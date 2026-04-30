@@ -145,13 +145,13 @@ def _parse_ohlcv(raw_text: str) -> "pd.DataFrame":
 
     df = df.rename(columns=col_map)
 
-    required = {"Open", "High", "Low", "Close", "Volume"}
-    missing = required - set(df.columns)
+    required_cols = ["Open", "High", "Low", "Close", "Volume"]
+    missing = set(required_cols) - set(df.columns)
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
 
     df.index = pd.to_datetime(df.index)
     df = df.sort_index()
-    df = df[list(required)].apply(pd.to_numeric, errors="coerce").dropna()
+    df = df[required_cols].apply(pd.to_numeric, errors="coerce").dropna()
 
     return df

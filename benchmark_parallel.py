@@ -147,33 +147,37 @@ def main():
     # ── Sequential run ──
     print("▶ Running SEQUENTIAL (current behavior)...")
     seq_times = []
+    seq_results = None
     for trial in range(3):
         elapsed, results = run_sequential()
+        if seq_results is None:
+            seq_results = results
         seq_times.append(elapsed)
         print(f"  Trial {trial + 1}: {format_time(elapsed)}")
 
     print()
     print(f"  Sequential breakdown:")
-    _, results = run_sequential()
-    for r in results:
+    for r in seq_results:
         tools_str = " + ".join(f"{t:.1f}s" for t in r.tool_times)
         print(f"    {r.name:25s} │ Tools: {tools_str} │ LLM: {r.llm_time:.1f}s │ Total: {r.total_time:.1f}s")
-    seq_times.append(sum(r.total_time for r in results))
 
     print()
 
     # ── Parallel run ──
     print("▶ Running PARALLEL (proposed fan-out)...")
     par_times = []
+    par_results = None
     for trial in range(3):
         elapsed, results = run_parallel()
+        if par_results is None:
+            par_results = results
         par_times.append(elapsed)
         print(f"  Trial {trial + 1}: {format_time(elapsed)}")
 
     print()
 
     # ── Results ──
-    seq_avg = statistics.mean(seq_times[:3])
+    seq_avg = statistics.mean(seq_times)
     par_avg = statistics.mean(par_times)
     speedup = seq_avg / par_avg
 
@@ -200,7 +204,7 @@ def main():
     print()
     print("  SEQUENTIAL:")
     cumulative = 0
-    for r in results:
+    for r in seq_results:
         bar = "█" * int(r.total_time * 3)
         print(f"    {r.name:25s} [{bar}] {r.total_time:.1f}s  (starts at +{cumulative:.1f}s)")
         cumulative += r.total_time
@@ -208,8 +212,8 @@ def main():
     print()
 
     print("  PARALLEL:")
-    max_time = max(r.total_time for r in results)
-    for r in results:
+    max_time = max(r.total_time for r in par_results)
+    for r in par_results:
         bar = "█" * int(r.total_time * 3)
         pad = " " * int((max_time - r.total_time) * 3)
         print(f"    {r.name:25s} [{bar}]{pad} {r.total_time:.1f}s  (starts at +0.0s)")

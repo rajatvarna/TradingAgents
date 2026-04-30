@@ -53,12 +53,15 @@ _PROVIDER_CONFIG = {
 
 
 class OpenAIClient(BaseLLMClient):
-    """Client for OpenAI, Ollama (local + cloud), OpenRouter, and xAI providers.
+    """Client for OpenAI and OpenAI-compatible providers.
+
+    Supported providers: OpenAI (native), xAI, DeepSeek, Qwen, GLM, OpenRouter,
+    Ollama (local), and Ollama Cloud.
 
     For native OpenAI models, uses the Responses API (/v1/responses) which
     supports reasoning_effort with function tools across all model families
-    (GPT-4.1, GPT-5). Third-party compatible providers (xAI, OpenRouter,
-    Ollama, Ollama Cloud) use standard Chat Completions.
+    (GPT-4.1, GPT-5). All other OpenAI-compatible providers use standard
+    Chat Completions.
     """
 
     def __init__(
@@ -93,6 +96,22 @@ class OpenAIClient(BaseLLMClient):
         for key in _PASSTHROUGH_KWARGS:
             if key in self.kwargs:
                 llm_kwargs[key] = self.kwargs[key]
+
+        # Guard against silent fallback to OPENAI_API_KEY for non-OpenAI
+        # providers. ChatOpenAI reads OPENAI_API_KEY from env when api_key
+        # is missing, which would send the wrong key to third-party
+        # endpoints (e.g. ollama.com, api.x.ai).
+        if (
+            self.provider in _PROVIDER_CONFIG
+            and _PROVIDER_CONFIG[self.provider][1] is not None
+            and "api_key" not in llm_kwargs
+        ):
+            api_key_env = _PROVIDER_CONFIG[self.provider][1]
+            raise ValueError(
+                f"{self.provider} provider requires an API key. "
+                f"Set the {api_key_env} environment variable or pass "
+                f"api_key explicitly."
+            )
 
         # Native OpenAI: use Responses API for consistent behavior across
         # all model families. Third-party providers use Chat Completions.

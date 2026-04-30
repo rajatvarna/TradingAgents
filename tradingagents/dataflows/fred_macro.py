@@ -13,18 +13,22 @@ def get_macro_data(series_id: str, start_date: str = None, end_date: str = None,
     if not FRED_API_KEY:
         return "Error: FRED_API_KEY environment variable is not set. Cannot fetch macroeconomic data."
         
-    url = f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}&api_key={FRED_API_KEY}&file_type=json"
+    url = "https://api.stlouisfed.org/fred/series/observations"
+    params = {
+        "series_id": series_id,
+        "api_key": FRED_API_KEY,
+        "file_type": "json",
+        "sort_order": "desc",
+        "limit": limit
+    }
     
     if start_date:
-        url += f"&observation_start={start_date}"
+        params["observation_start"] = start_date
     if end_date:
-        url += f"&observation_end={end_date}"
+        params["observation_end"] = end_date
         
-    # Sort descending so we get latest first if limiting
-    url += f"&sort_order=desc&limit={limit}"
-    
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, params=params, timeout=10)
         if response.status_code != 200:
             error_message = response.json().get("error_message", response.reason)
             logger.error(f"FRED API Error ({response.status_code}): {error_message}")

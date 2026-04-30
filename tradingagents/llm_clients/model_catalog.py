@@ -112,6 +112,21 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Qwen3:latest (8B, local)", "qwen3:latest"),
         ],
     },
+    "ollama_cloud": {
+        "quick": [
+            ("GPT-OSS 20B (cloud)", "gpt-oss:20b"),
+            ("Qwen3-Coder 480B (cloud)", "qwen3-coder:480b"),
+            ("GPT-OSS 120B (cloud)", "gpt-oss:120b"),
+            ("Custom model ID", "custom"),
+        ],
+        "deep": [
+            ("DeepSeek V3.1 671B (cloud)", "deepseek-v3.1:671b"),
+            ("Kimi K2 1T (cloud)", "kimi-k2:1t"),
+            ("GPT-OSS 120B (cloud)", "gpt-oss:120b"),
+            ("Qwen3-Coder 480B (cloud)", "qwen3-coder:480b"),
+            ("Custom model ID", "custom"),
+        ],
+    },
 }
 
 

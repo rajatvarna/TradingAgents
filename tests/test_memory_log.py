@@ -627,6 +627,45 @@ class TestDeferredReflection:
         assert "SPY" not in requested
         mock_graph._resolve_benchmark.assert_called_once_with("RELIANCE.NS")
 
+    def test_fetch_returns_skips_resolution_when_benchmark_passed(self):
+        """Caller-provided benchmark must skip _resolve_benchmark entirely."""
+        stock_prices = [100.0, 102.0, 104.0, 103.0, 105.0, 106.0]
+        spy_prices   = [400.0, 402.0, 404.0, 403.0, 405.0, 406.0]
+        mock_graph = MagicMock(spec=TradingAgentsGraph)
+        with patch("yfinance.Ticker") as mock_ticker_cls:
+            def _make_ticker(sym):
+                m = MagicMock()
+                m.history.return_value = _price_df(
+                    spy_prices if sym == "SPY" else stock_prices
+                )
+                return m
+            mock_ticker_cls.side_effect = _make_ticker
+            raw, alpha, days = TradingAgentsGraph._fetch_returns(
+                mock_graph, "NVDA", "2026-01-05", benchmark="SPY"
+            )
+        assert raw is not None and alpha is not None and days is not None
+        mock_graph._resolve_benchmark.assert_not_called()
+
+    def test_fetch_returns_reuses_stock_when_ticker_is_benchmark(self):
+        """Analysing the benchmark itself (e.g. SPY vs SPY) must not duplicate the yfinance call."""
+        spy_prices = [400.0, 402.0, 404.0, 403.0, 405.0, 406.0]
+        mock_graph = MagicMock(spec=TradingAgentsGraph)
+        requested = []
+        with patch("yfinance.Ticker") as mock_ticker_cls:
+            def _make_ticker(sym):
+                requested.append(sym)
+                m = MagicMock()
+                m.history.return_value = _price_df(spy_prices)
+                return m
+            mock_ticker_cls.side_effect = _make_ticker
+            raw, alpha, days = TradingAgentsGraph._fetch_returns(
+                mock_graph, "SPY", "2026-01-05", benchmark="SPY"
+            )
+        assert raw is not None and alpha == 0.0 and days == 5
+        assert requested == ["SPY"], (
+            f"expected exactly one yfinance request when ticker == benchmark, got {requested}"
+        )
+
     # TradingAgentsGraph._resolve_pending_entries
 
     def test_resolve_skips_other_tickers(self, tmp_path):
@@ -658,6 +697,25 @@ class TestDeferredReflection:
         assert entries[0]["reflection"] == "Momentum confirmed."
         assert "+5.0%" in entries[0]["raw"]
         assert "+2.0%" in entries[0]["alpha"]
+
+    def test_resolve_resolves_benchmark_once_per_run(self, tmp_path):
+        """Benchmark is resolved once per run and forwarded to every _fetch_returns call,
+        instead of being recomputed for each pending entry."""
+        log = make_log(tmp_path)
+        log.store_decision("NVDA", "2026-01-05", DECISION_BUY)
+        log.store_decision("NVDA", "2026-01-12", DECISION_SELL)
+        mock_reflector = MagicMock()
+        mock_reflector.reflect_on_final_decision.return_value = "ok"
+        mock_graph = MagicMock(spec=TradingAgentsGraph)
+        mock_graph.memory_log = log
+        mock_graph.reflector = mock_reflector
+        mock_graph._resolve_benchmark = MagicMock(return_value="SPY")
+        mock_graph._fetch_returns = MagicMock(return_value=(0.05, 0.02, 5))
+        TradingAgentsGraph._resolve_pending_entries(mock_graph, "NVDA")
+        mock_graph._resolve_benchmark.assert_called_once_with("NVDA")
+        assert mock_graph._fetch_returns.call_count == 2
+        for call in mock_graph._fetch_returns.call_args_list:
+            assert call.kwargs.get("benchmark") == "SPY"
 
 
 # ---------------------------------------------------------------------------

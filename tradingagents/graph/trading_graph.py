@@ -205,9 +205,18 @@ class TradingAgentsGraph:
         return benchmark_map.get("", "SPY")
 
     def _fetch_returns(
-        self, ticker: str, trade_date: str, holding_days: int = 5
+        self,
+        ticker: str,
+        trade_date: str,
+        holding_days: int = 5,
+        benchmark: Optional[str] = None,
     ) -> Tuple[Optional[float], Optional[float], Optional[int]]:
         """Fetch raw and alpha return for ticker over holding_days from trade_date.
+
+        ``benchmark`` may be passed by callers that already resolved it (e.g.
+        :meth:`_resolve_pending_entries` does so once per ticker), avoiding
+        redundant resolution work in batch loops. When ``None`` it is resolved
+        from the ticker.
 
         Returns (raw_return, alpha_return, actual_holding_days) or
         (None, None, None) if price data is unavailable (too recent, delisted,
@@ -218,9 +227,14 @@ class TradingAgentsGraph:
             end = start + timedelta(days=holding_days + 7)  # buffer for weekends/holidays
             end_str = end.strftime("%Y-%m-%d")
 
-            benchmark = self._resolve_benchmark(ticker)
+            if benchmark is None:
+                benchmark = self._resolve_benchmark(ticker)
             stock = yf.Ticker(ticker).history(start=trade_date, end=end_str)
-            bench = yf.Ticker(benchmark).history(start=trade_date, end=end_str)
+            # Skip the duplicate request when the user analyses the benchmark
+            # itself (e.g. SPY vs SPY → alpha is 0 by definition).
+            bench = stock if benchmark == ticker else yf.Ticker(benchmark).history(
+                start=trade_date, end=end_str
+            )
 
             if len(stock) < 2 or len(bench) < 2:
                 return None, None, None
@@ -260,7 +274,9 @@ class TradingAgentsGraph:
         benchmark = self._resolve_benchmark(ticker)
         updates = []
         for entry in pending:
-            raw, alpha, days = self._fetch_returns(ticker, entry["date"])
+            raw, alpha, days = self._fetch_returns(
+                ticker, entry["date"], benchmark=benchmark
+            )
             if raw is None:
                 continue  # price not available yet — try again next run
             reflection = self.reflector.reflect_on_final_decision(

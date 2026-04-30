@@ -30,7 +30,10 @@ def get_macro_data(series_id: str, start_date: str = None, end_date: str = None,
     try:
         response = requests.get(url, params=params, timeout=10)
         if response.status_code != 200:
-            error_message = response.json().get("error_message", response.reason)
+            try:
+                error_message = response.json().get("error_message", response.reason)
+            except (ValueError, requests.exceptions.JSONDecodeError):
+                error_message = response.reason
             logger.error(f"FRED API Error ({response.status_code}): {error_message}")
             return f"Error fetching '{series_id}' from FRED: {error_message}"
             

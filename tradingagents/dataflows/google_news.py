@@ -149,20 +149,18 @@ async def _deep_scrape_article(
     pub_date = item_data["pub_date"]
 
     skip_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.mp4', '.pdf')
-    is_article = not any(link.lower().split('?')[0].endswith(ext) for ext in skip_extensions)
     
+    real_url = await unroll_google_link(link)
+    is_article = not any(real_url.lower().split('?')[0].endswith(ext) for ext in skip_extensions)
+
     full_body = None
     scraped = False
-    real_url = link
 
     if is_article:
-        real_url = await unroll_google_link(link)
-        
         async with semaphore:
             full_body = await _jina_scrape(session, real_url)
-            
-        if not full_body:
-            full_body = await _readability_scrape(session, real_url)
+            if not full_body:
+                full_body = await _readability_scrape(session, real_url)
 
     if full_body:
         scraped = True

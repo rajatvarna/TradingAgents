@@ -1,7 +1,6 @@
 from langchain_core.tools import tool
 from typing import Annotated
 from tradingagents.dataflows.interface import route_to_vendor
-from tradingagents.dataflows.google_news import get_google_news
 
 @tool
 def get_news(
@@ -65,6 +64,7 @@ async def fetch_recent_news(query: str, time_range: str = "7d", limit: int = 5) 
         limit: The maximum number of articles to retrieve.
     """
     try:
+        from tradingagents.dataflows.google_news import get_google_news
         # Call your new async dataflow
         articles = await get_google_news(query=query, time_range=time_range, limit=limit)
         

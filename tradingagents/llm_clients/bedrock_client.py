@@ -56,6 +56,7 @@ class BedrockClient(BaseLLMClient):
 
         llm_kwargs = {
             "model": self.model,
+            "endpoint_url": self.base_url,
             "region_name": (
                 self.kwargs.get("region_name")
                 or os.getenv("AWS_REGION")

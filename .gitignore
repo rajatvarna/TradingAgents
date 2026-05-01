@@ -6,6 +6,7 @@ __pycache__/
 # C extensions
 *.so
 .env
+.env.enterprise
 reports/
 logs/
 .env*
@@ -153,6 +154,7 @@ activemq-data/
 
 # Environments
 .env
+.env.enterprise
 .envrc
 .venv
 env/

@@ -50,6 +50,22 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Gemini 2.5 Flash - Balanced, stable", "gemini-2.5-flash"),
         ],
     },
+    "bedrock": {
+        "quick": [
+            ("Claude Haiku 4.5 - Bedrock inference profile", "us.anthropic.claude-haiku-4-5-20251001-v1:0"),
+            ("Claude 3.5 Haiku - Fast, low-cost Bedrock", "anthropic.claude-3-5-haiku-20241022-v1:0"),
+            ("Claude 3 Haiku - Broad regional availability", "anthropic.claude-3-haiku-20240307-v1:0"),
+            ("Claude 3.5 Sonnet v2 - Stronger analysis", "anthropic.claude-3-5-sonnet-20241022-v2:0"),
+            ("Custom model ID", "custom"),
+        ],
+        "deep": [
+            ("Claude Sonnet 4.6 - Bedrock inference profile", "us.anthropic.claude-sonnet-4-6"),
+            ("Claude 3.7 Sonnet - Strong reasoning on Bedrock", "anthropic.claude-3-7-sonnet-20250219-v1:0"),
+            ("Claude 3.5 Sonnet v2 - Balanced deep analysis", "anthropic.claude-3-5-sonnet-20241022-v2:0"),
+            ("Claude Sonnet 4 - Newer Anthropic model", "anthropic.claude-sonnet-4-20250514-v1:0"),
+            ("Custom model ID", "custom"),
+        ],
+    },
     "xai": {
         "quick": [
             ("Grok 4.1 Fast (Non-Reasoning) - Speed optimized, 2M ctx", "grok-4-1-fast-non-reasoning"),

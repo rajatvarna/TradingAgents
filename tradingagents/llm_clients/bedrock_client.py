@@ -1,6 +1,8 @@
 import os
 from typing import Any, Optional
 
+from botocore.config import Config
+
 from .base_client import BaseLLMClient, normalize_content
 from .validators import validate_model
 
@@ -21,6 +23,16 @@ def _load_chat_bedrock_converse():
             return normalize_content(super().invoke(input, config, **kwargs))
 
     return NormalizedChatBedrockConverse
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
 
 
 class BedrockClient(BaseLLMClient):
@@ -52,6 +64,28 @@ class BedrockClient(BaseLLMClient):
         profile_name = self.kwargs.get("credentials_profile_name") or os.getenv("AWS_PROFILE")
         if profile_name:
             llm_kwargs["credentials_profile_name"] = profile_name
+
+        connect_timeout = int(
+            self.kwargs.get("connect_timeout")
+            or _env_int("TRADINGAGENTS_BEDROCK_CONNECT_TIMEOUT", 10)
+        )
+        read_timeout = int(
+            self.kwargs.get("read_timeout")
+            or _env_int("TRADINGAGENTS_BEDROCK_READ_TIMEOUT", 300)
+        )
+        max_attempts = int(
+            self.kwargs.get("max_attempts")
+            or _env_int("TRADINGAGENTS_BEDROCK_MAX_ATTEMPTS", 5)
+        )
+
+        bedrock_config = Config(
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
+            retries={"max_attempts": max_attempts, "mode": "standard"},
+        )
+        if self.kwargs.get("config") is not None:
+            bedrock_config = self.kwargs["config"].merge(bedrock_config)
+        llm_kwargs["config"] = bedrock_config
 
         for key in ("callbacks", "temperature", "max_tokens", "top_p", "stop_sequences"):
             if key in self.kwargs:

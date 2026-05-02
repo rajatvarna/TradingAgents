@@ -2,7 +2,12 @@
 
 from typing import Callable
 from tradingagents.agents.utils.agent_states import AgentState
-from tradingagents.graph.constants import ANALYST_REPORT_KEYS
+from tradingagents.graph.constants import (
+    ANALYST_REPORT_KEYS,
+    analyst_node_name,
+    clear_node_name,
+    tools_node_name,
+)
 
 
 class ConditionalLogic:
@@ -20,8 +25,8 @@ class ConditionalLogic:
         message has pending tool calls, otherwise to
         ``Msg Clear <Analyst_type>``.
         """
-        tool_node = f"tools_{analyst_type}"
-        clear_node = f"Msg Clear {analyst_type.capitalize()}"
+        tool_node = tools_node_name(analyst_type)
+        clear_node = clear_node_name(analyst_type)
 
         def _router(state: AgentState) -> str:
             messages = state.get("messages") or []

@@ -217,5 +217,5 @@ __marimo__/
 
 # Cache
 **/data_cache/
-reports
+reports/
 .DS_Store

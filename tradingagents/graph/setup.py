@@ -9,6 +9,7 @@ from tradingagents.agents import *
 from tradingagents.agents.utils.agent_states import AgentState
 
 from .conditional_logic import ConditionalLogic
+from .constants import ANALYST_REPORT_KEYS
 
 
 class GraphSetup:
@@ -105,18 +106,10 @@ class GraphSetup:
         workflow.add_node("Conservative Analyst", conservative_analyst)
         workflow.add_node("Portfolio Manager", portfolio_manager_node)
 
-        _report_keys = {
-            "market": "market_report",
-            "sentiment": "sentiment_report",
-            "news": "news_report",
-            "fundamentals": "fundamentals_report",
-            "options": "options_report",
-        }
-
         def join_analysts_node(state):
             from langchain_core.messages import HumanMessage, RemoveMessage
             for analyst in selected_analysts:
-                key = _report_keys.get(analyst)
+                key = ANALYST_REPORT_KEYS.get(analyst)
                 if key and not state.get(key):
                     return {}
             messages = state.get("messages", [])

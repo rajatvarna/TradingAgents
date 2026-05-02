@@ -804,12 +804,7 @@ ANALYST_AGENT_NAMES = {
     "news": "News Analyst",
     "fundamentals": "Fundamentals Analyst",
 }
-ANALYST_REPORT_MAP = {
-    "market": "market_report",
-    "sentiment": "sentiment_report",
-    "news": "news_report",
-    "fundamentals": "fundamentals_report",
-}
+from tradingagents.graph.constants import ANALYST_REPORT_KEYS as ANALYST_REPORT_MAP
 
 
 def update_analyst_statuses(message_buffer, chunk):
@@ -1336,6 +1331,7 @@ def portfolio(
     # --- Optional CSV export (atomic write: temp file → rename) ---
     if output:
         output_path = Path(output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         fieldnames = ["rank", "ticker", "signal", "rating", "confidence", "score", "error", "decision"]
         tmp_fd, tmp_path = tempfile.mkstemp(
             dir=output_path.parent, prefix=".tmp_portfolio_", suffix=".csv"

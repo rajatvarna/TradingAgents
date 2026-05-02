@@ -53,6 +53,10 @@ class Propagator:
             "sentiment_report": "",
             "news_report": "",
             "options_report": "",
+            "investment_plan": "",
+            "trader_investment_plan": "",
+            "final_trade_decision": "",
+            "sender": "",
         }
 
     def get_graph_args(self, callbacks: Optional[List] = None) -> Dict[str, Any]:

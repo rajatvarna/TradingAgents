@@ -62,7 +62,8 @@ class TradingMemoryLog:
                     raw_return REAL,
                     alpha_return REAL,
                     holding_days INTEGER,
-                    pending INTEGER NOT NULL DEFAULT 1
+                    pending INTEGER NOT NULL DEFAULT 1,
+                    UNIQUE (ticker, trade_date, pending)
                 )
             """)
             # Create index for fast lookups by ticker and pending status
@@ -84,17 +85,11 @@ class TradingMemoryLog:
         rating = parse_rating(final_trade_decision)
         
         with self._get_conn() as conn:
-            # Idempotency guard
-            cursor = conn.execute(
-                "SELECT id FROM memory_log WHERE ticker = ? AND trade_date = ? AND pending = 1",
-                (ticker, trade_date)
-            )
-            if cursor.fetchone():
-                return
-                
+            # INSERT OR IGNORE respects the UNIQUE(ticker, trade_date, pending) constraint,
+            # replacing the previous SELECT + conditional INSERT (two round-trips → one).
             conn.execute(
                 """
-                INSERT INTO memory_log (ticker, trade_date, rating, decision, reflection, pending)
+                INSERT OR IGNORE INTO memory_log (ticker, trade_date, rating, decision, reflection, pending)
                 VALUES (?, ?, ?, ?, "", 1)
                 """,
                 (ticker, trade_date, rating, final_trade_decision)

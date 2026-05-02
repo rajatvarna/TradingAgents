@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -35,7 +36,9 @@ def _format_chain_summary(ticker: str, expiry: str) -> str:
     spot: Optional[float] = None
     try:
         raw = tk.fast_info.last_price or tk.fast_info.regularMarketPrice
-        spot = float(raw) if raw is not None else None
+        if raw is not None:
+            val = float(raw)
+            spot = val if not math.isnan(val) else None
     except Exception:
         pass
 
@@ -123,6 +126,9 @@ def get_options_data(ticker: str, trade_date: str, num_expiries: int = 3) -> str
         trade_date: Reference date in YYYY-MM-DD format.
         num_expiries: Number of expiration dates to analyse (default 3).
     """
+    if num_expiries <= 0:
+        num_expiries = 3
+
     try:
         tk = yf.Ticker(ticker)
         available = tk.options  # tuple of date strings YYYY-MM-DD
@@ -153,10 +159,12 @@ def get_options_data(ticker: str, trade_date: str, num_expiries: int = 3) -> str
     sections = [f"## Options Data for {ticker} (reference date: {trade_date})"]
     try:
         raw_spot = tk.fast_info.last_price or tk.fast_info.regularMarketPrice
-        spot = float(raw_spot) if raw_spot is not None else None
-        sections.append(f"Current Spot Price: ${spot:.2f}" if spot else "Spot price unavailable.")
+        spot: Optional[float] = None
+        if raw_spot is not None:
+            val = float(raw_spot)
+            spot = val if not math.isnan(val) else None
+        sections.append(f"Current Spot Price: ${spot:.2f}" if spot is not None else "Spot price unavailable.")
     except Exception:
-        spot = None
         sections.append("Spot price unavailable.")
 
     for expiry in selected:

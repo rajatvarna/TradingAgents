@@ -7,6 +7,7 @@ from rich.table import Table
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
+from tradingagents.agents.utils.rating import parse_rating
 from cli.stats_handler import StatsCallbackHandler
 
 console = Console()
@@ -44,63 +45,14 @@ def run_backtest(
         date_str = current_date.strftime("%Y-%m-%d")
         console.print(f"Processing date: {date_str}...")
         
-        # Initial state
-        initial_state = {
-            "messages": [],
-            "company_of_interest": ticker,
-            "trade_date": date_str,
-            "market_report": "",
-            "fundamentals_report": "",
-            "sentiment_report": "",
-            "news_report": "",
-            "investment_plan": "",
-            "trader_investment_plan": "",
-            "final_trade_decision": "",
-            "past_context": "",
-            "investment_debate_state": {
-                "bull_history": "",
-                "bear_history": "",
-                "judge_decision": "",
-                "history": "",
-                "latest_speaker": "",
-                "current_response": "",
-                "count": 0,
-            },
-            "risk_debate_state": {
-                "aggressive_history": "",
-                "conservative_history": "",
-                "neutral_history": "",
-                "judge_decision": "",
-                "history": "",
-                "latest_speaker": "",
-                "current_aggressive_response": "",
-                "current_conservative_response": "",
-                "current_neutral_response": "",
-                "count": 0,
-            },
-        }
-        
         final_state = None
         try:
-            # We must use invoke, since we don't want to stream and display for backtesting
-            final_state = graph.graph.invoke(initial_state, {"recursion_limit": 100})
-            
-            # Extract decision
+            final_state, _ = graph.propagate(ticker, date_str)
+
             decision_text = final_state.get("final_trade_decision", "")
-            # Simple heuristic to extract rating if we didn't get structured output cleanly
-            # Wait, PortfolioDecision renders to Markdown with **Rating**: Buy
-            rating = "Hold"
-            if "**Rating**: Buy" in decision_text: rating = "Buy"
-            elif "**Rating**: Sell" in decision_text: rating = "Sell"
-            elif "**Rating**: Overweight" in decision_text: rating = "Overweight"
-            elif "**Rating**: Underweight" in decision_text: rating = "Underweight"
-            
-            confidence = 0.5
-            import re
-            conf_match = re.search(r"\*\*Confidence\*\*: (0\.\d+|1\.0)", decision_text)
-            if conf_match:
-                confidence = float(conf_match.group(1))
-                
+            rating = parse_rating(decision_text)
+            confidence = TradingAgentsGraph._extract_confidence(decision_text)
+
             results.append({
                 "date": date_str,
                 "ticker": ticker,

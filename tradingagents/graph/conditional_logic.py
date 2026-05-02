@@ -2,6 +2,7 @@
 
 from typing import Callable
 from tradingagents.agents.utils.agent_states import AgentState
+from tradingagents.graph.constants import ANALYST_REPORT_KEYS
 
 
 class ConditionalLogic:
@@ -23,7 +24,8 @@ class ConditionalLogic:
         clear_node = f"Msg Clear {analyst_type.capitalize()}"
 
         def _router(state: AgentState) -> str:
-            if state["messages"][-1].tool_calls:
+            messages = state.get("messages") or []
+            if messages and getattr(messages[-1], "tool_calls", None):
                 return tool_node
             return clear_node
 
@@ -47,15 +49,8 @@ class ConditionalLogic:
 
     def wait_for_all_analysts(self, state: AgentState, selected_analysts: list) -> str:
         """Determine if all selected analysts have completed their reports."""
-        _report_keys = {
-            "market": "market_report",
-            "sentiment": "sentiment_report",
-            "news": "news_report",
-            "fundamentals": "fundamentals_report",
-            "options": "options_report",
-        }
         for analyst in selected_analysts:
-            key = _report_keys.get(analyst)
+            key = ANALYST_REPORT_KEYS.get(analyst)
             if key and not state.get(key):
                 return "wait"
         return "continue"

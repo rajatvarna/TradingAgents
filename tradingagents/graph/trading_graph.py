@@ -322,14 +322,12 @@ class TradingAgentsGraph:
             args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = tid
 
         if self.debug:
-            trace = []
+            final_state = None
             for chunk in self.graph.stream(init_agent_state, **args):
-                if len(chunk["messages"]) == 0:
-                    pass
-                else:
+                if chunk.get("messages"):
                     chunk["messages"][-1].pretty_print()
-                    trace.append(chunk)
-            final_state = trace[-1]
+                # Only keep the latest chunk — avoids unbounded memory in long runs.
+                final_state = chunk
         else:
             final_state = self.graph.invoke(init_agent_state, **args)
 

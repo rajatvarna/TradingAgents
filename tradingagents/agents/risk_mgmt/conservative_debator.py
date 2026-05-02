@@ -1,9 +1,10 @@
 
+from tradingagents.agents.utils.agent_utils import invoke_with_retry, trim_debate_history
 
 def create_conservative_debator(llm):
     def conservative_node(state) -> dict:
         risk_debate_state = state["risk_debate_state"]
-        history = risk_debate_state.get("history", "")
+        history = trim_debate_history(risk_debate_state.get("history", ""))
         conservative_history = risk_debate_state.get("conservative_history", "")
 
         current_aggressive_response = risk_debate_state.get("current_aggressive_response", "")
@@ -30,7 +31,7 @@ Here is the current conversation history: {history} Here is the last response fr
 
 Engage by questioning their optimism and emphasizing the potential downsides they may have overlooked. Address each of their counterpoints to showcase why a conservative stance is ultimately the safest path for the firm's assets. Focus on debating and critiquing their arguments to demonstrate the strength of a low-risk strategy over their approaches. Output conversationally as if you are speaking without any special formatting."""
 
-        response = llm.invoke(prompt)
+        response = invoke_with_retry(llm, prompt)
 
         argument = f"Conservative Analyst: {response.content}"
 

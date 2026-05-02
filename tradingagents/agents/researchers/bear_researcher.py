@@ -1,9 +1,10 @@
 
+from tradingagents.agents.utils.agent_utils import invoke_with_retry, trim_debate_history
 
 def create_bear_researcher(llm):
     def bear_node(state) -> dict:
         investment_debate_state = state["investment_debate_state"]
-        history = investment_debate_state.get("history", "")
+        history = trim_debate_history(investment_debate_state.get("history", ""))
         bear_history = investment_debate_state.get("bear_history", "")
 
         current_response = investment_debate_state.get("current_response", "")
@@ -33,7 +34,7 @@ Last bull argument: {current_response}
 Use this information to deliver a compelling bear argument, refute the bull's claims, and engage in a dynamic debate that demonstrates the risks and weaknesses of investing in the stock.
 """
 
-        response = llm.invoke(prompt)
+        response = invoke_with_retry(llm, prompt)
 
         argument = f"Bear Analyst: {response.content}"
 

@@ -22,6 +22,7 @@ import logging
 from typing import Any, Callable, Optional, TypeVar
 
 from pydantic import BaseModel
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,14 @@ def bind_structured(llm: Any, schema: type[T], agent_name: str) -> Optional[Any]
         return None
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=30), reraise=True)
+def _invoke_structured(llm, prompt):
+    return llm.invoke(prompt)
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=30), reraise=True)
+def _invoke_plain(llm, prompt):
+    return llm.invoke(prompt)
+
 def invoke_structured_or_freetext(
     structured_llm: Optional[Any],
     plain_llm: Any,
@@ -61,7 +70,7 @@ def invoke_structured_or_freetext(
     """
     if structured_llm is not None:
         try:
-            result = structured_llm.invoke(prompt)
+            result = _invoke_structured(structured_llm, prompt)
             return render(result)
         except Exception as exc:
             logger.warning(
@@ -69,5 +78,5 @@ def invoke_structured_or_freetext(
                 agent_name, exc,
             )
 
-    response = plain_llm.invoke(prompt)
+    response = _invoke_plain(plain_llm, prompt)
     return response.content

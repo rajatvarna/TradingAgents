@@ -19,13 +19,13 @@ class ConditionalLogic:
             return "tools_market"
         return "Msg Clear Market"
 
-    def should_continue_social(self, state: AgentState):
-        """Determine if social media analysis should continue."""
+    def should_continue_sentiment(self, state: AgentState):
+        """Determine if sentiment analysis should continue."""
         messages = state["messages"]
         last_message = messages[-1]
         if last_message.tool_calls:
-            return "tools_social"
-        return "Msg Clear Social"
+            return "tools_sentiment"
+        return "Msg Clear Sentiment"
 
     def should_continue_news(self, state: AgentState):
         """Determine if news analysis should continue."""
@@ -42,6 +42,19 @@ class ConditionalLogic:
         if last_message.tool_calls:
             return "tools_fundamentals"
         return "Msg Clear Fundamentals"
+
+    def wait_for_all_analysts(self, state: AgentState, selected_analysts: list) -> str:
+        """Determine if all selected analysts have completed their reports."""
+        for analyst in selected_analysts:
+            if analyst == "market" and not state.get("market_report"):
+                return "wait"
+            if analyst == "sentiment" and not state.get("sentiment_report"):
+                return "wait"
+            if analyst == "news" and not state.get("news_report"):
+                return "wait"
+            if analyst == "fundamentals" and not state.get("fundamentals_report"):
+                return "wait"
+        return "continue"
 
     def should_continue_debate(self, state: AgentState) -> str:
         """Determine if debate should continue."""

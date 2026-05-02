@@ -1,4 +1,5 @@
 from langchain_core.messages import HumanMessage, RemoveMessage
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 # Import tools from separate utility files
 from tradingagents.agents.utils.core_stock_tools import (
@@ -42,20 +43,51 @@ def build_instrument_context(ticker: str) -> str:
         "preserving any exchange suffix (e.g. `.TO`, `.L`, `.HK`, `.T`)."
     )
 
+def trim_debate_history(history: str, max_turns: int = 4) -> str:
+    """Keep only the most recent N turns of the debate to prevent context window overflow.
+    Assumes each turn is prefixed by a known Analyst/Researcher name.
+    """
+    if not history:
+        return ""
+        
+    # Split by common prefixes used in the debate
+    prefixes = [
+        "Bull Analyst:", "Bear Analyst:", 
+        "Aggressive Analyst:", "Conservative Analyst:", "Neutral Analyst:"
+    ]
+    
+    # We can split by lines and look for these prefixes
+    lines = history.split('\n')
+    turns = []
+    current_turn = []
+    
+    for line in lines:
+        is_new_turn = any(line.startswith(p) for p in prefixes)
+        if is_new_turn:
+            if current_turn:
+                turns.append("\n".join(current_turn))
+            current_turn = [line]
+        else:
+            if current_turn:
+                current_turn.append(line)
+                
+    if current_turn:
+        turns.append("\n".join(current_turn))
+        
+    if len(turns) <= max_turns:
+        return history
+        
+    truncated = "\n\n...[Earlier history truncated]...\n\n" + "\n".join(turns[-max_turns:])
+    return truncated
+
 def create_msg_delete():
     def delete_messages(state):
-        """Clear messages and add placeholder for Anthropic compatibility"""
-        messages = state["messages"]
-
-        # Remove all messages
-        removal_operations = [RemoveMessage(id=m.id) for m in messages]
-
-        # Add a minimal placeholder message
-        placeholder = HumanMessage(content="Continue")
-
-        return {"messages": removal_operations + [placeholder]}
-
+        """No-op. Messages are cleared in the Join Analysts barrier node."""
+        return {}
     return delete_messages
 
 
-        
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=30), reraise=True)
+def invoke_with_retry(chain, prompt):
+    """Invoke a LangChain model/chain with exponential backoff for transient errors."""
+    return chain.invoke(prompt)

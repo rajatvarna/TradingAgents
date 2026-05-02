@@ -183,6 +183,11 @@ class PortfolioDecision(BaseModel):
             "Underweight / Sell, picked based on the analysts' debate."
         ),
     )
+    confidence: float = Field(
+        description="Confidence level from 0.0 to 1.0 reflecting how strongly the evidence supports the rating.",
+        ge=0.0,
+        le=1.0,
+    )
     executive_summary: str = Field(
         description=(
             "A concise action plan covering entry strategy, position sizing, "
@@ -216,6 +221,7 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
     """
     parts = [
         f"**Rating**: {decision.rating.value}",
+        f"**Confidence**: {decision.confidence:.2f}",
         "",
         f"**Executive Summary**: {decision.executive_summary}",
         "",

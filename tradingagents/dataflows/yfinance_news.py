@@ -5,6 +5,7 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 from .stockstats_utils import yf_retry
+from .cache import ticker_cache
 
 
 def _extract_article_data(article: dict) -> dict:
@@ -65,7 +66,7 @@ def get_news_yfinance(
         Formatted string containing news articles
     """
     try:
-        stock = yf.Ticker(ticker)
+        stock = ticker_cache.get_ticker(ticker)
         news = yf_retry(lambda: stock.get_news(count=20))
 
         if not news:

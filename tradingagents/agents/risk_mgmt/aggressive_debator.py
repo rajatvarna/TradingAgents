@@ -1,9 +1,9 @@
-
+from tradingagents.agents.utils.agent_utils import invoke_with_retry, trim_debate_history
 
 def create_aggressive_debator(llm):
     def aggressive_node(state) -> dict:
         risk_debate_state = state["risk_debate_state"]
-        history = risk_debate_state.get("history", "")
+        history = trim_debate_history(risk_debate_state.get("history", ""))
         aggressive_history = risk_debate_state.get("aggressive_history", "")
 
         current_conservative_response = risk_debate_state.get("current_conservative_response", "")
@@ -30,7 +30,7 @@ Here is the current conversation history: {history} Here are the last arguments 
 
 Engage actively by addressing any specific concerns raised, refuting the weaknesses in their logic, and asserting the benefits of risk-taking to outpace market norms. Maintain a focus on debating and persuading, not just presenting data. Challenge each counterpoint to underscore why a high-risk approach is optimal. Output conversationally as if you are speaking without any special formatting."""
 
-        response = llm.invoke(prompt)
+        response = invoke_with_retry(llm, prompt)
 
         argument = f"Aggressive Analyst: {response.content}"
 

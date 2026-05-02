@@ -3,6 +3,7 @@
 from typing import Any, Dict
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
+from functools import partial
 
 from tradingagents.agents import *
 from tradingagents.agents.utils.agent_states import AgentState
@@ -34,7 +35,7 @@ class GraphSetup:
         Args:
             selected_analysts (list): List of analyst types to include. Options are:
                 - "market": Market analyst
-                - "social": Social media analyst
+                - "sentiment": Sentiment analyst
                 - "news": News analyst
                 - "fundamentals": Fundamentals analyst
         """
@@ -53,12 +54,13 @@ class GraphSetup:
             delete_nodes["market"] = create_msg_delete()
             tool_nodes["market"] = self.tool_nodes["market"]
 
-        if "social" in selected_analysts:
-            analyst_nodes["social"] = create_social_media_analyst(
+        if "sentiment" in selected_analysts:
+            analyst_nodes["sentiment"] = create_sentiment_analyst(
                 self.quick_thinking_llm
             )
-            delete_nodes["social"] = create_msg_delete()
-            tool_nodes["social"] = self.tool_nodes["social"]
+            delete_nodes["sentiment"] = create_msg_delete()
+            tool_nodes["sentiment"] = self.tool_nodes["social"] # Wait, tool_nodes key is passed from main.py. If I rename to sentiment, I must change it in main.py too. Let's use sentiment.
+
 
         if "news" in selected_analysts:
             analyst_nodes["news"] = create_news_analyst(
@@ -107,31 +109,55 @@ class GraphSetup:
         workflow.add_node("Conservative Analyst", conservative_analyst)
         workflow.add_node("Portfolio Manager", portfolio_manager_node)
 
-        # Define edges
-        # Start with the first analyst
-        first_analyst = selected_analysts[0]
-        workflow.add_edge(START, f"{first_analyst.capitalize()} Analyst")
+        def join_analysts_node(state):
+            from langchain_core.messages import HumanMessage, RemoveMessage
+            all_done = True
+            for analyst in selected_analysts:
+                if analyst == "market" and not state.get("market_report"): all_done = False
+                if analyst == "social" and not state.get("sentiment_report"): all_done = False
+                if analyst == "news" and not state.get("news_report"): all_done = False
+                if analyst == "fundamentals" and not state.get("fundamentals_report"): all_done = False
+                
+            if all_done:
+                messages = state.get("messages", [])
+                removal_operations = [RemoveMessage(id=m.id) for m in messages]
+                placeholder = HumanMessage(content="Analysts finished their reports.")
+                return {"messages": removal_operations + [placeholder]}
+            return {}
 
-        # Connect analysts in sequence
-        for i, analyst_type in enumerate(selected_analysts):
+        # Add a dummy node to join parallel branches
+        workflow.add_node("Join Analysts", join_analysts_node)
+
+        # Start all selected analysts in parallel
+        for analyst_type in selected_analysts:
+            workflow.add_edge(START, f"{analyst_type.capitalize()} Analyst")
+
+        # Configure tools and join edges for each analyst
+        for analyst_type in selected_analysts:
             current_analyst = f"{analyst_type.capitalize()} Analyst"
             current_tools = f"tools_{analyst_type}"
             current_clear = f"Msg Clear {analyst_type.capitalize()}"
 
-            # Add conditional edges for current analyst
+            # Add conditional edges for current analyst's tools
             workflow.add_conditional_edges(
                 current_analyst,
                 getattr(self.conditional_logic, f"should_continue_{analyst_type}"),
                 [current_tools, current_clear],
             )
             workflow.add_edge(current_tools, current_analyst)
+            
+            # All clear nodes route to the Join node
+            workflow.add_edge(current_clear, "Join Analysts")
 
-            # Connect to next analyst or to Bull Researcher if this is the last analyst
-            if i < len(selected_analysts) - 1:
-                next_analyst = f"{selected_analysts[i+1].capitalize()} Analyst"
-                workflow.add_edge(current_clear, next_analyst)
-            else:
-                workflow.add_edge(current_clear, "Bull Researcher")
+        # After joining, verify if all analysts are done, otherwise END the current branch execution
+        workflow.add_conditional_edges(
+            "Join Analysts",
+            partial(self.conditional_logic.wait_for_all_analysts, selected_analysts=selected_analysts),
+            {
+                "continue": "Bull Researcher",
+                "wait": END,
+            }
+        )
 
         # Add remaining edges
         workflow.add_conditional_edges(

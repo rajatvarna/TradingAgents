@@ -4,6 +4,8 @@ import logging
 import os
 from pathlib import Path
 import json
+import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import Dict, Any, Tuple, List, Optional
 
@@ -385,6 +387,122 @@ class TradingAgentsGraph:
         log_path = directory / f"full_states_log_{trade_date}.json"
         with open(log_path, "w", encoding="utf-8") as f:
             json.dump(self.log_states_dict[str(trade_date)], f, indent=4)
+
+    def propagate_portfolio(
+        self,
+        tickers: List[str],
+        trade_date: str,
+        max_workers: int = 4,
+    ) -> Dict[str, Any]:
+        """Analyze a basket of tickers in parallel and return a ranked summary.
+
+        Each ticker is analysed independently by cloning the graph's config so
+        that checkpoint state, memory log lookups, and YFinance cache remain
+        isolated per ticker.  Results are ranked by conviction score: a blend
+        of the Portfolio Manager's confidence and directional rating.
+
+        Args:
+            tickers: List of ticker symbols to analyse.
+            trade_date: Analysis date in YYYY-MM-DD format.
+            max_workers: Maximum parallel threads (default 4; keep below API
+                rate-limit thresholds for your provider).
+
+        Returns:
+            A dict with keys:
+                ``results`` — list of per-ticker dicts sorted by ``score`` desc,
+                ``summary`` — high-level counts (buy/hold/sell) and top pick.
+        """
+        if not tickers:
+            return {"results": [], "summary": {}}
+
+        def _analyse_one(ticker: str) -> Dict[str, Any]:
+            try:
+                final_state, signal = self.propagate(ticker, trade_date)
+                decision_text = final_state.get("final_trade_decision", "")
+                confidence = self._extract_confidence(decision_text)
+                rating = self._extract_rating(decision_text)
+                score = self._conviction_score(signal, confidence)
+                return {
+                    "ticker": ticker,
+                    "signal": signal,
+                    "rating": rating,
+                    "confidence": confidence,
+                    "score": score,
+                    "decision": decision_text,
+                    "error": None,
+                }
+            except Exception as exc:
+                logger.error("Portfolio analysis failed for %s: %s", ticker, exc)
+                return {
+                    "ticker": ticker,
+                    "signal": "ERROR",
+                    "rating": None,
+                    "confidence": 0.0,
+                    "score": -999.0,
+                    "decision": "",
+                    "error": str(exc),
+                }
+
+        results: List[Dict[str, Any]] = []
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(_analyse_one, t): t for t in tickers}
+            for future in as_completed(futures):
+                results.append(future.result())
+
+        results.sort(key=lambda r: r["score"], reverse=True)
+
+        # Assign rank after sorting
+        for i, r in enumerate(results, start=1):
+            r["rank"] = i
+
+        buy_count = sum(1 for r in results if r["signal"] in ("BUY", "OVERWEIGHT"))
+        sell_count = sum(1 for r in results if r["signal"] in ("SELL", "UNDERWEIGHT"))
+        hold_count = sum(1 for r in results if r["signal"] == "HOLD")
+        top_pick = results[0]["ticker"] if results else None
+
+        return {
+            "results": results,
+            "summary": {
+                "trade_date": trade_date,
+                "total": len(results),
+                "buy": buy_count,
+                "hold": hold_count,
+                "sell": sell_count,
+                "top_pick": top_pick,
+            },
+        }
+
+    @staticmethod
+    def _extract_confidence(decision_text: str) -> float:
+        """Parse **Confidence**: 0.XX from the Portfolio Manager's markdown."""
+        match = re.search(r"\*\*Confidence\*\*:\s*([0-9.]+)", decision_text)
+        if match:
+            try:
+                return float(match.group(1))
+            except ValueError:
+                pass
+        return 0.5  # neutral fallback
+
+    @staticmethod
+    def _extract_rating(decision_text: str) -> Optional[str]:
+        """Parse **Rating**: <value> from the Portfolio Manager's markdown."""
+        match = re.search(r"\*\*Rating\*\*:\s*(\w+)", decision_text)
+        return match.group(1) if match else None
+
+    @staticmethod
+    def _conviction_score(signal: str, confidence: float) -> float:
+        """Blend signal direction with confidence into a scalar for ranking.
+
+        Positive score → bullish, negative → bearish, magnitude = conviction.
+        """
+        direction = {
+            "BUY": 2.0,
+            "OVERWEIGHT": 1.0,
+            "HOLD": 0.0,
+            "UNDERWEIGHT": -1.0,
+            "SELL": -2.0,
+        }.get(signal.upper(), 0.0)
+        return direction * confidence
 
     def process_signal(self, full_signal):
         """Process a signal to extract the core decision."""

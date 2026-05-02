@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 class TradingMemoryLog:
     """SQLite-backed log of trading decisions and reflections."""
 
+    _SEPARATOR = "\n\n<!-- ENTRY_END -->\n\n"
+
     def __init__(self, config: dict = None):
         cfg = config or {}
         self._db_path = None
@@ -295,11 +297,10 @@ class TradingMemoryLog:
         try:
             logger.info("Migrating legacy trading_memory.md to SQLite DB...")
             text = md_path.read_text(encoding="utf-8")
-            _SEPARATOR = "\n\n<!-- ENTRY_END -->\n\n"
             _DECISION_RE = re.compile(r"DECISION:\n(.*?)(?=\nREFLECTION:|\Z)", re.DOTALL)
             _REFLECTION_RE = re.compile(r"REFLECTION:\n(.*?)$", re.DOTALL)
-            
-            raw_entries = [e.strip() for e in text.split(_SEPARATOR) if e.strip()]
+
+            raw_entries = [e.strip() for e in text.split(self._SEPARATOR) if e.strip()]
             
             with self._get_conn() as conn:
                 # Check if we already have entries in DB to avoid double migration

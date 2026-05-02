@@ -1228,11 +1228,98 @@ def backtest(
 ):
     from cli.backtester import run_backtest
     selected_analysts = [a.strip().lower() for a in analysts.split(",")]
-    
+
     config = DEFAULT_CONFIG.copy()
     config["llm_provider"] = provider.lower()
-    
+
     run_backtest(ticker, start_date, end_date, selected_analysts, config)
+
+
+@app.command()
+def portfolio(
+    tickers: str = typer.Option(..., "--tickers", help="Comma-separated ticker symbols, e.g. AAPL,MSFT,NVDA"),
+    trade_date: str = typer.Option(..., "--date", help="Analysis date YYYY-MM-DD"),
+    analysts: str = typer.Option("market,sentiment,news,fundamentals", "--analysts", help="Comma-separated analysts"),
+    provider: str = typer.Option("google", "--provider", help="LLM provider"),
+    workers: int = typer.Option(2, "--workers", help="Max parallel tickers (keep low to avoid API rate limits)"),
+    output: Optional[str] = typer.Option(None, "--output", help="Optional CSV path to save results"),
+):
+    """Analyse a basket of tickers in parallel and print a ranked summary table."""
+    import csv
+
+    ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    if not ticker_list:
+        console.print("[red]No tickers provided.[/red]")
+        raise typer.Exit(1)
+
+    selected_analysts = [a.strip().lower() for a in analysts.split(",")]
+    config = DEFAULT_CONFIG.copy()
+    config["llm_provider"] = provider.lower()
+
+    console.print(
+        Panel(
+            f"[bold]Portfolio Analysis[/bold]\n"
+            f"Tickers : {', '.join(ticker_list)}\n"
+            f"Date    : {trade_date}\n"
+            f"Workers : {workers}",
+            title="TradingAgents — Portfolio",
+            border_style="blue",
+        )
+    )
+
+    ta = TradingAgentsGraph(selected_analysts=selected_analysts, config=config)
+
+    with console.status("[bold green]Running analysis (this may take a while)…[/bold green]"):
+        portfolio_result = ta.propagate_portfolio(ticker_list, trade_date, max_workers=workers)
+
+    results = portfolio_result["results"]
+    summary = portfolio_result["summary"]
+
+    # --- Rich results table ---
+    table = Table(title=f"Portfolio Ranking — {trade_date}", box=box.ROUNDED, show_lines=True)
+    table.add_column("Rank", style="bold", justify="center")
+    table.add_column("Ticker", style="bold cyan")
+    table.add_column("Signal")
+    table.add_column("Rating")
+    table.add_column("Confidence", justify="right")
+    table.add_column("Score", justify="right")
+    table.add_column("Error", style="red")
+
+    SIGNAL_COLORS = {
+        "BUY": "green",
+        "OVERWEIGHT": "bright_green",
+        "HOLD": "yellow",
+        "UNDERWEIGHT": "orange3",
+        "SELL": "red",
+    }
+
+    for r in results:
+        color = SIGNAL_COLORS.get(r["signal"].upper(), "white")
+        table.add_row(
+            str(r["rank"]),
+            r["ticker"],
+            f"[{color}]{r['signal']}[/{color}]",
+            r["rating"] or "—",
+            f"{r['confidence']:.2f}",
+            f"{r['score']:.2f}",
+            r["error"] or "",
+        )
+
+    console.print(table)
+    console.print(
+        f"\n[bold]Summary:[/bold] {summary['buy']} Buy/OW  |  "
+        f"{summary['hold']} Hold  |  {summary['sell']} Sell/UW  |  "
+        f"Top pick: [bold cyan]{summary['top_pick']}[/bold cyan]"
+    )
+
+    # --- Optional CSV export ---
+    if output:
+        fieldnames = ["rank", "ticker", "signal", "rating", "confidence", "score", "error", "decision"]
+        with open(output, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(results)
+        console.print(f"[dim]Results saved to {output}[/dim]")
 
 
 if __name__ == "__main__":

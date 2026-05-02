@@ -11,7 +11,7 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.graph.propagation import Propagator
 from tradingagents.agents.managers.portfolio_manager import create_portfolio_manager
 
-_SEP = TradingMemoryLog._SEPARATOR
+_SEP = TradingMemoryLog._SEPARATOR  # available as a class attribute for callers
 
 DECISION_BUY = "Rating: Buy\nEnter at $189-192, 6% portfolio cap."
 DECISION_OVERWEIGHT = (
@@ -36,15 +36,11 @@ def make_log(tmp_path, filename="trading_memory.md"):
 
 
 def _seed_completed(tmp_path, ticker, date, decision_text, reflection_text, filename="trading_memory.md"):
-    """Write a completed entry directly to file, bypassing the API."""
-    entry = (
-        f"[{date} | {ticker} | Buy | +1.0% | +0.5% | 5d]\n\n"
-        f"DECISION:\n{decision_text}\n\n"
-        f"REFLECTION:\n{reflection_text}"
-        + _SEP
-    )
-    with open(tmp_path / filename, "a", encoding="utf-8") as f:
-        f.write(entry)
+    """Insert a completed (resolved) entry via the API into the shared SQLite DB."""
+    config = {"memory_log_path": str(tmp_path / filename)}
+    log = TradingMemoryLog(config)
+    log.store_decision(ticker, date, decision_text)
+    log.update_with_outcome(ticker, date, 0.01, 0.005, 5, reflection_text)
 
 
 def _resolve_entry(log, ticker, date, decision, reflection="Good call."):
@@ -110,10 +106,9 @@ def _structured_pm_llm(captured: dict, decision: PortfolioDecision | None = None
 class TestTradingMemoryLogCore:
 
     def test_store_creates_file(self, tmp_path):
-        log = make_log(tmp_path)
-        assert not (tmp_path / "trading_memory.md").exists()
-        log.store_decision("NVDA", "2026-01-10", DECISION_BUY)
-        assert (tmp_path / "trading_memory.md").exists()
+        assert not (tmp_path / "trading_memory.db").exists()
+        make_log(tmp_path)  # _init_db() creates the SQLite file at construction time
+        assert (tmp_path / "trading_memory.db").exists()
 
     def test_store_appends_not_overwrites(self, tmp_path):
         log = make_log(tmp_path)
@@ -156,8 +151,13 @@ class TestTradingMemoryLogCore:
     def test_pending_tag_format(self, tmp_path):
         log = make_log(tmp_path)
         log.store_decision("NVDA", "2026-01-10", DECISION_BUY)
-        text = (tmp_path / "trading_memory.md").read_text(encoding="utf-8")
-        assert "[2026-01-10 | NVDA | Buy | pending]" in text
+        entries = log.load_entries()
+        assert len(entries) == 1
+        e = entries[0]
+        assert e["date"] == "2026-01-10"
+        assert e["ticker"] == "NVDA"
+        assert e["rating"] == "Buy"
+        assert e["pending"] is True
 
     # Rating parsing
 
@@ -392,11 +392,13 @@ class TestDeferredReflection:
         log = make_log(tmp_path)
         log.store_decision("NVDA", "2026-01-10", DECISION_BUY)
         log.update_with_outcome("NVDA", "2026-01-10", 0.042, 0.021, 5, "Momentum confirmed.")
-        text = (tmp_path / "trading_memory.md").read_text(encoding="utf-8")
-        assert "[2026-01-10 | NVDA | Buy | pending]" not in text
-        assert "+4.2%" in text
-        assert "+2.1%" in text
-        assert "5d" in text
+        entries = log.load_entries()
+        assert len(entries) == 1
+        e = entries[0]
+        assert e["pending"] is False
+        assert e["raw"] == "+4.2%"
+        assert e["alpha"] == "+2.1%"
+        assert e["holding"] == "5d"
 
     def test_update_appends_reflection(self, tmp_path):
         log = make_log(tmp_path)
@@ -425,13 +427,13 @@ class TestDeferredReflection:
         assert msft["ticker"] == "MSFT" and msft["pending"] is True
 
     def test_update_atomic_write(self, tmp_path):
-        """A pre-existing .tmp file is overwritten; the log is correctly updated."""
+        """SQLite transactions are atomic; unrelated files in the directory are untouched."""
         log = make_log(tmp_path)
         log.store_decision("NVDA", "2026-01-10", DECISION_BUY)
-        stale_tmp = tmp_path / "trading_memory.tmp"
-        stale_tmp.write_text("GARBAGE CONTENT — should be overwritten", encoding="utf-8")
+        unrelated = tmp_path / "trading_memory.tmp"
+        unrelated.write_text("GARBAGE CONTENT — should be untouched", encoding="utf-8")
         log.update_with_outcome("NVDA", "2026-01-10", 0.042, 0.021, 5, "Correct.")
-        assert not stale_tmp.exists()
+        assert unrelated.exists(), "SQLite backend must not delete unrelated files"
         entries = log.load_entries()
         assert len(entries) == 1
         assert entries[0]["reflection"] == "Correct."
@@ -442,7 +444,7 @@ class TestDeferredReflection:
         log.update_with_outcome("NVDA", "2026-01-10", 0.05, 0.02, 5, "Reflection")
 
     def test_formatting_roundtrip_after_update(self, tmp_path):
-        """All fields intact and blank line between tag and DECISION preserved after update."""
+        """All fields intact after update — SQLite stores structured data natively."""
         log = make_log(tmp_path)
         log.store_decision("NVDA", "2026-01-10", DECISION_BUY)
         log.update_with_outcome("NVDA", "2026-01-10", 0.042, 0.021, 5, "Momentum confirmed.")
@@ -455,8 +457,6 @@ class TestDeferredReflection:
         assert e["raw"] == "+4.2%"
         assert e["alpha"] == "+2.1%"
         assert e["holding"] == "5d"
-        raw_text = (tmp_path / "trading_memory.md").read_text(encoding="utf-8")
-        assert "[2026-01-10 | NVDA | Buy | +4.2% | +2.1% | 5d]\n\nDECISION:" in raw_text
 
     # Reflector.reflect_on_final_decision
 

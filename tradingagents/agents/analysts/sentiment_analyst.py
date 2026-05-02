@@ -6,6 +6,7 @@ from tradingagents.agents.utils.agent_utils import (
     invoke_with_retry,
 )
 from tradingagents.dataflows.config import get_config
+from tradingagents.prompts import load_prompt
 
 
 def create_sentiment_analyst(llm):
@@ -17,11 +18,7 @@ def create_sentiment_analyst(llm):
             get_news,
         ]
 
-        system_message = (
-            "You are a Sentiment Analyst tasked with analyzing recent company news to gauge public and market sentiment for a specific company over the past week. You will be given a company's name. Your objective is to write a comprehensive report detailing the bullish or bearish sentiment surrounding the company, analyzing the tone of the news articles, and extracting implications for traders. Use the get_news(query, start_date, end_date) tool to search for company-specific news. Look for keywords, tone, and context that indicate market confidence or fear. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."
-            + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
-            + get_language_instruction()
-        )
+        system_message = load_prompt("sentiment_analyst") + get_language_instruction()
 
         prompt = ChatPromptTemplate.from_messages(
             [

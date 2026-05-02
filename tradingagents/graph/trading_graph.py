@@ -454,7 +454,22 @@ class TradingAgentsGraph:
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = {pool.submit(_analyse_one, t): t for t in tickers}
             for future in as_completed(futures):
-                results.append(future.result())
+                ticker_sym = futures[future]
+                try:
+                    results.append(future.result())
+                except Exception as exc:
+                    # Last-resort catch: _analyse_one should never propagate, but
+                    # guard against unexpected BaseException subclasses bubbling up.
+                    logger.error("Unhandled thread failure for %s: %s", ticker_sym, exc)
+                    results.append({
+                        "ticker": ticker_sym,
+                        "signal": "ERROR",
+                        "rating": None,
+                        "confidence": 0.0,
+                        "score": -999.0,
+                        "decision": "",
+                        "error": f"Unhandled: {exc}",
+                    })
 
         results.sort(key=lambda r: r["score"], reverse=True)
 
@@ -487,13 +502,17 @@ class TradingAgentsGraph:
             try:
                 return float(match.group(1))
             except ValueError:
-                pass
+                logger.debug("Malformed confidence value in decision text: %r", match.group(1))
+        else:
+            logger.debug("No **Confidence** field found in decision text; defaulting to 0.5")
         return 0.5  # neutral fallback
 
     @staticmethod
     def _extract_rating(decision_text: str) -> Optional[str]:
         """Parse **Rating**: <value> from the Portfolio Manager's markdown."""
         match = re.search(r"\*\*Rating\*\*:\s*(\w+)", decision_text)
+        if not match:
+            logger.debug("No **Rating** field found in decision text")
         return match.group(1) if match else None
 
     @staticmethod

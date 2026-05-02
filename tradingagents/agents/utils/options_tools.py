@@ -21,19 +21,23 @@ def _format_chain_summary(ticker: str, expiry: str) -> str:
     try:
         chain = tk.option_chain(expiry)
     except Exception as exc:
+        logger.warning("Failed to fetch option chain for %s expiry %s: %s", ticker, expiry, exc)
         return f"Could not fetch chain for {expiry}: {exc}"
 
     calls: pd.DataFrame = chain.calls.copy()
     puts: pd.DataFrame = chain.puts.copy()
 
     if calls.empty or puts.empty:
+        logger.debug("Empty calls or puts for %s expiry %s", ticker, expiry)
         return f"No option data available for expiry {expiry}."
 
     # Current price for moneyness reference
+    spot: Optional[float] = None
     try:
-        spot = tk.fast_info.last_price or tk.fast_info.regularMarketPrice
+        raw = tk.fast_info.last_price or tk.fast_info.regularMarketPrice
+        spot = float(raw) if raw is not None else None
     except Exception:
-        spot = None
+        pass
 
     lines = [f"### Expiry: {expiry}"]
 
@@ -123,29 +127,37 @@ def get_options_data(ticker: str, trade_date: str, num_expiries: int = 3) -> str
         tk = yf.Ticker(ticker)
         available = tk.options  # tuple of date strings YYYY-MM-DD
     except Exception as exc:
+        logger.warning("Failed to fetch options list for %s: %s", ticker, exc)
         return f"Failed to fetch options for {ticker}: {exc}"
 
     if not available:
-        return f"No options data available for {ticker}."
+        # Distinguish: empty tuple means the ticker genuinely has no listed options
+        # (e.g. ETFs without options, delisted tickers, or invalid symbol).
+        logger.debug("No options available for %s (empty expiry list)", ticker)
+        return f"No options data available for {ticker}. The ticker may not have listed options or may be invalid."
 
     try:
         ref = datetime.strptime(trade_date, "%Y-%m-%d")
     except ValueError:
+        logger.warning("Invalid trade_date format %r for options lookup; using today", trade_date)
         ref = datetime.now()
 
     # Filter to expiries on or after the trade date
     future_expiries = [e for e in available if e >= trade_date]
     if not future_expiries:
+        logger.debug("No future expiries for %s after %s; using last %d available", ticker, trade_date, num_expiries)
         future_expiries = list(available[-num_expiries:])
 
     selected = future_expiries[:num_expiries]
 
     sections = [f"## Options Data for {ticker} (reference date: {trade_date})"]
     try:
-        spot = tk.fast_info.last_price or tk.fast_info.regularMarketPrice
+        raw_spot = tk.fast_info.last_price or tk.fast_info.regularMarketPrice
+        spot = float(raw_spot) if raw_spot is not None else None
         sections.append(f"Current Spot Price: ${spot:.2f}" if spot else "Spot price unavailable.")
     except Exception:
-        pass
+        spot = None
+        sections.append("Spot price unavailable.")
 
     for expiry in selected:
         sections.append(_format_chain_summary(ticker, expiry))

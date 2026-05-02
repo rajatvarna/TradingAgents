@@ -1246,10 +1246,19 @@ def portfolio(
 ):
     """Analyse a basket of tickers in parallel and print a ranked summary table."""
     import csv
+    import tempfile
 
     ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
     if not ticker_list:
         console.print("[red]No tickers provided.[/red]")
+        raise typer.Exit(1)
+
+    # Validate date format before spinning up the graph.
+    try:
+        from datetime import datetime as _dt
+        _dt.strptime(trade_date, "%Y-%m-%d")
+    except ValueError:
+        console.print(f"[red]Invalid date '{trade_date}'. Expected format: YYYY-MM-DD[/red]")
         raise typer.Exit(1)
 
     selected_analysts = [a.strip().lower() for a in analysts.split(",")]
@@ -1269,11 +1278,23 @@ def portfolio(
 
     ta = TradingAgentsGraph(selected_analysts=selected_analysts, config=config)
 
-    with console.status("[bold green]Running analysis (this may take a while)…[/bold green]"):
-        portfolio_result = ta.propagate_portfolio(ticker_list, trade_date, max_workers=workers)
+    try:
+        with console.status("[bold green]Running analysis (this may take a while)…[/bold green]"):
+            portfolio_result = ta.propagate_portfolio(ticker_list, trade_date, max_workers=workers)
+    except Exception as exc:
+        console.print(f"[red]Portfolio analysis failed: {exc}[/red]")
+        raise typer.Exit(1)
 
     results = portfolio_result["results"]
     summary = portfolio_result["summary"]
+
+    failed = [r for r in results if r.get("error")]
+    if failed:
+        console.print(
+            f"[yellow]Warning: {len(failed)} ticker(s) failed — "
+            + ", ".join(r["ticker"] for r in failed)
+            + "[/yellow]"
+        )
 
     # --- Rich results table ---
     table = Table(title=f"Portfolio Ranking — {trade_date}", box=box.ROUNDED, show_lines=True)
@@ -1312,13 +1333,25 @@ def portfolio(
         f"Top pick: [bold cyan]{summary['top_pick']}[/bold cyan]"
     )
 
-    # --- Optional CSV export ---
+    # --- Optional CSV export (atomic write: temp file → rename) ---
     if output:
+        output_path = Path(output)
         fieldnames = ["rank", "ticker", "signal", "rating", "confidence", "score", "error", "decision"]
-        with open(output, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-            writer.writeheader()
-            writer.writerows(results)
+        tmp_fd, tmp_path = tempfile.mkstemp(
+            dir=output_path.parent, prefix=".tmp_portfolio_", suffix=".csv"
+        )
+        try:
+            with os.fdopen(tmp_fd, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(results)
+            os.replace(tmp_path, output_path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
         console.print(f"[dim]Results saved to {output}[/dim]")
 
 

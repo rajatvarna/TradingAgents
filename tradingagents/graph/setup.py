@@ -48,33 +48,29 @@ class GraphSetup:
         tool_nodes = {}
 
         if "market" in selected_analysts:
-            analyst_nodes["market"] = create_market_analyst(
-                self.quick_thinking_llm
-            )
+            analyst_nodes["market"] = create_market_analyst(self.quick_thinking_llm)
             delete_nodes["market"] = create_msg_delete()
             tool_nodes["market"] = self.tool_nodes["market"]
 
         if "sentiment" in selected_analysts:
-            analyst_nodes["sentiment"] = create_sentiment_analyst(
-                self.quick_thinking_llm
-            )
+            analyst_nodes["sentiment"] = create_sentiment_analyst(self.quick_thinking_llm)
             delete_nodes["sentiment"] = create_msg_delete()
-            tool_nodes["sentiment"] = self.tool_nodes["social"] # Wait, tool_nodes key is passed from main.py. If I rename to sentiment, I must change it in main.py too. Let's use sentiment.
-
+            tool_nodes["sentiment"] = self.tool_nodes["social"]
 
         if "news" in selected_analysts:
-            analyst_nodes["news"] = create_news_analyst(
-                self.quick_thinking_llm
-            )
+            analyst_nodes["news"] = create_news_analyst(self.quick_thinking_llm)
             delete_nodes["news"] = create_msg_delete()
             tool_nodes["news"] = self.tool_nodes["news"]
 
         if "fundamentals" in selected_analysts:
-            analyst_nodes["fundamentals"] = create_fundamentals_analyst(
-                self.quick_thinking_llm
-            )
+            analyst_nodes["fundamentals"] = create_fundamentals_analyst(self.quick_thinking_llm)
             delete_nodes["fundamentals"] = create_msg_delete()
             tool_nodes["fundamentals"] = self.tool_nodes["fundamentals"]
+
+        if "options" in selected_analysts:
+            analyst_nodes["options"] = create_options_analyst(self.quick_thinking_llm)
+            delete_nodes["options"] = create_msg_delete()
+            tool_nodes["options"] = self.tool_nodes["options"]
 
         # Create researcher and manager nodes
         bull_researcher_node = create_bull_researcher(self.quick_thinking_llm)
@@ -109,21 +105,24 @@ class GraphSetup:
         workflow.add_node("Conservative Analyst", conservative_analyst)
         workflow.add_node("Portfolio Manager", portfolio_manager_node)
 
+        _report_keys = {
+            "market": "market_report",
+            "sentiment": "sentiment_report",
+            "news": "news_report",
+            "fundamentals": "fundamentals_report",
+            "options": "options_report",
+        }
+
         def join_analysts_node(state):
             from langchain_core.messages import HumanMessage, RemoveMessage
-            all_done = True
             for analyst in selected_analysts:
-                if analyst == "market" and not state.get("market_report"): all_done = False
-                if analyst == "social" and not state.get("sentiment_report"): all_done = False
-                if analyst == "news" and not state.get("news_report"): all_done = False
-                if analyst == "fundamentals" and not state.get("fundamentals_report"): all_done = False
-                
-            if all_done:
-                messages = state.get("messages", [])
-                removal_operations = [RemoveMessage(id=m.id) for m in messages]
-                placeholder = HumanMessage(content="Analysts finished their reports.")
-                return {"messages": removal_operations + [placeholder]}
-            return {}
+                key = _report_keys.get(analyst)
+                if key and not state.get(key):
+                    return {}
+            messages = state.get("messages", [])
+            removal_operations = [RemoveMessage(id=m.id) for m in messages]
+            placeholder = HumanMessage(content="Analysts finished their reports.")
+            return {"messages": removal_operations + [placeholder]}
 
         # Add a dummy node to join parallel branches
         workflow.add_node("Join Analysts", join_analysts_node)
@@ -138,14 +137,14 @@ class GraphSetup:
             current_tools = f"tools_{analyst_type}"
             current_clear = f"Msg Clear {analyst_type.capitalize()}"
 
-            # Add conditional edges for current analyst's tools
+            # Use the DRY factory router instead of per-analyst methods.
             workflow.add_conditional_edges(
                 current_analyst,
-                getattr(self.conditional_logic, f"should_continue_{analyst_type}"),
+                self.conditional_logic.should_continue_analyst(analyst_type),
                 [current_tools, current_clear],
             )
             workflow.add_edge(current_tools, current_analyst)
-            
+
             # All clear nodes route to the Join node
             workflow.add_edge(current_clear, "Join Analysts")
 

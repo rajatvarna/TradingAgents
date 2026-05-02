@@ -1,5 +1,6 @@
 # TradingAgents/graph/conditional_logic.py
 
+from typing import Callable
 from tradingagents.agents.utils.agent_states import AgentState
 
 
@@ -11,48 +12,51 @@ class ConditionalLogic:
         self.max_debate_rounds = max_debate_rounds
         self.max_risk_discuss_rounds = max_risk_discuss_rounds
 
-    def should_continue_market(self, state: AgentState):
-        """Determine if market analysis should continue."""
-        messages = state["messages"]
-        last_message = messages[-1]
-        if last_message.tool_calls:
-            return "tools_market"
-        return "Msg Clear Market"
+    def should_continue_analyst(self, analyst_type: str) -> Callable[[AgentState], str]:
+        """Return a router function for the named analyst type.
 
-    def should_continue_sentiment(self, state: AgentState):
-        """Determine if sentiment analysis should continue."""
-        messages = state["messages"]
-        last_message = messages[-1]
-        if last_message.tool_calls:
-            return "tools_sentiment"
-        return "Msg Clear Sentiment"
+        The returned function routes to ``tools_<analyst_type>`` when the last
+        message has pending tool calls, otherwise to
+        ``Msg Clear <Analyst_type>``.
+        """
+        tool_node = f"tools_{analyst_type}"
+        clear_node = f"Msg Clear {analyst_type.capitalize()}"
 
-    def should_continue_news(self, state: AgentState):
-        """Determine if news analysis should continue."""
-        messages = state["messages"]
-        last_message = messages[-1]
-        if last_message.tool_calls:
-            return "tools_news"
-        return "Msg Clear News"
+        def _router(state: AgentState) -> str:
+            if state["messages"][-1].tool_calls:
+                return tool_node
+            return clear_node
 
-    def should_continue_fundamentals(self, state: AgentState):
-        """Determine if fundamentals analysis should continue."""
-        messages = state["messages"]
-        last_message = messages[-1]
-        if last_message.tool_calls:
-            return "tools_fundamentals"
-        return "Msg Clear Fundamentals"
+        return _router
+
+    # Backward-compatible named wrappers — delegate to the factory.
+    def should_continue_market(self, state: AgentState) -> str:
+        return self.should_continue_analyst("market")(state)
+
+    def should_continue_sentiment(self, state: AgentState) -> str:
+        return self.should_continue_analyst("sentiment")(state)
+
+    def should_continue_news(self, state: AgentState) -> str:
+        return self.should_continue_analyst("news")(state)
+
+    def should_continue_fundamentals(self, state: AgentState) -> str:
+        return self.should_continue_analyst("fundamentals")(state)
+
+    def should_continue_options(self, state: AgentState) -> str:
+        return self.should_continue_analyst("options")(state)
 
     def wait_for_all_analysts(self, state: AgentState, selected_analysts: list) -> str:
         """Determine if all selected analysts have completed their reports."""
+        _report_keys = {
+            "market": "market_report",
+            "sentiment": "sentiment_report",
+            "news": "news_report",
+            "fundamentals": "fundamentals_report",
+            "options": "options_report",
+        }
         for analyst in selected_analysts:
-            if analyst == "market" and not state.get("market_report"):
-                return "wait"
-            if analyst == "sentiment" and not state.get("sentiment_report"):
-                return "wait"
-            if analyst == "news" and not state.get("news_report"):
-                return "wait"
-            if analyst == "fundamentals" and not state.get("fundamentals_report"):
+            key = _report_keys.get(analyst)
+            if key and not state.get(key):
                 return "wait"
         return "continue"
 

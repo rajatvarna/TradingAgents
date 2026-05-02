@@ -33,6 +33,26 @@ from cli.stats_handler import StatsCallbackHandler
 
 console = Console()
 
+# Canonical team → agents mapping used by both the classic Live renderer and
+# the Textual TUI. `MessageBuffer.FIXED_AGENTS` is a related but narrower view
+# (omits the Analyst Team since analysts are user-selected).
+ALL_TEAMS = {
+    "Analyst Team": [
+        "Market Analyst",
+        "Social Analyst",
+        "News Analyst",
+        "Fundamentals Analyst",
+    ],
+    "Research Team": ["Bull Researcher", "Bear Researcher", "Research Manager"],
+    "Trading Team": ["Trader"],
+    "Risk Management": [
+        "Aggressive Analyst",
+        "Neutral Analyst",
+        "Conservative Analyst",
+    ],
+    "Portfolio Management": ["Portfolio Manager"],
+}
+
 app = typer.Typer(
     name="TradingAgents",
     help="TradingAgents CLI: Multi-Agents LLM Financial Trading Framework",
@@ -280,23 +300,9 @@ def update_display(layout, spinner_text=None, stats_handler=None, start_time=Non
     progress_table.add_column("Agent", style="green", justify="center", width=20)
     progress_table.add_column("Status", style="yellow", justify="center", width=20)
 
-    # Group agents by team - filter to only include agents in agent_status
-    all_teams = {
-        "Analyst Team": [
-            "Market Analyst",
-            "Social Analyst",
-            "News Analyst",
-            "Fundamentals Analyst",
-        ],
-        "Research Team": ["Bull Researcher", "Bear Researcher", "Research Manager"],
-        "Trading Team": ["Trader"],
-        "Risk Management": ["Aggressive Analyst", "Neutral Analyst", "Conservative Analyst"],
-        "Portfolio Management": ["Portfolio Manager"],
-    }
-
     # Filter teams to only include agents that are in agent_status
     teams = {}
-    for team, agents in all_teams.items():
+    for team, agents in ALL_TEAMS.items():
         active_agents = [a for a in agents if a in message_buffer.agent_status]
         if active_agents:
             teams[team] = active_agents
@@ -1148,6 +1154,9 @@ def run_analysis(checkpoint: bool = False, classic: bool = False):
                 update_display(layout, stats_handler=stats_handler, start_time=start_time)
                 trace.append(chunk)
 
+            if not trace:
+                console.print("[red]Analysis ended before producing any output.[/red]")
+                return
             for agent in message_buffer.agent_status:
                 message_buffer.update_agent_status(agent, "completed")
             message_buffer.add_message(
@@ -1181,8 +1190,16 @@ def run_analysis(checkpoint: bool = False, classic: bool = False):
             return
         final_state = trace[-1]
 
-    # Process final signal (same for both display modes; may have side effects)
-    graph.process_signal(final_state["final_trade_decision"])
+    # Final-state may be incomplete if the user quit early or the graph
+    # failed before reaching the Portfolio Manager — guard the key access.
+    final_decision = final_state.get("final_trade_decision")
+    if final_decision is not None:
+        graph.process_signal(final_decision)
+    else:
+        console.print(
+            "[yellow]No final trade decision in trace — analysis ended early. "
+            "Skipping signal processing.[/yellow]"
+        )
 
     # Post-analysis prompts (outside Live context for clean interaction)
     console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")

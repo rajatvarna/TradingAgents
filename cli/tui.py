@@ -32,23 +32,6 @@ from textual.widgets import Footer, Header, Markdown, Static
 # Pure functions of buffer state. No Textual coupling, easy to unit-test, and
 # reusable from the classic renderer if we ever consolidate.
 
-ALL_TEAMS = {
-    "Analyst Team": [
-        "Market Analyst",
-        "Social Analyst",
-        "News Analyst",
-        "Fundamentals Analyst",
-    ],
-    "Research Team": ["Bull Researcher", "Bear Researcher", "Research Manager"],
-    "Trading Team": ["Trader"],
-    "Risk Management": [
-        "Aggressive Analyst",
-        "Neutral Analyst",
-        "Conservative Analyst",
-    ],
-    "Portfolio Management": ["Portfolio Manager"],
-}
-
 _STATUS_COLORS = {"pending": "yellow", "completed": "green", "error": "red"}
 
 
@@ -60,6 +43,8 @@ def _status_cell(status: str):
 
 
 def build_progress_table(buffer) -> Table:
+    from cli.main import ALL_TEAMS  # canonical mapping; defined in cli.main
+
     table = Table(
         show_header=True,
         header_style="bold magenta",

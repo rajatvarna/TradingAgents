@@ -12,6 +12,7 @@ from tradingagents.agents.utils.structured import (
     bind_structured,
     invoke_structured_or_freetext,
 )
+from tradingagents.prompts import load_prompt
 
 
 def create_trader(llm):
@@ -33,13 +34,11 @@ def create_trader(llm):
             },
             {
                 "role": "user",
-                "content": (
-                    f"Based on a comprehensive analysis by a team of analysts, here is an investment "
-                    f"plan tailored for {company_name}. {instrument_context} This plan incorporates "
-                    f"insights from current technical market trends, macroeconomic indicators, and "
-                    f"social media sentiment. Use this plan as a foundation for evaluating your next "
-                    f"trading decision.\n\nProposed Investment Plan: {investment_plan}\n\n"
-                    f"Leverage these insights to make an informed and strategic decision."
+                "content": load_prompt(
+                    "trader",
+                    company_name=company_name,
+                    instrument_context=instrument_context,
+                    investment_plan=investment_plan,
                 ),
             },
         ]

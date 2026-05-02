@@ -19,6 +19,7 @@ from tradingagents.agents.utils.structured import (
     bind_structured,
     invoke_structured_or_freetext,
 )
+from tradingagents.prompts import load_prompt
 
 
 def create_portfolio_manager(llm):
@@ -39,29 +40,15 @@ def create_portfolio_manager(llm):
             else ""
         )
 
-        prompt = f"""As the Portfolio Manager, synthesize the risk analysts' debate and deliver the final trading decision.
-
-{instrument_context}
-
----
-
-**Rating Scale** (use exactly one):
-- **Buy**: Strong conviction to enter or add to position
-- **Overweight**: Favorable outlook, gradually increase exposure
-- **Hold**: Maintain current position, no action needed
-- **Underweight**: Reduce exposure, take partial profits
-- **Sell**: Exit position or avoid entry
-
-**Context:**
-- Research Manager's investment plan: **{research_plan}**
-- Trader's transaction proposal: **{trader_plan}**
-{lessons_line}
-**Risk Analysts Debate History:**
-{history}
-
----
-
-Be decisive and ground every conclusion in specific evidence from the analysts. Provide a confidence score between 0.0 and 1.0 reflecting your conviction.{get_language_instruction()}"""
+        prompt = load_prompt(
+            "portfolio_manager",
+            instrument_context=instrument_context,
+            research_plan=research_plan,
+            trader_plan=trader_plan,
+            lessons_line=lessons_line,
+            history=history,
+            language_instruction=get_language_instruction(),
+        )
 
         final_trade_decision = invoke_structured_or_freetext(
             structured_llm,

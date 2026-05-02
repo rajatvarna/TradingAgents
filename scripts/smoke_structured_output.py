@@ -8,10 +8,10 @@ OpenAI / xAI / DeepSeek / Qwen / GLM, response_schema for Gemini, tool-use
 for Anthropic) returns clean instances on the schemas we ship.
 
 Usage:
-    OPENAI_API_KEY=... python scripts/smoke_structured_output.py openai
-    GOOGLE_API_KEY=... python scripts/smoke_structured_output.py google
-    ANTHROPIC_API_KEY=... python scripts/smoke_structured_output.py anthropic
-    DEEPSEEK_API_KEY=... python scripts/smoke_structured_output.py deepseek
+    export OPENAI_API_KEY="<your-key>"    && python scripts/smoke_structured_output.py openai
+    export GOOGLE_API_KEY="<your-key>"    && python scripts/smoke_structured_output.py google
+    export ANTHROPIC_API_KEY="<your-key>" && python scripts/smoke_structured_output.py anthropic
+    export DEEPSEEK_API_KEY="<your-key>"  && python scripts/smoke_structured_output.py deepseek
 
 The script does NOT call propagate(), to keep the surface tight and the
 cost low — it exercises only the three structured-output calls we just

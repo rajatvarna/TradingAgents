@@ -13,6 +13,14 @@ from tradingagents.dataflows import config as config_module
 pytestmark = pytest.mark.unit
 
 
+@pytest.fixture(autouse=True)
+def _clear_company_name_cache():
+    """Avoid cache bleed between tests (``_company_name`` is ``lru_cache``-d)."""
+    searxng._company_name.cache_clear()
+    yield
+    searxng._company_name.cache_clear()
+
+
 def _fake_response(payload, status_code=200):
     response = requests.Response()
     response.status_code = status_code
@@ -86,6 +94,40 @@ def test_get_news_filters_outside_date_window(stub_company_name):
 
     assert "In window" in result
     assert "Too old" not in result
+
+
+def test_get_news_caps_results_at_limit(stub_company_name):
+    payload = {
+        "results": [
+            {
+                "title": f"Article {i}",
+                "url": f"https://news.example.com/a{i}",
+                "content": "",
+                "publishedDate": "2026-04-15T00:00:00Z",
+            }
+            for i in range(40)
+        ]
+    }
+
+    with patch.object(searxng.requests, "get", return_value=_fake_response(payload)):
+        result = searxng.get_news_searxng(
+            "NVDA", "2026-04-01", "2026-04-30", limit=5
+        )
+
+    assert result.count("### Article") == 5
+
+
+def test_company_name_cached():
+    """Caching means lookups for the same ticker only call yfinance once."""
+    with patch.object(searxng.yf, "Ticker") as ticker_factory:
+        ticker_factory.return_value.info = {"longName": "NVIDIA Corporation"}
+
+        first = searxng._company_name("NVDA")
+        second = searxng._company_name("NVDA")
+
+    assert first == "NVIDIA Corporation"
+    assert second == "NVIDIA Corporation"
+    assert ticker_factory.call_count == 1
 
 
 def test_searxng_request_failure_raises_unavailable(stub_company_name):

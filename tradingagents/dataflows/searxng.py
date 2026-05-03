@@ -11,6 +11,7 @@ Set SEARXNG_BASE_URL to point at the JSON-API endpoint
 
 import os
 from datetime import datetime, timedelta
+from functools import lru_cache
 from typing import Iterable, List, Optional
 
 import requests
@@ -31,11 +32,14 @@ def _base_url() -> str:
     return os.getenv("SEARXNG_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
 
 
+@lru_cache(maxsize=128)
 def _company_name(ticker: str) -> Optional[str]:
     """Resolve a ticker to its company name via yfinance ``.info``.
 
-    Returns ``None`` if the lookup fails so callers can fall back to the raw
-    ticker without aborting the search.
+    Cached because company names are static for a ticker and the underlying
+    ``yfinance.Ticker.info`` lookup makes a blocking network call. Returns
+    ``None`` if the lookup fails so callers can fall back to the raw ticker
+    without aborting the search.
     """
     try:
         info = yf.Ticker(ticker).info or {}
@@ -141,11 +145,18 @@ def _format_results(results: Iterable[dict]) -> str:
     return "\n".join(lines)
 
 
-def get_news_searxng(ticker: str, start_date: str, end_date: str) -> str:
+def get_news_searxng(
+    ticker: str,
+    start_date: str,
+    end_date: str,
+    limit: int = 20,
+) -> str:
     """Retrieve news for a ticker via SearXNG.
 
     Returns a markdown-formatted string matching the yfinance vendor's shape so
-    downstream agents can consume either vendor interchangeably.
+    downstream agents can consume either vendor interchangeably. ``limit``
+    caps the total number of articles emitted to keep the output within the
+    LLM's context window — four facet queries can otherwise return ~40 hits.
     """
     start_dt = datetime.strptime(start_date, "%Y-%m-%d")
     end_dt = datetime.strptime(end_date, "%Y-%m-%d")
@@ -154,7 +165,7 @@ def get_news_searxng(ticker: str, start_date: str, end_date: str) -> str:
     for query in _ticker_queries(ticker):
         aggregated.extend(_search(query, time_range="month"))
 
-    filtered = _dedupe_and_filter(aggregated, start_dt, end_dt)
+    filtered = _dedupe_and_filter(aggregated, start_dt, end_dt)[:limit]
     if not filtered:
         return f"No news found for {ticker} between {start_date} and {end_date}"
 

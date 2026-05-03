@@ -44,7 +44,8 @@ DEFAULT_CONFIG = {
     # News parameters
     "ticker_news_count": 20,
     "global_news_look_back_days": 7,
-    "global_news_limit": 10,
+    "global_news_limit": 10,        # yfinance global news article cap
+    "av_global_news_limit": 50,     # Alpha Vantage global news article cap (historically 50)
     # Benchmark for alpha calculation in the reflection layer.
     # None = auto-detect from ticker suffix via benchmark_map.
     # Set an explicit ticker (e.g. "QQQ") to override for all tickers.

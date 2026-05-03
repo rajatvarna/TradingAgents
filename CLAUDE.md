@@ -10,7 +10,7 @@ Before starting any work, ask: *"Would the upstream maintainers accept this?"* I
 
 ## Environment
 
-- **Python:** 3.13 (`.venv/` at project root)
+- **Python:** 3.10+ (`.venv/` at project root; this repo runs on 3.13 locally)
 - **Activate:** `source .venv/bin/activate`
 - **Install (editable):** `pip install -e .`
 - **Test runner:** `python -m pytest` (pytest not in `pyproject.toml`; install separately)

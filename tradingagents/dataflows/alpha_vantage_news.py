@@ -23,7 +23,7 @@ def get_news(ticker, start_date, end_date) -> dict[str, str] | str:
 
     return _make_api_request("NEWS_SENTIMENT", params)
 
-def get_global_news(curr_date, look_back_days: int = None, limit: int = None) -> dict[str, str] | str:
+def get_global_news(curr_date, look_back_days: int | None = None, limit: int | None = None) -> dict[str, str] | str:
     """Returns global market news & sentiment data without ticker-specific filtering.
 
     Covers broad market topics like financial markets, economy, and more.
@@ -41,7 +41,7 @@ def get_global_news(curr_date, look_back_days: int = None, limit: int = None) ->
     if look_back_days is None:
         look_back_days = DEFAULT_CONFIG.get("global_news_look_back_days", 7)
     if limit is None:
-        limit = DEFAULT_CONFIG.get("global_news_limit", 50) # Alpha Vantage historically used 50
+        limit = DEFAULT_CONFIG.get("av_global_news_limit", 50)
 
     # Calculate start date
     curr_dt = datetime.strptime(curr_date, "%Y-%m-%d")

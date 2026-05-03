@@ -150,6 +150,12 @@ class TradingAgentsGraph:
             if effort:
                 kwargs["effort"] = effort
 
+        timeout = self.config.get("llm_timeout")
+        if timeout is None and provider in ("custom_openai", "ollama"):
+            timeout = 900
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+
         return kwargs
 
     def _create_tool_nodes(self) -> Dict[str, ToolNode]:

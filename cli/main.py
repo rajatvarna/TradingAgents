@@ -596,6 +596,17 @@ def get_user_selections():
         )
         anthropic_effort = ask_anthropic_effort()
 
+    # Step 9: LLM timeout for local inference providers
+    llm_timeout = None
+    if provider_lower in ("custom_openai", "ollama"):
+        console.print(
+            create_question_box(
+                "Step 9: Request Timeout",
+                "Set timeout in seconds for LLM API calls (increase for slow local models)"
+            )
+        )
+        llm_timeout = ask_llm_timeout()
+
     return {
         "ticker": selected_ticker,
         "analysis_date": analysis_date,
@@ -609,6 +620,7 @@ def get_user_selections():
         "openai_reasoning_effort": reasoning_effort,
         "anthropic_effort": anthropic_effort,
         "output_language": output_language,
+        "llm_timeout": llm_timeout,
     }
 
 
@@ -947,6 +959,7 @@ def run_analysis(checkpoint: bool = False):
     config["openai_reasoning_effort"] = selections.get("openai_reasoning_effort")
     config["anthropic_effort"] = selections.get("anthropic_effort")
     config["output_language"] = selections.get("output_language", "English")
+    config["llm_timeout"] = selections.get("llm_timeout")
     config["checkpoint_enabled"] = checkpoint
 
     # Create stats callback handler for tracking LLM/tool calls

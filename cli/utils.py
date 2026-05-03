@@ -402,3 +402,36 @@ def ask_output_language() -> str:
         ).ask().strip()
 
     return choice
+
+
+def ask_llm_timeout() -> int | None:
+    """Ask for LLM request timeout (seconds). Returns None for provider default."""
+    TIMEOUT_OPTIONS = [
+        ("Default (provider decides)", None),
+        ("5 minutes (300s) - fast local models", 300),
+        ("15 minutes (900s) - moderate local models", 900),
+        ("30 minutes (1800s) - slow or large local models", 1800),
+        ("Custom", "custom"),
+    ]
+
+    choice = questionary.select(
+        "Select Request Timeout:",
+        choices=[
+            questionary.Choice(display, value=value) for display, value in TIMEOUT_OPTIONS
+        ],
+        style=questionary.Style([
+            ("selected", "fg:cyan noinherit"),
+            ("highlighted", "fg:cyan noinherit"),
+            ("pointer", "fg:cyan noinherit"),
+        ]),
+    ).ask()
+
+    if choice == "custom":
+        val = questionary.text(
+            "Enter timeout in seconds:",
+            validate=lambda x: x.strip().isdigit() and int(x.strip()) > 0
+            or "Enter a positive integer.",
+        ).ask()
+        return int(val.strip()) if val else None
+
+    return choice

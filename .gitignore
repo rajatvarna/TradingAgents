@@ -1,3 +1,8 @@
+# Local AI tooling (not for upstream)
+.codex/
+.claude/skills/
+HANDOFF.md
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

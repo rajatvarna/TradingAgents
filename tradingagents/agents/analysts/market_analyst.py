@@ -3,6 +3,7 @@ from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_indicators,
     get_language_instruction,
+    get_horizon_instruction,
     get_stock_data,
     invoke_with_retry,
 )
@@ -21,7 +22,7 @@ def create_market_analyst(llm):
             get_indicators,
         ]
 
-        system_message = load_prompt("market_analyst") + get_language_instruction()
+        system_message = load_prompt("market_analyst") + get_language_instruction() + get_horizon_instruction()
 
         prompt = ChatPromptTemplate.from_messages(
             [

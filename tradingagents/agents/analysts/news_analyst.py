@@ -2,6 +2,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_global_news,
+    get_horizon_instruction,
     get_language_instruction,
     get_news,
     invoke_with_retry,
@@ -20,7 +21,7 @@ def create_news_analyst(llm):
             get_global_news,
         ]
 
-        system_message = load_prompt("news_analyst") + get_language_instruction()
+        system_message = load_prompt("news_analyst") + get_language_instruction() + get_horizon_instruction()
 
         prompt = ChatPromptTemplate.from_messages(
             [

@@ -6,6 +6,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_fundamentals,
     get_income_statement,
     get_insider_transactions,
+    get_horizon_instruction,
     get_language_instruction,
     invoke_with_retry,
 )
@@ -25,7 +26,7 @@ def create_fundamentals_analyst(llm):
             get_income_statement,
         ]
 
-        system_message = load_prompt("fundamentals_analyst") + get_language_instruction()
+        system_message = load_prompt("fundamentals_analyst") + get_language_instruction() + get_horizon_instruction()
 
         prompt = ChatPromptTemplate.from_messages(
             [

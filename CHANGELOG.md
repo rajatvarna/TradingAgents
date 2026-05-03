@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Breaking changes within the 0.x line are called out explicitly.
 
+## [Unreleased]
+
+### Added
+
+- **Scrollable Textual TUI** for `tradingagents analyze`. The live view now
+  uses a [Textual](https://textual.textualize.io/) app with scrollable
+  Messages & Tools and Current Report panes (mouse wheel, arrow keys,
+  `g`/`G` for top/bottom, `Tab` to switch panes), so long reports and
+  earlier tool calls are no longer truncated. The classic Rich `Live`
+  renderer is preserved behind `--classic` (or `TRADINGAGENTS_CLASSIC_TUI=1`)
+  for one release.
+- `handle_stream_chunk(buffer, chunk)` extracted from `run_analysis` so the
+  chunk → buffer mapping has a single home shared by both renderers.
+
+### Changed
+
+- The `update_research_team_status` helper now takes a buffer argument
+  instead of relying on the module-global `message_buffer`.
+
 ## [0.2.4] — 2026-04-25
 
 ### Added

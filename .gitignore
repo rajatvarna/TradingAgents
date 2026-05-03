@@ -218,4 +218,6 @@ __marimo__/
 # Cache
 **/data_cache/
 reports/
+
+# macOS
 .DS_Store

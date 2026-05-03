@@ -180,6 +180,44 @@ An interface will appear showing results as they load, letting you track the age
   <img src="assets/cli/cli_transaction.png" width="100%" style="display: inline-block; margin: 0 2%;">
 </p>
 
+### 🦞 OpenClaw Integration
+
+Use TradingAgents directly from **Telegram, WhatsApp, Discord, Slack**, and other chat apps via [OpenClaw](https://openclaw.ai/), a personal AI assistant.
+
+<details>
+<summary>Click to expand OpenClaw integration guide</summary>
+
+**Quick Start:**
+
+1. Install the Trading Analyzer skill:
+```bash
+openclaw skill add https://github.com/TauricResearch/TradingAgents/tree/main/skills/openclaw
+```
+
+2. Set your LLM provider:
+```bash
+export OPENCLAW_LLM_PROVIDER="openai"
+export OPENCLAW_LLM_MODEL="gpt-4"
+export OPENAI_API_KEY="sk-..."
+```
+
+3. Chat with OpenClaw in your favorite app:
+```
+You: "Analyze NVDA"
+OpenClaw: 📊 Stock Analysis: NVDA
+          [Full multi-agent analysis with recommendation...]
+```
+
+**Features:**
+- ✅ Full trading analysis via chat
+- ✅ Share your LLM endpoint between apps
+- ✅ Use any LLM provider (OpenAI, Anthropic, Google, DeepSeek, local models)
+- ✅ Local/private or cloud-hosted
+
+See [**OPENCLAW_INTEGRATION.md**](OPENCLAW_INTEGRATION.md) for detailed setup instructions.
+
+</details>
+
 ## TradingAgents Package
 
 ### Implementation Details

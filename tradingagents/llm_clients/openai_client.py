@@ -158,6 +158,7 @@ class OpenAIClient(BaseLLMClient):
                     raise ValueError(
                         f"API key for provider '{self.provider}' is not set."
                         f" Please set the {api_key_env} environment variable."
+                        f"(e.g. add {api_key_env}=your_key to your .env file)."
                     )
             else:
                 llm_kwargs["api_key"] = "ollama"

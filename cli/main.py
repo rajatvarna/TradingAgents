@@ -23,6 +23,7 @@ from rich.tree import Tree
 from rich import box
 from rich.align import Align
 from rich.rule import Rule
+import questionary
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
@@ -462,8 +463,12 @@ def update_display(layout, spinner_text=None, stats_handler=None, start_time=Non
     layout["footer"].update(Panel(stats_table, border_style="grey50"))
 
 
-def get_user_selections():
-    """Get all user selections before starting the analysis display."""
+def get_user_selections(batch_mode: bool = False):
+    """Get all user selections before starting the analysis display.
+
+    Args:
+        batch_mode: If True, skip the batch mode prompt and assume batch mode.
+    """
     # Display ASCII art welcome message
     with open(Path(__file__).parent / "static" / "welcome.txt", "r", encoding="utf-8") as f:
         welcome_ascii = f.read()
@@ -501,15 +506,48 @@ def get_user_selections():
             box_content += f"\n[dim]Default: {default}[/dim]"
         return Panel(box_content, border_style="blue", padding=(1, 2))
 
-    # Step 1: Ticker symbol
-    console.print(
-        create_question_box(
-            "Step 1: Ticker Symbol",
-            "Enter the exact ticker symbol to analyze, including exchange suffix when needed (examples: SPY, CNC.TO, 7203.T, 0700.HK)",
-            "SPY",
+    # Step 0: Batch mode selection
+    is_batch_mode = batch_mode
+    if not batch_mode:
+        console.print(
+            create_question_box(
+                "Step 0: Run Mode",
+                "Choose single ticker analysis or batch mode for multiple tickers"
+            )
         )
-    )
-    selected_ticker = get_ticker()
+        mode_choice = questionary.select(
+            "Select run mode:",
+            choices=[
+                questionary.Choice("Single ticker", "single"),
+                questionary.Choice("Batch mode (multiple tickers)", "batch"),
+            ],
+            style=questionary.Style([
+                ("selected", "fg:cyan noinherit"),
+                ("highlighted", "fg:cyan noinherit"),
+                ("pointer", "fg:cyan noinherit"),
+            ]),
+        ).ask()
+        is_batch_mode = (mode_choice == "batch")
+
+    # Step 1: Ticker symbol(s)
+    if is_batch_mode:
+        console.print(
+            create_question_box(
+                "Step 1: Ticker Symbols (Batch Mode)",
+                "Enter multiple ticker symbols separated by commas (examples: SPY,AAPL,MSFT)",
+            )
+        )
+        selected_tickers = get_batch_tickers()
+        console.print(f"[green]Tickers to analyze:[/green] {', '.join(selected_tickers)} ({len(selected_tickers)} total)")
+    else:
+        console.print(
+            create_question_box(
+                "Step 1: Ticker Symbol",
+                "Enter the exact ticker symbol to analyze, including exchange suffix when needed (examples: SPY, CNC.TO, 7203.T, 0700.HK)",
+                "SPY",
+            )
+        )
+        selected_tickers = [get_ticker()]
 
     # Step 2: Analysis date
     default_date = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -599,7 +637,8 @@ def get_user_selections():
         anthropic_effort = ask_anthropic_effort()
 
     return {
-        "ticker": selected_ticker,
+        "tickers": selected_tickers,
+        "batch_mode": is_batch_mode,
         "analysis_date": analysis_date,
         "analysts": selected_analysts,
         "research_depth": selected_research_depth,
@@ -915,9 +954,8 @@ def format_tool_args(args, max_length=80) -> str:
         return result[:max_length - 3] + "..."
     return result
 
-def run_analysis(checkpoint: bool = False):
-    # First get all user selections
-    selections = get_user_selections()
+def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: bool = False):
+    """Run analysis for a single ticker.
 
 <<<<<<< HEAD
     # Create config with selected research depth
@@ -937,6 +975,17 @@ def run_analysis(checkpoint: bool = False):
 
     # Create stats callback handler for tracking LLM/tool calls and costs
     stats_handler = StatsCallbackHandler(provider=config["llm_provider"])
+=======
+    Args:
+        ticker: The ticker symbol to analyze.
+        selections: User selections from get_user_selections().
+        config: Configuration dictionary.
+        auto_save: If True, skip prompts and auto-save the report.
+    """
+    global message_buffer
+    message_buffer = MessageBuffer()
+    stats_handler = StatsCallbackHandler()
+>>>>>>> pr/668
 
     selected_analyst_keys = [a for a in ANALYST_ORDER if a in {analyst.value for analyst in selections["analysts"]}]
 

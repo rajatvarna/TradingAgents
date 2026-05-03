@@ -34,10 +34,22 @@ def get_language_instruction() -> str:
     return f" Write your entire response in {lang}."
 
 
+def _resolve_company_name(ticker: str) -> str | None:
+    """Best-effort company name lookup via yfinance."""
+    try:
+        import yfinance as yf
+        info = yf.Ticker(ticker.upper()).info
+        return info.get("longName") or info.get("shortName")
+    except Exception:
+        return None
+
+
 def build_instrument_context(ticker: str) -> str:
     """Describe the exact instrument so agents preserve exchange-qualified tickers."""
+    name = _resolve_company_name(ticker)
+    name_clause = f" ({name})" if name else ""
     return (
-        f"The instrument to analyze is `{ticker}`. "
+        f"The instrument to analyze is `{ticker}`{name_clause}. "
         "Use this exact ticker in every tool call, report, and recommendation, "
         "preserving any exchange suffix (e.g. `.TO`, `.L`, `.HK`, `.T`)."
     )

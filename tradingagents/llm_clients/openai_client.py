@@ -117,6 +117,7 @@ _PROVIDER_CONFIG = {
     "glm": ("https://api.z.ai/api/paas/v4/", "ZHIPU_API_KEY"),
     "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
     "ollama": ("http://localhost:11434/v1", None),
+    "custom_openai": ("http://localhost:1234/v1", "CUSTOM_OPENAI_API_KEY"),
 }
 
 
@@ -154,6 +155,8 @@ class OpenAIClient(BaseLLMClient):
                 api_key = os.environ.get(api_key_env)
                 if api_key:
                     llm_kwargs["api_key"] = api_key
+                elif self.provider == "custom_openai":
+                    llm_kwargs["api_key"] = "not-needed"
             else:
                 llm_kwargs["api_key"] = "ollama"
         elif self.base_url:

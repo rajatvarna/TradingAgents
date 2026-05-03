@@ -930,6 +930,10 @@ def run_analysis(checkpoint: bool = False):
     # First get all user selections
     selections = get_user_selections()
 
+    # Persist LLM selections for next run
+    from cli.preferences import save_preferences
+    save_preferences(selections)
+
     # Create config with selected research depth
     config = DEFAULT_CONFIG.copy()
     config["max_debate_rounds"] = selections["research_depth"]
@@ -1155,6 +1159,16 @@ def run_analysis(checkpoint: bool = False):
         # Get final state and decision
         final_state = trace[-1]
         decision = graph.process_signal(final_state["final_trade_decision"])
+
+        # Persist decision log and state (the CLI streams directly and
+        # bypasses TradingAgentsGraph._run_graph which normally does this)
+        graph.ticker = selections["ticker"]
+        graph._log_state(selections["analysis_date"], final_state)
+        graph.memory_log.store_decision(
+            ticker=selections["ticker"],
+            trade_date=selections["analysis_date"],
+            final_trade_decision=final_state["final_trade_decision"],
+        )
 
         # Update all agent statuses to completed
         for agent in message_buffer.agent_status:

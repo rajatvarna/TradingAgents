@@ -114,6 +114,22 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Qwen3:latest (8B, local)", "qwen3:latest"),
         ],
     },
+    "lm-studio": {
+        "quick": [
+            ("Custom local model (default port 8000)", "custom"),
+        ],
+        "deep": [
+            ("Custom local model (default port 8000)", "custom"),
+        ],
+    },
+    "llama-cpp": {
+        "quick": [
+            ("Custom local model (default port 8001)", "custom"),
+        ],
+        "deep": [
+            ("Custom local model (default port 8001)", "custom"),
+        ],
+    },
 }
 
 

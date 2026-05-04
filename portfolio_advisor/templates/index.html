@@ -5,197 +5,518 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Portfolio Advisor</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <style>
-    body { background: #0f1117; color: #e0e0e0; }
-    .card { background: #1a1d27; border: 1px solid #2a2d3a; }
-    .card-header { background: #1f2235; border-bottom: 1px solid #2a2d3a; font-weight: 600; }
-    .table { color: #e0e0e0; }
-    .table th { color: #8b95a1; font-size: .8rem; text-transform: uppercase; border-color: #2a2d3a; }
-    .table td { border-color: #2a2d3a; vertical-align: middle; }
-    .source-live { color: #4ade80; }
-    .source-fallback { color: #facc15; }
-    .source-unknown  { color: #9ca3af; }
-    .unaffordable { opacity: 0.5; }
-    .rationale { font-size: .8rem; color: #6b7280; max-width: 420px; }
-    #spinner { display: none; }
-    #portfolio-form { display: none; }
-    pre { color: #a5b4fc; background: #0f1117; padding: 1rem; border-radius: .375rem; font-size: .8rem; }
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #1c2128;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --green:     #3fb950;
+      --green-bg:  #0a2818;
+      --green-dim: rgba(63,185,80,.08);
+      --red:       #f85149;
+      --red-bg:    #2d1117;
+      --red-dim:   rgba(248,81,73,.08);
+      --yellow:    #d29922;
+      --blue:      #58a6ff;
+      --orange:    #fb8f44;
+      --purple:    #bc8cff;
+    }
 
-    /* Regime colors */
-    .regime-bull          { color: #4ade80; }
-    .regime-corrective    { color: #facc15; }
-    .regime-bear          { color: #fb923c; }
-    .regime-confirmed_bear{ color: #f87171; }
-    .regime-unknown       { color: #9ca3af; }
+    * { box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      font-size: .9rem;
+      min-height: 100vh;
+    }
 
-    /* Condition badge */
-    .condition-1 { background: #14532d; color: #86efac; }
-    .condition-2 { background: #1e3a5f; color: #93c5fd; }
-    .condition-3 { background: #3f3f46; color: #a1a1aa; }
-    .condition-4 { background: #422006; color: #fdba74; }
+    /* ── Layout ── */
+    .app-wrapper { max-width: 1400px; margin: 0 auto; padding: 1.5rem 1.25rem; }
+
+    /* ── Header ── */
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .app-title { font-size: 1.2rem; font-weight: 700; color: var(--text); margin: 0; }
+    .app-subtitle { font-size: .75rem; color: var(--muted); margin: 0; }
+    .header-controls { display: flex; gap: .5rem; align-items: center; }
+
+    /* ── Mode toggle ── */
+    .mode-toggle {
+      display: flex;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .mode-btn {
+      padding: .3rem .85rem;
+      font-size: .8rem;
+      font-weight: 500;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .mode-btn.active-conservative {
+      background: var(--surface2);
+      color: var(--blue);
+    }
+    .mode-btn.active-aggressive {
+      background: var(--surface2);
+      color: var(--orange);
+    }
+    .mode-btn:hover:not(.active-conservative):not(.active-aggressive) {
+      color: var(--text);
+      background: rgba(255,255,255,.04);
+    }
+
+    /* ── Run button ── */
+    .run-btn {
+      display: flex;
+      align-items: center;
+      gap: .35rem;
+      padding: .35rem .9rem;
+      font-size: .8rem;
+      font-weight: 500;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .run-btn:hover:not(:disabled) { background: #79b8ff; }
+    .run-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+    /* ── Status strip ── */
+    .status-strip {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: .75rem;
+      margin-bottom: 1.5rem;
+    }
+    @media (max-width: 1100px) { .status-strip { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 640px)  { .status-strip { grid-template-columns: repeat(2, 1fr); } }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .75rem 1rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--accent-color, var(--border));
+    }
+    .stat-label {
+      font-size: .7rem;
+      font-weight: 600;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: .3rem;
+      display: flex;
+      align-items: center;
+      gap: .3rem;
+    }
+    .stat-value { font-size: 1.05rem; font-weight: 700; color: var(--text); line-height: 1.2; }
+    .stat-sub   { font-size: .7rem; color: var(--muted); margin-top: .15rem; }
+
+    /* ── Content grid ── */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 1rem;
+    }
+    @media (max-width: 900px) { .content-grid { grid-template-columns: 1fr; } }
+
+    /* ── Panels ── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+    }
+    .panel:last-child { margin-bottom: 0; }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .65rem 1rem;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      font-size: .8rem;
+      font-weight: 600;
+    }
+    .panel-header .panel-title {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+    }
+    .panel-count {
+      font-size: .7rem;
+      font-weight: 500;
+      padding: .1rem .45rem;
+      border-radius: 20px;
+      background: var(--surface);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    /* ── Tables ── */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .data-table th {
+      font-size: .68rem;
+      font-weight: 600;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: .5rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: transparent;
+      white-space: nowrap;
+    }
+    .data-table td {
+      padding: .55rem 1rem;
+      border-bottom: 1px solid rgba(48,54,61,.5);
+      vertical-align: middle;
+    }
+    .data-table tbody tr:last-child td { border-bottom: none; }
+    .data-table tbody tr:hover td { background: rgba(255,255,255,.03); }
+
+    /* Action row accents */
+    .row-sell td:first-child { border-left: 3px solid var(--red); }
+    .row-buy  td:first-child { border-left: 3px solid var(--green); }
+    .row-hold td:first-child { border-left: 3px solid var(--border); }
+
+    .row-sell { background: var(--red-dim); }
+    .row-buy  { background: var(--green-dim); }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .2rem;
+      font-size: .68rem;
+      font-weight: 600;
+      padding: .18rem .45rem;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .badge-buy        { background: rgba(63,185,80,.15);  color: var(--green); border: 1px solid rgba(63,185,80,.3); }
+    .badge-overweight { background: rgba(63,185,80,.1);   color: #a0d7a6;      border: 1px solid rgba(63,185,80,.2); }
+    .badge-sell       { background: rgba(248,81,73,.15);  color: var(--red);   border: 1px solid rgba(248,81,73,.3); }
+    .badge-underweight{ background: rgba(248,81,73,.1);   color: #f4a09a;      border: 1px solid rgba(248,81,73,.2); }
+    .badge-hold       { background: rgba(139,148,158,.1); color: var(--muted); border: 1px solid rgba(139,148,158,.2); }
+    .badge-owned      { background: rgba(88,166,255,.1);  color: var(--blue);  border: 1px solid rgba(88,166,255,.2); }
+    .badge-new        { background: transparent;           color: var(--muted); border: 1px solid var(--border); }
+    .badge-warn       { background: rgba(210,153,34,.15); color: var(--yellow);border: 1px solid rgba(210,153,34,.3); }
+    .badge-dim        { background: var(--surface2);      color: var(--muted); border: 1px solid var(--border); font-style: italic; }
+    .badge-flag-conc  { background: rgba(210,153,34,.12); color: var(--yellow);border: 1px solid rgba(210,153,34,.25); }
+    .badge-flag-down  { background: rgba(248,81,73,.12);  color: #f4a09a;      border: 1px solid rgba(248,81,73,.25); }
+    .badge-flag-sec   { background: rgba(188,140,255,.1); color: var(--purple);border: 1px solid rgba(188,140,255,.25); }
+
+    /* ── Ticker + price ── */
+    .ticker { font-weight: 700; font-size: .9rem; letter-spacing: .02em; }
+    .price-cell { font-variant-numeric: tabular-nums; font-size: .85rem; color: var(--text); }
+    .rationale-cell { font-size: .75rem; color: var(--muted); max-width: 380px; }
+
+    /* ── PnL ── */
+    .pnl-pos { color: var(--green); }
+    .pnl-neg { color: var(--red); }
+    .pnl-sub { font-size: .72rem; opacity: .8; }
+
+    /* ── Unaffordable ── */
+    .row-unaffordable { opacity: .45; }
+
+    /* ── Empty state ── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+      color: var(--muted);
+      font-size: .8rem;
+      gap: .4rem;
+    }
+    .empty-state i { font-size: 1.4rem; opacity: .4; }
+
+    /* ── Source indicator ── */
+    .src-live     { color: var(--green); }
+    .src-fallback { color: var(--yellow); }
+    .src-unknown  { color: var(--muted); }
+
+    /* ── Regime colors ── */
+    .regime-bull          { color: var(--green); }
+    .regime-corrective    { color: var(--yellow); }
+    .regime-bear          { color: var(--orange); }
+    .regime-confirmed_bear{ color: var(--red); }
+    .regime-unknown       { color: var(--muted); }
+
+    /* Accent colors per stat card */
+    .accent-cash    { --accent-color: var(--blue); }
+    .accent-source  { --accent-color: var(--purple); }
+    .accent-cond    { --accent-color: var(--muted); }
+    .accent-regime  { --accent-color: var(--muted); } /* overridden by JS */
+    .accent-intra   { --accent-color: #3dc9b0; }
+    .accent-eod     { --accent-color: #3dc9b0; }
+
+    /* ── Condition badge ── */
+    .cond-1 { color: var(--green); }
+    .cond-2 { color: var(--blue); }
+    .cond-3 { color: var(--muted); }
+    .cond-4 { color: var(--orange); }
+
+    /* ── Spinner ── */
+    .spin {
+      display: none;
+      width: .75rem;
+      height: .75rem;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Portfolio editor ── */
+    .editor-body { padding: .85rem; display: none; border-top: 1px solid var(--border); }
+    .form-label-sm { font-size: .72rem; font-weight: 600; text-transform: uppercase;
+                     letter-spacing: .04em; color: var(--muted); margin-bottom: .3rem; }
+    .form-ctrl {
+      width: 100%; background: var(--bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: .4rem .6rem; font-size: .82rem;
+      transition: border-color .15s;
+    }
+    .form-ctrl:focus { outline: none; border-color: var(--blue); }
+    textarea.form-ctrl { resize: vertical; font-family: 'Courier New', monospace; }
+
+    .btn-save {
+      width: 100%; margin-top: .5rem;
+      padding: .45rem; border: none; border-radius: 6px;
+      background: var(--blue); color: #fff; font-weight: 600;
+      font-size: .82rem; cursor: pointer; transition: background .15s;
+    }
+    .btn-save:hover { background: #79b8ff; }
+
+    .btn-edit {
+      font-size: .72rem; padding: .2rem .55rem;
+      background: transparent; color: var(--muted);
+      border: 1px solid var(--border); border-radius: 4px;
+      cursor: pointer; transition: all .15s;
+    }
+    .btn-edit:hover { color: var(--text); border-color: var(--muted); }
+
+    .save-msg { font-size: .75rem; margin-top: .4rem; color: var(--green); display: none; }
   </style>
 </head>
 <body>
-<div class="container-fluid py-4 px-4">
+<div class="app-wrapper">
 
   <!-- Header -->
-  <div class="d-flex align-items-center justify-content-between mb-4">
+  <header class="app-header">
     <div>
-      <h4 class="mb-0 fw-bold">Portfolio Advisor</h4>
-      <small class="text-muted">Powered by TradingAgents</small>
+      <p class="app-title"><i class="bi bi-graph-up-arrow" style="color:var(--blue)"></i> Portfolio Advisor</p>
+      <p class="app-subtitle">Powered by TradingAgents &mdash; multi-agent LLM analysis</p>
     </div>
-    <div class="d-flex gap-2 align-items-center">
-      <div class="btn-group" role="group" id="aggToggle">
-        <button type="button" class="btn btn-sm btn-outline-secondary agg-btn"
-                data-value="conservative">Conservative</button>
-        <button type="button" class="btn btn-sm btn-outline-warning agg-btn"
-                data-value="aggressive">Aggressive</button>
+    <div class="header-controls">
+      <div class="mode-toggle" id="modeToggle">
+        <button class="mode-btn" data-value="conservative">
+          <i class="bi bi-shield-check"></i> Conservative
+        </button>
+        <button class="mode-btn" data-value="aggressive">
+          <i class="bi bi-lightning-charge"></i> Aggressive
+        </button>
       </div>
-      <button class="btn btn-sm btn-primary" id="runBtn" onclick="triggerRun()">
-        Run Now
-        <span id="spinner" class="spinner-border spinner-border-sm ms-1"></span>
+      <button class="run-btn" id="runBtn" onclick="triggerRun()">
+        <i class="bi bi-play-fill"></i>
+        <span>Run Now</span>
+        <div class="spin" id="spinner"></div>
       </button>
     </div>
+  </header>
+
+  <!-- Status strip -->
+  <div class="status-strip">
+
+    <div class="stat-card accent-cash">
+      <div class="stat-label"><i class="bi bi-wallet2"></i> Cash Available</div>
+      <div class="stat-value" id="cashVal">—</div>
+    </div>
+
+    <div class="stat-card accent-source">
+      <div class="stat-label"><i class="bi bi-plug"></i> Data Source</div>
+      <div class="stat-value" id="sourceVal">—</div>
+    </div>
+
+    <div class="stat-card accent-cond" id="condCard">
+      <div class="stat-label"><i class="bi bi-diagram-3"></i> Condition</div>
+      <div class="stat-value" id="conditionVal">—</div>
+      <div class="stat-sub" id="conditionSub"></div>
+    </div>
+
+    <div class="stat-card accent-regime" id="regimeCard">
+      <div class="stat-label"><i class="bi bi-activity"></i> Market Regime</div>
+      <div class="stat-value" id="regimeVal">—</div>
+      <div class="stat-sub" id="regimeSub"></div>
+    </div>
+
+    <div class="stat-card accent-intra">
+      <div class="stat-label"><i class="bi bi-clock-history"></i> Last Intraday</div>
+      <div class="stat-value" style="font-size:.85rem" id="intradayVal">—</div>
+    </div>
+
+    <div class="stat-card accent-eod">
+      <div class="stat-label"><i class="bi bi-calendar-check"></i> Last EOD Scan</div>
+      <div class="stat-value" style="font-size:.85rem" id="eodVal">—</div>
+    </div>
+
   </div>
 
-  <!-- Status row -->
-  <div class="row g-3 mb-4" id="statusCards">
-    <div class="col-md-2">
-      <div class="card h-100">
-        <div class="card-body">
-          <div class="text-muted small">Cash Available</div>
-          <div class="fs-4 fw-bold" id="cashVal">—</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-2">
-      <div class="card h-100">
-        <div class="card-body">
-          <div class="text-muted small">Data Source</div>
-          <div class="fs-5 fw-bold" id="sourceVal">—</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-2">
-      <div class="card h-100">
-        <div class="card-body">
-          <div class="text-muted small">Condition</div>
-          <div id="conditionVal" class="fw-bold">—</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-2">
-      <div class="card h-100">
-        <div class="card-body">
-          <div class="text-muted small">Market Regime</div>
-          <div id="regimeVal" class="fw-bold">—</div>
-          <div id="regimeSub" class="text-muted" style="font-size:.75rem"></div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-2">
-      <div class="card h-100">
-        <div class="card-body">
-          <div class="text-muted small">Last Intraday</div>
-          <div class="fw-bold" id="intradayVal">—</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-2">
-      <div class="card h-100">
-        <div class="card-body">
-          <div class="text-muted small">Last EOD Scan</div>
-          <div class="fw-bold" id="eodVal">—</div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- Content grid -->
+  <div class="content-grid">
 
-  <div class="row g-3">
-    <!-- Action list -->
-    <div class="col-lg-8">
+    <!-- Left column: action tables -->
+    <div>
 
       <!-- SELL -->
-      <div class="card mb-3">
-        <div class="card-header text-danger">Sell Alerts</div>
-        <div class="card-body p-0">
-          <table class="table table-hover mb-0" id="sellTable">
+      <div class="panel" id="sellPanel">
+        <div class="panel-header" style="color:var(--red)">
+          <div class="panel-title">
+            <i class="bi bi-arrow-down-circle-fill"></i>
+            Sell Alerts
+            <span class="panel-count" id="sellCount">0</span>
+          </div>
+        </div>
+        <div id="sellBody">
+          <table class="data-table" id="sellTable">
             <thead><tr>
               <th>Ticker</th><th>Signal</th><th>Price</th><th>Rationale</th>
             </tr></thead>
             <tbody></tbody>
           </table>
-          <div class="text-center text-muted py-3 empty-msg" id="sellEmpty">No sell alerts</div>
+          <div class="empty-state" id="sellEmpty">
+            <i class="bi bi-check-circle"></i>
+            No sell alerts
+          </div>
         </div>
       </div>
 
       <!-- BUY -->
-      <div class="card mb-3">
-        <div class="card-header text-success">Buy Candidates</div>
-        <div class="card-body p-0">
-          <table class="table table-hover mb-0" id="buyTable">
+      <div class="panel" id="buyPanel">
+        <div class="panel-header" style="color:var(--green)">
+          <div class="panel-title">
+            <i class="bi bi-arrow-up-circle-fill"></i>
+            Buy Candidates
+            <span class="panel-count" id="buyCount">0</span>
+          </div>
+        </div>
+        <div id="buyBody">
+          <table class="data-table" id="buyTable">
             <thead><tr>
-              <th>Ticker</th><th>Signal</th><th>Price</th><th>Owned</th><th>Rationale</th>
+              <th>Ticker</th><th>Signal</th><th>Price</th><th>Status</th><th>Rationale</th>
             </tr></thead>
             <tbody></tbody>
           </table>
-          <div class="text-center text-muted py-3 empty-msg" id="buyEmpty">No buy candidates</div>
+          <div class="empty-state" id="buyEmpty">
+            <i class="bi bi-search"></i>
+            No buy candidates
+          </div>
         </div>
       </div>
 
       <!-- HOLD -->
-      <div class="card mb-3">
-        <div class="card-header text-secondary">Hold</div>
-        <div class="card-body p-0">
-          <table class="table table-hover mb-0" id="holdTable">
-            <thead><tr>
-              <th>Ticker</th><th>Signal</th><th>Price</th><th>Rationale</th>
-            </tr></thead>
-            <tbody></tbody>
-          </table>
-          <div class="text-center text-muted py-3 empty-msg" id="holdEmpty">No hold positions</div>
+      <div class="panel">
+        <div class="panel-header" style="color:var(--muted)">
+          <div class="panel-title">
+            <i class="bi bi-pause-circle"></i>
+            Hold
+            <span class="panel-count" id="holdCount">0</span>
+          </div>
+        </div>
+        <table class="data-table" id="holdTable">
+          <thead><tr>
+            <th>Ticker</th><th>Signal</th><th>Price</th><th>Rationale</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty-state" id="holdEmpty">
+          <i class="bi bi-hourglass-split"></i>
+          No hold positions
         </div>
       </div>
 
     </div>
 
-    <!-- Right column: positions + fallback editor -->
-    <div class="col-lg-4">
+    <!-- Right column -->
+    <div>
 
       <!-- Positions -->
-      <div class="card mb-3">
-        <div class="card-header">Current Positions</div>
-        <div class="card-body p-0">
-          <table class="table table-sm mb-0" id="posTable">
-            <thead><tr>
-              <th>Ticker</th><th>Shares</th><th>Price</th><th>P&amp;L</th>
-            </tr></thead>
-            <tbody></tbody>
-          </table>
-          <div class="text-center text-muted py-3 empty-msg" id="posEmpty">No positions loaded</div>
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="bi bi-briefcase"></i>
+            Positions
+            <span class="panel-count" id="posCount">0</span>
+          </div>
+        </div>
+        <table class="data-table" id="posTable">
+          <thead><tr>
+            <th>Ticker</th><th>Shares</th><th>Price</th><th>P&amp;L</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty-state" id="posEmpty">
+          <i class="bi bi-briefcase"></i>
+          No positions loaded
         </div>
       </div>
 
       <!-- Fallback portfolio editor -->
-      <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <span>Fallback Portfolio</span>
-          <button class="btn btn-sm btn-outline-secondary" onclick="toggleEditor()">Edit</button>
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="bi bi-pencil-square"></i>
+            Fallback Portfolio
+          </div>
+          <button class="btn-edit" onclick="toggleEditor()">Edit</button>
         </div>
-        <div id="portfolio-form" class="card-body">
-          <div class="mb-2">
-            <label class="form-label small">Cash</label>
-            <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary"
-                   id="cashInput" step="0.01" placeholder="0.00">
+        <div class="editor-body" id="editorBody">
+          <div style="margin-bottom:.6rem">
+            <div class="form-label-sm">Cash ($)</div>
+            <input type="number" class="form-ctrl" id="cashInput" step="0.01" placeholder="0.00">
           </div>
-          <div class="mb-2">
-            <label class="form-label small">Positions (JSON array)</label>
-            <textarea class="form-control form-control-sm bg-dark text-light border-secondary"
-                      id="positionsInput" rows="8"
-                      placeholder='[{"ticker":"AAPL","shares":10,"cost_basis":150,"current_price":175,"sector":"Technology","market_value":1750}]'></textarea>
+          <div>
+            <div class="form-label-sm">Positions — JSON array</div>
+            <textarea class="form-ctrl" id="positionsInput" rows="8"
+              placeholder='[{"ticker":"AAPL","shares":10,"cost_basis":150,"current_price":175,"sector":"Technology","market_value":1750}]'></textarea>
           </div>
-          <button class="btn btn-sm btn-primary w-100" onclick="savePortfolio()">Save Portfolio</button>
-          <div id="saveMsg" class="text-success small mt-1" style="display:none">Saved.</div>
+          <button class="btn-save" onclick="savePortfolio()">Save Portfolio</button>
+          <div class="save-msg" id="saveMsg">Saved successfully.</div>
         </div>
       </div>
 
@@ -207,190 +528,229 @@
 const initialState = {{ state | tojson }};
 let currentState = initialState;
 
+// ── Formatters ──────────────────────────────────────────────────────────────
+
 function fmt(ts) {
   if (!ts) return '—';
-  const d = new Date(ts);
-  return d.toLocaleString('en-US', {timeZone: 'America/New_York', hour12: false,
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}) + ' ET';
+  return new Date(ts).toLocaleString('en-US', {
+    timeZone: 'America/New_York', hour12: false,
+    month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  }) + ' ET';
 }
 
 function fmtMoney(n) {
-  if (!n && n !== 0) return '—';
+  if (n == null || n === '') return '—';
   return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
 
+// ── Badge builders ──────────────────────────────────────────────────────────
+
 function signalBadge(signal) {
-  const cls = {Buy:'success', Overweight:'success', Hold:'secondary', Underweight:'warning', Sell:'danger'};
-  return `<span class="badge bg-${cls[signal]||'secondary'}">${signal}</span>`;
+  const map = {
+    Buy:         ['badge-buy',         '<i class="bi bi-arrow-up-short"></i> Buy'],
+    Overweight:  ['badge-overweight',  '<i class="bi bi-arrow-up-short"></i> Overweight'],
+    Hold:        ['badge-hold',        'Hold'],
+    Underweight: ['badge-underweight', '<i class="bi bi-arrow-down-short"></i> Underweight'],
+    Sell:        ['badge-sell',        '<i class="bi bi-arrow-down-short"></i> Sell'],
+  };
+  const [cls, label] = map[signal] || ['badge-hold', signal];
+  return `<span class="badge ${cls}">${label}</span>`;
 }
 
-const CONDITION_LABELS = {
-  1: 'Cash, No Positions',
-  2: 'Cash + Positions',
-  3: 'No Cash, No Positions',
-  4: 'No Cash, Has Positions',
+// ── Condition & regime metadata ─────────────────────────────────────────────
+
+const COND = {
+  1: { label: 'Condition 1', sub: 'Cash available — no positions', cls: 'cond-1', accent: 'var(--green)' },
+  2: { label: 'Condition 2', sub: 'Cash available + positions held', cls: 'cond-2', accent: 'var(--blue)' },
+  3: { label: 'Condition 3', sub: 'No cash — no positions', cls: 'cond-3', accent: 'var(--muted)' },
+  4: { label: 'Condition 4', sub: 'No cash — positions held', cls: 'cond-4', accent: 'var(--orange)' },
 };
 
-const REGIME_LABELS = {
-  bull:           'Bull Market',
-  corrective:     'Corrective',
-  bear:           'Bear Market',
-  confirmed_bear: 'Confirmed Bear',
-  unknown:        'Unknown',
+const REGIME = {
+  bull:           { label: 'Bull Market',     sub: 'SPY above 50 & 200-day SMA', cls: 'regime-bull',           accent: 'var(--green)' },
+  corrective:     { label: 'Corrective',      sub: 'SPY above 200-day, below 50-day', cls: 'regime-corrective',accent: 'var(--yellow)' },
+  bear:           { label: 'Bear Market',     sub: 'SPY below 200-day SMA', cls: 'regime-bear',                accent: 'var(--orange)' },
+  confirmed_bear: { label: 'Confirmed Bear',  sub: 'Death cross — sell pressure', cls: 'regime-confirmed_bear',accent: 'var(--red)' },
+  unknown:        { label: 'Unknown',         sub: 'Insufficient data', cls: 'regime-unknown',                 accent: 'var(--muted)' },
 };
 
-const REGIME_SUB = {
-  bull:           'SPY above 50-day & 200-day SMA',
-  corrective:     'SPY above 200-day, below 50-day',
-  bear:           'SPY below 200-day SMA',
-  confirmed_bear: 'Death cross — 50-day below 200-day',
-  unknown:        '',
-};
+// ── Main render ─────────────────────────────────────────────────────────────
 
 function renderState(s) {
   currentState = s;
 
-  // Status cards
+  // Cash
   document.getElementById('cashVal').textContent = fmtMoney(s.cash || 0);
+
+  // Source
   const src = s.portfolio_source || 'unknown';
   const srcEl = document.getElementById('sourceVal');
   srcEl.textContent = src.charAt(0).toUpperCase() + src.slice(1);
-  srcEl.className = 'fs-5 fw-bold source-' + src;
-  document.getElementById('intradayVal').textContent = fmt(s.last_intraday_run);
-  document.getElementById('eodVal').textContent = fmt(s.last_eod_run);
+  srcEl.className = 'stat-value src-' + src;
 
   // Condition
-  const cond = s.condition;
-  const condEl = document.getElementById('conditionVal');
-  if (cond) {
-    condEl.innerHTML = `<span class="badge condition-${cond} fs-6">Condition ${cond}</span>
-      <div class="text-muted mt-1" style="font-size:.75rem">${CONDITION_LABELS[cond]||''}</div>`;
+  const c = COND[s.condition];
+  const condCard = document.getElementById('condCard');
+  if (c) {
+    condCard.style.setProperty('--accent-color', c.accent);
+    document.getElementById('conditionVal').innerHTML =
+      `<span class="${c.cls}">${c.label}</span>`;
+    document.getElementById('conditionSub').textContent = c.sub;
   } else {
-    condEl.textContent = '—';
+    document.getElementById('conditionVal').textContent = '—';
+    document.getElementById('conditionSub').textContent = '';
   }
 
   // Market regime
-  const regime = (s.market_regime || {});
-  const r = regime.regime || 'unknown';
+  const rm = (s.market_regime || {});
+  const r = REGIME[rm.regime] || REGIME.unknown;
+  const regimeCard = document.getElementById('regimeCard');
+  regimeCard.style.setProperty('--accent-color', r.accent);
   const regimeEl = document.getElementById('regimeVal');
-  regimeEl.textContent = REGIME_LABELS[r] || r;
-  regimeEl.className = 'fw-bold regime-' + r;
-  const subEl = document.getElementById('regimeSub');
-  subEl.textContent = (regime.spy_price && r !== 'unknown')
-    ? `SPY ${fmtMoney(regime.spy_price)} | SMA50 ${fmtMoney(regime.sma50)}`
-    : (REGIME_SUB[r] || '');
+  regimeEl.textContent = r.label;
+  regimeEl.className = 'stat-value ' + r.cls;
+  document.getElementById('regimeSub').textContent =
+    rm.spy_price ? `SPY ${fmtMoney(rm.spy_price)} · SMA50 ${fmtMoney(rm.sma50)}` : r.sub;
 
-  // Aggressiveness toggle
-  document.querySelectorAll('.agg-btn').forEach(btn => {
-    const active = btn.dataset.value === (s.aggressiveness || 'conservative');
-    btn.classList.toggle('active', active);
-    btn.classList.toggle('btn-secondary', active && btn.dataset.value === 'conservative');
-    btn.classList.toggle('btn-warning', active && btn.dataset.value === 'aggressive');
-    btn.classList.toggle('btn-outline-secondary', !active && btn.dataset.value === 'conservative');
-    btn.classList.toggle('btn-outline-warning', !active && btn.dataset.value === 'aggressive');
+  // Timestamps
+  document.getElementById('intradayVal').textContent = fmt(s.last_intraday_run);
+  document.getElementById('eodVal').textContent      = fmt(s.last_eod_run);
+
+  // Mode toggle
+  const mode = s.aggressiveness || 'conservative';
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.classList.remove('active-conservative', 'active-aggressive');
+    if (btn.dataset.value === mode) btn.classList.add(`active-${mode}`);
   });
 
-  // Run button spinner
-  const running = s.running || false;
+  // Run button
+  const running = !!s.running;
   document.getElementById('runBtn').disabled = running;
-  document.getElementById('spinner').style.display = running ? 'inline-block' : 'none';
+  document.getElementById('spinner').style.display = running ? 'block' : 'none';
 
-  // Positions table
-  const positions = s.portfolio_positions || [];
-  const posBody = document.querySelector('#posTable tbody');
-  posBody.innerHTML = '';
-  positions.forEach(p => {
-    const pnl = (p.current_price - p.cost_basis) * p.shares;
-    const pnlPct = p.cost_basis > 0
-      ? ((p.current_price - p.cost_basis) / p.cost_basis * 100).toFixed(1)
-      : '0.0';
-    const pnlCls = pnl >= 0 ? 'text-success' : 'text-danger';
-    const flags = (p.flags || []);
-    const flagBadges = flags.map(f => {
-      if (f === 'concentration_risk')
-        return '<span class="badge bg-warning text-dark ms-1" title="Position >10% of portfolio">Conc.</span>';
-      if (f === 'drawdown_15pct')
-        return '<span class="badge bg-danger ms-1" title="Down >15% from cost basis">-15%</span>';
-      if (f === 'sector_concentration')
-        return '<span class="badge bg-secondary ms-1" title="Sector >25% of portfolio">Sector</span>';
-      return '';
-    }).join('');
-    const row = posBody.insertRow();
-    row.innerHTML = `<td><strong>${p.ticker}</strong>${flagBadges}</td>
-      <td>${p.shares}</td>
-      <td>${fmtMoney(p.current_price)}</td>
-      <td class="${pnlCls}">${pnl >= 0 ? '+' : ''}${fmtMoney(pnl)}<br>
-        <small>${pnl >= 0 ? '+' : ''}${pnlPct}%</small></td>`;
-  });
-  document.getElementById('posEmpty').style.display = positions.length ? 'none' : 'block';
+  // Actions
+  const all = s.actions || [];
+  renderActions('sellTable', 'sellEmpty', 'sellCount',
+    all.filter(a => a.action === 'SELL'), ['ticker','signal','price','rationale']);
+  renderActions('buyTable',  'buyEmpty',  'buyCount',
+    all.filter(a => a.action === 'BUY'),  ['ticker','signal','price','owned','rationale']);
+  renderActions('holdTable', 'holdEmpty', 'holdCount',
+    all.filter(a => a.action === 'HOLD'), ['ticker','signal','price','rationale']);
 
-  // Action tables
-  const actions = s.actions || [];
-  const sells = actions.filter(a => a.action === 'SELL');
-  const buys  = actions.filter(a => a.action === 'BUY');
-  const holds = actions.filter(a => a.action === 'HOLD');
-
-  renderActionTable('sellTable', 'sellEmpty', sells, ['ticker','signal','price','rationale']);
-  renderActionTable('buyTable',  'buyEmpty',  buys,  ['ticker','signal','price','owned','rationale']);
-  renderActionTable('holdTable', 'holdEmpty', holds, ['ticker','signal','price','rationale']);
+  // Positions
+  renderPositions(s.portfolio_positions || []);
 }
 
-function renderActionTable(tableId, emptyId, rows, cols) {
+// ── Action tables ───────────────────────────────────────────────────────────
+
+function renderActions(tableId, emptyId, countId, rows, cols) {
+  document.getElementById(countId).textContent = rows.length;
   const tbody = document.querySelector(`#${tableId} tbody`);
   tbody.innerHTML = '';
+  document.getElementById(emptyId).style.display = rows.length ? 'none' : 'flex';
+  document.getElementById(tableId).style.display = rows.length ? 'table' : 'none';
+
   rows.forEach(a => {
     const tr = tbody.insertRow();
-    if (a.action === 'BUY' && a.affordable === false) {
-      tr.classList.add('unaffordable');
-      tr.title = 'Insufficient cash to purchase at current price';
-    }
+    const actionCls = { BUY: 'row-buy', SELL: 'row-sell', HOLD: 'row-hold' }[a.action] || '';
+    tr.className = actionCls;
+    if (a.action === 'BUY' && a.affordable === false) tr.classList.add('row-unaffordable');
+
     cols.forEach(col => {
       const td = tr.insertCell();
       if (col === 'ticker') {
-        td.innerHTML = `<strong>${a.ticker}</strong>`;
-        if (a.action === 'BUY' && a.affordable === false) {
-          td.innerHTML += ' <span class="badge bg-secondary" title="Price exceeds available cash">N/A</span>';
-        }
+        let html = `<span class="ticker">${a.ticker}</span>`;
+        if (a.action === 'BUY' && a.affordable === false)
+          html += ` <span class="badge badge-dim" title="Price exceeds available cash">Unaffordable</span>`;
+        td.innerHTML = html;
+
       } else if (col === 'signal') {
         td.innerHTML = signalBadge(a.signal);
+
       } else if (col === 'price') {
+        td.className = 'price-cell';
         td.textContent = a.price ? fmtMoney(a.price) : '—';
-        td.style.fontVariantNumeric = 'tabular-nums';
+
       } else if (col === 'owned') {
         td.innerHTML = a.owned
-          ? '<span class="badge bg-secondary">Owned</span>'
-          : '<span class="badge bg-dark border border-secondary">New</span>';
+          ? '<span class="badge badge-owned"><i class="bi bi-check2"></i> Owned</span>'
+          : '<span class="badge badge-new">New</span>';
+
       } else if (col === 'rationale') {
-        td.className = 'rationale';
+        td.className = 'rationale-cell';
         td.textContent = a.rationale || '—';
       }
     });
   });
-  document.getElementById(emptyId).style.display = rows.length ? 'none' : 'block';
 }
 
+// ── Positions table ─────────────────────────────────────────────────────────
+
+function renderPositions(positions) {
+  document.getElementById('posCount').textContent = positions.length;
+  const tbody = document.querySelector('#posTable tbody');
+  tbody.innerHTML = '';
+  document.getElementById('posEmpty').style.display  = positions.length ? 'none' : 'flex';
+  document.getElementById('posTable').style.display  = positions.length ? 'table' : 'none';
+
+  positions.forEach(p => {
+    const pnl    = (p.current_price - p.cost_basis) * p.shares;
+    const pnlPct = p.cost_basis > 0
+      ? ((p.current_price - p.cost_basis) / p.cost_basis * 100).toFixed(1)
+      : '0.0';
+    const pnlCls = pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+    const sign   = pnl >= 0 ? '+' : '';
+
+    const flags = (p.flags || []).map(f => {
+      if (f === 'concentration_risk')
+        return `<span class="badge badge-flag-conc ms-1" title="Position >10% of portfolio"><i class="bi bi-exclamation-triangle"></i> Conc.</span>`;
+      if (f === 'drawdown_15pct')
+        return `<span class="badge badge-flag-down ms-1" title="Down >15% from cost basis"><i class="bi bi-arrow-down-circle"></i> −15%</span>`;
+      if (f === 'sector_concentration')
+        return `<span class="badge badge-flag-sec ms-1" title="Sector >25% of portfolio"><i class="bi bi-pie-chart"></i> Sector</span>`;
+      return '';
+    }).join('');
+
+    const tr = tbody.insertRow();
+    tr.innerHTML = `
+      <td><span class="ticker">${p.ticker}</span>${flags}</td>
+      <td>${p.shares}</td>
+      <td class="price-cell">${fmtMoney(p.current_price)}</td>
+      <td class="${pnlCls}">
+        ${sign}${fmtMoney(pnl)}
+        <div class="pnl-sub">${sign}${pnlPct}%</div>
+      </td>`;
+  });
+}
+
+// ── Portfolio editor ────────────────────────────────────────────────────────
+
 function toggleEditor() {
-  const form = document.getElementById('portfolio-form');
-  if (form.style.display === 'none') {
-    const pos = (currentState.portfolio_positions || []);
-    document.getElementById('cashInput').value = currentState.cash || 0;
-    document.getElementById('positionsInput').value = JSON.stringify(pos, null, 2);
+  const body = document.getElementById('editorBody');
+  const open = body.style.display === 'block';
+  if (!open) {
+    document.getElementById('cashInput').value =
+      currentState.cash || 0;
+    document.getElementById('positionsInput').value =
+      JSON.stringify(currentState.portfolio_positions || [], null, 2);
   }
-  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  body.style.display = open ? 'none' : 'block';
 }
 
 async function savePortfolio() {
   try {
     const positions = JSON.parse(document.getElementById('positionsInput').value || '[]');
-    const cash = parseFloat(document.getElementById('cashInput').value) || 0;
-    const res = await fetch('/api/portfolio', {
+    const cash      = parseFloat(document.getElementById('cashInput').value) || 0;
+    const res  = await fetch('/api/portfolio', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({cash, positions}),
     });
     const data = await res.json();
-    const msg = document.getElementById('saveMsg');
-    msg.textContent = data.ok ? 'Saved.' : 'Error: ' + data.reason;
+    const msg  = document.getElementById('saveMsg');
+    msg.textContent  = data.ok ? 'Saved successfully.' : 'Error: ' + data.reason;
+    msg.style.color  = data.ok ? 'var(--green)' : 'var(--red)';
     msg.style.display = 'block';
     setTimeout(() => msg.style.display = 'none', 3000);
   } catch (e) {
@@ -398,14 +758,18 @@ async function savePortfolio() {
   }
 }
 
-async function setAggressiveness(value) {
-  await fetch('/api/aggressiveness', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({aggressiveness: value}),
+// ── Controls ────────────────────────────────────────────────────────────────
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    await fetch('/api/aggressiveness', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({aggressiveness: btn.dataset.value}),
+    });
+    refresh();
   });
-  refresh();
-}
+});
 
 async function triggerRun() {
   const res = await fetch('/api/run', {method: 'POST'});
@@ -415,24 +779,19 @@ async function triggerRun() {
     return;
   }
   document.getElementById('runBtn').disabled = true;
-  document.getElementById('spinner').style.display = 'inline-block';
+  document.getElementById('spinner').style.display = 'block';
 }
 
 async function refresh() {
   try {
-    const res = await fetch('/api/state');
-    const state = await res.json();
+    const state = await fetch('/api/state').then(r => r.json());
     renderState(state);
   } catch (e) {
-    console.warn('State refresh failed:', e);
+    console.warn('Refresh failed:', e);
   }
 }
 
-document.querySelectorAll('.agg-btn').forEach(btn => {
-  btn.addEventListener('click', () => setAggressiveness(btn.dataset.value));
-});
-
-// Initial render and auto-refresh every 60 seconds
+// Initial render + 60-second auto-refresh
 renderState(initialState);
 setInterval(refresh, 60_000);
 </script>

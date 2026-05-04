@@ -98,6 +98,51 @@ def _load_from_json(data_dir: str) -> Portfolio:
     return Portfolio(positions=positions, cash=float(data.get("cash", 0)), source="fallback")
 
 
+def reauth_robinhood(mfa_code: str | None = None) -> tuple[str, str | None]:
+    """Attempt a fresh Robinhood login without blocking the server.
+
+    Returns (status, message):
+        ("ok", None)            — login succeeded; device token stored
+        ("mfa_required", None) — MFA prompt intercepted; call again with mfa_code
+        ("error", message)     — login failed for another reason
+    """
+    import builtins
+    import robin_stocks.robinhood as rh
+
+    username = os.environ.get("ROBINHOOD_USERNAME", "")
+    password = os.environ.get("ROBINHOOD_PASSWORD", "")
+    if not username or not password:
+        return ("error", "ROBINHOOD_USERNAME or ROBINHOOD_PASSWORD not set in environment")
+
+    if mfa_code:
+        try:
+            rh.login(username, password, store_session=True, mfa_code=str(mfa_code))
+            return ("ok", None)
+        except Exception as exc:
+            return ("error", str(exc))
+
+    # First attempt: patch builtins.input so the MFA prompt raises instead of blocking.
+    _mfa_seen: list[bool] = []
+    _orig_input = builtins.input
+
+    def _catch_mfa(prompt=""):
+        _mfa_seen.append(True)
+        raise RuntimeError("__MFA_INTERCEPTED__")
+
+    builtins.input = _catch_mfa
+    try:
+        rh.login(username, password, store_session=True)
+        return ("ok", None)
+    except RuntimeError:
+        if _mfa_seen:
+            return ("mfa_required", None)
+        return ("error", "Unexpected runtime error during login")
+    except Exception as exc:
+        return ("error", str(exc))
+    finally:
+        builtins.input = _orig_input
+
+
 def save_portfolio_json(data_dir: str, positions: list, cash: float) -> None:
     path = os.path.join(data_dir, "portfolio.json")
     with open(path, "w", encoding="utf-8") as fh:

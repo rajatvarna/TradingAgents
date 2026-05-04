@@ -8,7 +8,7 @@ from typing import Callable
 
 from flask import Flask, jsonify, render_template, request
 
-from .broker import save_portfolio_json
+from .broker import reauth_robinhood, save_portfolio_json
 from .config import Aggressiveness, Config
 
 logger = logging.getLogger(__name__)
@@ -90,6 +90,28 @@ def create_app(cfg: Config, run_now_fn: Callable) -> Flask:
         except Exception as exc:
             return jsonify({"ok": False, "reason": str(exc)}), 400
         return jsonify({"ok": True})
+
+    @app.route("/api/broker/reauth", methods=["POST"])
+    def reauth_broker_route():
+        """Re-authenticate with Robinhood.
+
+        First call: POST {} — attempts login with stored credentials.
+            Returns {"ok": false, "requires_mfa": true} if MFA is needed.
+        Second call: POST {"mfa_code": "123456"} — completes MFA login.
+        """
+        data = request.json or {}
+        mfa_code = data.get("mfa_code") or None
+        try:
+            status, message = reauth_robinhood(mfa_code)
+        except Exception as exc:
+            logger.error("reauth_robinhood raised unexpectedly: %s", exc)
+            return jsonify({"ok": False, "error": str(exc)}), 500
+
+        if status == "ok":
+            return jsonify({"ok": True})
+        if status == "mfa_required":
+            return jsonify({"ok": False, "requires_mfa": True})
+        return jsonify({"ok": False, "error": message}), 400
 
     @app.route("/api/broker/check", methods=["POST"])
     def check_broker():

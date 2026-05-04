@@ -387,6 +387,80 @@
     .btn-edit:hover { color: var(--text); border-color: var(--muted); }
 
     .save-msg { font-size: .75rem; margin-top: .4rem; color: var(--green); display: none; }
+
+    /* ── Reconnect button (header, shown when broker is in error/fallback) ── */
+    .reconnect-btn {
+      display: none;
+      align-items: center;
+      gap: .3rem;
+      font-size: .72rem;
+      font-weight: 600;
+      padding: .2rem .6rem;
+      border-radius: 20px;
+      border: 1px solid rgba(248,81,73,.4);
+      background: rgba(248,81,73,.08);
+      color: var(--red);
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .reconnect-btn:hover { background: rgba(248,81,73,.16); }
+    .reconnect-btn.fallback {
+      border-color: rgba(210,153,34,.4);
+      background: rgba(210,153,34,.08);
+      color: var(--yellow);
+    }
+    .reconnect-btn.fallback:hover { background: rgba(210,153,34,.16); }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.65);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+    }
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 420px; max-width: 95vw;
+      overflow: hidden;
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: .85rem 1.1rem;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      font-weight: 600; font-size: .88rem;
+    }
+    .modal-close {
+      background: transparent; border: none; color: var(--muted);
+      font-size: 1.2rem; cursor: pointer; line-height: 1; padding: 0 .25rem;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 1.1rem; }
+    .modal-footer {
+      display: flex; justify-content: flex-end; gap: .5rem;
+      padding: .75rem 1.1rem;
+      border-top: 1px solid var(--border);
+    }
+    .btn-cancel {
+      padding: .4rem .85rem; border-radius: 6px; font-size: .82rem;
+      background: transparent; color: var(--muted);
+      border: 1px solid var(--border); cursor: pointer;
+    }
+    .btn-cancel:hover { color: var(--text); border-color: var(--muted); }
+    .btn-action {
+      display: inline-flex; align-items: center; gap: .35rem;
+      padding: .4rem .85rem; border-radius: 6px; font-size: .82rem;
+      background: var(--blue); color: #fff; border: none; cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-action:hover:not(:disabled) { background: #79b8ff; }
+    .btn-action:disabled { opacity: .55; cursor: not-allowed; }
+    .reauth-msg  { font-size: .82rem; color: var(--muted); margin: 0 0 .9rem; min-height: 1.4em; }
+    .msg-error   { color: var(--red); }
+    .msg-success { color: var(--green); }
   </style>
 </head>
 <body>
@@ -402,6 +476,9 @@
       <button class="broker-pill" id="brokerPill" onclick="checkBroker()" title="Check brokerage connection">
         <i class="bi bi-plug" id="brokerIcon"></i>
         <span id="brokerLabel">Check connection</span>
+      </button>
+      <button class="reconnect-btn" id="reconnectBtn" onclick="openReauth()" title="Re-authenticate with Robinhood">
+        <i class="bi bi-arrow-clockwise"></i> Reconnect
       </button>
       <div class="mode-toggle" id="modeToggle">
         <button class="mode-btn" data-value="conservative">
@@ -595,6 +672,32 @@
   </div>
 </div>
 
+<!-- Reconnect modal -->
+<div class="modal-overlay" id="reauthOverlay" style="display:none" onclick="reauthOverlayClick(event)">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span><i class="bi bi-plug" style="color:var(--blue)"></i>&nbsp; Reconnect to Robinhood</span>
+      <button class="modal-close" onclick="closeReauth()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="reauth-msg" id="reauthMsg">Click <strong>Reconnect</strong> to attempt login with stored credentials.</p>
+      <div id="mfaSection" style="display:none">
+        <div class="form-label-sm">Verification code (SMS / authenticator app)</div>
+        <input type="text" class="form-ctrl" id="mfaInput" maxlength="8"
+               placeholder="6-digit code" inputmode="numeric" autocomplete="one-time-code"
+               onkeydown="if(event.key==='Enter') submitReauth()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="reauthCancelBtn" onclick="closeReauth()">Cancel</button>
+      <button class="btn-action" id="reauthSubmitBtn" onclick="submitReauth()">
+        <div class="spin" id="reauthSpin" style="border-color:rgba(255,255,255,.3);border-top-color:#fff"></div>
+        <span id="reauthBtnLabel">Reconnect</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 const initialState = {{ state | tojson }};
 let currentState   = initialState;
@@ -665,20 +768,33 @@ function updateProgress(stage, progress, detail) {
 
 // ── Broker check ──────────────────────────────────────────────────────────────
 
+function _setBrokerError(msg) {
+  const pill = document.getElementById('brokerPill');
+  const rBtn = document.getElementById('reconnectBtn');
+  pill.className = 'broker-pill error';
+  document.getElementById('brokerIcon').className  = 'bi bi-x-circle';
+  document.getElementById('brokerIcon').style.animation = '';
+  document.getElementById('brokerLabel').textContent = msg;
+  rBtn.className = 'reconnect-btn';
+  rBtn.style.display = 'inline-flex';
+}
+
 async function checkBroker() {
   const pill  = document.getElementById('brokerPill');
   const icon  = document.getElementById('brokerIcon');
   const label = document.getElementById('brokerLabel');
+  const rBtn  = document.getElementById('reconnectBtn');
 
   pill.className       = 'broker-pill checking';
   icon.className       = 'bi bi-arrow-repeat';
   icon.style.animation = 'spin .6s linear infinite';
   label.textContent    = 'Checking…';
+  rBtn.style.display   = 'none';
 
   try {
     const data = await fetch('/api/broker/check', {method: 'POST'}).then(r => r.json());
-
     icon.style.animation = '';
+
     if (data.ok) {
       const src = data.source || 'unknown';
       pill.className = `broker-pill ${src}`;
@@ -686,16 +802,91 @@ async function checkBroker() {
       label.textContent = src === 'live'
         ? `Live · ${data.positions} pos · $${Number(data.cash).toFixed(2)}`
         : `Fallback · ${data.positions} pos`;
+      // Show reconnect button for fallback so user can try to get a live connection
+      if (src === 'fallback') {
+        rBtn.className = 'reconnect-btn fallback';
+        rBtn.style.display = 'inline-flex';
+      }
     } else {
-      pill.className = 'broker-pill error';
-      icon.className = 'bi bi-x-circle';
-      label.textContent = 'Connection failed';
+      _setBrokerError('Connection failed');
     }
   } catch {
-    icon.style.animation = '';
-    pill.className = 'broker-pill error';
-    icon.className = 'bi bi-x-circle';
-    label.textContent = 'Network error';
+    _setBrokerError('Network error');
+  }
+}
+
+// ── Reconnect (reauth) flow ───────────────────────────────────────────────────
+
+function openReauth() {
+  const msg = document.getElementById('reauthMsg');
+  msg.textContent = 'Click Reconnect to attempt login with stored credentials.';
+  msg.className = 'reauth-msg';
+  document.getElementById('mfaSection').style.display  = 'none';
+  document.getElementById('mfaInput').value            = '';
+  document.getElementById('reauthBtnLabel').textContent = 'Reconnect';
+  document.getElementById('reauthSubmitBtn').disabled  = false;
+  document.getElementById('reauthSpin').style.display  = 'none';
+  document.getElementById('reauthCancelBtn').textContent = 'Cancel';
+  document.getElementById('reauthOverlay').style.display = 'flex';
+}
+
+function closeReauth() {
+  document.getElementById('reauthOverlay').style.display = 'none';
+}
+
+function reauthOverlayClick(e) {
+  if (e.target === document.getElementById('reauthOverlay')) closeReauth();
+}
+
+async function submitReauth() {
+  const mfaSection = document.getElementById('mfaSection');
+  const mfaCode    = mfaSection.style.display !== 'none'
+    ? document.getElementById('mfaInput').value.trim() : null;
+
+  const submitBtn = document.getElementById('reauthSubmitBtn');
+  const spin      = document.getElementById('reauthSpin');
+  const msg       = document.getElementById('reauthMsg');
+
+  submitBtn.disabled    = true;
+  spin.style.display    = 'block';
+  msg.className         = 'reauth-msg';
+  msg.textContent       = mfaCode ? 'Verifying code…' : 'Connecting to Robinhood…';
+
+  try {
+    const body = mfaCode ? {mfa_code: mfaCode} : {};
+    const data = await fetch('/api/broker/reauth', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    }).then(r => r.json());
+
+    spin.style.display = 'none';
+
+    if (data.ok) {
+      msg.className = 'reauth-msg msg-success';
+      msg.textContent = 'Connected! Refreshing status…';
+      mfaSection.style.display = 'none';
+      document.getElementById('reauthBtnLabel').textContent = 'Done';
+      document.getElementById('reauthCancelBtn').textContent = 'Close';
+      setTimeout(() => { closeReauth(); checkBroker(); }, 1500);
+
+    } else if (data.requires_mfa) {
+      msg.textContent = 'A verification code was sent to your registered device. Enter it below.';
+      mfaSection.style.display = 'block';
+      document.getElementById('mfaInput').focus();
+      document.getElementById('reauthBtnLabel').textContent = 'Verify';
+      submitBtn.disabled = false;
+
+    } else {
+      msg.className = 'reauth-msg msg-error';
+      msg.textContent = 'Error: ' + (data.error || 'Unknown error');
+      submitBtn.disabled = false;
+    }
+  } catch (e) {
+    spin.style.display = 'none';
+    msg.className = 'reauth-msg msg-error';
+    msg.textContent = 'Network error — is the server reachable?';
+    submitBtn.disabled = false;
   }
 }
 

@@ -388,6 +388,23 @@
 
     .save-msg { font-size: .75rem; margin-top: .4rem; color: var(--green); display: none; }
 
+    /* ── Settings gear button ── */
+    .gear-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem; height: 2rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: .95rem;
+      transition: all .15s;
+      flex-shrink: 0;
+    }
+    .gear-btn:hover { color: var(--text); border-color: var(--muted); background: var(--surface2); }
+
     /* ── Reconnect button (header, shown when broker is in error/fallback) ── */
     .reconnect-btn {
       display: none;
@@ -473,6 +490,9 @@
       <p class="app-subtitle">Powered by TradingAgents &mdash; multi-agent LLM analysis</p>
     </div>
     <div class="header-controls">
+      <button class="gear-btn" onclick="openSettings()" title="Settings">
+        <i class="bi bi-gear"></i>
+      </button>
       <button class="broker-pill" id="brokerPill" onclick="checkBroker()" title="Check brokerage connection">
         <i class="bi bi-plug" id="brokerIcon"></i>
         <span id="brokerLabel">Check connection</span>
@@ -672,6 +692,48 @@
   </div>
 </div>
 
+<!-- Settings modal -->
+<div class="modal-overlay" id="settingsOverlay" style="display:none" onclick="settingsOverlayClick(event)">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span><i class="bi bi-gear" style="color:var(--blue)"></i>&nbsp; Settings</span>
+      <button class="modal-close" onclick="closeSettings()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.75rem">
+        Robinhood Credentials
+      </div>
+      <div style="margin-bottom:.65rem">
+        <div class="form-label-sm">Username (email)</div>
+        <input type="email" class="form-ctrl" id="settingsUsername" placeholder="you@example.com" autocomplete="username">
+      </div>
+      <div style="margin-bottom:.65rem">
+        <div class="form-label-sm">Password</div>
+        <div style="position:relative">
+          <input type="password" class="form-ctrl" id="settingsPassword"
+                 placeholder="Leave blank to keep current"
+                 autocomplete="current-password"
+                 style="padding-right:2.5rem">
+          <button type="button" onclick="toggleSettingsPw()" tabindex="-1"
+                  style="position:absolute;right:.55rem;top:50%;transform:translateY(-50%);
+                         background:none;border:none;color:var(--muted);cursor:pointer;padding:0;font-size:.9rem">
+            <i class="bi bi-eye" id="settingsPwEye"></i>
+          </button>
+        </div>
+        <div id="settingsPwNote" style="font-size:.7rem;color:var(--muted);margin-top:.25rem"></div>
+      </div>
+      <p class="reauth-msg" id="settingsMsg" style="margin-top:.5rem;min-height:1.2em"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeSettings()">Cancel</button>
+      <button class="btn-action" id="settingsSaveBtn" onclick="saveSettings()">
+        <div class="spin" id="settingsSpin" style="border-color:rgba(255,255,255,.3);border-top-color:#fff"></div>
+        <span id="settingsBtnLabel">Save &amp; Test Connection</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Reconnect modal -->
 <div class="modal-overlay" id="reauthOverlay" style="display:none" onclick="reauthOverlayClick(event)">
   <div class="modal-box">
@@ -768,15 +830,33 @@ function updateProgress(stage, progress, detail) {
 
 // ── Broker check ──────────────────────────────────────────────────────────────
 
-function _setBrokerError(msg) {
-  const pill = document.getElementById('brokerPill');
-  const rBtn = document.getElementById('reconnectBtn');
-  pill.className = 'broker-pill error';
-  document.getElementById('brokerIcon').className  = 'bi bi-x-circle';
-  document.getElementById('brokerIcon').style.animation = '';
-  document.getElementById('brokerLabel').textContent = msg;
-  rBtn.className = 'reconnect-btn';
-  rBtn.style.display = 'inline-flex';
+function _applyBrokerResult(data) {
+  const pill  = document.getElementById('brokerPill');
+  const icon  = document.getElementById('brokerIcon');
+  const label = document.getElementById('brokerLabel');
+  const rBtn  = document.getElementById('reconnectBtn');
+
+  icon.style.animation = '';
+  rBtn.style.display   = 'none';
+
+  if (data.ok) {
+    const src = data.source || 'unknown';
+    pill.className = `broker-pill ${src}`;
+    icon.className = src === 'live' ? 'bi bi-plug-fill' : 'bi bi-exclamation-triangle';
+    label.textContent = src === 'live'
+      ? `Live · ${data.positions} pos · $${Number(data.cash).toFixed(2)}`
+      : `Fallback · ${data.positions} pos`;
+    if (src === 'fallback') {
+      rBtn.className = 'reconnect-btn fallback';
+      rBtn.style.display = 'inline-flex';
+    }
+  } else {
+    pill.className = 'broker-pill error';
+    icon.className = 'bi bi-x-circle';
+    label.textContent = 'Connection failed';
+    rBtn.className = 'reconnect-btn';
+    rBtn.style.display = 'inline-flex';
+  }
 }
 
 async function checkBroker() {
@@ -793,25 +873,126 @@ async function checkBroker() {
 
   try {
     const data = await fetch('/api/broker/check', {method: 'POST'}).then(r => r.json());
-    icon.style.animation = '';
-
-    if (data.ok) {
-      const src = data.source || 'unknown';
-      pill.className = `broker-pill ${src}`;
-      icon.className = src === 'live' ? 'bi bi-plug-fill' : 'bi bi-exclamation-triangle';
-      label.textContent = src === 'live'
-        ? `Live · ${data.positions} pos · $${Number(data.cash).toFixed(2)}`
-        : `Fallback · ${data.positions} pos`;
-      // Show reconnect button for fallback so user can try to get a live connection
-      if (src === 'fallback') {
-        rBtn.className = 'reconnect-btn fallback';
-        rBtn.style.display = 'inline-flex';
-      }
-    } else {
-      _setBrokerError('Connection failed');
-    }
+    _applyBrokerResult(data);
   } catch {
-    _setBrokerError('Network error');
+    _applyBrokerResult({ok: false});
+  }
+}
+
+// ── Settings modal ────────────────────────────────────────────────────────────
+
+async function openSettings() {
+  // Reset state
+  const msg = document.getElementById('settingsMsg');
+  msg.textContent = '';
+  msg.className = 'reauth-msg';
+  document.getElementById('settingsPassword').value = '';
+  document.getElementById('settingsBtnLabel').textContent = 'Save & Test Connection';
+  document.getElementById('settingsSaveBtn').disabled = false;
+  document.getElementById('settingsSpin').style.display = 'none';
+
+  // Pre-populate from server
+  try {
+    const s = await fetch('/api/settings').then(r => r.json());
+    document.getElementById('settingsUsername').value = s.robinhood_username || '';
+    document.getElementById('settingsPwNote').textContent =
+      s.robinhood_password_set ? 'Password is set. Leave blank to keep it.' : 'No password saved yet.';
+  } catch {
+    document.getElementById('settingsPwNote').textContent = 'Could not load current settings.';
+  }
+
+  document.getElementById('settingsOverlay').style.display = 'flex';
+}
+
+function closeSettings() {
+  document.getElementById('settingsOverlay').style.display = 'none';
+}
+
+function settingsOverlayClick(e) {
+  if (e.target === document.getElementById('settingsOverlay')) closeSettings();
+}
+
+function toggleSettingsPw() {
+  const inp  = document.getElementById('settingsPassword');
+  const icon = document.getElementById('settingsPwEye');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    icon.className = 'bi bi-eye-slash';
+  } else {
+    inp.type = 'password';
+    icon.className = 'bi bi-eye';
+  }
+}
+
+async function saveSettings() {
+  const username = document.getElementById('settingsUsername').value.trim();
+  const password = document.getElementById('settingsPassword').value;
+
+  if (!username) {
+    const m = document.getElementById('settingsMsg');
+    m.className = 'reauth-msg msg-error';
+    m.textContent = 'Username is required.';
+    return;
+  }
+
+  const btn  = document.getElementById('settingsSaveBtn');
+  const spin = document.getElementById('settingsSpin');
+  const msg  = document.getElementById('settingsMsg');
+  btn.disabled = true;
+  spin.style.display = 'block';
+  msg.className = 'reauth-msg';
+  msg.textContent = 'Saving…';
+
+  try {
+    const body = { robinhood_username: username };
+    if (password) body.robinhood_password = password;
+
+    const saved = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(r => r.json());
+
+    if (!saved.ok) {
+      msg.className = 'reauth-msg msg-error';
+      msg.textContent = 'Save failed: ' + (saved.reason || 'unknown error');
+      btn.disabled = false;
+      spin.style.display = 'none';
+      return;
+    }
+
+    // Saved — now test connection
+    msg.textContent = 'Saved. Testing connection…';
+    const result = await fetch('/api/broker/check', { method: 'POST' }).then(r => r.json());
+    spin.style.display = 'none';
+
+    if (result.ok && result.source === 'live') {
+      msg.className = 'reauth-msg msg-success';
+      msg.textContent = `Connected — Live · ${result.positions} position(s) · $${Number(result.cash).toFixed(2)}`;
+      document.getElementById('settingsBtnLabel').textContent = 'Done';
+      // Update the pill immediately
+      _applyBrokerResult(result);
+      setTimeout(closeSettings, 2500);
+    } else if (result.ok && result.source === 'fallback') {
+      msg.className = 'reauth-msg';
+      msg.textContent = `Settings saved. Robinhood unreachable — using local fallback (${result.positions} positions).`;
+      _applyBrokerResult(result);
+      document.getElementById('settingsBtnLabel').textContent = 'Close';
+      btn.disabled = false;
+      btn.onclick = closeSettings;
+    } else {
+      msg.className = 'reauth-msg msg-error';
+      msg.textContent = 'Settings saved, but connection failed: ' + (result.error || 'unknown');
+      _applyBrokerResult(result);
+      btn.disabled = false;
+      document.getElementById('settingsBtnLabel').textContent = 'Close';
+      btn.onclick = closeSettings;
+    }
+  } catch (e) {
+    spin.style.display = 'none';
+    msg.className = 'reauth-msg msg-error';
+    msg.textContent = 'Network error: ' + e.message;
+    btn.disabled = false;
   }
 }
 
@@ -868,7 +1049,12 @@ async function submitReauth() {
       mfaSection.style.display = 'none';
       document.getElementById('reauthBtnLabel').textContent = 'Done';
       document.getElementById('reauthCancelBtn').textContent = 'Close';
-      setTimeout(() => { closeReauth(); checkBroker(); }, 1500);
+      // Run check and apply result to pill, then close
+      fetch('/api/broker/check', {method: 'POST'})
+        .then(r => r.json())
+        .then(r => { _applyBrokerResult(r); })
+        .catch(() => {});
+      setTimeout(closeReauth, 1500);
 
     } else if (data.requires_mfa) {
       msg.textContent = 'A verification code was sent to your registered device. Enter it below.';

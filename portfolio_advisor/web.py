@@ -8,7 +8,13 @@ from typing import Callable
 
 from flask import Flask, jsonify, render_template, request
 
-from .broker import reauth_robinhood, save_portfolio_json
+from .broker import (
+    check_connection,
+    load_settings,
+    reauth_robinhood,
+    save_portfolio_json,
+    save_settings,
+)
 from .config import Aggressiveness, Config
 
 logger = logging.getLogger(__name__)
@@ -49,6 +55,8 @@ def create_app(cfg: Config, run_now_fn: Callable) -> Flask:
     def api_state():
         return jsonify(_read_state())
 
+    # ── Aggressiveness ────────────────────────────────────────────────────────
+
     @app.route("/api/aggressiveness", methods=["POST"])
     def set_aggressiveness():
         value = (request.json or {}).get("aggressiveness", "conservative")
@@ -58,6 +66,8 @@ def create_app(cfg: Config, run_now_fn: Callable) -> Flask:
             return jsonify({"ok": False, "reason": f"Unknown value: {value}"}), 400
         _patch_state({"aggressiveness": value})
         return jsonify({"ok": True})
+
+    # ── Run ───────────────────────────────────────────────────────────────────
 
     @app.route("/api/run", methods=["POST"])
     def trigger_run():
@@ -78,6 +88,8 @@ def create_app(cfg: Config, run_now_fn: Callable) -> Flask:
         threading.Thread(target=_run, daemon=True).start()
         return jsonify({"ok": True})
 
+    # ── Portfolio (fallback JSON editor) ──────────────────────────────────────
+
     @app.route("/api/portfolio", methods=["POST"])
     def save_portfolio():
         data = request.json or {}
@@ -91,6 +103,49 @@ def create_app(cfg: Config, run_now_fn: Callable) -> Flask:
             return jsonify({"ok": False, "reason": str(exc)}), 400
         return jsonify({"ok": True})
 
+    # ── Settings ──────────────────────────────────────────────────────────────
+
+    @app.route("/api/settings", methods=["GET"])
+    def get_settings():
+        """Return current settings (password masked)."""
+        s = load_settings(cfg.data_dir)
+        return jsonify({
+            "robinhood_username": s.get("robinhood_username", ""),
+            "robinhood_password_set": bool(s.get("robinhood_password")),
+        })
+
+    @app.route("/api/settings", methods=["POST"])
+    def post_settings():
+        """Save settings to data_dir/settings.json. Empty password = keep current."""
+        data = request.json or {}
+        patch: dict = {}
+        if "robinhood_username" in data:
+            patch["robinhood_username"] = str(data["robinhood_username"]).strip()
+        if data.get("robinhood_password"):
+            patch["robinhood_password"] = data["robinhood_password"]
+        if not patch:
+            return jsonify({"ok": False, "reason": "No settings provided"}), 400
+        try:
+            save_settings(cfg.data_dir, patch)
+            return jsonify({"ok": True})
+        except Exception as exc:
+            logger.error("save_settings failed: %s", exc)
+            return jsonify({"ok": False, "reason": str(exc)}), 500
+
+    # ── Broker connection check ───────────────────────────────────────────────
+
+    @app.route("/api/broker/check", methods=["POST"])
+    def check_broker():
+        """Lightweight connection check: login + profile only, no full portfolio build."""
+        try:
+            result = check_connection(cfg.data_dir)
+            return jsonify(result)
+        except Exception as exc:
+            logger.error("check_connection raised unexpectedly: %s", exc)
+            return jsonify({"ok": False, "error": str(exc)}), 500
+
+    # ── Broker re-authentication ──────────────────────────────────────────────
+
     @app.route("/api/broker/reauth", methods=["POST"])
     def reauth_broker_route():
         """Re-authenticate with Robinhood.
@@ -102,7 +157,7 @@ def create_app(cfg: Config, run_now_fn: Callable) -> Flask:
         data = request.json or {}
         mfa_code = data.get("mfa_code") or None
         try:
-            status, message = reauth_robinhood(mfa_code)
+            status, message = reauth_robinhood(cfg.data_dir, mfa_code)
         except Exception as exc:
             logger.error("reauth_robinhood raised unexpectedly: %s", exc)
             return jsonify({"ok": False, "error": str(exc)}), 500
@@ -112,20 +167,5 @@ def create_app(cfg: Config, run_now_fn: Callable) -> Flask:
         if status == "mfa_required":
             return jsonify({"ok": False, "requires_mfa": True})
         return jsonify({"ok": False, "error": message}), 400
-
-    @app.route("/api/broker/check", methods=["POST"])
-    def check_broker():
-        """Live brokerage connection check. Returns current source, cash, and position count."""
-        try:
-            portfolio = load_portfolio(cfg.data_dir)
-            return jsonify({
-                "ok": True,
-                "source": portfolio.source,
-                "cash": portfolio.cash,
-                "positions": len(portfolio.positions),
-            })
-        except Exception as exc:
-            logger.error("Broker check failed: %s", exc)
-            return jsonify({"ok": False, "error": str(exc)}), 500
 
     return app

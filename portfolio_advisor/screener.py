@@ -103,7 +103,12 @@ def fetch_nasdaq_tickers() -> List[str]:
     return df["Symbol"].tolist()
 
 
-def screen_candidates(portfolio: Portfolio, cfg: Config, cash: float = 0.0) -> List[str]:
+def screen_candidates(
+    portfolio: Portfolio,
+    cfg: Config,
+    cash: float = 0.0,
+    on_progress=None,
+) -> List[str]:
     owned = {p.ticker for p in portfolio.positions}
     prices = [p.current_price for p in portfolio.positions]
 
@@ -129,9 +134,13 @@ def screen_candidates(portfolio: Portfolio, cfg: Config, cash: float = 0.0) -> L
 
     passed: List[dict] = []
     batch_size = 200
+    total_batches = max(1, (len(all_tickers) + batch_size - 1) // batch_size)
 
     for i in range(0, len(all_tickers), batch_size):
         batch = all_tickers[i : i + batch_size]
+        batch_num = i // batch_size + 1
+        if on_progress:
+            on_progress(batch_num / total_batches, f"Batch {batch_num}/{total_batches}")
         try:
             data = yf.download(
                 batch,

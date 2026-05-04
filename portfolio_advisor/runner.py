@@ -37,11 +37,15 @@ def run_tickers(
     tickers: List[str],
     trade_date: date,
     cfg: Config,
+    on_progress=None,
 ) -> List[Tuple[str, dict, str]]:
     """Run TradingAgents on each ticker.
 
     Returns a list of (ticker, final_state, signal) tuples.
     Tickers that fail are logged and skipped.
+
+    on_progress(fraction: float, detail: str) is called before each ticker
+    with fraction in [0, 1) and a human-readable detail string.
     """
     if not _IMPORT_OK:
         raise RuntimeError(
@@ -57,8 +61,11 @@ def run_tickers(
 
     date_str = trade_date.strftime("%Y-%m-%d")
     results: List[Tuple[str, dict, str]] = []
+    total = len(tickers)
 
-    for ticker in tickers:
+    for idx, ticker in enumerate(tickers):
+        if on_progress and total:
+            on_progress(idx / total, f"{ticker} ({idx + 1}/{total})")
         try:
             final_state, signal = graph.propagate(ticker, date_str)
             results.append((ticker, final_state, signal))

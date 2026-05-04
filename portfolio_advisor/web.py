@@ -91,4 +91,19 @@ def create_app(cfg: Config, run_now_fn: Callable) -> Flask:
             return jsonify({"ok": False, "reason": str(exc)}), 400
         return jsonify({"ok": True})
 
+    @app.route("/api/broker/check", methods=["POST"])
+    def check_broker():
+        """Live brokerage connection check. Returns current source, cash, and position count."""
+        try:
+            portfolio = load_portfolio(cfg.data_dir)
+            return jsonify({
+                "ok": True,
+                "source": portfolio.source,
+                "cash": portfolio.cash,
+                "positions": len(portfolio.positions),
+            })
+        except Exception as exc:
+            logger.error("Broker check failed: %s", exc)
+            return jsonify({"ok": False, "error": str(exc)}), 500
+
     return app

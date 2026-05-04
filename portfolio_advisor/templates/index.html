@@ -302,6 +302,61 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── Progress bar ── */
+    .progress-bar-wrap {
+      display: none;
+      margin-top: 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .75rem 1rem;
+    }
+    .progress-bar-wrap.visible { display: block; }
+    .progress-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: .4rem;
+    }
+    .progress-stage { font-size: .82rem; font-weight: 600; color: var(--text); }
+    .progress-pct   { font-size: .82rem; font-weight: 700; color: var(--blue); font-variant-numeric: tabular-nums; }
+    .progress-track {
+      height: 6px;
+      background: var(--surface2);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--blue), #3fb950);
+      border-radius: 3px;
+      transition: width .4s ease;
+      width: 0%;
+    }
+    .progress-detail { font-size: .72rem; color: var(--muted); margin-top: .35rem; min-height: 1em; }
+
+    /* ── Broker status ── */
+    .broker-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      font-size: .72rem;
+      font-weight: 600;
+      padding: .2rem .55rem;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .broker-pill:hover { border-color: var(--muted); color: var(--text); }
+    .broker-pill.live     { color: var(--green); border-color: rgba(63,185,80,.4); }
+    .broker-pill.fallback { color: var(--yellow); border-color: rgba(210,153,34,.4); }
+    .broker-pill.error    { color: var(--red);   border-color: rgba(248,81,73,.4); }
+    .broker-pill.checking { color: var(--muted); }
+
     /* ── Portfolio editor ── */
     .editor-body { padding: .85rem; display: none; border-top: 1px solid var(--border); }
     .form-label-sm { font-size: .72rem; font-weight: 600; text-transform: uppercase;
@@ -344,6 +399,10 @@
       <p class="app-subtitle">Powered by TradingAgents &mdash; multi-agent LLM analysis</p>
     </div>
     <div class="header-controls">
+      <button class="broker-pill" id="brokerPill" onclick="checkBroker()" title="Check brokerage connection">
+        <i class="bi bi-plug" id="brokerIcon"></i>
+        <span id="brokerLabel">Check connection</span>
+      </button>
       <div class="mode-toggle" id="modeToggle">
         <button class="mode-btn" data-value="conservative">
           <i class="bi bi-shield-check"></i> Conservative
@@ -359,6 +418,18 @@
       </button>
     </div>
   </header>
+
+  <!-- Progress bar (shown during active runs) -->
+  <div class="progress-bar-wrap" id="progressWrap">
+    <div class="progress-top">
+      <span class="progress-stage" id="progressStage">Starting…</span>
+      <span class="progress-pct" id="progressPct">0%</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-detail" id="progressDetail"></div>
+  </div>
 
   <!-- Status strip -->
   <div class="status-strip">
@@ -526,9 +597,12 @@
 
 <script>
 const initialState = {{ state | tojson }};
-let currentState = initialState;
+let currentState   = initialState;
+let _wasRunning    = !!initialState.running;
+let _slowTimer     = null;
+let _fastTimer     = null;
 
-// ── Formatters ──────────────────────────────────────────────────────────────
+// ── Formatters ────────────────────────────────────────────────────────────────
 
 function fmt(ts) {
   if (!ts) return '—';
@@ -544,7 +618,7 @@ function fmtMoney(n) {
   return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
 
-// ── Badge builders ──────────────────────────────────────────────────────────
+// ── Badge builders ────────────────────────────────────────────────────────────
 
 function signalBadge(signal) {
   const map = {
@@ -558,7 +632,7 @@ function signalBadge(signal) {
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
-// ── Condition & regime metadata ─────────────────────────────────────────────
+// ── Condition & regime metadata ───────────────────────────────────────────────
 
 const COND = {
   1: { label: 'Condition 1', sub: 'Cash available — no positions', cls: 'cond-1', accent: 'var(--green)' },
@@ -568,14 +642,64 @@ const COND = {
 };
 
 const REGIME = {
-  bull:           { label: 'Bull Market',     sub: 'SPY above 50 & 200-day SMA', cls: 'regime-bull',           accent: 'var(--green)' },
-  corrective:     { label: 'Corrective',      sub: 'SPY above 200-day, below 50-day', cls: 'regime-corrective',accent: 'var(--yellow)' },
-  bear:           { label: 'Bear Market',     sub: 'SPY below 200-day SMA', cls: 'regime-bear',                accent: 'var(--orange)' },
-  confirmed_bear: { label: 'Confirmed Bear',  sub: 'Death cross — sell pressure', cls: 'regime-confirmed_bear',accent: 'var(--red)' },
-  unknown:        { label: 'Unknown',         sub: 'Insufficient data', cls: 'regime-unknown',                 accent: 'var(--muted)' },
+  bull:           { label: 'Bull Market',    sub: 'SPY above 50 & 200-day SMA',        cls: 'regime-bull',           accent: 'var(--green)'  },
+  corrective:     { label: 'Corrective',     sub: 'SPY above 200-day, below 50-day',   cls: 'regime-corrective',     accent: 'var(--yellow)' },
+  bear:           { label: 'Bear Market',    sub: 'SPY below 200-day SMA',             cls: 'regime-bear',           accent: 'var(--orange)' },
+  confirmed_bear: { label: 'Confirmed Bear', sub: 'Death cross — broad sell pressure', cls: 'regime-confirmed_bear', accent: 'var(--red)'    },
+  unknown:        { label: 'Unknown',        sub: 'Insufficient data',                  cls: 'regime-unknown',        accent: 'var(--muted)'  },
 };
 
-// ── Main render ─────────────────────────────────────────────────────────────
+// ── Progress bar ──────────────────────────────────────────────────────────────
+
+function showProgress(visible) {
+  document.getElementById('progressWrap').classList.toggle('visible', visible);
+}
+
+function updateProgress(stage, progress, detail) {
+  const pct = Math.min(100, Math.max(0, progress || 0));
+  document.getElementById('progressStage').textContent  = stage || 'Running…';
+  document.getElementById('progressPct').textContent    = pct + '%';
+  document.getElementById('progressFill').style.width   = pct + '%';
+  document.getElementById('progressDetail').textContent = detail || '';
+}
+
+// ── Broker check ──────────────────────────────────────────────────────────────
+
+async function checkBroker() {
+  const pill  = document.getElementById('brokerPill');
+  const icon  = document.getElementById('brokerIcon');
+  const label = document.getElementById('brokerLabel');
+
+  pill.className       = 'broker-pill checking';
+  icon.className       = 'bi bi-arrow-repeat';
+  icon.style.animation = 'spin .6s linear infinite';
+  label.textContent    = 'Checking…';
+
+  try {
+    const data = await fetch('/api/broker/check', {method: 'POST'}).then(r => r.json());
+
+    icon.style.animation = '';
+    if (data.ok) {
+      const src = data.source || 'unknown';
+      pill.className = `broker-pill ${src}`;
+      icon.className = src === 'live' ? 'bi bi-plug-fill' : 'bi bi-exclamation-triangle';
+      label.textContent = src === 'live'
+        ? `Live · ${data.positions} pos · $${Number(data.cash).toFixed(2)}`
+        : `Fallback · ${data.positions} pos`;
+    } else {
+      pill.className = 'broker-pill error';
+      icon.className = 'bi bi-x-circle';
+      label.textContent = 'Connection failed';
+    }
+  } catch {
+    icon.style.animation = '';
+    pill.className = 'broker-pill error';
+    icon.className = 'bi bi-x-circle';
+    label.textContent = 'Network error';
+  }
+}
+
+// ── Main render ───────────────────────────────────────────────────────────────
 
 function renderState(s) {
   currentState = s;
@@ -584,18 +708,17 @@ function renderState(s) {
   document.getElementById('cashVal').textContent = fmtMoney(s.cash || 0);
 
   // Source
-  const src = s.portfolio_source || 'unknown';
+  const src   = s.portfolio_source || 'unknown';
   const srcEl = document.getElementById('sourceVal');
   srcEl.textContent = src.charAt(0).toUpperCase() + src.slice(1);
-  srcEl.className = 'stat-value src-' + src;
+  srcEl.className   = 'stat-value src-' + src;
 
   // Condition
-  const c = COND[s.condition];
+  const c        = COND[s.condition];
   const condCard = document.getElementById('condCard');
   if (c) {
     condCard.style.setProperty('--accent-color', c.accent);
-    document.getElementById('conditionVal').innerHTML =
-      `<span class="${c.cls}">${c.label}</span>`;
+    document.getElementById('conditionVal').innerHTML    = `<span class="${c.cls}">${c.label}</span>`;
     document.getElementById('conditionSub').textContent = c.sub;
   } else {
     document.getElementById('conditionVal').textContent = '—';
@@ -603,15 +726,16 @@ function renderState(s) {
   }
 
   // Market regime
-  const rm = (s.market_regime || {});
-  const r = REGIME[rm.regime] || REGIME.unknown;
+  const rm         = s.market_regime || {};
+  const r          = REGIME[rm.regime] || REGIME.unknown;
   const regimeCard = document.getElementById('regimeCard');
   regimeCard.style.setProperty('--accent-color', r.accent);
-  const regimeEl = document.getElementById('regimeVal');
-  regimeEl.textContent = r.label;
-  regimeEl.className = 'stat-value ' + r.cls;
-  document.getElementById('regimeSub').textContent =
-    rm.spy_price ? `SPY ${fmtMoney(rm.spy_price)} · SMA50 ${fmtMoney(rm.sma50)}` : r.sub;
+  const regimeEl        = document.getElementById('regimeVal');
+  regimeEl.textContent  = r.label;
+  regimeEl.className    = 'stat-value ' + r.cls;
+  document.getElementById('regimeSub').textContent = rm.spy_price
+    ? `SPY ${fmtMoney(rm.spy_price)} · SMA50 ${fmtMoney(rm.sma50)}`
+    : r.sub;
 
   // Timestamps
   document.getElementById('intradayVal').textContent = fmt(s.last_intraday_run);
@@ -624,10 +748,36 @@ function renderState(s) {
     if (btn.dataset.value === mode) btn.classList.add(`active-${mode}`);
   });
 
-  // Run button
+  // Run button & spinner
   const running = !!s.running;
-  document.getElementById('runBtn').disabled = running;
-  document.getElementById('spinner').style.display = running ? 'block' : 'none';
+  document.getElementById('runBtn').disabled            = running;
+  document.getElementById('spinner').style.display      = running ? 'block' : 'none';
+
+  // Progress bar
+  if (running) {
+    showProgress(true);
+    updateProgress(s.stage, s.progress, s.stage_detail);
+  } else if (_wasRunning) {
+    // Run just finished — flash complete state then hide
+    showProgress(true);
+    updateProgress(s.stage || 'Complete', 100, s.stage_detail || '');
+    setTimeout(() => showProgress(false), 4000);
+  } else {
+    showProgress(false);
+  }
+
+  // Polling speed: 3s during run, 60s otherwise
+  if (running && !_fastTimer) {
+    clearInterval(_slowTimer);
+    _slowTimer = null;
+    _fastTimer = setInterval(refresh, 3000);
+  } else if (!running && _fastTimer) {
+    clearInterval(_fastTimer);
+    _fastTimer = null;
+    _slowTimer = setInterval(refresh, 60_000);
+  }
+
+  _wasRunning = running;
 
   // Actions
   const all = s.actions || [];
@@ -642,19 +792,18 @@ function renderState(s) {
   renderPositions(s.portfolio_positions || []);
 }
 
-// ── Action tables ───────────────────────────────────────────────────────────
+// ── Action tables ─────────────────────────────────────────────────────────────
 
 function renderActions(tableId, emptyId, countId, rows, cols) {
-  document.getElementById(countId).textContent = rows.length;
+  document.getElementById(countId).textContent          = rows.length;
   const tbody = document.querySelector(`#${tableId} tbody`);
   tbody.innerHTML = '';
-  document.getElementById(emptyId).style.display = rows.length ? 'none' : 'flex';
-  document.getElementById(tableId).style.display = rows.length ? 'table' : 'none';
+  document.getElementById(emptyId).style.display        = rows.length ? 'none'  : 'flex';
+  document.getElementById(tableId).style.display        = rows.length ? 'table' : 'none';
 
   rows.forEach(a => {
     const tr = tbody.insertRow();
-    const actionCls = { BUY: 'row-buy', SELL: 'row-sell', HOLD: 'row-hold' }[a.action] || '';
-    tr.className = actionCls;
+    tr.className = ({ BUY: 'row-buy', SELL: 'row-sell', HOLD: 'row-hold' }[a.action] || '');
     if (a.action === 'BUY' && a.affordable === false) tr.classList.add('row-unaffordable');
 
     cols.forEach(col => {
@@ -664,67 +813,60 @@ function renderActions(tableId, emptyId, countId, rows, cols) {
         if (a.action === 'BUY' && a.affordable === false)
           html += ` <span class="badge badge-dim" title="Price exceeds available cash">Unaffordable</span>`;
         td.innerHTML = html;
-
       } else if (col === 'signal') {
         td.innerHTML = signalBadge(a.signal);
-
       } else if (col === 'price') {
-        td.className = 'price-cell';
+        td.className   = 'price-cell';
         td.textContent = a.price ? fmtMoney(a.price) : '—';
-
       } else if (col === 'owned') {
         td.innerHTML = a.owned
           ? '<span class="badge badge-owned"><i class="bi bi-check2"></i> Owned</span>'
           : '<span class="badge badge-new">New</span>';
-
       } else if (col === 'rationale') {
-        td.className = 'rationale-cell';
+        td.className   = 'rationale-cell';
         td.textContent = a.rationale || '—';
       }
     });
   });
 }
 
-// ── Positions table ─────────────────────────────────────────────────────────
+// ── Positions table ───────────────────────────────────────────────────────────
 
 function renderPositions(positions) {
-  document.getElementById('posCount').textContent = positions.length;
+  document.getElementById('posCount').textContent       = positions.length;
   const tbody = document.querySelector('#posTable tbody');
   tbody.innerHTML = '';
-  document.getElementById('posEmpty').style.display  = positions.length ? 'none' : 'flex';
-  document.getElementById('posTable').style.display  = positions.length ? 'table' : 'none';
+  document.getElementById('posEmpty').style.display     = positions.length ? 'none'  : 'flex';
+  document.getElementById('posTable').style.display     = positions.length ? 'table' : 'none';
 
   positions.forEach(p => {
     const pnl    = (p.current_price - p.cost_basis) * p.shares;
     const pnlPct = p.cost_basis > 0
       ? ((p.current_price - p.cost_basis) / p.cost_basis * 100).toFixed(1)
       : '0.0';
-    const pnlCls = pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
     const sign   = pnl >= 0 ? '+' : '';
-
-    const flags = (p.flags || []).map(f => {
+    const flags  = (p.flags || []).map(f => {
       if (f === 'concentration_risk')
-        return `<span class="badge badge-flag-conc ms-1" title="Position >10% of portfolio"><i class="bi bi-exclamation-triangle"></i> Conc.</span>`;
+        return `<span class="badge badge-flag-conc" title=">10% of portfolio"><i class="bi bi-exclamation-triangle"></i> Conc.</span>`;
       if (f === 'drawdown_15pct')
-        return `<span class="badge badge-flag-down ms-1" title="Down >15% from cost basis"><i class="bi bi-arrow-down-circle"></i> −15%</span>`;
+        return `<span class="badge badge-flag-down" title="Down >15% from cost"><i class="bi bi-arrow-down-circle"></i> −15%</span>`;
       if (f === 'sector_concentration')
-        return `<span class="badge badge-flag-sec ms-1" title="Sector >25% of portfolio"><i class="bi bi-pie-chart"></i> Sector</span>`;
+        return `<span class="badge badge-flag-sec" title="Sector >25% of portfolio"><i class="bi bi-pie-chart"></i> Sector</span>`;
       return '';
-    }).join('');
+    }).join(' ');
 
     const tr = tbody.insertRow();
     tr.innerHTML = `
-      <td><span class="ticker">${p.ticker}</span>${flags}</td>
+      <td><span class="ticker">${p.ticker}</span>${flags ? ' ' + flags : ''}</td>
       <td>${p.shares}</td>
       <td class="price-cell">${fmtMoney(p.current_price)}</td>
-      <td class="${pnlCls}">
-        ${sign}${fmtMoney(pnl)}
-        <div class="pnl-sub">${sign}${pnlPct}%</div>
+      <td class="${pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">
+        ${sign}${fmtMoney(pnl)}<div class="pnl-sub">${sign}${pnlPct}%</div>
       </td>`;
   });
 }
 
-// ── Portfolio editor ────────────────────────────────────────────────────────
+// ── Portfolio editor ──────────────────────────────────────────────────────────
 
 function toggleEditor() {
   const body = document.getElementById('editorBody');
@@ -742,15 +884,14 @@ async function savePortfolio() {
   try {
     const positions = JSON.parse(document.getElementById('positionsInput').value || '[]');
     const cash      = parseFloat(document.getElementById('cashInput').value) || 0;
-    const res  = await fetch('/api/portfolio', {
+    const data = await fetch('/api/portfolio', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({cash, positions}),
-    });
-    const data = await res.json();
-    const msg  = document.getElementById('saveMsg');
-    msg.textContent  = data.ok ? 'Saved successfully.' : 'Error: ' + data.reason;
-    msg.style.color  = data.ok ? 'var(--green)' : 'var(--red)';
+    }).then(r => r.json());
+    const msg       = document.getElementById('saveMsg');
+    msg.textContent = data.ok ? 'Saved successfully.' : 'Error: ' + data.reason;
+    msg.style.color = data.ok ? 'var(--green)' : 'var(--red)';
     msg.style.display = 'block';
     setTimeout(() => msg.style.display = 'none', 3000);
   } catch (e) {
@@ -758,13 +899,12 @@ async function savePortfolio() {
   }
 }
 
-// ── Controls ────────────────────────────────────────────────────────────────
+// ── Controls ──────────────────────────────────────────────────────────────────
 
 document.querySelectorAll('.mode-btn').forEach(btn => {
   btn.addEventListener('click', async () => {
     await fetch('/api/aggressiveness', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({aggressiveness: btn.dataset.value}),
     });
     refresh();
@@ -773,27 +913,27 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
 
 async function triggerRun() {
   const res = await fetch('/api/run', {method: 'POST'});
-  if (!res.ok) {
-    const d = await res.json();
-    alert(d.reason || 'Run failed');
-    return;
-  }
-  document.getElementById('runBtn').disabled = true;
+  if (!res.ok) { alert((await res.json()).reason || 'Run failed'); return; }
+  document.getElementById('runBtn').disabled       = true;
   document.getElementById('spinner').style.display = 'block';
+  showProgress(true);
+  updateProgress('Starting…', 0, '');
 }
 
 async function refresh() {
-  try {
-    const state = await fetch('/api/state').then(r => r.json());
-    renderState(state);
-  } catch (e) {
-    console.warn('Refresh failed:', e);
-  }
+  try { renderState(await fetch('/api/state').then(r => r.json())); }
+  catch (e) { console.warn('Refresh failed:', e); }
 }
 
-// Initial render + 60-second auto-refresh
+// ── Boot ──────────────────────────────────────────────────────────────────────
+
 renderState(initialState);
-setInterval(refresh, 60_000);
+// Start appropriate polling interval based on initial state
+if (_wasRunning) {
+  _fastTimer = setInterval(refresh, 3000);
+} else {
+  _slowTimer = setInterval(refresh, 60_000);
+}
 </script>
 </body>
 </html>

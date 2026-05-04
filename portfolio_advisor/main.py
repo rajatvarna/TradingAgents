@@ -27,6 +27,8 @@ ET = pytz.timezone("America/New_York")
 os.makedirs(config.data_dir, exist_ok=True)
 
 
+# ── State helpers ────────────────────────────────────────────────────────────
+
 def _patch_state(patch: dict) -> None:
     state: dict = {}
     if os.path.exists(config.state_file):
@@ -39,6 +41,13 @@ def _patch_state(patch: dict) -> None:
     with open(config.state_file, "w", encoding="utf-8") as fh:
         json.dump(state, fh, indent=2, default=str)
 
+
+def _set_stage(stage: str, progress: int, detail: str = "") -> None:
+    """Patch just the progress fields — cheap, called frequently during runs."""
+    _patch_state({"stage": stage, "progress": progress, "stage_detail": detail})
+
+
+# ── Serializers ──────────────────────────────────────────────────────────────
 
 def _serialize_actions(actions) -> list:
     return [
@@ -80,19 +89,33 @@ def _fetch_prices(tickers: list, portfolio) -> dict:
     return price_map
 
 
+# ── Run functions ────────────────────────────────────────────────────────────
+
 def run_intraday() -> None:
     """Check owned positions for sell signals (runs 4x per trading day)."""
     logger.info("--- Intraday check ---")
+    _set_stage("Loading portfolio", 2)
+
     trade_date = date.today()
     portfolio = load_portfolio(config.data_dir)
     owned_tickers = [p.ticker for p in portfolio.positions]
 
     if not owned_tickers:
         logger.info("No owned positions to check")
+        _patch_state({"running": False, "stage": "No positions to check", "progress": 100, "stage_detail": ""})
         return
 
+    _set_stage("Checking market regime", 8)
     regime = get_market_regime()
-    results = run_tickers(owned_tickers, trade_date, config)
+
+    _set_stage("Running analysis", 15, f"0/{len(owned_tickers)} positions")
+
+    def _analysis_progress(fraction, detail):
+        _set_stage("Running analysis", int(15 + fraction * 75), detail)
+
+    results = run_tickers(owned_tickers, trade_date, config, on_progress=_analysis_progress)
+
+    _set_stage("Aggregating results", 92)
     owned_set = {p.ticker for p in portfolio.positions}
     price_map = _fetch_prices(owned_tickers, portfolio)
     actions = aggregate(
@@ -111,6 +134,9 @@ def run_intraday() -> None:
         "condition": condition,
         "market_regime": regime,
         "running": False,
+        "stage": "Complete",
+        "progress": 100,
+        "stage_detail": f"{len(owned_tickers)} positions reviewed",
     })
     logger.info("Intraday check complete: %d positions reviewed", len(owned_tickers))
 
@@ -118,33 +144,52 @@ def run_intraday() -> None:
 def run_eod() -> None:
     """Screen NASDAQ candidates and run full analysis (EOD + Monday pre-market)."""
     logger.info("--- EOD/pre-market scan ---")
+    _set_stage("Loading portfolio", 2)
+
     trade_date = date.today()
     portfolio = load_portfolio(config.data_dir)
 
+    _set_stage("Checking market regime", 5)
     regime = get_market_regime()
     logger.info("Market regime: %s", regime.get("regime"))
 
     # Aggressive strategy: no new long positions when market is in a downtrend
-    # (strategy doc: Condition 1 Aggressive, Step 1 — SPY below 50-day SMA = downtrend)
     skip_new_buys = (
         config.aggressiveness == Aggressiveness.AGGRESSIVE
         and regime.get("regime") in ("bear", "confirmed_bear")
     )
+
     if skip_new_buys:
         logger.info(
             "Aggressive mode: market regime is %s — skipping new buy candidates",
             regime.get("regime"),
         )
         candidates = []
+        _set_stage("Screening skipped", 50, f"Regime: {regime.get('regime')} — no new longs")
     else:
-        candidates = screen_candidates(portfolio, config, cash=portfolio.cash)
+        _set_stage("Screening NASDAQ candidates", 10, "Fetching ticker list…")
+
+        def _screen_progress(fraction, detail):
+            _set_stage("Screening NASDAQ candidates", int(10 + fraction * 40), detail)
+
+        candidates = screen_candidates(
+            portfolio, config, cash=portfolio.cash, on_progress=_screen_progress,
+        )
+
     logger.info("%d candidates after screening", len(candidates))
 
     # Always include owned positions so sell signals are evaluated
     owned_set = {p.ticker for p in portfolio.positions}
     all_tickers = list(owned_set | set(candidates))
 
-    results = run_tickers(all_tickers, trade_date, config)
+    _set_stage("Running analysis", 52, f"0/{len(all_tickers)} tickers")
+
+    def _analysis_progress(fraction, detail):
+        _set_stage("Running analysis", int(52 + fraction * 43), detail)
+
+    results = run_tickers(all_tickers, trade_date, config, on_progress=_analysis_progress)
+
+    _set_stage("Aggregating results", 97)
     price_map = _fetch_prices(all_tickers, portfolio)
     actions = aggregate(
         results, owned_set, config, trade_date,
@@ -162,9 +207,14 @@ def run_eod() -> None:
         "condition": condition,
         "market_regime": regime,
         "running": False,
+        "stage": "Complete",
+        "progress": 100,
+        "stage_detail": f"{len(all_tickers)} tickers analyzed",
     })
     logger.info("EOD scan complete: %d tickers analyzed", len(all_tickers))
 
+
+# ── Entry point ──────────────────────────────────────────────────────────────
 
 def main() -> None:
     logger.info("Starting Portfolio Advisor")

@@ -12,19 +12,27 @@
     .table { color: #e0e0e0; }
     .table th { color: #8b95a1; font-size: .8rem; text-transform: uppercase; border-color: #2a2d3a; }
     .table td { border-color: #2a2d3a; vertical-align: middle; }
-    .badge-sell  { background: #7f1d1d; color: #fca5a5; }
-    .badge-buy   { background: #14532d; color: #86efac; }
-    .badge-hold  { background: #1e293b; color: #94a3b8; }
-    .pill-sell   { background: #991b1b; }
-    .pill-buy    { background: #166534; }
-    .pill-hold   { background: #334155; }
-    .rationale   { font-size: .8rem; color: #6b7280; max-width: 420px; }
     .source-live { color: #4ade80; }
     .source-fallback { color: #facc15; }
     .source-unknown  { color: #9ca3af; }
+    .unaffordable { opacity: 0.5; }
+    .rationale { font-size: .8rem; color: #6b7280; max-width: 420px; }
     #spinner { display: none; }
     #portfolio-form { display: none; }
     pre { color: #a5b4fc; background: #0f1117; padding: 1rem; border-radius: .375rem; font-size: .8rem; }
+
+    /* Regime colors */
+    .regime-bull          { color: #4ade80; }
+    .regime-corrective    { color: #facc15; }
+    .regime-bear          { color: #fb923c; }
+    .regime-confirmed_bear{ color: #f87171; }
+    .regime-unknown       { color: #9ca3af; }
+
+    /* Condition badge */
+    .condition-1 { background: #14532d; color: #86efac; }
+    .condition-2 { background: #1e3a5f; color: #93c5fd; }
+    .condition-3 { background: #3f3f46; color: #a1a1aa; }
+    .condition-4 { background: #422006; color: #fdba74; }
   </style>
 </head>
 <body>
@@ -52,7 +60,7 @@
 
   <!-- Status row -->
   <div class="row g-3 mb-4" id="statusCards">
-    <div class="col-md-3">
+    <div class="col-md-2">
       <div class="card h-100">
         <div class="card-body">
           <div class="text-muted small">Cash Available</div>
@@ -60,7 +68,7 @@
         </div>
       </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
       <div class="card h-100">
         <div class="card-body">
           <div class="text-muted small">Data Source</div>
@@ -68,15 +76,32 @@
         </div>
       </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
       <div class="card h-100">
         <div class="card-body">
-          <div class="text-muted small">Last Intraday Check</div>
+          <div class="text-muted small">Condition</div>
+          <div id="conditionVal" class="fw-bold">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-2">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Market Regime</div>
+          <div id="regimeVal" class="fw-bold">—</div>
+          <div id="regimeSub" class="text-muted" style="font-size:.75rem"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-2">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small">Last Intraday</div>
           <div class="fw-bold" id="intradayVal">—</div>
         </div>
       </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
       <div class="card h-100">
         <div class="card-body">
           <div class="text-muted small">Last EOD Scan</div>
@@ -96,7 +121,7 @@
         <div class="card-body p-0">
           <table class="table table-hover mb-0" id="sellTable">
             <thead><tr>
-              <th>Ticker</th><th>Signal</th><th>Rationale</th>
+              <th>Ticker</th><th>Signal</th><th>Price</th><th>Rationale</th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -110,7 +135,7 @@
         <div class="card-body p-0">
           <table class="table table-hover mb-0" id="buyTable">
             <thead><tr>
-              <th>Ticker</th><th>Signal</th><th>Owned</th><th>Rationale</th>
+              <th>Ticker</th><th>Signal</th><th>Price</th><th>Owned</th><th>Rationale</th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -124,7 +149,7 @@
         <div class="card-body p-0">
           <table class="table table-hover mb-0" id="holdTable">
             <thead><tr>
-              <th>Ticker</th><th>Signal</th><th>Rationale</th>
+              <th>Ticker</th><th>Signal</th><th>Price</th><th>Rationale</th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -190,6 +215,7 @@ function fmt(ts) {
 }
 
 function fmtMoney(n) {
+  if (!n && n !== 0) return '—';
   return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
 
@@ -197,6 +223,29 @@ function signalBadge(signal) {
   const cls = {Buy:'success', Overweight:'success', Hold:'secondary', Underweight:'warning', Sell:'danger'};
   return `<span class="badge bg-${cls[signal]||'secondary'}">${signal}</span>`;
 }
+
+const CONDITION_LABELS = {
+  1: 'Cash, No Positions',
+  2: 'Cash + Positions',
+  3: 'No Cash, No Positions',
+  4: 'No Cash, Has Positions',
+};
+
+const REGIME_LABELS = {
+  bull:           'Bull Market',
+  corrective:     'Corrective',
+  bear:           'Bear Market',
+  confirmed_bear: 'Confirmed Bear',
+  unknown:        'Unknown',
+};
+
+const REGIME_SUB = {
+  bull:           'SPY above 50-day & 200-day SMA',
+  corrective:     'SPY above 200-day, below 50-day',
+  bear:           'SPY below 200-day SMA',
+  confirmed_bear: 'Death cross — 50-day below 200-day',
+  unknown:        '',
+};
 
 function renderState(s) {
   currentState = s;
@@ -209,6 +258,27 @@ function renderState(s) {
   srcEl.className = 'fs-5 fw-bold source-' + src;
   document.getElementById('intradayVal').textContent = fmt(s.last_intraday_run);
   document.getElementById('eodVal').textContent = fmt(s.last_eod_run);
+
+  // Condition
+  const cond = s.condition;
+  const condEl = document.getElementById('conditionVal');
+  if (cond) {
+    condEl.innerHTML = `<span class="badge condition-${cond} fs-6">Condition ${cond}</span>
+      <div class="text-muted mt-1" style="font-size:.75rem">${CONDITION_LABELS[cond]||''}</div>`;
+  } else {
+    condEl.textContent = '—';
+  }
+
+  // Market regime
+  const regime = (s.market_regime || {});
+  const r = regime.regime || 'unknown';
+  const regimeEl = document.getElementById('regimeVal');
+  regimeEl.textContent = REGIME_LABELS[r] || r;
+  regimeEl.className = 'fw-bold regime-' + r;
+  const subEl = document.getElementById('regimeSub');
+  subEl.textContent = (regime.spy_price && r !== 'unknown')
+    ? `SPY ${fmtMoney(regime.spy_price)} | SMA50 ${fmtMoney(regime.sma50)}`
+    : (REGIME_SUB[r] || '');
 
   // Aggressiveness toggle
   document.querySelectorAll('.agg-btn').forEach(btn => {
@@ -231,10 +301,22 @@ function renderState(s) {
   posBody.innerHTML = '';
   positions.forEach(p => {
     const pnl = (p.current_price - p.cost_basis) * p.shares;
-    const pnlPct = ((p.current_price - p.cost_basis) / p.cost_basis * 100).toFixed(1);
+    const pnlPct = p.cost_basis > 0
+      ? ((p.current_price - p.cost_basis) / p.cost_basis * 100).toFixed(1)
+      : '0.0';
     const pnlCls = pnl >= 0 ? 'text-success' : 'text-danger';
+    const flags = (p.flags || []);
+    const flagBadges = flags.map(f => {
+      if (f === 'concentration_risk')
+        return '<span class="badge bg-warning text-dark ms-1" title="Position >10% of portfolio">Conc.</span>';
+      if (f === 'drawdown_15pct')
+        return '<span class="badge bg-danger ms-1" title="Down >15% from cost basis">-15%</span>';
+      if (f === 'sector_concentration')
+        return '<span class="badge bg-secondary ms-1" title="Sector >25% of portfolio">Sector</span>';
+      return '';
+    }).join('');
     const row = posBody.insertRow();
-    row.innerHTML = `<td><strong>${p.ticker}</strong></td>
+    row.innerHTML = `<td><strong>${p.ticker}</strong>${flagBadges}</td>
       <td>${p.shares}</td>
       <td>${fmtMoney(p.current_price)}</td>
       <td class="${pnlCls}">${pnl >= 0 ? '+' : ''}${fmtMoney(pnl)}<br>
@@ -248,9 +330,9 @@ function renderState(s) {
   const buys  = actions.filter(a => a.action === 'BUY');
   const holds = actions.filter(a => a.action === 'HOLD');
 
-  renderActionTable('sellTable', 'sellEmpty', sells, ['ticker','signal','rationale']);
-  renderActionTable('buyTable',  'buyEmpty',  buys,  ['ticker','signal','owned','rationale']);
-  renderActionTable('holdTable', 'holdEmpty', holds, ['ticker','signal','rationale']);
+  renderActionTable('sellTable', 'sellEmpty', sells, ['ticker','signal','price','rationale']);
+  renderActionTable('buyTable',  'buyEmpty',  buys,  ['ticker','signal','price','owned','rationale']);
+  renderActionTable('holdTable', 'holdEmpty', holds, ['ticker','signal','price','rationale']);
 }
 
 function renderActionTable(tableId, emptyId, rows, cols) {
@@ -258,14 +340,27 @@ function renderActionTable(tableId, emptyId, rows, cols) {
   tbody.innerHTML = '';
   rows.forEach(a => {
     const tr = tbody.insertRow();
+    if (a.action === 'BUY' && a.affordable === false) {
+      tr.classList.add('unaffordable');
+      tr.title = 'Insufficient cash to purchase at current price';
+    }
     cols.forEach(col => {
       const td = tr.insertCell();
-      if (col === 'ticker') td.innerHTML = `<strong>${a.ticker}</strong>`;
-      else if (col === 'signal') td.innerHTML = signalBadge(a.signal);
-      else if (col === 'owned') td.innerHTML = a.owned
-        ? '<span class="badge bg-secondary">Owned</span>'
-        : '<span class="badge bg-dark border border-secondary">New</span>';
-      else if (col === 'rationale') {
+      if (col === 'ticker') {
+        td.innerHTML = `<strong>${a.ticker}</strong>`;
+        if (a.action === 'BUY' && a.affordable === false) {
+          td.innerHTML += ' <span class="badge bg-secondary" title="Price exceeds available cash">N/A</span>';
+        }
+      } else if (col === 'signal') {
+        td.innerHTML = signalBadge(a.signal);
+      } else if (col === 'price') {
+        td.textContent = a.price ? fmtMoney(a.price) : '—';
+        td.style.fontVariantNumeric = 'tabular-nums';
+      } else if (col === 'owned') {
+        td.innerHTML = a.owned
+          ? '<span class="badge bg-secondary">Owned</span>'
+          : '<span class="badge bg-dark border border-secondary">New</span>';
+      } else if (col === 'rationale') {
         td.className = 'rationale';
         td.textContent = a.rationale || '—';
       }

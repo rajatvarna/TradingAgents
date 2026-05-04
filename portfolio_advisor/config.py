@@ -14,11 +14,19 @@ class Aggressiveness(str, Enum):
 class Config:
     aggressiveness: Aggressiveness = Aggressiveness.CONSERVATIVE
 
+    # Cash threshold: minimum balance to be considered "has cash" (strategy Condition detection)
+    cash_threshold: float = 100.0
+
     # Screener thresholds
     min_avg_volume: int = 500_000
     price_range_pct: float = 0.20
     momentum_days: int = 5
     max_candidates: int = 50
+
+    # Aggressive mode technical filters (strategy doc: Condition 1 Aggressive, Step 2)
+    min_market_cap_b: float = 2.0   # minimum market cap in billions
+    min_rsi: float = 55.0           # RSI lower bound (trending bullish)
+    max_rsi: float = 75.0           # RSI upper bound (not yet overbought)
 
     # Scheduled job times (all ET, 24h format)
     intraday_check_times: list = field(

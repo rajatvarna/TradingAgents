@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 import datetime
 import typer
@@ -934,9 +935,8 @@ def run_analysis(checkpoint: bool = False):
     config["checkpoint_enabled"] = checkpoint
 
     # Auto-detect B3 stocks and use specialized dataflow
-    import re
     ticker_upper = selections["ticker"].upper()
-    if selections.get("market") == "B3" or ticker_upper.endswith(".SA") or re.match(r'^[A-Z]{4}[0-9]{1,2}$', ticker_upper):
+    if selections.get("market") == "B3" or ticker_upper.endswith(".SA") or re.match(r'^[A-Z]{4}[0-9]{1,2}F?$', ticker_upper):
         if not ticker_upper.endswith(".SA"):
             selections["ticker"] = f"{ticker_upper}.SA"
         
@@ -1009,7 +1009,11 @@ def run_analysis(checkpoint: bool = False):
                 content = obj.report_sections[section_name]
                 if content:
                     file_name = f"{section_name}.md"
-                    text = "\n".join(str(item) for item in content) if isinstance(content, list) else content
+                    if isinstance(content, list):
+                        text = "\n".join(extract_content_string(item) or "" for item in content)
+                    else:
+                        text = extract_content_string(content) or ""
+                    
                     with open(report_dir / file_name, "w", encoding="utf-8") as f:
                         f.write(text)
         return wrapper

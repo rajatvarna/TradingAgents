@@ -22,8 +22,8 @@ def normalize_b3_ticker(ticker: str) -> str:
     Example: PETR4 -> PETR4.SA, VALE3 -> VALE3.SA, BOVA11 -> BOVA11.SA
     """
     ticker = ticker.upper().strip()
-    # Pattern: 4 letters followed by 1 or 2 digits (e.g., 3, 4, 11)
-    if re.match(r'^[A-Z]{4}[0-9]{1,2}$', ticker) and not ticker.endswith('.SA'):
+    # Pattern: 4 letters followed by 1 or 2 digits (e.g., 3, 4, 11) and optional F for fractional
+    if re.match(r'^[A-Z]{4}[0-9]{1,2}F?$', ticker) and not ticker.endswith('.SA'):
         return f"{ticker}.SA"
     return ticker
 

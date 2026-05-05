@@ -101,6 +101,20 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Custom model ID", "custom"),
         ],
     },
+    "mimo": {
+        "quick": [
+            ("MiMo-V2.5 - Native omnimodal, 1M context, cost-efficient", "xiaomi/mimo-v2.5"),
+            ("MiMo-V2-Flash - Open-source 309B MoE, fast reasoning", "xiaomi/mimo-v2-flash"),
+            ("MiMo-V2-Omni - Multimodal (image/video/audio)", "xiaomi/mimo-v2-omni"),
+            ("Custom model ID", "custom"),
+        ],
+        "deep": [
+            ("MiMo-V2.5-Pro - Flagship, 1T params, 1M context, best agent perf", "xiaomi/mimo-v2.5-pro"),
+            ("MiMo-V2.5 - Native omnimodal, 1M context, cost-efficient", "xiaomi/mimo-v2.5"),
+            ("MiMo-V2-Pro - Previous flagship, 1T params, 1M context", "xiaomi/mimo-v2-pro"),
+            ("Custom model ID", "custom"),
+        ],
+    },
     # OpenRouter: fetched dynamically. Azure: any deployed model name.
     "ollama": {
         "quick": [

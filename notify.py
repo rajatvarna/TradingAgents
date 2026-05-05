@@ -3,9 +3,9 @@
 One shared bot. Token in ``.env`` as ``TELEGRAM_BOT_TOKEN``. Users hand-paste
 their personal ``chat_id`` (from @userinfobot) into the webui prefs.
 
-The Telegram Bot API hostname (``api.telegram.org``) is not reachable from
-this host without the local proxy, so callers should source
-``/usr/local/proxy1.sh`` (or have HTTPS_PROXY set) before running.
+If your host can't reach ``api.telegram.org`` directly (e.g. mainland-China
+networks), set ``HTTPS_PROXY`` / ``HTTP_PROXY`` in the environment before
+running — ``requests`` honours them automatically.
 """
 from __future__ import annotations
 

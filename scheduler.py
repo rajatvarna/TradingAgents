@@ -35,10 +35,10 @@ import notify
 import ticker_resolver
 import user_prefs
 
-PYTHON_BIN = "/home/jeffwang/miniconda3/bin/python"
+PYTHON_BIN = os.getenv("TRADINGAGENTS_PYTHON_BIN", sys.executable)
 WORKER_PATH = str(_ROOT / "worker.py")
 LOCK_PATH = "/tmp/trading-scheduler.lock"
-WEBUI_BASE_URL = os.getenv("WEBUI_PUBLIC_URL", "https://trade.recompdaily.com")
+WEBUI_BASE_URL = os.getenv("WEBUI_PUBLIC_URL", "http://localhost:8501")
 
 
 def _log(msg: str) -> None:

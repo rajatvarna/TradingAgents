@@ -11,8 +11,8 @@ Resolution order (cheapest → most expensive):
   4. Gemini LLM (handles A-shares, less-common names, typos)
   5. Fallback: upper-cased input
 
-Both callers should source ``/usr/local/proxy1.sh`` so the LLM call (and any
-Search HTTP traffic) reaches Google.
+Both callers should have ``HTTPS_PROXY`` set in the environment if their host
+can't reach Google APIs / yfinance directly.
 """
 from __future__ import annotations
 

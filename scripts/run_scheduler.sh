@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# One-shot launcher for scheduler.py — invoked by trading-scheduler.timer.
+# Daily scheduler launcher — invoked by trading-scheduler.timer.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Outbound HTTP proxy for Gemini API + Telegram Bot API.
-# shellcheck disable=SC1091
-source /usr/local/proxy1.sh
+# Optional outbound proxy (see scripts/run_webui.sh).
+if [[ -n "${TRADINGAGENTS_PROXY_SH:-}" && -r "$TRADINGAGENTS_PROXY_SH" ]]; then
+    # shellcheck disable=SC1090
+    source "$TRADINGAGENTS_PROXY_SH"
+fi
 
-exec /home/jeffwang/miniconda3/bin/python scheduler.py "$@"
+PYTHON_BIN="${TRADINGAGENTS_PYTHON_BIN:-$(command -v python3 || command -v python)}"
+exec "$PYTHON_BIN" scheduler.py "$@"

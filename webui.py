@@ -10,6 +10,7 @@ import datetime as _dt
 import hashlib
 import os
 import re
+import sys
 import threading
 import time
 from collections import deque
@@ -661,7 +662,7 @@ if run and worker_info is None:
     import json as _json_init
 
     _WORKER_PATH_INIT = str(_ROOT / "worker.py")
-    _PYTHON_BIN = "/home/jeffwang/miniconda3/bin/python"
+    _PYTHON_BIN = os.getenv("TRADINGAGENTS_PYTHON_BIN", sys.executable)
     _proc_new = _sp_init.Popen(
         [_PYTHON_BIN, "-u", _WORKER_PATH_INIT],
         stdin=_sp_init.PIPE, stdout=_sp_init.PIPE, stderr=_sp_init.PIPE,

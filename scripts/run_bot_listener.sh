@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Long-polling Telegram listener — auto-replies with caller's chat_id.
+# Long-polling Telegram bot — auto-replies to /start with the caller's chat_id.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# shellcheck disable=SC1091
-source /usr/local/proxy1.sh
+# Optional outbound proxy (see scripts/run_webui.sh).
+if [[ -n "${TRADINGAGENTS_PROXY_SH:-}" && -r "$TRADINGAGENTS_PROXY_SH" ]]; then
+    # shellcheck disable=SC1090
+    source "$TRADINGAGENTS_PROXY_SH"
+fi
 
-exec /home/jeffwang/miniconda3/bin/python bot_listener.py
+PYTHON_BIN="${TRADINGAGENTS_PYTHON_BIN:-$(command -v python3 || command -v python)}"
+exec "$PYTHON_BIN" bot_listener.py

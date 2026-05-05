@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
-# Start the Streamlit web UI bound to 127.0.0.1 only.
-# Public access is via the Cloudflare tunnel (run_tunnel.sh).
+# Launch the Streamlit webui bound to 127.0.0.1.
+# Public access should be fronted by your own reverse proxy / tunnel.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Outbound HTTP proxy is required to reach Google / OpenAI APIs from this host.
-# Worker subprocesses inherit these env vars automatically via subprocess.Popen.
-# shellcheck disable=SC1091
-source /usr/local/proxy1.sh
+# Optional: source a proxy-setup script if your host needs an outbound proxy
+# to reach LLM APIs (e.g. Google generativelanguage). Set TRADINGAGENTS_PROXY_SH
+# to its path. Skipped if unset.
+if [[ -n "${TRADINGAGENTS_PROXY_SH:-}" && -r "$TRADINGAGENTS_PROXY_SH" ]]; then
+    # shellcheck disable=SC1090
+    source "$TRADINGAGENTS_PROXY_SH"
+fi
 
-exec /home/jeffwang/miniconda3/bin/streamlit run webui.py \
-    --server.address 127.0.0.1 \
-    --server.port 8501 \
+PYTHON_BIN="${TRADINGAGENTS_PYTHON_BIN:-$(command -v python3 || command -v python)}"
+exec "$PYTHON_BIN" -m streamlit run webui.py \
+    --server.address "${TRADINGAGENTS_BIND:-127.0.0.1}" \
+    --server.port "${TRADINGAGENTS_PORT:-8501}" \
     --server.headless true \
     --browser.gatherUsageStats false

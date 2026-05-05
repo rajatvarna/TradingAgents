@@ -22,7 +22,7 @@ load_dotenv(_ROOT / ".env")
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 API = f"https://api.telegram.org/bot{TOKEN}"
-WEBUI = os.getenv("WEBUI_PUBLIC_URL", "https://trade.recompdaily.com")
+WEBUI = os.getenv("WEBUI_PUBLIC_URL", "http://localhost:8501")
 
 LONG_POLL_TIMEOUT = 30      # seconds Telegram holds the connection
 RECV_TIMEOUT = 40            # client-side socket timeout (slightly > server)

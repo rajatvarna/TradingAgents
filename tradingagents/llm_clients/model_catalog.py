@@ -101,6 +101,20 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Custom model ID", "custom"),
         ],
     },
+    "github_copilot": {
+        "quick": [
+            ("OpenAI GPT-4.1 - Smartest non-reasoning model", "gpt-4.1"),
+            ("OpenAI GPT-4o - Balanced multimodal", "gpt-4o"),
+            ("OpenAI o3 Mini - Lightweight reasoning", "o3-mini"),
+            ("Custom model ID", "custom"),
+        ],
+        "deep": [
+            ("OpenAI GPT-4.1 - Smartest non-reasoning model", "gpt-4.1"),
+            ("OpenAI GPT-4o - Balanced multimodal", "gpt-4o"),
+            ("OpenAI o3 Mini - Lightweight reasoning", "o3-mini"),
+            ("Custom model ID", "custom"),
+        ],
+    },
     # OpenRouter: fetched dynamically. Azure: any deployed model name.
     "ollama": {
         "quick": [

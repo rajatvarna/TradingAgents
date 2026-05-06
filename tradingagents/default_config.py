@@ -7,6 +7,7 @@ INVESTMENT_HORIZONS = {
     "6_months":     "Medium-term investing",
     "1_year":       "Long-term investing",
     "5_years_plus": "Long-term strategic allocation",
+     "medium_term":  "Medium-term (default)",
 }
 
 _TRADINGAGENTS_HOME = os.path.join(os.path.expanduser("~"), ".tradingagents")

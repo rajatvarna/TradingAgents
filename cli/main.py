@@ -627,7 +627,7 @@ def get_user_selections(batch_mode: bool = False):
     selected_shallow_thinker = select_shallow_thinking_agent(selected_llm_provider)
     selected_deep_thinker = select_deep_thinking_agent(selected_llm_provider)
 
-
+    # Step 9: Investment Horizon
     console.print(
         create_question_box(
             "Step 9: Investment Horizon",

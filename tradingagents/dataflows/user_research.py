@@ -14,7 +14,7 @@ import io
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -93,15 +93,14 @@ def _save(
     summary_path = target_dir / f"{digest}.summary.md"
     meta_path = target_dir / f"{digest}.meta.json"
 
-    if not original_path.exists():
+    deduped = original_path.exists()
+    if not deduped:
         original_path.write_bytes(file_bytes)
-    if not summary_path.exists():
         summary_path.write_text(summary_md, encoding="utf-8")
-    if not meta_path.exists():
         meta_path.write_text(
             json.dumps({
                 "filename": original_filename,
-                "uploaded_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "uploaded_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "size": len(file_bytes),
                 "hash": digest,
                 "ticker": ticker.upper() if ticker else None,
@@ -109,14 +108,30 @@ def _save(
             }, indent=2),
             encoding="utf-8",
         )
+        persisted_filename = original_filename
+        persisted_summary = summary_md
+    else:
+        # Same bytes uploaded again — keep the original filename/summary on disk
+        # and reflect that in the return dict so the caller doesn't believe a
+        # new summary was saved.
+        try:
+            existing_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            persisted_filename = existing_meta.get("filename", original_filename)
+        except Exception:
+            persisted_filename = original_filename
+        try:
+            persisted_summary = summary_path.read_text(encoding="utf-8")
+        except Exception:
+            persisted_summary = summary_md
 
     return {
         "path": str(original_path),
         "summary_path": str(summary_path),
         "meta_path": str(meta_path),
         "hash": digest,
-        "filename": original_filename,
-        "summary": summary_md,
+        "filename": persisted_filename,
+        "summary": persisted_summary,
+        "deduped": deduped,
     }
 
 
@@ -140,8 +155,17 @@ def list_research(user_root: Path, ticker: str) -> list[dict]:
     return out
 
 
+_DIGEST_RE = re.compile(r"^[a-f0-9]{12}$")
+
+
 def delete_research(user_root: Path, ticker: str, digest: str) -> None:
-    """Delete the original + summary + meta for a single library entry."""
+    """Delete the original + summary + meta for a single library entry.
+
+    The digest must be the 12-hex-char SHA prefix produced by `_save`.
+    Anything else is rejected (defense against caller-supplied paths).
+    """
+    if not _DIGEST_RE.match(digest):
+        return
     d = _research_root(user_root) / ticker.upper()
     if not d.exists():
         return

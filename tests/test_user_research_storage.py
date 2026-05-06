@@ -1,7 +1,5 @@
 from pathlib import Path
 
-import pytest
-
 
 def test_save_and_list_per_ticker(tmp_path: Path):
     from tradingagents.dataflows.user_research import (
@@ -63,3 +61,32 @@ def test_clear_run_dir(tmp_path: Path):
 def test_list_research_unknown_ticker_returns_empty(tmp_path: Path):
     from tradingagents.dataflows.user_research import list_research
     assert list_research(tmp_path / "user42", "ZZZ") == []
+
+
+def test_dedupe_return_dict_reflects_persisted_first_upload(tmp_path):
+    from tradingagents.dataflows.user_research import _save, list_research
+    user_root = tmp_path / "user42"
+    first = _save(b"identical bytes", "first_summary", "AAPL", user_root, "first.md", None)
+    second = _save(b"identical bytes", "second_summary", "AAPL", user_root, "second.md", None)
+    assert first["deduped"] is False
+    assert second["deduped"] is True
+    # Second call's return must reflect what's actually on disk (the first upload).
+    assert second["filename"] == "first.md"
+    assert second["summary"] == "first_summary"
+    # And list_research agrees.
+    listed = list_research(user_root, "AAPL")
+    assert len(listed) == 1
+    assert listed[0]["filename"] == "first.md"
+
+
+def test_delete_research_rejects_path_injection_digest(tmp_path):
+    from tradingagents.dataflows.user_research import _save, delete_research, list_research
+    user_root = tmp_path / "user42"
+    saved = _save(b"hello", "summary", "AAPL", user_root, "n.md", None)
+    # Try a malicious "digest" — must be rejected silently.
+    delete_research(user_root, "AAPL", "../../etc/passwd")
+    delete_research(user_root, "AAPL", "*")
+    # Original entry should still be intact.
+    listed = list_research(user_root, "AAPL")
+    assert len(listed) == 1
+    assert listed[0]["hash"] == saved["hash"]

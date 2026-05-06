@@ -3,8 +3,9 @@ from tradingagents.default_config import DEFAULT_CONFIG
 
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load environment variables from .env files
 load_dotenv()
+load_dotenv(".env.enterprise", override=False)
 
 # Create a custom config
 config = DEFAULT_CONFIG.copy()

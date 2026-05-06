@@ -54,4 +54,8 @@ def create_llm_client(
         from .openclaw_client import OpenClawClient
         return OpenClawClient(model, base_url, **kwargs)
 
+    if provider_lower == "bedrock":
+        from .bedrock_client import BedrockClient
+        return BedrockClient(model, base_url, **kwargs)
+
     raise ValueError(f"Unsupported LLM provider: {provider}")

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh pr *)",
+      "Bash(gh repo *)",
+      "Bash(curl -s \"https://api.github.com/repos/TauricResearch/TradingAgents/pulls?state=all&sort=updated&direction=desc&per_page=50\")",
+      "Bash(python3 -c ' *)",
+      "Bash(where python3 *)",
+      "Bash(where python *)",
+      "Bash(curl -s \"https://api.github.com/repos/TauricResearch/TradingAgents/pulls?state=closed&sort=updated&direction=desc&per_page=30\")",
+      "Bash(git rm *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git add *)",
+      "Bash(git diff *)"
+    ]
+  }
+}

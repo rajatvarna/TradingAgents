@@ -1,9 +1,10 @@
-"""Range-stats compute: today's open/close/volume vs 52w/6m/3m/1m high-low ranges.
+"""Range-stats compute + formatters for open/close/volume vs 52w/6m/3m/1m ranges.
 
 Pure-ish module. The only side effect is the historical-data fetch which goes
 through the configured vendor (`route_to_vendor("get_stock_data", ...)`).
-Markdown / WebUI / Telegram formatters land alongside in a follow-up task and
-share the dict shape this module produces.
+Three formatters live alongside (markdown for the LLM tool; dict for the WebUI
+card; compact block for Telegram), all sharing the dict shape `compute_range_stats`
+produces.
 """
 
 from __future__ import annotations
@@ -196,11 +197,13 @@ def _table_for_metric(label: str, current: float, windows: dict, *, is_volume: b
     ]
     for w in ("52w", "6m", "3m", "1m"):
         d = windows[w]
+        lo_raw = fmt(d["low"]) if d["low"] is not None else "n/a"
+        hi_raw = fmt(d["high"]) if d["high"] is not None else "n/a"
         lines.append(
-            "| {w:<6} | {lo} | {hi} | {al} | {bh} | {pos} |".format(
+            "| {w:<6} | {lo:<6} | {hi:<6} | {al:<8} | {bh:<8} | {pos:<8} |".format(
                 w=w,
-                lo=fmt(d["low"]) if d["low"] is not None else "n/a   ",
-                hi=fmt(d["high"]) if d["high"] is not None else "n/a   ",
+                lo=lo_raw,
+                hi=hi_raw,
                 al=_fmt_pct(d["pct_above_low"]),
                 bh=_fmt_pct(d["pct_below_high"]),
                 pos=_fmt_pos(d["position_pct"]),

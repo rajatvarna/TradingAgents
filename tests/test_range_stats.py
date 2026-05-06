@@ -11,6 +11,7 @@ from tradingagents.dataflows.range_stats import (
     format_range_stats_markdown,
     format_range_stats_for_webui,
     format_range_stats_telegram,
+    _color_for_window,
 )
 
 
@@ -196,7 +197,6 @@ def test_webui_dict_includes_color_hints_for_extremes():
         "low": 10, "high": 20, "pct_above_low": 100.0,
         "pct_below_high": -2.0, "position_pct": 95.0,
     }
-    from tradingagents.dataflows.range_stats import _color_for_window
     assert _color_for_window(extreme) == "red"
     extreme_low = {
         "low": 10, "high": 20, "pct_above_low": 1.0,
@@ -205,7 +205,7 @@ def test_webui_dict_includes_color_hints_for_extremes():
     assert _color_for_window(extreme_low) == "green"
 
 
-def test_telegram_format_is_compact_three_lines():
+def test_telegram_format_is_compact_four_lines():
     msg = format_range_stats_telegram(_sample_stats())
     # Header + 3 metric lines
     lines = [ln for ln in msg.splitlines() if ln.strip()]

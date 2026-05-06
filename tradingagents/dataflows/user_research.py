@@ -14,9 +14,10 @@ import io
 import json
 import os
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 
 SUPPORTED_TEXT_EXT = {".txt", ".md", ".markdown"}
@@ -182,3 +183,63 @@ def clear_run_dir(user_root: Path, run_id: str) -> None:
     d = _research_root(user_root) / "_shared_for_run" / run_id
     if d.exists():
         shutil.rmtree(d, ignore_errors=True)
+
+
+SUMMARY_PROMPT_TMPL = """You are summarizing a research report{ticker_clause}.
+Produce a markdown summary with these sections:
+- **Bottom line** (1-2 sentences)
+- **Key thesis** (3-5 bullets)
+- **Price targets / numbers** (if any)
+- **Key risks** (3-5 bullets)
+- **Notable quotes** (1-3, with page if known)
+
+Keep total output under 1500 words.
+
+Source:
+{text}
+"""
+
+
+def _summarize(text: str, ticker: Optional[str], summarize_fn) -> str:
+    """Call the LLM to compress the report. summarize_fn is a langchain BaseLLM
+    or similar with an .invoke(prompt) -> message-with-.content interface."""
+    ticker_clause = f" for ticker {ticker}" if ticker else ""
+    prompt = SUMMARY_PROMPT_TMPL.format(ticker_clause=ticker_clause, text=text)
+    last_err: Optional[Exception] = None
+    for attempt in range(2):
+        try:
+            response = summarize_fn.invoke(prompt)
+            content = getattr(response, "content", None) or str(response)
+            content = content.strip()
+            if content:
+                return content
+        except Exception as e:  # noqa: BLE001
+            last_err = e
+            time.sleep(0.5)
+    excerpt = text[:2000].strip()
+    return (
+        f"_(summary failed after retry: {type(last_err).__name__ if last_err else 'empty'} — "
+        f"raw text excerpt below)_\n\n{excerpt}"
+    )
+
+
+def ingest_research(
+    file_bytes: bytes,
+    filename: str,
+    ticker: Optional[str],
+    user_root: Path,
+    summarize_fn: Callable,
+    run_id: Optional[str] = None,
+) -> dict:
+    """Extract → summarize → persist. Returns metadata dict including summary."""
+    text = _extract_text(file_bytes, filename)
+    text = text[:MAX_SUMMARY_INPUT_CHARS]
+    summary_md = _summarize(text, ticker, summarize_fn)
+    return _save(
+        file_bytes=file_bytes,
+        summary_md=summary_md,
+        ticker=ticker,
+        user_root=user_root,
+        original_filename=filename,
+        run_id=run_id,
+    )

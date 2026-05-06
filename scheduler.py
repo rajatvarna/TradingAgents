@@ -182,11 +182,9 @@ def _push_full_report(
     if full:
         user_research_report = full.get("user_research_report") or ""
         if user_research_report:
-            n_notes = user_research_report.count("\n## ") + (
-                1 if user_research_report.startswith("## ") else 0
-            )
-            if n_notes == 0:
-                n_notes = 1  # research present but no detectable headers; count as one note
+            # Count by upload-separator, not by `## `, since LLM summaries may
+            # emit `##` headers that would inflate the count.
+            n_notes = user_research_report.count("\n\n---\n\n") + 1
 
     # 1. Header — small, formatted, with sound
     header = (

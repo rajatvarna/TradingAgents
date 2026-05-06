@@ -6,7 +6,7 @@ from .model_catalog import get_known_models
 VALID_MODELS = {
     provider: models
     for provider, models in get_known_models().items()
-    if provider not in ("ollama", "ollama_cloud", "openrouter", "deepinfra", "custom_openai", "lm-studio", "llama-cpp")
+    if provider not in ("ollama", "ollama_cloud", "openrouter", "deepinfra", "mimo", "custom_openai", "lm-studio", "llama-cpp")
 }
 
 
@@ -17,7 +17,7 @@ def validate_model(provider: str, model: str) -> bool:
     """
     provider_lower = provider.lower()
 
-    if provider_lower in ("ollama", "ollama_cloud", "openrouter", "deepinfra", "custom_openai", "lm-studio", "llama-cpp"):
+    if provider_lower in ("ollama", "ollama_cloud", "openrouter", "deepinfra", "mimo", "custom_openai", "lm-studio", "llama-cpp"):
         return True
 
     if provider_lower not in VALID_MODELS:

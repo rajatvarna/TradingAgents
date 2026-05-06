@@ -36,14 +36,9 @@ def get_language_instruction() -> str:
 
 
 def get_horizon_instruction() -> str:
-    """Return a prompt instruction for the configured investment horizon.
-    
-    Returns guidance string based on investment horizon in config.
-    """
+    """Return a prompt instruction for the configured investment horizon."""
     from tradingagents.dataflows.config import get_config
-    
     horizon = get_config().get("investment_horizon", "medium_term")
-    
     horizon_guidance = {
         "1_day": "Focus on: intraday volatility, momentum indicators (MACD, RSI), bid-ask spreads, and execution timing. Prioritize short-term signals only.",
         "1_week": "Focus on: weekly momentum, support/resistance levels, and event-driven price moves. Balance technical signals with short-term catalysts.",
@@ -53,15 +48,26 @@ def get_horizon_instruction() -> str:
         "5_years_plus": "Focus on: structural demand drivers, supply constraints, industry trends, and long-term valuation multiples. Ignore short-term technical noise like MACD crossovers or 50-day SMA.",
         "medium_term": "Balance technical and fundamental analysis equally for medium-term trading decisions.",
     }
-    
     guidance = horizon_guidance.get(horizon, horizon_guidance["medium_term"])
     return f" Investment Horizon: {horizon}. Analysis Priority: {guidance} Adapt your analysis based on this investment horizon."
 
 
+def _resolve_company_name(ticker: str) -> str | None:
+    """Best-effort company name lookup via yfinance."""
+    try:
+        import yfinance as yf
+        info = yf.Ticker(ticker.upper()).info
+        return info.get("longName") or info.get("shortName")
+    except Exception:
+        return None
+
+
 def build_instrument_context(ticker: str) -> str:
     """Describe the exact instrument so agents preserve exchange-qualified tickers."""
+    name = _resolve_company_name(ticker)
+    name_clause = f" ({name})" if name else ""
     return (
-        f"The instrument to analyze is `{ticker}`. "
+        f"The instrument to analyze is `{ticker}`{name_clause}. "
         "Use this exact ticker in every tool call, report, and recommendation, "
         "preserving any exchange suffix (e.g. `.TO`, `.L`, `.HK`, `.T`)."
     )

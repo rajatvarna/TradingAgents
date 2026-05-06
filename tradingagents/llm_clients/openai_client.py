@@ -118,15 +118,15 @@ _PROVIDER_CONFIG = {
     "deepinfra": ("https://api.deepinfra.com/v1/openai", "DEEPINFRA_API_KEY"),
     "ollama": (os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434/v1", None),
     "ollama_cloud": ("https://ollama.com/v1", "OLLAMA_API_KEY"),
+    "custom_openai": (os.environ.get("CUSTOM_OPENAI_BASE_URL") or "http://localhost:1234/v1", "CUSTOM_OPENAI_API_KEY"),
 }
 
 
 class OpenAIClient(BaseLLMClient):
-<<<<<<< HEAD
     """Client for OpenAI and OpenAI-compatible providers.
 
     Supported providers: OpenAI (native), xAI, DeepSeek, Qwen, GLM, OpenRouter,
-    DeepInfra, Ollama (local), and Ollama Cloud.
+    DeepInfra, Ollama (local), Ollama Cloud, and custom OpenAI-compatible servers.
 
     For native OpenAI models, uses the Responses API (/v1/responses) which
     supports reasoning_effort with function tools across all model families
@@ -159,6 +159,8 @@ class OpenAIClient(BaseLLMClient):
                 api_key = os.environ.get(api_key_env)
                 if api_key:
                     llm_kwargs["api_key"] = api_key
+                elif self.provider == "custom_openai":
+                    llm_kwargs["api_key"] = "not-needed"
                 else:
                     raise ValueError(
                         f"API key for provider '{self.provider}' is not set."

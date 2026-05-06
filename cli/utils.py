@@ -4,9 +4,12 @@ from typing import List, Optional, Tuple, Dict
 from rich.console import Console
 
 from cli.models import AnalystType
+from cli.preferences import load_preferences
 from tradingagents.llm_clients.model_catalog import get_model_options
 
 console = Console()
+
+_prefs = load_preferences()
 
 TICKER_INPUT_EXAMPLES = "Examples: SPY, CNC.TO, 7203.T, 0700.HK"
 
@@ -218,6 +221,19 @@ def _select_model(provider: str, mode: str) -> str:
     if provider.lower() == "openrouter":
         return select_openrouter_model()
 
+    if provider.lower() == "custom_openai":
+        saved_key = "shallow_thinker" if mode == "quick" else "deep_thinker"
+        saved_model = _prefs.get(saved_key, "")
+        model_name = questionary.text(
+            f"Enter model name for {mode}-thinking (as shown in your server):",
+            default=saved_model,
+            validate=lambda x: len(x.strip()) > 0 or "Please enter a model name.",
+        ).ask()
+        if model_name is None:
+            console.print(f"\n[red]No {mode} thinking model name provided. Exiting...[/red]")
+            exit(1)
+        return model_name.strip()
+
     if provider.lower() == "azure":
         return questionary.text(
             f"Enter Azure deployment name ({mode}-thinking):",
@@ -282,14 +298,25 @@ def select_llm_provider() -> tuple[str, str | None]:
         ("AWS Bedrock", "bedrock", None),
         ("Ollama", "ollama", "http://localhost:11434/v1"),
         ("Ollama Cloud", "ollama_cloud", "https://ollama.com/v1"),
+        ("Custom OpenAI-Compatible (LM Studio, vLLM, llama.cpp, etc.)", "custom_openai", None),
     ]
+
+    saved_provider = _prefs.get("llm_provider")
+    provider_choices = [
+        questionary.Choice(display, value=(provider_key, url))
+        for display, provider_key, url in PROVIDERS
+    ]
+    default_choice = None
+    if saved_provider:
+        for display, provider_key, url in PROVIDERS:
+            if provider_key == saved_provider:
+                default_choice = (provider_key, url)
+                break
 
     choice = questionary.select(
         "Select your LLM Provider:",
-        choices=[
-            questionary.Choice(display, value=(provider_key, url))
-            for display, provider_key, url in PROVIDERS
-        ],
+        choices=provider_choices,
+        default=default_choice,
         instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
         style=questionary.Style(
             [
@@ -299,12 +326,29 @@ def select_llm_provider() -> tuple[str, str | None]:
             ]
         ),
     ).ask()
-    
+
     if choice is None:
         console.print("\n[red]No LLM provider selected. Exiting...[/red]")
         exit(1)
 
     provider, url = choice
+
+    if provider == "custom_openai":
+        saved_url = _prefs.get("backend_url") or "http://localhost:1234/v1"
+        url = questionary.text(
+            "Enter base URL for your OpenAI-compatible endpoint:",
+            default=saved_url,
+            validate=lambda x: len(x.strip()) > 0 or "Please enter a base URL.",
+            style=questionary.Style([
+                ("text", "fg:green"),
+                ("highlighted", "noinherit"),
+            ]),
+        ).ask()
+        if not url:
+            console.print("\n[red]No base URL provided. Exiting...[/red]")
+            exit(1)
+        url = url.strip()
+
     return provider, url
 
 
@@ -424,5 +468,38 @@ def ask_investment_horizon() -> str:
     if choice is None:
         console.print("\n[red]No investment horizon selected. Exiting...[/red]")
         exit(1)
+
+    return choice
+
+
+def ask_llm_timeout() -> int | None:
+    """Ask for LLM request timeout (seconds). Returns None for provider default."""
+    TIMEOUT_OPTIONS = [
+        ("Default (provider decides)", None),
+        ("5 minutes (300s) - fast local models", 300),
+        ("15 minutes (900s) - moderate local models", 900),
+        ("30 minutes (1800s) - slow or large local models", 1800),
+        ("Custom", "custom"),
+    ]
+
+    choice = questionary.select(
+        "Select Request Timeout:",
+        choices=[
+            questionary.Choice(display, value=value) for display, value in TIMEOUT_OPTIONS
+        ],
+        style=questionary.Style([
+            ("selected", "fg:cyan noinherit"),
+            ("highlighted", "fg:cyan noinherit"),
+            ("pointer", "fg:cyan noinherit"),
+        ]),
+    ).ask()
+
+    if choice == "custom":
+        val = questionary.text(
+            "Enter timeout in seconds:",
+            validate=lambda x: x.strip().isdigit() and int(x.strip()) > 0
+            or "Enter a positive integer.",
+        ).ask()
+        return int(val.strip()) if val else None
 
     return choice

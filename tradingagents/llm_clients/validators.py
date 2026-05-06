@@ -17,7 +17,7 @@ def validate_model(provider: str, model: str) -> bool:
     """
     provider_lower = provider.lower()
 
-    if provider_lower in ("ollama", "ollama_cloud", "openrouter", "deepinfra"):
+    if provider_lower in ("ollama", "ollama_cloud", "openrouter", "deepinfra", "custom_openai"):
         return True
 
     if provider_lower not in VALID_MODELS:

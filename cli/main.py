@@ -652,6 +652,17 @@ def get_user_selections(batch_mode: bool = False):
         )
         anthropic_effort = ask_anthropic_effort()
 
+    # Step 9: LLM timeout for local inference providers
+    llm_timeout = None
+    if provider_lower in ("custom_openai", "ollama"):
+        console.print(
+            create_question_box(
+                "Step 9: Request Timeout",
+                "Set timeout in seconds for LLM API calls (increase for slow local models)"
+            )
+        )
+        llm_timeout = ask_llm_timeout()
+
     return {
         "tickers": selected_tickers,
         "batch_mode": is_batch_mode,
@@ -667,6 +678,7 @@ def get_user_selections(batch_mode: bool = False):
         "anthropic_effort": anthropic_effort,
         "output_language": output_language,
         "investment_horizon": selected_horizon,
+        "llm_timeout": llm_timeout,
     }
 
 
@@ -1077,6 +1089,10 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
     global message_buffer
     message_buffer = MessageBuffer()
 
+    # Persist LLM selections for next run
+    from cli.preferences import save_preferences
+    save_preferences(selections)
+
     # Create config with selected research depth
     config = DEFAULT_CONFIG.copy()
     config["max_debate_rounds"] = selections["research_depth"]
@@ -1091,6 +1107,7 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
     config["anthropic_effort"] = selections.get("anthropic_effort")
     config["output_language"] = selections.get("output_language", "English")
     config["investment_horizon"] = selections.get("investment_horizon", "medium_term")
+    config["llm_timeout"] = selections.get("llm_timeout")
     config["checkpoint_enabled"] = checkpoint
 
     # Create stats callback handler for tracking LLM/tool calls and costs

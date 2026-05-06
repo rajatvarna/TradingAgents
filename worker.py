@@ -94,6 +94,7 @@ def main() -> int:
         ticker = req["ticker"]
         trade_date = req["trade_date"]
         selected_analysts = req["selected_analysts"]
+        user_research = req.get("user_research", "") or ""
         checkpoint_enabled = bool(config.get("checkpoint_enabled"))
     except Exception as e:
         emit({"kind": "error", "type": "BadRequest", "msg": str(e),
@@ -112,7 +113,9 @@ def main() -> int:
         ta._resolve_pending_entries(ticker)
         past_context = ta.memory_log.get_past_context(ticker)
         init_state = ta.propagator.create_initial_state(
-            ticker, str(trade_date), past_context=past_context
+            ticker, str(trade_date),
+            past_context=past_context,
+            user_research=user_research,
         )
         args = ta.propagator.get_graph_args()
 

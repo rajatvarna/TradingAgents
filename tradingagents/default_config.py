@@ -63,10 +63,10 @@ DEFAULT_CONFIG = {
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
     "data_vendors": {
-        "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance
-        "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance
-        "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance
-        "news_data": "yfinance",             # Options: alpha_vantage, yfinance, searxng
+        "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance, b3
+        "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance, b3
+        "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance, b3
+        "news_data": "yfinance",             # Options: alpha_vantage, yfinance, searxng, b3
     },
     # News parameters
     "ticker_news_count": 20,
@@ -80,6 +80,7 @@ DEFAULT_CONFIG = {
     "benchmark_map": {
         ".NS":  "^NSEI",    # NSE India — Nifty 50
         ".BO":  "^BSESN",   # BSE India — Sensex
+        ".SA":  "^BVSP",    # Brazil — Ibovespa
         ".T":   "^N225",    # Tokyo — Nikkei 225
         ".HK":  "^HSI",     # Hong Kong — Hang Seng
         ".L":   "^FTSE",    # London — FTSE 100

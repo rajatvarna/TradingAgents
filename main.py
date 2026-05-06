@@ -24,7 +24,14 @@ config["data_vendors"] = {
 ta = TradingAgentsGraph(debug=True, config=config)
 
 # forward propagate
-_, decision = ta.propagate("NVDA", "2024-05-10")
+# fixed date
+# _, decision = ta.propagate("NVDA", "2024-05-10")
+
+# dynamic date 
+from datetime import datetime
+today = datetime.today().strftime("%Y-%m-%d")
+
+ta.propagate("NVDA", today)
 print(decision)
 
 # Memorize mistakes and reflect

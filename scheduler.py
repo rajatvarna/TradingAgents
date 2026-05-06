@@ -34,6 +34,7 @@ load_dotenv(_ROOT / ".env")
 import notify
 import ticker_resolver
 import user_prefs
+
 from tradingagents.dataflows.range_stats import (
     RangeStatsUnavailable,
     compute_range_stats,
@@ -192,7 +193,7 @@ def _push_full_report(
     except RangeStatsUnavailable:
         pass
     except Exception as e:  # noqa: BLE001 — never let this kill a report
-        _log(f"  range-stats failed for {ticker}: {e}")
+        _log(f"range-stats failed for {ticker}: {e}")
 
     full = _load_full_state(slug, ticker, trade_date)
     sep = "━━━━━━━━━━━━━━━"

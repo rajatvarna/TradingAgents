@@ -1281,7 +1281,9 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
                 console.print("[red]Analysis ended before producing any output.[/red]")
                 return
 
-            final_state = trace[-1]
+            final_state = {}
+            for chunk in trace:
+                final_state.update(chunk)
             decision = graph.process_signal(final_state.get("final_trade_decision", ""))
 
             for agent in message_buffer.agent_status:
@@ -1335,7 +1337,9 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
             if getattr(tui, '_stream_error', None) is not None:
                 raise tui._stream_error
             return
-        final_state = trace[-1]
+        final_state = {}
+        for chunk in trace:
+            final_state.update(chunk)
         
         for section in message_buffer.report_sections.keys():
             if section in final_state:

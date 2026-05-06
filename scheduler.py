@@ -34,6 +34,11 @@ load_dotenv(_ROOT / ".env")
 import notify
 import ticker_resolver
 import user_prefs
+from tradingagents.dataflows.range_stats import (
+    RangeStatsUnavailable,
+    compute_range_stats,
+    format_range_stats_telegram,
+)
 
 PYTHON_BIN = os.getenv("TRADINGAGENTS_PYTHON_BIN", sys.executable)
 WORKER_PATH = str(_ROOT / "worker.py")
@@ -174,6 +179,20 @@ def _push_full_report(
     )
     notify.send_telegram(chat_id, header, parse_mode="Markdown",
                          disable_notification=False)
+
+    # Range stats — fail-soft, never abort the report.
+    try:
+        rs = compute_range_stats(ticker, trade_date)
+        notify.send_telegram(
+            chat_id,
+            format_range_stats_telegram(rs),
+            parse_mode=None,
+            disable_notification=True,
+        )
+    except RangeStatsUnavailable:
+        pass
+    except Exception as e:  # noqa: BLE001 — never let this kill a report
+        _log(f"  range-stats failed for {ticker}: {e}")
 
     full = _load_full_state(slug, ticker, trade_date)
     sep = "━━━━━━━━━━━━━━━"

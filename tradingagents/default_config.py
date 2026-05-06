@@ -62,13 +62,30 @@ DEFAULT_CONFIG = {
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
-    # Data vendor configuration
-    # Category-level configuration (default for all tools in category)
     "data_vendors": {
         "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance
         "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance
         "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance
         "news_data": "yfinance",             # Options: alpha_vantage, yfinance, searxng
+    },
+    # News parameters
+    "ticker_news_count": 20,
+    "global_news_look_back_days": 7,
+    "global_news_limit": 10,        # yfinance global news article cap
+    "av_global_news_limit": 50,     # Alpha Vantage global news article cap (historically 50)
+    # Benchmark for alpha calculation in the reflection layer.
+    # None = auto-detect from ticker suffix via benchmark_map.
+    # Set an explicit ticker (e.g. "QQQ") to override for all tickers.
+    "benchmark_ticker": None,
+    "benchmark_map": {
+        ".NS":  "^NSEI",    # NSE India — Nifty 50
+        ".BO":  "^BSESN",   # BSE India — Sensex
+        ".T":   "^N225",    # Tokyo — Nikkei 225
+        ".HK":  "^HSI",     # Hong Kong — Hang Seng
+        ".L":   "^FTSE",    # London — FTSE 100
+        ".TO":  "^GSPTSE",  # Toronto — TSX Composite
+        ".AX":  "^AXJO",    # Australia — ASX 200
+        "":     "SPY",      # default for US-listed (no suffix)
     },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {

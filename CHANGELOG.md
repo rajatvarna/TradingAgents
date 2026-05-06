@@ -19,6 +19,12 @@ Breaking changes within the 0.x line are called out explicitly.
   for one release.
 - `handle_stream_chunk(buffer, chunk)` extracted from `run_analysis` so the
   chunk → buffer mapping has a single home shared by both renderers.
+- Configurable alpha benchmark for non-US tickers. `DEFAULT_CONFIG` now exposes
+  `benchmark_ticker` (explicit override) and `benchmark_map` (suffix-based
+  auto-detection: `.T` → `^N225`, `.HK` → `^HSI`, `.NS` → `^NSEI`, etc.).
+  US tickers continue to use SPY by default. The reflection log now labels
+  alpha against the actual benchmark used (e.g. `Alpha vs ^N225`) instead of
+  the hardcoded `Alpha vs SPY`. (#628)
 
 ### Changed
 

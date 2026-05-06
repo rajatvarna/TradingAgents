@@ -300,7 +300,7 @@ class TradingAgentsGraph:
                     final_decision=entry.get("decision", ""),
                     raw_return=raw,
                     alpha_return=alpha,
-                    benchmark=benchmark,
+                    benchmark_name=benchmark,
                 )
             except Exception:
                 logger.warning(

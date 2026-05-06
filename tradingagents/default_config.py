@@ -40,6 +40,20 @@ DEFAULT_CONFIG = {
     # Output language for analyst reports and final decision
     # Internal agent debate stays in English for reasoning quality
     "output_language": "English",
+    # Benchmark used for alpha calculation in deferred reflection.
+    # When `benchmark_ticker` is set, it wins for every analysis.
+    # Otherwise the longest matching suffix in `benchmark_map` is used,
+    # falling back to the "" entry for tickers without a known suffix.
+    "benchmark_ticker": None,
+    "benchmark_map": {
+        ".NS": "^NSEI",     # Nifty 50 (NSE India)
+        ".BO": "^BSESN",    # Sensex (BSE India)
+        ".T":  "^N225",     # Nikkei 225 (Japan)
+        ".HK": "^HSI",      # Hang Seng (Hong Kong)
+        ".L":  "^FTSE",     # FTSE 100 (London)
+        ".TO": "^GSPTSE",   # TSX Composite (Toronto)
+        "":    "SPY",       # default for US-listed tickers
+    },
     # Debate and discussion settings
     "investment_horizon": "medium_term"
     "max_debate_rounds": 1,

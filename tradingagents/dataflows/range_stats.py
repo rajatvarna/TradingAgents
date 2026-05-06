@@ -142,3 +142,125 @@ def compute_range_stats(symbol: str, trade_date: str) -> dict:
         "today": today,
         "metrics": metrics,
     }
+
+
+def _fmt_pct(v: Optional[float]) -> str:
+    if v is None:
+        return "n/a"
+    return f"{v:+.1f}%"
+
+
+def _fmt_pos(v: Optional[float]) -> str:
+    if v is None:
+        return "n/a"
+    return f"{v:.1f}%"
+
+
+def _fmt_price(v: Optional[float]) -> str:
+    if v is None:
+        return "n/a"
+    return f"{v:.2f}"
+
+
+def _fmt_vol_short(v: int | float) -> str:
+    """Render a volume as 1.2K / 58.2M / 1.4B."""
+    v = float(v)
+    if abs(v) >= 1e9:
+        return f"{v / 1e9:.1f}B"
+    if abs(v) >= 1e6:
+        return f"{v / 1e6:.1f}M"
+    if abs(v) >= 1e3:
+        return f"{v / 1e3:.1f}K"
+    return f"{v:.0f}"
+
+
+def _color_for_window(window: dict) -> Optional[str]:
+    """Return 'red' near recent high, 'green' near recent low, else None."""
+    pos = window.get("position_pct")
+    if pos is None:
+        return None
+    if pos >= 80.0:
+        return "red"
+    if pos <= 20.0:
+        return "green"
+    return None
+
+
+def _table_for_metric(label: str, current: float, windows: dict, *, is_volume: bool = False) -> str:
+    fmt = _fmt_vol_short if is_volume else _fmt_price
+    cur_str = f"{int(current):,}" if is_volume else f"{current:.2f}"
+    lines = [
+        f"## {label.title()} ({cur_str}) vs historical ranges",
+        "| Window | Low    | High   | vs Low   | vs High  | Position |",
+        "|--------|--------|--------|----------|----------|----------|",
+    ]
+    for w in ("52w", "6m", "3m", "1m"):
+        d = windows[w]
+        lines.append(
+            "| {w:<6} | {lo} | {hi} | {al} | {bh} | {pos} |".format(
+                w=w,
+                lo=fmt(d["low"]) if d["low"] is not None else "n/a   ",
+                hi=fmt(d["high"]) if d["high"] is not None else "n/a   ",
+                al=_fmt_pct(d["pct_above_low"]),
+                bh=_fmt_pct(d["pct_below_high"]),
+                pos=_fmt_pos(d["position_pct"]),
+            )
+        )
+    return "\n".join(lines)
+
+
+def format_range_stats_markdown(stats: dict) -> str:
+    """LLM-facing + Telegram-fallback markdown render."""
+    today = stats["today"]
+    parts = [
+        f"# Range Stats for {stats['symbol']} on {stats['trade_date']}",
+        f"Today: open={today['open']:.2f}  close={today['close']:.2f}  "
+        f"volume={today['volume']:,}  (effective_date={today['effective_date']})",
+        "",
+        _table_for_metric("Close",  today["close"],  stats["metrics"]["close"]),
+        "",
+        _table_for_metric("Open",   today["open"],   stats["metrics"]["open"]),
+        "",
+        _table_for_metric("Volume", today["volume"], stats["metrics"]["volume"], is_volume=True),
+    ]
+    return "\n".join(parts)
+
+
+def format_range_stats_for_webui(stats: dict) -> dict:
+    """Returns a payload streamlit can render directly: numbers + color hints."""
+    out = {
+        "symbol": stats["symbol"],
+        "trade_date": stats["trade_date"],
+        "today": stats["today"],
+        "metrics": {},
+    }
+    for metric, windows in stats["metrics"].items():
+        out["metrics"][metric] = {
+            w: {**d, "color": _color_for_window(d)} for w, d in windows.items()
+        }
+    return out
+
+
+def format_range_stats_telegram(stats: dict) -> str:
+    """Compact 4-line block: header + close, open, volume rows showing 52w and 1m."""
+    sym = stats["symbol"]
+    date = stats["trade_date"]
+    today = stats["today"]
+
+    def row(label: str, cur: str, windows: dict) -> str:
+        w52 = windows["52w"]
+        w1m = windows["1m"]
+        return (
+            f"{label:<5} {cur:<10} → "
+            f"52w {_fmt_pct(w52['pct_above_low'])}/{_fmt_pct(w52['pct_below_high'])} "
+            f"({_fmt_pos(w52['position_pct'])})  "
+            f"1m {_fmt_pct(w1m['pct_above_low'])}/{_fmt_pct(w1m['pct_below_high'])} "
+            f"({_fmt_pos(w1m['position_pct'])})"
+        )
+
+    return "\n".join([
+        f"📊 Range Stats ({sym}, {date})",
+        row("Close", f"{today['close']:.2f}", stats["metrics"]["close"]),
+        row("Open",  f"{today['open']:.2f}",  stats["metrics"]["open"]),
+        row("Vol",   _fmt_vol_short(today["volume"]), stats["metrics"]["volume"]),
+    ])

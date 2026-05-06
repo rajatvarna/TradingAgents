@@ -7,6 +7,12 @@ from tradingagents.dataflows.range_stats import (
     RangeStatsUnavailable,
 )
 
+from tradingagents.dataflows.range_stats import (
+    format_range_stats_markdown,
+    format_range_stats_for_webui,
+    format_range_stats_telegram,
+)
+
 
 def _fake_ohlcv(rows: int, last_date="2026-05-06") -> pd.DataFrame:
     """Build a deterministic OHLCV frame ending on `last_date`."""
@@ -114,3 +120,99 @@ def test_no_data_at_all_raises(mock_load):
     mock_load.return_value = pd.DataFrame()
     with pytest.raises(RangeStatsUnavailable):
         compute_range_stats("NOPE", "2026-05-06")
+
+
+def _sample_stats():
+    return {
+        "symbol": "AAPL",
+        "trade_date": "2026-05-06",
+        "today": {
+            "effective_date": "2026-05-06",
+            "open": 189.23,
+            "close": 192.15,
+            "volume": 58_231_400,
+        },
+        "metrics": {
+            "close": {
+                "52w": {"low": 164.20, "high": 215.40,
+                        "pct_above_low": 17.0, "pct_below_high": -10.8, "position_pct": 54.5},
+                "6m":  {"low": 170.10, "high": 215.40,
+                        "pct_above_low": 12.9, "pct_below_high": -10.8, "position_pct": 48.6},
+                "3m":  {"low": 178.50, "high": 210.00,
+                        "pct_above_low": 7.6,  "pct_below_high": -8.5,  "position_pct": 43.3},
+                "1m":  {"low": 184.00, "high": 198.20,
+                        "pct_above_low": 4.4,  "pct_below_high": -3.0,  "position_pct": 57.4},
+            },
+            "open": {
+                "52w": {"low": None, "high": None,
+                        "pct_above_low": None, "pct_below_high": None, "position_pct": None},
+                "6m":  {"low": 170.10, "high": 215.40,
+                        "pct_above_low": 11.2, "pct_below_high": -12.1, "position_pct": 42.0},
+                "3m":  {"low": 178.50, "high": 210.00,
+                        "pct_above_low": 6.0, "pct_below_high": -9.9, "position_pct": 34.0},
+                "1m":  {"low": 184.00, "high": 198.20,
+                        "pct_above_low": 2.8, "pct_below_high": -4.5, "position_pct": 36.8},
+            },
+            "volume": {
+                "52w": {"low": 26_000_000, "high": 105_000_000,
+                        "pct_above_low": 124.0, "pct_below_high": -44.5, "position_pct": 40.8},
+                "6m":  {"low": 28_000_000, "high": 90_000_000,
+                        "pct_above_low": 108.0, "pct_below_high": -35.3, "position_pct": 48.8},
+                "3m":  {"low": 30_000_000, "high": 80_000_000,
+                        "pct_above_low": 94.1, "pct_below_high": -27.2, "position_pct": 56.5},
+                "1m":  {"low": 35_000_000, "high": 70_000_000,
+                        "pct_above_low": 66.4, "pct_below_high": -16.8, "position_pct": 66.4},
+            },
+        },
+    }
+
+
+def test_markdown_contains_three_section_headers_and_today_line():
+    md = format_range_stats_markdown(_sample_stats())
+    assert "Range Stats for AAPL on 2026-05-06" in md
+    assert "Today: open=189.23" in md
+    assert "## Close (192.15)" in md
+    assert "## Open (189.23)" in md
+    assert "## Volume (58,231,400)" in md
+    assert "| 52w" in md
+    assert "n/a" in md  # the open 52w window has None values
+
+
+def test_markdown_renders_signed_percentages_with_one_decimal():
+    md = format_range_stats_markdown(_sample_stats())
+    assert "+17.0%" in md
+    assert "-10.8%" in md
+    assert "54.5%" in md
+
+
+def test_webui_dict_includes_color_hints_for_extremes():
+    payload = format_range_stats_for_webui(_sample_stats())
+    # close 1m position_pct = 57.4 → not extreme → no color
+    close_1m = payload["metrics"]["close"]["1m"]
+    assert close_1m["color"] is None
+    # volume 1m position_pct = 66.4 → still no color hint (threshold is >80)
+    # construct an extreme entry to verify
+    extreme = {
+        "low": 10, "high": 20, "pct_above_low": 100.0,
+        "pct_below_high": -2.0, "position_pct": 95.0,
+    }
+    from tradingagents.dataflows.range_stats import _color_for_window
+    assert _color_for_window(extreme) == "red"
+    extreme_low = {
+        "low": 10, "high": 20, "pct_above_low": 1.0,
+        "pct_below_high": -50.0, "position_pct": 5.0,
+    }
+    assert _color_for_window(extreme_low) == "green"
+
+
+def test_telegram_format_is_compact_three_lines():
+    msg = format_range_stats_telegram(_sample_stats())
+    # Header + 3 metric lines
+    lines = [ln for ln in msg.splitlines() if ln.strip()]
+    assert len(lines) == 4
+    assert "AAPL" in lines[0] and "2026-05-06" in lines[0]
+    assert lines[1].startswith("Close")
+    assert lines[2].startswith("Open")
+    assert lines[3].startswith("Vol")
+    # Volume row uses readable 58.2M, not raw integer
+    assert "58.2M" in lines[3]

@@ -468,6 +468,77 @@ st.caption(
         provider, deep_model, quick_model, ", ".join(selected_analysts) or "none"
     )
 )
+
+# ════════════════════════════════════════════════════════════════════
+# Range stats card (pre-analysis, cached)
+# ════════════════════════════════════════════════════════════════════
+def _render_range_stats_card(ticker: str, trade_date_str: str) -> None:
+    """Render a 3-column close/open/volume range stats card.
+
+    Uses st.cache_data so the same (ticker, date) tuple doesn't refetch.
+    Failures degrade silently to a one-line note — never block the page.
+    """
+    try:
+        from tradingagents.dataflows.range_stats import (
+            RangeStatsUnavailable,
+            compute_range_stats,
+            format_range_stats_for_webui,
+        )
+    except Exception as e:
+        st.caption(f"Range stats module unavailable: {e}")
+        return
+
+    @st.cache_data(show_spinner=False, ttl=15 * 60)
+    def _cached(t: str, d: str):
+        try:
+            return format_range_stats_for_webui(compute_range_stats(t, d))
+        except RangeStatsUnavailable:
+            return None
+
+    payload = _cached(ticker, trade_date_str)
+    if payload is None:
+        st.info(f"Range stats unavailable for {ticker} on {trade_date_str}.")
+        return
+
+    today = payload["today"]
+    with st.expander(
+        f"📊 Range Stats — {ticker} (today: open={today['open']:.2f} "
+        f"close={today['close']:.2f} vol={today['volume']:,})",
+        expanded=False,
+    ):
+        cols = st.columns(3)
+        for col, (metric_label, metric_key, current_value, is_vol) in zip(
+            cols,
+            [
+                ("Close", "close", today["close"], False),
+                ("Open", "open", today["open"], False),
+                ("Volume", "volume", today["volume"], True),
+            ],
+        ):
+            with col:
+                cur_str = f"{int(current_value):,}" if is_vol else f"{current_value:.2f}"
+                col.markdown(f"**{metric_label}** — {cur_str}")
+                rows = []
+                for w in ("52w", "6m", "3m", "1m"):
+                    d = payload["metrics"][metric_key][w]
+                    if d["low"] is None:
+                        rows.append({"window": w, "low": "n/a", "high": "n/a",
+                                     "vs Low": "n/a", "vs High": "n/a", "Pos": "n/a"})
+                        continue
+                    rows.append({
+                        "window": w,
+                        "low": f"{d['low']:,.2f}" if not is_vol else f"{int(d['low']):,}",
+                        "high": f"{d['high']:,.2f}" if not is_vol else f"{int(d['high']):,}",
+                        "vs Low": f"{d['pct_above_low']:+.1f}%",
+                        "vs High": f"{d['pct_below_high']:+.1f}%",
+                        "Pos": f"{d['position_pct']:.0f}%",
+                    })
+                col.dataframe(rows, hide_index=True, use_container_width=True)
+
+
+if ticker:
+    _render_range_stats_card(ticker, str(trade_date))
+
 if resolution_msg and resolution_msg != f"{raw_input} → {ticker}":
     st.caption(f"🔍 {resolution_msg}")
 

@@ -15,7 +15,7 @@ import os
 
 SUPPORTED_TEXT_EXT = {".txt", ".md", ".markdown"}
 SUPPORTED_PDF_EXT = {".pdf"}
-MAX_SUMMARY_INPUT_CHARS = 100_000
+MAX_SUMMARY_INPUT_CHARS = 100_000  # consumed by ingest_research in a later task
 
 
 class ResearchExtractionError(Exception):
@@ -30,10 +30,8 @@ def _sniff_ext(filename: str) -> str:
 def _extract_text(file_bytes: bytes, filename: str) -> str:
     ext = _sniff_ext(filename)
     if ext in SUPPORTED_TEXT_EXT:
-        try:
-            return file_bytes.decode("utf-8", errors="replace")
-        except Exception as e:  # noqa: BLE001
-            raise ResearchExtractionError(f"text decode failed: {e}") from e
+        # errors="replace" guarantees decode can't raise, so no try/except needed.
+        return file_bytes.decode("utf-8", errors="replace")
     if ext in SUPPORTED_PDF_EXT:
         try:
             from pypdf import PdfReader

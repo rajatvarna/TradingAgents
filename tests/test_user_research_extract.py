@@ -16,8 +16,9 @@ def test_extract_text_from_txt():
 
 
 def test_extract_text_from_pdf_with_text(tmp_path):
-    """Build a real PDF with a known text payload using reportlab if installed,
-    else use a precomposed fixture in tests/fixtures/sample.pdf."""
+    """Synthesize a real PDF with a known text payload via reportlab.
+
+    Skipped if reportlab is not installed (no shipped fixture)."""
     pytest.importorskip("reportlab", reason="reportlab needed to synthesize a PDF in-test")
     from reportlab.pdfgen import canvas
     buf = io.BytesIO()

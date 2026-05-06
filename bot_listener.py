@@ -35,7 +35,7 @@ def _log(msg: str) -> None:
 
 def _reply(chat_id: int | str, text: str) -> None:
     try:
-        requests.post(
+        r = requests.post(
             f"{API}/sendMessage",
             json={
                 "chat_id": chat_id, "text": text,
@@ -43,8 +43,10 @@ def _reply(chat_id: int | str, text: str) -> None:
             },
             timeout=15,
         )
+        if r.status_code != 200:
+            _log(f"sendMessage chat_id={chat_id} HTTP {r.status_code}: {r.text[:300]}")
     except Exception as e:
-        _log(f"sendMessage failed: {type(e).__name__}: {e}")
+        _log(f"sendMessage chat_id={chat_id} failed: {type(e).__name__}: {e}")
 
 
 def _is_chinese(name: str) -> bool:
@@ -97,16 +99,13 @@ def main() -> int:
                 chat = msg.get("chat") or {}
                 chat_id = chat.get("id")
                 first = chat.get("first_name", "") or chat.get("title", "") or ""
-                text = (msg.get("text") or "").strip().lower()
+                text = (msg.get("text") or "").strip()
                 if not chat_id:
                     continue
-                # Trigger on /start, /chatid, /help, /id, or any short greeting
-                triggered = (
-                    text.startswith(("/start", "/chatid", "/help", "/id"))
-                    or text in {"hi", "hello", "你好", "在吗", "id", "chat_id"}
-                )
-                if triggered:
-                    _log(f"reply chat_id={chat_id} to first_name={first!r} text={text!r}")
+                # Reply to any text message — this bot's only job is handing
+                # out chat_id, so don't gate on a keyword allowlist.
+                if text:
+                    _log(f"reply chat_id={chat_id} first_name={first!r} text={text[:60]!r}")
                     _reply(chat_id, _build_welcome(chat_id, first))
         except requests.RequestException as e:
             _log(f"poll error: {type(e).__name__}: {e}")

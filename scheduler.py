@@ -173,11 +173,29 @@ def _push_full_report(
     label = _decision_label(decision)
     emoji = _decision_emoji(label)
 
+    full = _load_full_state(slug, ticker, trade_date)
+
+    # Detect user-uploaded research notes used by this run, so the headline
+    # message can call them out. Each uploaded note becomes a "## filename"
+    # chunk in the joined string (per webui.py _assemble_user_research format).
+    n_notes = 0
+    if full:
+        user_research_report = full.get("user_research_report") or ""
+        if user_research_report:
+            n_notes = user_research_report.count("\n## ") + (
+                1 if user_research_report.startswith("## ") else 0
+            )
+            if n_notes == 0:
+                n_notes = 1  # research present but no detectable headers; count as one note
+
     # 1. Header — small, formatted, with sound
     header = (
         f"📊 *{ticker}* · {trade_date}\n"
         f"*Decision*: {label} {emoji}"
     )
+    if n_notes:
+        suffix = "" if n_notes == 1 else "s"
+        header += f"\n📎 Used {n_notes} user-uploaded research note{suffix}"
     notify.send_telegram(chat_id, header, parse_mode="Markdown",
                          disable_notification=False)
 
@@ -195,7 +213,6 @@ def _push_full_report(
     except Exception as e:  # noqa: BLE001 — never let this kill a report
         _log(f"range-stats failed for {ticker}: {e}")
 
-    full = _load_full_state(slug, ticker, trade_date)
     sep = "━━━━━━━━━━━━━━━"
 
     sections: list[tuple[str, str]] = []

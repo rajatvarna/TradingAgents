@@ -413,6 +413,9 @@ if "ur_per_run" not in st.session_state:
 if "ur_run_id" not in st.session_state:
     st.session_state["ur_run_id"] = f"run-{int(time.time())}-{os.getpid()}"
 
+if "ur_seen_digests" not in st.session_state:
+    st.session_state["ur_seen_digests"] = set()
+
 if ticker:
     _lib_count = len(list_research(USER_HOME, ticker))
     _lib_label = f"📎 Research notes (library: {_lib_count})"
@@ -440,14 +443,21 @@ with st.sidebar.expander(_lib_label, expanded=False):
                 if _f.size > 20 * 1024 * 1024:
                     st.error(f"{_f.name} exceeds 20MB.")
                     continue
-                if any(m.get("filename") == _f.name for m in st.session_state["ur_per_run"]):
+                data = _f.getvalue()
+                digest = hashlib.sha256(data).hexdigest()[:12]
+                if digest in st.session_state["ur_seen_digests"]:
                     continue
+                if ticker:
+                    lib_hashes = {m["hash"] for m in list_research(USER_HOME, ticker)}
+                    if digest in lib_hashes:
+                        st.session_state["ur_seen_digests"].add(digest)
+                        continue
                 with st.spinner(f"Summarizing {_f.name}…"):
                     try:
                         _quick_client = create_llm_client(provider=provider, model=quick_model)
                         _summarize_llm = _quick_client.get_llm()
                         meta = ingest_research(
-                            file_bytes=_f.read(),
+                            file_bytes=data,
                             filename=_f.name,
                             ticker=ticker if _save_to_lib else None,
                             user_root=USER_HOME,
@@ -456,6 +466,7 @@ with st.sidebar.expander(_lib_label, expanded=False):
                         )
                         if not _save_to_lib:
                             st.session_state["ur_per_run"].append(meta)
+                        st.session_state["ur_seen_digests"].add(digest)
                         st.success(f"✓ {_f.name} summarized")
                     except Exception as e:  # noqa: BLE001
                         st.error(f"Failed to ingest {_f.name}: {e}")
@@ -1146,6 +1157,7 @@ try:
 except Exception as e:  # noqa: BLE001
     print(f"[run] clear_run_dir failed: {e}", flush=True)
 st.session_state["ur_per_run"] = []
+st.session_state["ur_seen_digests"] = set()
 st.session_state["ur_run_id"] = f"run-{int(time.time())}-{os.getpid()}"
 
 label = _decision_label(decision)

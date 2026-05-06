@@ -1,3 +1,4 @@
+from tradingagents.agents.utils.agent_utils import get_language_instruction
 
 from tradingagents.agents.utils.agent_utils import invoke_with_retry, trim_debate_history
 from tradingagents.prompts import load_prompt
@@ -31,6 +32,7 @@ def create_conservative_debator(llm):
             current_neutral_response=current_neutral_response,
         )
 
+        prompt += get_language_instruction()
         response = invoke_with_retry(llm, prompt)
 
         argument = f"Conservative Analyst: {response.content}"

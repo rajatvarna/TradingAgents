@@ -1,3 +1,4 @@
+from tradingagents.agents.utils.agent_utils import get_language_instruction
 
 from tradingagents.agents.utils.agent_utils import invoke_with_retry, trim_debate_history
 from tradingagents.prompts import load_prompt
@@ -14,6 +15,15 @@ def create_bull_researcher(llm):
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
+        user_research_report = state.get("user_research_report", "")
+
+        user_research_block = ""
+        if user_research_report.strip():
+            user_research_block = (
+                "\nUser-uploaded research (provided by the user; treat as one expert "
+                "opinion among many, NOT ground truth):\n"
+                f"{user_research_report}\n"
+            )
 
         prompt = load_prompt(
             "bull_researcher",
@@ -21,9 +31,11 @@ def create_bull_researcher(llm):
             sentiment_report=sentiment_report,
             news_report=news_report,
             fundamentals_report=fundamentals_report,
+            user_research_report=user_research_block,
             history=history,
             current_response=current_response,
         )
+        prompt += get_language_instruction()
 
         response = invoke_with_retry(llm, prompt)
 

@@ -1,4 +1,4 @@
-from tradingagents.agents.utils.agent_utils import invoke_with_retry, trim_debate_history
+from tradingagents.agents.utils.agent_utils import invoke_with_retry, trim_debate_history, get_language_instruction
 from tradingagents.prompts import load_prompt
 
 
@@ -30,6 +30,7 @@ def create_aggressive_debator(llm):
             current_neutral_response=current_neutral_response,
         )
 
+        prompt += get_language_instruction()
         response = invoke_with_retry(llm, prompt)
 
         argument = f"Aggressive Analyst: {response.content}"

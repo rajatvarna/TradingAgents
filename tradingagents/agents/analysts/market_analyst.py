@@ -4,6 +4,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_indicators,
     get_language_instruction,
     get_horizon_instruction,
+    get_range_stats,
     get_stock_data,
     invoke_with_retry,
 )
@@ -18,11 +19,17 @@ def create_market_analyst(llm):
         instrument_context = build_instrument_context(state["company_of_interest"])
 
         tools = [
+            get_range_stats,
             get_stock_data,
             get_indicators,
         ]
 
-        system_message = load_prompt("market_analyst") + get_language_instruction() + get_horizon_instruction()
+        system_message = (
+            load_prompt("market_analyst") 
+            + get_language_instruction() 
+            + get_horizon_instruction()
+            + "\nAlways call get_range_stats first to anchor today's open/close/volume against 52w/6m/3m/1m ranges before selecting indicators. The returned tables tell you whether the stock is at a 52-week high, near a one-month low, or somewhere mid-range — incorporate this in your trend narrative."
+        )
 
         prompt = ChatPromptTemplate.from_messages(
             [

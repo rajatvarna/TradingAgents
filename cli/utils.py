@@ -298,7 +298,9 @@ def select_llm_provider() -> tuple[str, str | None]:
         ("AWS Bedrock", "bedrock", None),
         ("Ollama", "ollama", "http://localhost:11434/v1"),
         ("Ollama Cloud", "ollama_cloud", "https://ollama.com/v1"),
-        ("Custom OpenAI-Compatible (LM Studio, vLLM, llama.cpp, etc.)", "custom_openai", None),
+        ("LM Studio", "lm-studio", None),
+        ("Llama.cpp", "llama-cpp", None),
+        ("Custom OpenAI-Compatible (vLLM, etc.)", "custom_openai", None),
     ]
 
     saved_provider = _prefs.get("llm_provider")

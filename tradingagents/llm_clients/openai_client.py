@@ -119,6 +119,8 @@ _PROVIDER_CONFIG = {
     "ollama": (os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434/v1", None),
     "ollama_cloud": ("https://ollama.com/v1", "OLLAMA_API_KEY"),
     "custom_openai": (os.environ.get("CUSTOM_OPENAI_BASE_URL") or "http://localhost:1234/v1", "CUSTOM_OPENAI_API_KEY"),
+    "lm-studio": (os.environ.get("LM_STUDIO_BASE_URL") or "http://localhost:8000/v1", None),
+    "llama-cpp": (os.environ.get("LLAMA_CPP_BASE_URL") or "http://localhost:8001/v1", None),
 }
 
 
@@ -126,7 +128,7 @@ class OpenAIClient(BaseLLMClient):
     """Client for OpenAI and OpenAI-compatible providers.
 
     Supported providers: OpenAI (native), xAI, DeepSeek, Qwen, GLM, OpenRouter,
-    DeepInfra, Ollama (local), Ollama Cloud, and custom OpenAI-compatible servers.
+    DeepInfra, Ollama (local/cloud), LM Studio, llama.cpp, and custom servers.
 
     For native OpenAI models, uses the Responses API (/v1/responses) which
     supports reasoning_effort with function tools across all model families

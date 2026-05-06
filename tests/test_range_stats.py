@@ -43,8 +43,8 @@ def test_basic_shape_with_full_history(mock_load):
 
 @patch("tradingagents.dataflows.range_stats._load_ohlcv")
 def test_close_percentages_against_known_window(mock_load):
-    """1m window = last 21 trading days. Build a frame where close at index -1 is 110
-    and the prior 20 closes range exactly 100..120."""
+    """1m window = last 21 trading days. Build a frame where today's close is 120
+    (the high) and the prior 20 closes range exactly 100..119."""
     df = pd.DataFrame(
         {
             "Date": pd.bdate_range(end="2026-05-06", periods=21).strftime("%Y-%m-%d"),

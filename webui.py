@@ -34,6 +34,13 @@ from tradingagents.graph.checkpointer import (
 )
 import notify
 import user_prefs
+from tradingagents.dataflows.user_research import (
+    clear_run_dir,
+    delete_research,
+    ingest_research,
+    list_research,
+)
+from tradingagents.llm_clients import create_llm_client
 
 
 # Concurrency: each analysis runs in its own subprocess (worker.py), so the
@@ -397,6 +404,84 @@ if key_env:
     else:
         st.sidebar.error(T("key_missing").format(key_env))
 
+# ════════════════════════════════════════════════════════════════════
+# Research notes upload + per-ticker library
+# ════════════════════════════════════════════════════════════════════
+if "ur_per_run" not in st.session_state:
+    st.session_state["ur_per_run"] = []
+
+if "ur_run_id" not in st.session_state:
+    st.session_state["ur_run_id"] = f"run-{int(time.time())}-{os.getpid()}"
+
+if ticker:
+    _lib_count = len(list_research(USER_HOME, ticker))
+    _lib_label = f"📎 Research notes (library: {_lib_count})"
+else:
+    _lib_label = "📎 Research notes"
+
+with st.sidebar.expander(_lib_label, expanded=False):
+    _save_to_lib = st.checkbox(
+        f"Save to {ticker} library" if ticker else "Save to ticker library",
+        value=True,
+        disabled=not ticker,
+        key="ur_save_to_lib",
+    )
+    _uploads = st.file_uploader(
+        "Drop PDF / .md / .txt (max 20MB, up to 5 files)",
+        type=["pdf", "md", "markdown", "txt"],
+        accept_multiple_files=True,
+        key="ur_uploader",
+    )
+    if _uploads and ticker:
+        if len(_uploads) > 5:
+            st.error("Max 5 files at once.")
+        else:
+            for _f in _uploads:
+                if _f.size > 20 * 1024 * 1024:
+                    st.error(f"{_f.name} exceeds 20MB.")
+                    continue
+                if any(m.get("filename") == _f.name for m in st.session_state["ur_per_run"]):
+                    continue
+                with st.spinner(f"Summarizing {_f.name}…"):
+                    try:
+                        _quick_client = create_llm_client(provider=provider, model=quick_model)
+                        _summarize_llm = _quick_client.get_llm()
+                        meta = ingest_research(
+                            file_bytes=_f.read(),
+                            filename=_f.name,
+                            ticker=ticker if _save_to_lib else None,
+                            user_root=USER_HOME,
+                            summarize_fn=_summarize_llm,
+                            run_id=st.session_state["ur_run_id"] if not _save_to_lib else None,
+                        )
+                        if not _save_to_lib:
+                            st.session_state["ur_per_run"].append(meta)
+                        st.success(f"✓ {_f.name} summarized")
+                    except Exception as e:  # noqa: BLE001
+                        st.error(f"Failed to ingest {_f.name}: {e}")
+
+    if ticker:
+        existing = list_research(USER_HOME, ticker)
+        if existing:
+            st.markdown("**Library**")
+            for m in existing:
+                cols = st.columns([1, 4, 1])
+                key_base = f"ur_{ticker}_{m['hash']}"
+                cols[0].checkbox(
+                    "include",
+                    value=True,
+                    key=f"{key_base}_chk",
+                    label_visibility="collapsed",
+                )
+                cols[1].caption(
+                    f"{m['filename']} · {m['uploaded_at'][:10]}"
+                )
+                if cols[2].button("🗑", key=f"{key_base}_del"):
+                    delete_research(USER_HOME, ticker, m["hash"])
+                    st.rerun()
+        else:
+            st.caption("Library is empty for this ticker.")
+
 st.sidebar.divider()
 st.sidebar.markdown(f"**{T('analysts')}**")
 ANALYST_OPTIONS = [
@@ -741,9 +826,24 @@ if run and worker_info is None:
         stdin=_sp_init.PIPE, stdout=_sp_init.PIPE, stderr=_sp_init.PIPE,
         text=True, bufsize=1, encoding="utf-8",
     )
+
+    def _assemble_user_research(ticker_: str) -> str:
+        chunks = []
+        for m in list_research(USER_HOME, ticker_):
+            if st.session_state.get(f"ur_{ticker_}_{m['hash']}_chk", True):
+                chunks.append(
+                    f"## {m['filename']} (uploaded {m['uploaded_at'][:10]})\n{m['summary']}"
+                )
+        for m in st.session_state.get("ur_per_run", []):
+            chunks.append(f"## {m['filename']} (this run)\n{m['summary']}")
+        return "\n\n---\n\n".join(chunks)
+
+    user_research_text = _assemble_user_research(ticker) if ticker else ""
+
     _proc_new.stdin.write(_json_init.dumps({
         "config": config, "ticker": ticker, "trade_date": str(trade_date),
         "selected_analysts": selected_analysts,
+        "user_research": user_research_text,
     }))
     _proc_new.stdin.close()
 
@@ -1040,6 +1140,13 @@ if decision is None:
     st.stop()
 
 tick_timer()
+
+try:
+    clear_run_dir(USER_HOME, st.session_state["ur_run_id"])
+except Exception as e:  # noqa: BLE001
+    print(f"[run] clear_run_dir failed: {e}", flush=True)
+st.session_state["ur_per_run"] = []
+st.session_state["ur_run_id"] = f"run-{int(time.time())}-{os.getpid()}"
 
 label = _decision_label(decision)
 decision_box.markdown(

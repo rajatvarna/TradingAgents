@@ -296,6 +296,7 @@ def select_llm_provider() -> tuple[str, str | None]:
         ("DeepInfra", "deepinfra", "https://api.deepinfra.com/v1/openai"),
         ("Azure OpenAI", "azure", None),
         ("AWS Bedrock", "bedrock", None),
+        ("GitHub Copilot", "github_copilot", "https://models.github.ai/inference"),
         ("Ollama", "ollama", "http://localhost:11434/v1"),
         ("Ollama Cloud", "ollama_cloud", "https://ollama.com/v1"),
         ("LM Studio", "lm-studio", None),

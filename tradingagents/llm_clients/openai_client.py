@@ -106,6 +106,7 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
 _PASSTHROUGH_KWARGS = (
     "timeout", "max_retries", "reasoning_effort",
     "api_key", "callbacks", "http_client", "http_async_client",
+    "default_headers",
 )
 
 # Provider base URLs and API key env vars
@@ -116,6 +117,7 @@ _PROVIDER_CONFIG = {
     "glm": ("https://api.z.ai/api/paas/v4/", "ZHIPU_API_KEY"),
     "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
     "deepinfra": ("https://api.deepinfra.com/v1/openai", "DEEPINFRA_API_KEY"),
+    "github_copilot": ("https://models.github.ai/inference", "GITHUB_TOKEN"),
     "ollama": (os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434/v1", None),
     "ollama_cloud": ("https://ollama.com/v1", "OLLAMA_API_KEY"),
     "custom_openai": (os.environ.get("CUSTOM_OPENAI_BASE_URL") or "http://localhost:1234/v1", "CUSTOM_OPENAI_API_KEY"),

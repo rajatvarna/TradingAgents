@@ -59,4 +59,8 @@ def create_llm_client(
         from .bedrock_client import BedrockClient
         return BedrockClient(model, base_url, **kwargs)
 
+    if provider_lower == "github_copilot":
+        from .github_copilot_client import GitHubCopilotClient
+        return GitHubCopilotClient(model, base_url, **kwargs)
+
     raise ValueError(f"Unsupported LLM provider: {provider}")

@@ -28,6 +28,7 @@ _API_KEY_ENV_VARS = (
     "AWS_SESSION_TOKEN",
     "AWS_REGION",
     "AWS_DEFAULT_REGION",
+    "GITHUB_TOKEN",
 )
 
 

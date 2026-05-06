@@ -224,6 +224,12 @@ def _select_model(provider: str, mode: str) -> str:
             validate=lambda x: len(x.strip()) > 0 or "Please enter a deployment name.",
         ).ask().strip()
 
+    if provider.lower() == "deepinfra":
+        return questionary.text(
+            f"Enter DeepInfra model ID ({mode}-thinking):",
+            validate=lambda x: len(x.strip()) > 0 or "Please enter a model ID.",
+        ).ask().strip()
+
     choice = questionary.select(
         f"Select Your [{mode.title()}-Thinking LLM Engine]:",
         choices=[
@@ -271,6 +277,7 @@ def select_llm_provider() -> tuple[str, str | None]:
         ("Qwen", "qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
         ("GLM", "glm", "https://open.bigmodel.cn/api/paas/v4/"),
         ("OpenRouter", "openrouter", "https://openrouter.ai/api/v1"),
+        ("DeepInfra", "deepinfra", "https://api.deepinfra.com/v1/openai"),
         ("Azure OpenAI", "azure", None),
         ("AWS Bedrock", "bedrock", None),
         ("Ollama", "ollama", "http://localhost:11434/v1"),

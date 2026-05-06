@@ -115,16 +115,18 @@ _PROVIDER_CONFIG = {
     "qwen": ("https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "DASHSCOPE_API_KEY"),
     "glm": ("https://api.z.ai/api/paas/v4/", "ZHIPU_API_KEY"),
     "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
+    "deepinfra": ("https://api.deepinfra.com/v1/openai", "DEEPINFRA_API_KEY"),
     "ollama": (os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434/v1", None),
     "ollama_cloud": ("https://ollama.com/v1", "OLLAMA_API_KEY"),
 }
 
 
 class OpenAIClient(BaseLLMClient):
+<<<<<<< HEAD
     """Client for OpenAI and OpenAI-compatible providers.
 
     Supported providers: OpenAI (native), xAI, DeepSeek, Qwen, GLM, OpenRouter,
-    Ollama (local), and Ollama Cloud.
+    DeepInfra, Ollama (local), and Ollama Cloud.
 
     For native OpenAI models, uses the Responses API (/v1/responses) which
     supports reasoning_effort with function tools across all model families

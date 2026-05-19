@@ -55,11 +55,12 @@ tradingagents = "cli.main:app"
 portfolio-advisor = "portfolio_advisor.main:main"
 
 [tool.setuptools.packages.find]
-include = ["tradingagents*", "cli*", "portfolio_advisor*"]
+include = ["tradingagents*", "cli*", "portfolio_advisor*", "automation*"]
 
 [tool.setuptools.package-data]
 cli = ["static/*", "*.tcss"]
 tradingagents = ["prompts/*.yaml"]
+automation = ["*.json.example", "*.ps1", "README.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,6 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
+    build_scope_guard,
     get_global_news,
     get_horizon_instruction,
     get_language_instruction,
@@ -15,13 +16,19 @@ def create_news_analyst(llm):
     def news_analyst_node(state):
         current_date = state["trade_date"]
         instrument_context = build_instrument_context(state["company_of_interest"])
+        scope_guard = build_scope_guard(state["company_of_interest"])
 
         tools = [
             get_news,
             get_global_news,
         ]
 
-        system_message = load_prompt("news_analyst") + get_language_instruction() + get_horizon_instruction()
+        system_message = (
+            load_prompt("news_analyst")
+            + f" {scope_guard}"
+            + get_language_instruction()
+            + get_horizon_instruction()
+        )
 
         prompt = ChatPromptTemplate.from_messages(
             [

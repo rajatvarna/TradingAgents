@@ -1,6 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
+    build_scope_guard,
     get_indicators,
     get_language_instruction,
     get_horizon_instruction,
@@ -17,6 +18,7 @@ def create_market_analyst(llm):
     def market_analyst_node(state):
         current_date = state["trade_date"]
         instrument_context = build_instrument_context(state["company_of_interest"])
+        scope_guard = build_scope_guard(state["company_of_interest"])
 
         tools = [
             get_range_stats,
@@ -26,6 +28,7 @@ def create_market_analyst(llm):
 
         system_message = (
             load_prompt("market_analyst") 
+            + f" {scope_guard}"
             + get_language_instruction() 
             + get_horizon_instruction()
             + "\nAlways call get_range_stats first to anchor today's open/close/volume against 52w/6m/3m/1m ranges before selecting indicators. The returned tables tell you whether the stock is at a 52-week high, near a one-month low, or somewhere mid-range — incorporate this in your trend narrative."

@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from tradingagents.agents.schemas import ResearchPlan, render_research_plan
-from tradingagents.agents.utils.agent_utils import build_instrument_context, get_language_instruction
+from tradingagents.agents.utils.agent_utils import (
+    build_instrument_context,
+    build_scope_guard,
+    get_language_instruction,
+)
 from tradingagents.agents.utils.structured import (
     bind_structured,
     invoke_structured_or_freetext,
@@ -16,6 +20,7 @@ def create_research_manager(llm):
 
     def research_manager_node(state) -> dict:
         instrument_context = build_instrument_context(state["company_of_interest"])
+        scope_guard = build_scope_guard(state["company_of_interest"])
         history = state["investment_debate_state"].get("history", "")
         user_research_report = state.get("user_research_report", "")
 
@@ -32,6 +37,7 @@ def create_research_manager(llm):
         prompt = load_prompt(
             "research_manager",
             instrument_context=instrument_context,
+            scope_guard=scope_guard,
             history=history + user_research_block,
         )
         prompt += get_language_instruction()

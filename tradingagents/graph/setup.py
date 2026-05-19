@@ -23,6 +23,7 @@ from tradingagents.agents import (
     create_trader,
 )
 from tradingagents.agents.utils.agent_states import AgentState
+from tradingagents.agents.utils.tool_provenance import create_tool_provenance_capture_node
 
 from .conditional_logic import ConditionalLogic
 from .constants import (
@@ -102,6 +103,10 @@ class GraphSetup:
             workflow.add_node(analyst_node_name(analyst_type), factory(self.quick_thinking_llm))
             workflow.add_node(clear_node_name(analyst_type), create_msg_delete())
             workflow.add_node(tools_node_name(analyst_type), self.tool_nodes[TOOL_NODE_KEY[analyst_type]])
+            workflow.add_node(
+                f"Capture Tools {analyst_type.capitalize()}",
+                create_tool_provenance_capture_node(analyst_type),
+            )
 
     def _build_fixed_nodes(self, workflow: StateGraph) -> None:
         """Add researcher, trader, risk analysts, and portfolio manager nodes."""
@@ -144,7 +149,8 @@ class GraphSetup:
                 self.conditional_logic.should_continue_analyst(analyst_type),
                 [t_node, c_node],
             )
-            workflow.add_edge(t_node, a_node)
+            workflow.add_edge(t_node, f"Capture Tools {analyst_type.capitalize()}")
+            workflow.add_edge(f"Capture Tools {analyst_type.capitalize()}", a_node)
             workflow.add_edge(c_node, "Join Analysts")
 
         workflow.add_conditional_edges(

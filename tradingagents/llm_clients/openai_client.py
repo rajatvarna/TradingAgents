@@ -160,6 +160,10 @@ class OpenAIClient(BaseLLMClient):
         # provider default so users can route through their own gateway.
         if self.provider in _PROVIDER_CONFIG:
             default_base, api_key_env = _PROVIDER_CONFIG[self.provider]
+            if self.provider == "ollama":
+                # Support container/network deployments where "localhost"
+                # is not the Ollama host (e.g., docker-compose service name).
+                default_base = os.environ.get("OLLAMA_BASE_URL", default_base)
             llm_kwargs["base_url"] = self.base_url or default_base
             if api_key_env:
                 api_key = os.environ.get(api_key_env)

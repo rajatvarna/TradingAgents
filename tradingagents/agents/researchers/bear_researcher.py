@@ -1,6 +1,9 @@
-from tradingagents.agents.utils.agent_utils import get_language_instruction
-
-from tradingagents.agents.utils.agent_utils import invoke_with_retry, trim_debate_history
+from tradingagents.agents.utils.agent_utils import (
+    build_scope_guard,
+    get_language_instruction,
+    invoke_with_retry,
+    trim_debate_history,
+)
 from tradingagents.prompts import load_prompt
 
 
@@ -25,6 +28,8 @@ def create_bear_researcher(llm):
                 f"{user_research_report}\n"
             )
 
+        scope_guard = build_scope_guard(state["company_of_interest"])
+
         prompt = load_prompt(
             "bear_researcher",
             market_research_report=market_research_report,
@@ -34,6 +39,7 @@ def create_bear_researcher(llm):
             user_research_report=user_research_block,
             history=history,
             current_response=current_response,
+            scope_guard=scope_guard,
         )
         prompt += get_language_instruction()
 

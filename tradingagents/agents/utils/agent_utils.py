@@ -112,6 +112,17 @@ def trim_debate_history(history: str, max_turns: int = 4) -> str:
     truncated = "\n\n...[Earlier history truncated]...\n\n" + "\n".join(turns[-max_turns:])
     return truncated
 
+
+def build_scope_guard(ticker: str) -> str:
+    """Instruction that keeps reports scoped to the requested instrument."""
+    return (
+        f"Scope guard: the requested instrument is `{ticker}`. Do not treat news, "
+        "prices, fundamentals, or recommendations for another ticker or issuer "
+        "as evidence for this instrument. If a retrieved source appears to refer "
+        "to a different company or ticker, label it as out-of-scope and exclude "
+        "it from the recommendation."
+    )
+
 def create_msg_delete():
     def delete_messages(state):
         """No-op. Messages are cleared in the Join Analysts barrier node."""

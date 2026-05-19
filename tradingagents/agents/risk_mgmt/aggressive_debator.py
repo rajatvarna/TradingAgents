@@ -1,4 +1,9 @@
-from tradingagents.agents.utils.agent_utils import invoke_with_retry, trim_debate_history, get_language_instruction
+from tradingagents.agents.utils.agent_utils import (
+    build_scope_guard,
+    get_language_instruction,
+    invoke_with_retry,
+    trim_debate_history,
+)
 from tradingagents.prompts import load_prompt
 
 
@@ -17,6 +22,7 @@ def create_aggressive_debator(llm):
         fundamentals_report = state["fundamentals_report"]
 
         trader_decision = state["trader_investment_plan"]
+        scope_guard = build_scope_guard(state["company_of_interest"])
 
         prompt = load_prompt(
             "aggressive_debator",
@@ -28,6 +34,7 @@ def create_aggressive_debator(llm):
             history=history,
             current_conservative_response=current_conservative_response,
             current_neutral_response=current_neutral_response,
+            scope_guard=scope_guard,
         )
 
         prompt += get_language_instruction()

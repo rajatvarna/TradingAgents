@@ -21,6 +21,7 @@ class Propagator:
         trade_date: str,
         past_context: str = "",
         user_research: str = "",
+        target_profile: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Create the initial state for the agent graph."""
         return {
@@ -62,6 +63,16 @@ class Propagator:
             "trader_investment_plan": "",
             "final_trade_decision": "",
             "sender": "",
+            "macro_report": "",
+            "source_objects": [],
+            "source_registry": {},
+            "claim_graph": {},
+            "skill_registry": {},
+            "recommendation_scorecard": {},
+            "pre_synthesis_scope_audit": {},
+            "raw_tool_outputs": [],
+            "raw_tool_seen_ids": [],
+            "target_profile": target_profile or {},
         }
 
     def get_graph_args(self, callbacks: Optional[List] = None) -> Dict[str, Any]:

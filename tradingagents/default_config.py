@@ -40,7 +40,7 @@ DEFAULT_CONFIG = {
     "llm_timeout": None,
     # Checkpoint/resume: when True, LangGraph saves state after each node
     # so a crashed run can resume from the last successful step.
-    "checkpoint_enabled": False,
+    "checkpoint_enabled": True,
     # Output language for analyst reports and final decision
     # Internal agent debate stays in English for reasoning quality
     "output_language": "English",

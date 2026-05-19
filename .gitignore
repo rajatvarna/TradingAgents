@@ -228,3 +228,5 @@ reports/
 
 # macOS
 .DS_Store
+.idea
+MEREAD.md

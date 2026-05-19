@@ -2,34 +2,58 @@ from datetime import datetime
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 from dotenv import load_dotenv
+import os
 
 # Load environment variables from .env files
 load_dotenv()
 load_dotenv(".env.enterprise", override=False)
 
-# Create a custom config
-config = DEFAULT_CONFIG.copy()
-config["deep_think_llm"] = "gpt-5.4-mini"
-config["quick_think_llm"] = "gpt-5.4-mini"
-config["max_debate_rounds"] = 1
+def validate_config(config):
+    if not config.get("deep_think_llm"):
+        raise ValueError("deep_think_llm is not configured")
 
-# Configure data vendors
-config["data_vendors"] = {
-    "core_stock_apis": "yfinance",           # Options: alpha_vantage, yfinance
-    "technical_indicators": "yfinance",      # Options: alpha_vantage, yfinance
-    "fundamental_data": "yfinance",          # Options: alpha_vantage, yfinance
-    "news_data": "yfinance",                 # Options: alpha_vantage, yfinance, searxng
-}
+    if not config.get("quick_think_llm"):
+        raise ValueError("quick_think_llm is not configured")
 
-# Initialize with custom config
-ta = TradingAgentsGraph(debug=True, config=config)
+def validate_input(ticker, date):
+    if not ticker or not isinstance(ticker, str):
+        raise ValueError("Invalid ticker symbol")
 
-# Use current date dynamically
-today = datetime.today().strftime("%Y-%m-%d")
+    if not date or not isinstance(date, str):
+        raise ValueError("Invalid date format")
 
-# Forward propagate
-_, decision = ta.propagate("NVDA", today)
-print(decision)
+def main():
+    try:
+        # Create config
+        config = DEFAULT_CONFIG.copy()
+        config["deep_think_llm"] = "gpt-5.4-mini"
+        config["quick_think_llm"] = "gpt-5.4-mini"
+        config["max_debate_rounds"] = 1
 
-# Memorize mistakes and reflect
-# ta.reflect_and_remember(1000)
+        config["data_vendors"] = {
+            "core_stock_apis": "yfinance",           # Options: alpha_vantage, yfinance
+            "technical_indicators": "yfinance",      # Options: alpha_vantage, yfinance
+            "fundamental_data": "yfinance",          # Options: alpha_vantage, yfinance
+            "news_data": "yfinance",                 # Options: alpha_vantage, yfinance, searxng
+        }
+
+        validate_config(config)
+
+        ticker = "NVDA"
+        date = datetime.today().strftime("%Y-%m-%d")
+        validate_input(ticker, date)
+
+        print("[INFO] Initializing TradingAgentsGraph...")
+        ta = TradingAgentsGraph(debug=True, config=config)
+
+        print(f"[INFO] Running analysis for {ticker} on {date}...")
+        _, decision = ta.propagate(ticker, date)
+
+        print("[RESULT]")
+        print(decision)
+
+    except Exception as e:
+        print(f"[ERROR] {e}")
+
+if __name__ == "__main__":
+    main()

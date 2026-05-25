@@ -8,6 +8,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_range_stats,
     get_stock_data,
     invoke_with_retry,
+    suggest_trade_levels,
 )
 from tradingagents.dataflows.config import get_config
 from tradingagents.prompts import load_prompt
@@ -24,6 +25,7 @@ def create_market_analyst(llm):
             get_range_stats,
             get_stock_data,
             get_indicators,
+            suggest_trade_levels,
         ]
 
         system_message = (
@@ -32,6 +34,7 @@ def create_market_analyst(llm):
             + get_language_instruction() 
             + get_horizon_instruction()
             + "\nAlways call get_range_stats first to anchor today's open/close/volume against 52w/6m/3m/1m ranges before selecting indicators. The returned tables tell you whether the stock is at a 52-week high, near a one-month low, or somewhere mid-range — incorporate this in your trend narrative."
+            + "\nAdditionally, produce a concrete execution plan: when to enter, where to place stop-loss, and where to set take-profit. Use the tool `suggest_trade_levels(symbol, curr_date, ...)` once after retrieving OHLCV to compute technically anchored levels (swing high/low, ATR, moving averages) and then explain why those levels make sense."
         )
 
         prompt = ChatPromptTemplate.from_messages(

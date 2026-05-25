@@ -10,7 +10,7 @@ from tradingagents.agents.utils.agent_utils import (
 )
 from tradingagents.agents.utils.structured import (
     bind_structured,
-    invoke_structured_or_freetext,
+    invoke_structured_or_freetext_with_meta,
 )
 from tradingagents.prompts import load_prompt
 
@@ -42,7 +42,7 @@ def create_research_manager(llm):
         )
         prompt += get_language_instruction()
 
-        investment_plan = invoke_structured_or_freetext(
+        investment_plan, structured_valid = invoke_structured_or_freetext_with_meta(
             structured_llm,
             llm,
             prompt,
@@ -62,6 +62,7 @@ def create_research_manager(llm):
         return {
             "investment_debate_state": new_investment_debate_state,
             "investment_plan": investment_plan,
+            "research_manager_structured_valid": structured_valid,
         }
 
     return research_manager_node

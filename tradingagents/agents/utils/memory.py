@@ -5,12 +5,16 @@ concurrent, and scalable memory lookups. Automatically migrates old .md logs.
 """
 
 import sqlite3
-from typing import List, Optional
+import json
+import logging
+from typing import Any, Dict, List, Optional
 from pathlib import Path
 import re
 import logging
 
-from tradingagents.agents.utils.rating import parse_rating
+from tradingagents.agents.utils.rating import extract_rating, parse_rating
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +22,7 @@ class TradingMemoryLog:
     """SQLite-backed log of trading decisions and reflections."""
 
     _SEPARATOR = "\n\n<!-- ENTRY_END -->\n\n"
+
 
     def __init__(self, config: dict = None):
         cfg = config or {}
@@ -77,11 +82,11 @@ class TradingMemoryLog:
         ticker: str,
         trade_date: str,
         final_trade_decision: str,
+        meta: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Insert a pending entry at end of propagate()."""
         if not self._db_path:
             return
-            
         rating = parse_rating(final_trade_decision)
         
         with self._get_conn() as conn:
@@ -181,6 +186,7 @@ class TradingMemoryLog:
         alpha_return: float,
         holding_days: int,
         reflection: str,
+        outcome: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Update a pending entry with the measured outcome and reflection."""
         if not self._db_path or not self._db_path.exists():
@@ -231,7 +237,6 @@ class TradingMemoryLog:
                         """,
                         (upd["raw_return"], upd["alpha_return"], upd["holding_days"], upd["reflection"], row["id"])
                     )
-            
             conn.commit()
             self._apply_rotation(conn)
 

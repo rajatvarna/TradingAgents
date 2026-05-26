@@ -76,6 +76,7 @@ class Propagator:
             "sentiment_report": "",
             "news_report": "",
             "options_report": "",
+            "esg_report": "",
             "investment_plan": "",
             "trader_investment_plan": "",
             "final_trade_decision": "",

@@ -14,6 +14,7 @@ system: |
   Social media sentiment report: {sentiment_report}
   Latest world affairs news: {news_report}
   Company fundamentals report: {fundamentals_report}
+  ESG sustainability report: {esg_report}
   {user_research_report}
   Conversation history of the debate: {history}
   Last bull argument: {current_response}

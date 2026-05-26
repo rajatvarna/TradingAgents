@@ -1,4 +1,4 @@
-from .alpha_vantage_common import _make_api_request
+from .alpha_vantage_common import _make_api_request, AlphaVantageRateLimitError, AlphaVantageUnsupportedIndicatorError
 
 def get_indicator(
     symbol: str,
@@ -39,7 +39,8 @@ def get_indicator(
         "boll_ub": ("Bollinger Upper Band", "close"),
         "boll_lb": ("Bollinger Lower Band", "close"),
         "atr": ("ATR", None),
-        "vwma": ("VWMA", "close")
+        "vwma": (None, None),
+        "mfi": (None, None)
     }
 
     indicator_descriptions = {
@@ -54,7 +55,8 @@ def get_indicator(
         "boll_ub": "Bollinger Upper Band: Typically 2 standard deviations above the middle line. Usage: Signals potential overbought conditions and breakout zones. Tips: Confirm signals with other tools; prices may ride the band in strong trends.",
         "boll_lb": "Bollinger Lower Band: Typically 2 standard deviations below the middle line. Usage: Indicates potential oversold conditions. Tips: Use additional analysis to avoid false reversal signals.",
         "atr": "ATR: Averages true range to measure volatility. Usage: Set stop-loss levels and adjust position sizes based on current market volatility. Tips: It's a reactive measure, so use it as part of a broader risk management strategy.",
-        "vwma": "VWMA: A moving average weighted by volume. Usage: Confirm trends by integrating price action with volume data. Tips: Watch for skewed results from volume spikes; use in combination with other volume analyses."
+        "vwma": "VWMA: A moving average weighted by volume. Usage: Confirm trends by integrating price action with volume data. Tips: Watch for skewed results from volume spikes; use in combination with other volume analyses.",
+        "mfi": "MFI: Money Flow Index. Measures volume-weighted momentum."
     }
 
     if indicator not in supported_indicators:
@@ -66,7 +68,12 @@ def get_indicator(
     before = curr_date_dt - relativedelta(days=look_back_days)
 
     # Get the full data for the period instead of making individual calls
-    _, required_series_type = supported_indicators[indicator]
+    av_name, required_series_type = supported_indicators[indicator]
+
+    if av_name is None and required_series_type is None:
+        raise AlphaVantageUnsupportedIndicatorError(
+            f"{indicator.upper()} is not available from Alpha Vantage API"
+        )
 
     # Use the provided series_type or fall back to the required one
     if required_series_type:
@@ -217,6 +224,8 @@ def get_indicator(
 
         return result_str
 
+    except AlphaVantageRateLimitError:
+        raise
     except Exception as e:
         print(f"Error getting Alpha Vantage indicator data for {indicator}: {e}")
         return f"Error retrieving {indicator} data: {str(e)}"

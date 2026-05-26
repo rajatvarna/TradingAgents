@@ -115,13 +115,16 @@ class TestDeepSeekReasoningContent:
 
 
 # ---------------------------------------------------------------------------
-# deepseek-reasoner: structured output unavailable, falls through to free-text
+# deepseek-reasoner: structured output binding and capability-aware dispatch
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.unit
 class TestDeepSeekReasonerStructuredOutput:
-    def test_with_structured_output_raises_for_reasoner(self):
+    def test_with_structured_output_binds_without_tool_choice_for_reasoner(self):
+        """For deepseek-reasoner, structured output is bound using function calling,
+        but tool_choice is suppressed to avoid API errors.
+        """
         client = DeepSeekChatOpenAI(
             model="deepseek-reasoner",
             api_key="placeholder",
@@ -132,18 +135,15 @@ class TestDeepSeekReasonerStructuredOutput:
         class _Sample(BaseModel):
             answer: str
 
-        with pytest.raises(NotImplementedError):
-            client.with_structured_output(_Sample)
+        bound = client.with_structured_output(_Sample)
+        assert bound is not None
+        assert "tool_choice" not in bound.first.kwargs
 
-    def test_with_structured_output_raises_for_v4(self):
-        """All DeepSeek models reject tool_choice, not just deepseek-reasoner.
-
-        V4 Flash, V4 Pro, and deepseek-chat all return HTTP 400 when
-        tool_choice is set. Raising NotImplementedError at bind time lets
-        bind_structured() fall back to free-text cleanly without wasting
-        an API call.
+    def test_with_structured_output_binds_without_tool_choice_for_v4(self):
+        """Models that do not support tool_choice (like deepseek-v4-flash) bind successfully
+        but suppress tool_choice in kwargs.
         """
-        for model in ("deepseek-v4-flash", "deepseek-v4-pro", "deepseek-chat"):
+        for model in ("deepseek-v4-flash", "deepseek-v4-pro"):
             client = DeepSeekChatOpenAI(
                 model=model,
                 api_key="placeholder",
@@ -154,8 +154,26 @@ class TestDeepSeekReasonerStructuredOutput:
             class _Sample(BaseModel):
                 answer: str
 
-            with pytest.raises(NotImplementedError, match="does not support tool_choice"):
-                client.with_structured_output(_Sample)
+            bound = client.with_structured_output(_Sample)
+            assert bound is not None
+            assert "tool_choice" not in bound.first.kwargs
+
+    def test_with_structured_output_binds_with_tool_choice_for_chat(self):
+        """Standard Chat models (like deepseek-chat) support tool_choice and include it in kwargs.
+        """
+        client = DeepSeekChatOpenAI(
+            model="deepseek-chat",
+            api_key="placeholder",
+            base_url="https://api.deepseek.com",
+        )
+        from pydantic import BaseModel
+
+        class _Sample(BaseModel):
+            answer: str
+
+        bound = client.with_structured_output(_Sample)
+        assert bound is not None
+        assert "tool_choice" in bound.first.kwargs
 
 
 # ---------------------------------------------------------------------------

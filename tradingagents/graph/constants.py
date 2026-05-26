@@ -8,6 +8,7 @@ ANALYST_REPORT_KEYS: dict[str, str] = {
     "news": "news_report",
     "fundamentals": "fundamentals_report",
     "options": "options_report",
+    "esg": "esg_report",
 }
 
 # Set of valid analyst names for input validation.
@@ -21,13 +22,18 @@ TOOL_NODE_KEY: dict[str, str] = {
     "news": "news",
     "fundamentals": "fundamentals",
     "options": "options",
+    "esg": "esg",
 }
 
 # Node-name helpers — single source of truth so renaming only happens here.
 def analyst_node_name(analyst_type: str) -> str:
+    if analyst_type.lower() == "esg":
+        return "ESG Analyst"
     return f"{analyst_type.capitalize()} Analyst"
 
 def clear_node_name(analyst_type: str) -> str:
+    if analyst_type.lower() == "esg":
+        return "Msg Clear ESG"
     return f"Msg Clear {analyst_type.capitalize()}"
 
 def tools_node_name(analyst_type: str) -> str:

@@ -18,6 +18,7 @@ def create_bear_researcher(llm):
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
+        esg_report = state.get("esg_report", "")
         user_research_report = state.get("user_research_report", "")
 
         user_research_block = ""
@@ -36,6 +37,7 @@ def create_bear_researcher(llm):
             sentiment_report=sentiment_report,
             news_report=news_report,
             fundamentals_report=fundamentals_report,
+            esg_report=esg_report,
             user_research_report=user_research_block,
             history=history,
             current_response=current_response,

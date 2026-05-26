@@ -21,11 +21,13 @@ from tradingagents.agents import (
     create_research_manager,
     create_sentiment_analyst,
     create_trader,
+    create_esg_analyst,
 )
 from tradingagents.agents.utils.agent_states import AgentState
 from tradingagents.agents.utils.tool_provenance import create_tool_provenance_capture_node
 
 from .conditional_logic import ConditionalLogic
+from .analyst_execution import build_analyst_execution_plan
 from .constants import (
     ANALYST_REPORT_KEYS,
     TOOL_NODE_KEY,
@@ -41,6 +43,7 @@ _ANALYST_FACTORIES = {
     "news": create_news_analyst,
     "fundamentals": create_fundamentals_analyst,
     "options": create_options_analyst,
+    "esg": create_esg_analyst,
 }
 
 _DEFAULT_ANALYSTS = ("market", "sentiment", "news", "fundamentals")

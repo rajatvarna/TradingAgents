@@ -42,6 +42,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_global_news,
 )
 from tradingagents.agents.utils.options_tools import get_options_data
+from tradingagents.agents.utils.esg_data_tools import get_esg_scores, get_esg_news
 
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
 from .conditional_logic import ConditionalLogic
@@ -121,7 +122,7 @@ class TradingAgentsGraph:
             analyst_concurrency_limit=self.config.get("analyst_concurrency_limit", 1),
         )
 
-        self.propagator = Propagator()
+        self.propagator = Propagator(max_recur_limit=self.config.get("max_recur_limit", 100))
         self.reflector = Reflector(self.quick_thinking_llm)
         self.signal_processor = SignalProcessor(self.quick_thinking_llm)
 
@@ -200,6 +201,12 @@ class TradingAgentsGraph:
             "options": ToolNode(
                 [
                     get_options_data,
+                ]
+            ),
+            "esg": ToolNode(
+                [
+                    get_esg_scores,
+                    get_esg_news,
                 ]
             ),
         }
@@ -594,6 +601,7 @@ class TradingAgentsGraph:
                 ("sentiment_report", "social_analyst"),
                 ("news_report", "news_analyst"),
                 ("fundamentals_report", "fundamentals_analyst"),
+                ("esg_report", "esg_analyst"),
             ):
                 marker = f"{stage}:complete"
                 content = chunk.get(report_key) or ""
@@ -670,6 +678,7 @@ class TradingAgentsGraph:
             "news_report": final_state["news_report"],
             "fundamentals_report": final_state["fundamentals_report"],
             "options_report": final_state.get("options_report", ""),
+            "esg_report": final_state.get("esg_report", ""),
             "investment_debate_state": {
                 "bull_history": final_state["investment_debate_state"]["bull_history"],
                 "bear_history": final_state["investment_debate_state"]["bear_history"],

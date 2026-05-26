@@ -20,8 +20,8 @@ def _make_setup(analysts=None):
     if analysts is None:
         analysts = list(VALID_ANALYSTS)
 
-    # Build a mock ToolNode for every analyst + "social" bucket
-    tool_node_keys = {"market", "social", "news", "fundamentals", "options"}
+    # Build a mock ToolNode for every analyst + "social" and "esg" bucket
+    tool_node_keys = {"market", "social", "news", "fundamentals", "options", "esg"}
     tool_nodes = {k: MagicMock() for k in tool_node_keys}
 
     cond = ConditionalLogic(max_debate_rounds=1, max_risk_discuss_rounds=1)
@@ -33,6 +33,7 @@ def _make_setup(analysts=None):
         "tradingagents.graph.setup.create_news_analyst",
         "tradingagents.graph.setup.create_fundamentals_analyst",
         "tradingagents.graph.setup.create_options_analyst",
+        "tradingagents.graph.setup.create_esg_analyst",
         "tradingagents.graph.setup.create_bull_researcher",
         "tradingagents.graph.setup.create_bear_researcher",
         "tradingagents.graph.setup.create_research_manager",
@@ -65,7 +66,7 @@ def _apply_patches(names):
 def _build_graph(selected_analysts):
     quick_llm = MagicMock()
     deep_llm = MagicMock()
-    tool_nodes = {k: MagicMock() for k in {"market", "social", "news", "fundamentals", "options"}}
+    tool_nodes = {k: MagicMock() for k in {"market", "social", "news", "fundamentals", "options", "esg"}}
     cond = ConditionalLogic()
     gs = GraphSetup(quick_llm, deep_llm, tool_nodes, cond)
 
@@ -75,6 +76,7 @@ def _build_graph(selected_analysts):
         "tradingagents.graph.setup.create_news_analyst",
         "tradingagents.graph.setup.create_fundamentals_analyst",
         "tradingagents.graph.setup.create_options_analyst",
+        "tradingagents.graph.setup.create_esg_analyst",
         "tradingagents.graph.setup.create_bull_researcher",
         "tradingagents.graph.setup.create_bear_researcher",
         "tradingagents.graph.setup.create_research_manager",
@@ -141,9 +143,38 @@ class TestNodePresence:
         for expected in [
             "Bull Researcher", "Bear Researcher", "Research Manager",
             "Trader", "Aggressive Analyst", "Neutral Analyst",
-            "Conservative Analyst", "Portfolio Manager", "Join Analysts",
+            "Conservative Analyst", "Portfolio Manager",
         ]:
             assert expected in node_names, f"{expected!r} missing from graph nodes"
+
+    def test_join_analysts_present_only_in_parallel(self):
+        workflow_seq = _build_graph(["market", "news"])
+        assert "Join Analysts" not in workflow_seq.nodes.keys()
+
+        quick_llm = MagicMock()
+        deep_llm = MagicMock()
+        tool_nodes = {k: MagicMock() for k in {"market", "social", "news", "fundamentals", "options"}}
+        cond = ConditionalLogic()
+        gs = GraphSetup(quick_llm, deep_llm, tool_nodes, cond, analyst_concurrency_limit=2)
+        patches = [
+            "tradingagents.graph.setup.create_market_analyst",
+            "tradingagents.graph.setup.create_sentiment_analyst",
+            "tradingagents.graph.setup.create_news_analyst",
+            "tradingagents.graph.setup.create_fundamentals_analyst",
+            "tradingagents.graph.setup.create_options_analyst",
+            "tradingagents.graph.setup.create_bull_researcher",
+            "tradingagents.graph.setup.create_bear_researcher",
+            "tradingagents.graph.setup.create_research_manager",
+            "tradingagents.graph.setup.create_trader",
+            "tradingagents.graph.setup.create_aggressive_debator",
+            "tradingagents.graph.setup.create_neutral_debator",
+            "tradingagents.graph.setup.create_conservative_debator",
+            "tradingagents.graph.setup.create_portfolio_manager",
+            "tradingagents.graph.setup.create_msg_delete",
+        ]
+        with _apply_patches(patches):
+            workflow_par = gs.setup_graph(["market", "news"])
+        assert "Join Analysts" in workflow_par.nodes.keys()
 
     def test_market_plus_options_subset(self):
         workflow = _build_graph(["market", "options"])
@@ -164,11 +195,13 @@ class TestNodePresence:
 class TestConstants:
     @pytest.mark.parametrize("analyst", list(VALID_ANALYSTS))
     def test_analyst_node_name_format(self, analyst):
-        assert analyst_node_name(analyst) == f"{analyst.capitalize()} Analyst"
+        expected = "ESG Analyst" if analyst == "esg" else f"{analyst.capitalize()} Analyst"
+        assert analyst_node_name(analyst) == expected
 
     @pytest.mark.parametrize("analyst", list(VALID_ANALYSTS))
     def test_clear_node_name_format(self, analyst):
-        assert clear_node_name(analyst) == f"Msg Clear {analyst.capitalize()}"
+        expected = "Msg Clear ESG" if analyst == "esg" else f"Msg Clear {analyst.capitalize()}"
+        assert clear_node_name(analyst) == expected
 
     @pytest.mark.parametrize("analyst", list(VALID_ANALYSTS))
     def test_tools_node_name_format(self, analyst):

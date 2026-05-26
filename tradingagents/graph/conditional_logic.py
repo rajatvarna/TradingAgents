@@ -54,6 +54,9 @@ class ConditionalLogic:
     def should_continue_options(self, state: AgentState) -> str:
         return self.should_continue_analyst("options")(state)
 
+    def should_continue_esg(self, state: AgentState) -> str:
+        return self.should_continue_analyst("esg")(state)
+
     def wait_for_all_analysts(self, state: AgentState, selected_analysts: list) -> str:
         """Determine if all selected analysts have completed their reports."""
         for analyst in selected_analysts:

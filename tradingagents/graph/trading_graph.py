@@ -118,6 +118,7 @@ class TradingAgentsGraph:
             self.deep_thinking_llm,
             self.tool_nodes,
             self.conditional_logic,
+            analyst_concurrency_limit=self.config.get("analyst_concurrency_limit", 1),
         )
 
         self.propagator = Propagator()
@@ -429,6 +430,7 @@ class TradingAgentsGraph:
         self,
         company_name,
         trade_date,
+        asset_type: str = "stock",
         user_research: str = "",
         progress_callback: Callable[[Dict[str, Any]], None] | None = None,
         target_profile: Dict[str, Any] | None = None,
@@ -466,6 +468,7 @@ class TradingAgentsGraph:
             return self._run_graph(
                 company_name,
                 trade_date,
+                asset_type=asset_type,
                 user_research=user_research,
                 progress_callback=progress_callback,
                 target_profile=target_profile,
@@ -480,6 +483,7 @@ class TradingAgentsGraph:
         self,
         company_name,
         trade_date,
+        asset_type: str = "stock",
         user_research: str = "",
         progress_callback: Callable[[Dict[str, Any]], None] | None = None,
         target_profile: Dict[str, Any] | None = None,
@@ -490,6 +494,7 @@ class TradingAgentsGraph:
         init_agent_state = self.propagator.create_initial_state(
             company_name,
             trade_date,
+            asset_type=asset_type,
             past_context=past_context,
             user_research=user_research,
             target_profile=target_profile,

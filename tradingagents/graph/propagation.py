@@ -19,6 +19,7 @@ class Propagator:
         self,
         company_name: str,
         trade_date: str,
+        asset_type: str = "stock",
         past_context: str = "",
         user_research: str = "",
         target_profile: Optional[Dict[str, Any]] = None,
@@ -27,6 +28,7 @@ class Propagator:
         return {
             "messages": [("human", company_name)],
             "company_of_interest": company_name,
+            "asset_type": asset_type,
             "trade_date": str(trade_date),
             "past_context": past_context,
             "user_research_report": user_research,

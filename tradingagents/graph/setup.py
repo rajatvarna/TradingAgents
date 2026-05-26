@@ -55,11 +55,13 @@ class GraphSetup:
         deep_thinking_llm: Any,
         tool_nodes: Dict[str, ToolNode],
         conditional_logic: ConditionalLogic,
+        analyst_concurrency_limit: int = 1,
     ):
         self.quick_thinking_llm = quick_thinking_llm
         self.deep_thinking_llm = deep_thinking_llm
         self.tool_nodes = tool_nodes
         self.conditional_logic = conditional_logic
+        self.analyst_concurrency_limit = analyst_concurrency_limit
 
     def setup_graph(self, selected_analysts: List[str] = None):
         """Set up and compile the agent workflow graph.
@@ -124,43 +126,73 @@ class GraphSetup:
         # join_analysts_node is defined per-call in _wire_analyst_branches.
 
     def _wire_analyst_branches(self, workflow: StateGraph, selected_analysts: List[str]) -> None:
-        """Wire parallel analyst fan-out, tool loops, clear nodes, and join."""
+        """Wire sequential or parallel analyst fan-out, tool loops, clear nodes, and join."""
+        plan = build_analyst_execution_plan(selected_analysts, concurrency_limit=self.analyst_concurrency_limit)
 
-        def join_analysts_node(state):
-            for analyst in selected_analysts:
-                key = ANALYST_REPORT_KEYS.get(analyst)
-                if key and not state.get(key):
-                    return {}
-            messages = state.get("messages", [])
-            removal_operations = [RemoveMessage(id=m.id) for m in messages]
-            placeholder = HumanMessage(content="Analysts finished their reports.")
-            return {"messages": removal_operations + [placeholder]}
+        if self.analyst_concurrency_limit == 1:
+            # Wire analysts sequentially (Upstream sequential flow)
+            # Start with the first analyst
+            workflow.add_edge(START, plan.specs[0].agent_node)
 
-        workflow.add_node("Join Analysts", join_analysts_node)
+            # Connect analysts in sequence
+            for i, spec in enumerate(plan.specs):
+                current_analyst = spec.agent_node
+                current_tools = spec.tool_node
+                current_clear = spec.clear_node
 
-        for analyst_type in selected_analysts:
-            a_node = analyst_node_name(analyst_type)
-            t_node = tools_node_name(analyst_type)
-            c_node = clear_node_name(analyst_type)
+                workflow.add_conditional_edges(
+                    current_analyst,
+                    self.conditional_logic.should_continue_analyst(spec.key),
+                    [current_tools, current_clear],
+                )
+                # Tool capture loop
+                workflow.add_edge(current_tools, f"Capture Tools {spec.key.capitalize()}")
+                workflow.add_edge(f"Capture Tools {spec.key.capitalize()}", current_analyst)
 
-            workflow.add_edge(START, a_node)
+                # Connect to next analyst or to Bull Researcher if this is the last analyst
+                if i < len(plan.specs) - 1:
+                    workflow.add_edge(current_clear, plan.specs[i + 1].agent_node)
+                else:
+                    workflow.add_edge(current_clear, "Bull Researcher")
+        else:
+            # Wire analysts in parallel (Local parallel flow with Join Analysts)
+            def join_analysts_node(state):
+                for analyst in selected_analysts:
+                    key = ANALYST_REPORT_KEYS.get(analyst)
+                    if key and not state.get(key):
+                        return {}
+                    if analyst == "sentiment" and not state.get("sentiment_report") and not state.get("social_report"):
+                        return {}
+                messages = state.get("messages", [])
+                removal_operations = [RemoveMessage(id=m.id) for m in messages]
+                placeholder = HumanMessage(content="Analysts finished their reports.")
+                return {"messages": removal_operations + [placeholder]}
+
+            workflow.add_node("Join Analysts", join_analysts_node)
+
+            for analyst_type in selected_analysts:
+                a_node = analyst_node_name(analyst_type)
+                t_node = tools_node_name(analyst_type)
+                c_node = clear_node_name(analyst_type)
+
+                workflow.add_edge(START, a_node)
+                workflow.add_conditional_edges(
+                    a_node,
+                    self.conditional_logic.should_continue_analyst(analyst_type),
+                    [t_node, c_node],
+                )
+                workflow.add_edge(t_node, f"Capture Tools {analyst_type.capitalize()}")
+                workflow.add_edge(f"Capture Tools {analyst_type.capitalize()}", a_node)
+                workflow.add_edge(c_node, "Join Analysts")
+
             workflow.add_conditional_edges(
-                a_node,
-                self.conditional_logic.should_continue_analyst(analyst_type),
-                [t_node, c_node],
+                "Join Analysts",
+                partial(
+                    self.conditional_logic.wait_for_all_analysts,
+                    selected_analysts=selected_analysts,
+                ),
+                {"continue": "Bull Researcher", "wait": END},
             )
-            workflow.add_edge(t_node, f"Capture Tools {analyst_type.capitalize()}")
-            workflow.add_edge(f"Capture Tools {analyst_type.capitalize()}", a_node)
-            workflow.add_edge(c_node, "Join Analysts")
-
-        workflow.add_conditional_edges(
-            "Join Analysts",
-            partial(
-                self.conditional_logic.wait_for_all_analysts,
-                selected_analysts=selected_analysts,
-            ),
-            {"continue": "Bull Researcher", "wait": END},
-        )
 
     def _wire_fixed_flow(self, workflow: StateGraph, selected_analysts: List[str]) -> None:
         """Wire the research debate, trader, risk debate, and portfolio manager."""

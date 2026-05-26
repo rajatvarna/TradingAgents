@@ -70,14 +70,21 @@ def _resolve_company_name(ticker: str) -> str | None:
         return None
 
 
-def build_instrument_context(ticker: str) -> str:
+def build_instrument_context(ticker: str, asset_type: str = "stock") -> str:
     """Describe the exact instrument so agents preserve exchange-qualified tickers."""
     name = _resolve_company_name(ticker)
     name_clause = f" ({name})" if name else ""
+    instrument_label = "asset" if asset_type == "crypto" else "instrument"
+    extra_hint = (
+        " Treat it as a crypto asset rather than a company, and do not assume company fundamentals are available."
+        if asset_type == "crypto"
+        else ""
+    )
     return (
-        f"The instrument to analyze is `{ticker}`{name_clause}. "
+        f"The {instrument_label} to analyze is `{ticker}`{name_clause}. "
         "Use this exact ticker in every tool call, report, and recommendation, "
-        "preserving any exchange suffix (e.g. `.TO`, `.L`, `.HK`, `.T`)."
+        "preserving any exchange suffix (e.g. `.TO`, `.L`, `.HK`, `.T`, `-USD`)."
+        + extra_hint
     )
 
 def trim_debate_history(history: str, max_turns: int = 4) -> str:

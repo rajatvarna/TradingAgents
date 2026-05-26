@@ -33,6 +33,11 @@ from cli.models import AnalystType
 from cli.utils import *
 from cli.announcements import fetch_announcements, display_announcements
 from cli.stats_handler import StatsCallbackHandler
+from tradingagents.graph.analyst_execution import (
+    build_analyst_execution_plan,
+    AnalystWallTimeTracker,
+    sync_analyst_tracker_from_chunk,
+)
 
 console = Console()
 
@@ -597,7 +602,8 @@ def get_user_selections(batch_mode: bool = False):
             "Step 5: Analysts Team", "Select your LLM analyst agents for the analysis"
         )
     )
-    selected_analysts = select_analysts()
+    asset_type = detect_asset_type(selected_tickers[0])
+    selected_analysts = select_analysts(asset_type)
     console.print(
         f"[green]Selected analysts:[/green] {', '.join(analyst.value for analyst in selected_analysts)}"
     )
@@ -685,6 +691,7 @@ def get_user_selections(batch_mode: bool = False):
         "market": selected_market,
         "analysis_date": analysis_date,
         "analysts": selected_analysts,
+        "asset_type": asset_type,
         "research_depth": selected_research_depth,
         "llm_provider": selected_llm_provider.lower(),
         "backend_url": backend_url,
@@ -868,7 +875,7 @@ ANALYST_AGENT_NAMES = {
 from tradingagents.graph.constants import ANALYST_REPORT_KEYS as ANALYST_REPORT_MAP
 
 
-def update_analyst_statuses(message_buffer, chunk):
+def update_analyst_statuses(message_buffer, chunk, wall_time_tracker=None):
     """Update analyst statuses based on accumulated report state.
 
     Logic:
@@ -879,6 +886,9 @@ def update_analyst_statuses(message_buffer, chunk):
     - Remaining analysts without reports = pending
     - When all analysts done, set Bull Researcher to in_progress
     """
+    if wall_time_tracker is not None:
+        sync_analyst_tracker_from_chunk(wall_time_tracker, chunk)
+
     selected = message_buffer.selected_analysts
     found_active = False
 
@@ -910,7 +920,7 @@ def update_analyst_statuses(message_buffer, chunk):
             message_buffer.update_agent_status("Bull Researcher", "in_progress")
 
 
-def handle_stream_chunk(buffer, chunk):
+def handle_stream_chunk(buffer, chunk, wall_time_tracker=None):
     """Apply a single graph stream chunk to the message buffer.
 
     Pure state mutation — no rendering side effects. Safe to call from a
@@ -936,7 +946,7 @@ def handle_stream_chunk(buffer, chunk):
                     buffer.add_tool_call(tool_call.name, tool_call.args)
 
     # Analyst statuses derived from accumulated report state
-    update_analyst_statuses(buffer, chunk)
+    update_analyst_statuses(buffer, chunk, wall_time_tracker=wall_time_tracker)
 
     # Research Team — investment debate
     if chunk.get("investment_debate_state"):
@@ -1120,6 +1130,11 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
 
     selected_analyst_keys = [a for a in ANALYST_ORDER if a in {analyst.value for analyst in selections["analysts"]}]
 
+    # Build analyst execution plan and instantiate wall time tracker
+    concurrency_limit = config.get("analyst_concurrency_limit", 1)
+    analyst_execution_plan = build_analyst_execution_plan(selected_analyst_keys, concurrency_limit=concurrency_limit)
+    wall_time_tracker = AnalystWallTimeTracker(analyst_execution_plan)
+
     graph = TradingAgentsGraph(
         selected_analyst_keys,
         config=config,
@@ -1208,7 +1223,7 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
             update_display(layout, spinner_text, stats_handler=stats_handler, start_time=start_time)
 
             init_agent_state = graph.propagator.create_initial_state(
-                ticker, selections["analysis_date"]
+                ticker, selections["analysis_date"], asset_type=selections.get("asset_type", "stock")
             )
             args = graph.propagator.get_graph_args(callbacks=[stats_handler])
 
@@ -1232,7 +1247,7 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
                             else:
                                 message_buffer.add_tool_call(tool_call.name, tool_call.args)
 
-                update_analyst_statuses(message_buffer, chunk)
+                update_analyst_statuses(message_buffer, chunk, wall_time_tracker=wall_time_tracker)
 
                 if chunk.get("investment_debate_state"):
                     debate_state = chunk["investment_debate_state"]
@@ -1343,7 +1358,7 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
             message_buffer.update_agent_status(analyst_name, "in_progress")
 
         init_agent_state = graph.propagator.create_initial_state(
-            ticker, selections["analysis_date"]
+            ticker, selections["analysis_date"], asset_type=selections.get("asset_type", "stock")
         )
         args = graph.propagator.get_graph_args(callbacks=[stats_handler])
 
@@ -1356,6 +1371,7 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
             start_time=start_time,
             ticker=ticker,
             analysis_date=selections["analysis_date"],
+            wall_time_tracker=wall_time_tracker,
         )
         tui.run()
         trace = tui.trace
@@ -1371,6 +1387,10 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
         for section in message_buffer.report_sections.keys():
             if section in final_state:
                 message_buffer.update_report_section(section, final_state[section])
+
+    console.print()
+    console.print(Rule("Analyst Wall Time Summary", style="bold cyan"))
+    console.print(wall_time_tracker.format_summary())
 
     if auto_save:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

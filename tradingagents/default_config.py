@@ -63,6 +63,7 @@ DEFAULT_CONFIG = {
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
+    "analyst_concurrency_limit": 1,
     "data_vendors": {
         "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance, b3
         "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance, b3

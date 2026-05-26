@@ -41,6 +41,13 @@ def create_bull_researcher(llm):
             current_response=current_response,
             scope_guard=scope_guard,
         )
+        asset_type = state.get("asset_type", "stock")
+        if asset_type != "stock":
+            prompt = (
+                prompt.replace("investing in the stock", "investing in the asset")
+                .replace("Company fundamentals report", "Asset fundamentals report (may be unavailable for crypto)")
+                .replace("the company's market opportunities", "the asset's market opportunities")
+            )
         prompt += get_language_instruction()
 
         response = invoke_with_retry(llm, prompt)

@@ -6,6 +6,7 @@ from .base_client import BaseLLMClient
 _OPENAI_COMPATIBLE = (
     "openai", "xai", "deepseek", "qwen", "glm", "ollama", "ollama_cloud",
     "openrouter", "deepinfra", "mimo", "custom_openai", "lm-studio", "llama-cpp",
+    "minimax",
 )
 
 

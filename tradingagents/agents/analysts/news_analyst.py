@@ -15,7 +15,11 @@ from tradingagents.prompts import load_prompt
 def create_news_analyst(llm):
     def news_analyst_node(state):
         current_date = state["trade_date"]
-        instrument_context = build_instrument_context(state["company_of_interest"])
+        asset_type = state.get("asset_type", "stock")
+        asset_label = "company" if asset_type == "stock" else "asset"
+        instrument_context = build_instrument_context(
+            state["company_of_interest"], asset_type
+        )
         scope_guard = build_scope_guard(state["company_of_interest"])
 
         tools = [
@@ -25,6 +29,8 @@ def create_news_analyst(llm):
 
         system_message = (
             load_prompt("news_analyst")
+            .replace("{company}", asset_label)
+            .replace("{asset_label}", asset_label)
             + f" {scope_guard}"
             + get_language_instruction()
             + get_horizon_instruction()

@@ -15,7 +15,7 @@ the `refresh_per_second=4` of the classic renderer.
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from rich import box
 from rich.spinner import Spinner
@@ -179,6 +179,7 @@ class TradingApp(App):
         ticker: str,
         analysis_date: str,
         on_complete: Callable[[list[Any]], None] | None = None,
+        wall_time_tracker: Optional[AnalystWallTimeTracker] = None,
     ):
         super().__init__()
         self.buffer = buffer
@@ -190,6 +191,7 @@ class TradingApp(App):
         self.ticker = ticker
         self.analysis_date = analysis_date
         self.on_complete = on_complete
+        self.wall_time_tracker = wall_time_tracker
         self.trace: list[Any] = []
         self._stream_error: BaseException | None = None
         self.title = "TradingAgents"
@@ -230,7 +232,7 @@ class TradingApp(App):
             for chunk in self.graph.graph.stream(
                 self.init_agent_state, **self.graph_args
             ):
-                handle_stream_chunk(self.buffer, chunk)
+                handle_stream_chunk(self.buffer, chunk, wall_time_tracker=self.wall_time_tracker)
                 self.trace.append(chunk)
         except BaseException as exc:  # noqa: BLE001 — re-raised on main thread
             self._stream_error = exc

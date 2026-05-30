@@ -378,8 +378,11 @@ def _artifact_path(uri: str) -> Path | None:
     if not uri:
         return None
     if uri.startswith("file://"):
-        parsed = urlparse(uri)
-        return Path(parsed.path)
+        path_str = uri[7:]
+        if path_str.startswith("/"):
+            if len(path_str) >= 3 and path_str[1].isalpha() and path_str[2] == ":":
+                path_str = path_str[1:]
+        return Path(path_str)
     return Path(uri)
 
 

@@ -16,7 +16,14 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
 import json
 import os
 import re
@@ -43,7 +50,8 @@ from tradingagents.dataflows.range_stats import (
 
 PYTHON_BIN = os.getenv("TRADINGAGENTS_PYTHON_BIN", sys.executable)
 WORKER_PATH = str(_ROOT / "worker.py")
-LOCK_PATH = "/tmp/trading-scheduler.lock"
+import tempfile
+LOCK_PATH = os.path.join(tempfile.gettempdir(), "trading-scheduler.lock")
 WEBUI_BASE_URL = os.getenv("WEBUI_PUBLIC_URL", "http://localhost:8501")
 
 
@@ -327,11 +335,18 @@ def _process_user(slug: str, prefs: dict[str, Any], *, dry_run: bool) -> None:
 def _acquire_host_lock() -> int | None:
     """Single-instance file lock so two scheduler runs can't trample."""
     fd = os.open(LOCK_PATH, os.O_CREAT | os.O_RDWR, 0o644)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        os.close(fd)
-        return None
+    if fcntl:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (BlockingIOError, PermissionError):
+            os.close(fd)
+            return None
+    elif msvcrt:
+        try:
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        except (OSError, IOError):
+            os.close(fd)
+            return None
     os.write(fd, f"{os.getpid()}\n".encode())
     return fd
 

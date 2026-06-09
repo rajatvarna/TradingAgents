@@ -27,6 +27,10 @@ from rich import box
 from rich.align import Align
 from rich.rule import Rule
 import questionary
+import socket
+import subprocess
+import sys
+import webbrowser
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
@@ -68,6 +72,14 @@ app = typer.Typer(
     help="TradingAgents CLI: Multi-Agents LLM Financial Trading Framework",
     add_completion=True,  # Enable shell completion
 )
+
+
+def _port_open(port: int) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+            return True
+    except OSError:
+        return False
 
 
 # Create a deque to store recent messages with a maximum length
@@ -1437,12 +1449,11 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
             report_file = save_report_to_disk(final_state, ticker, save_path)
             console.print(f"[green]✓ Report saved to:[/green] {save_path.resolve()}")
             console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
-
             # Write meta.json with current_price and company info
             meta = {}
             try:
                 import yfinance as yf
-                ticker_obj = yf.Ticker(selections["ticker"])
+                ticker_obj = yf.Ticker(ticker)
                 info = ticker_obj.fast_info
                 price = getattr(info, "last_price", None) or getattr(info, "previous_close", None)
                 if price:
@@ -1452,9 +1463,32 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
                     meta["company"] = long_name
             except Exception:
                 pass
-            meta["ticker"] = selections["ticker"]
-            meta["analysis_date"] = selections["analysis_date"]
+            meta["ticker"] = ticker
+            meta["analysis_date"] = selections.get("analysis_date") or selections.get("trade_date")
             (save_path / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+            _viewer = Path(__file__).resolve().parent.parent / "Trading Reports.html"
+            if _viewer.exists():
+                _manifest = Path(__file__).resolve().parent.parent / "scripts" / "generate_manifest.py"
+                if _manifest.exists():
+                    subprocess.run(
+                        [sys.executable, str(_manifest)],
+                        check=False,
+                        capture_output=True,
+                    )
+                _serve = Path(__file__).resolve().parent.parent / "serve.py"
+                if not _port_open(7788) and _serve.exists():
+                    subprocess.Popen(
+                        [sys.executable, str(_serve)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    time.sleep(1.0)
+                if _port_open(7788):
+                    _url = f"http://localhost:7788/Trading%20Reports.html#/r/{save_path.name}"
+                    if webbrowser.open(_url):
+                        console.print(f"\n[bold cyan]Report viewer opened in browser[/bold cyan]")
+                        console.print(f"  [dim]URL:[/dim] {_url}")
         except Exception as e:
             console.print(f"[red]Error saving report: {e}[/red]")
     else:

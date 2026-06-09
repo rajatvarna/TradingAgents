@@ -88,6 +88,13 @@ class ResearchPlan(BaseModel):
             "including position sizing guidance consistent with the rating."
         ),
     )
+    bull_weight: float = Field(
+        description=(
+            "Fraction of weight given to the bull thesis, 0.0 (bear dominates) "
+            "to 1.0 (bull dominates). Assign based on the quality and quantity "
+            "of compelling arguments on each side of the debate."
+        ),
+    )
 
 
 def render_research_plan(plan: ResearchPlan) -> str:
@@ -98,6 +105,8 @@ def render_research_plan(plan: ResearchPlan) -> str:
         f"**Rationale**: {plan.rationale}",
         "",
         f"**Strategic Actions**: {plan.strategic_actions}",
+        "",
+        f"**Bull Weight**: {plan.bull_weight}",
     ])
 
 
@@ -201,9 +210,14 @@ class PortfolioDecision(BaseModel):
         ),
     )
     confidence: float = Field(
-        description="Confidence level from 0.0 to 1.0 reflecting how strongly the evidence supports the rating.",
         ge=0.0,
         le=1.0,
+        description=(
+            "Your conviction in this recommendation, from 0.0 (very uncertain) "
+            "to 1.0 (very certain). Base it on: convergence of analyst views, "
+            "strength of supporting evidence, clarity of the bull/bear debate "
+            "outcome, and degree of risk analyst agreement."
+        ),
     )
     executive_summary: str = Field(
         description=(
@@ -238,7 +252,8 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
     """
     parts = [
         f"**Rating**: {decision.rating.value}",
-        f"**Confidence**: {decision.confidence:.2f}",
+        "",
+        f"**Confidence**: {decision.confidence}",
         "",
         f"**Executive Summary**: {decision.executive_summary}",
         "",

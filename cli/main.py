@@ -2,6 +2,7 @@ import re
 import os
 from typing import Optional
 import datetime
+import json
 import typer
 from pathlib import Path
 from functools import wraps
@@ -1436,6 +1437,24 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
             report_file = save_report_to_disk(final_state, ticker, save_path)
             console.print(f"[green]✓ Report saved to:[/green] {save_path.resolve()}")
             console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
+
+            # Write meta.json with current_price and company info
+            meta = {}
+            try:
+                import yfinance as yf
+                ticker_obj = yf.Ticker(selections["ticker"])
+                info = ticker_obj.fast_info
+                price = getattr(info, "last_price", None) or getattr(info, "previous_close", None)
+                if price:
+                    meta["current_price"] = round(float(price), 4)
+                long_name = ticker_obj.info.get("longName", "")
+                if long_name:
+                    meta["company"] = long_name
+            except Exception:
+                pass
+            meta["ticker"] = selections["ticker"]
+            meta["analysis_date"] = selections["analysis_date"]
+            (save_path / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
         except Exception as e:
             console.print(f"[red]Error saving report: {e}[/red]")
     else:

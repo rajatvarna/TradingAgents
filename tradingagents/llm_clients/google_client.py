@@ -1,5 +1,8 @@
+import asyncio
 import os
 import threading
+import time
+import warnings
 from typing import Any, Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -46,13 +49,93 @@ class NormalizedChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
     never trigger a 429; they wait for the next available slot instead.
     """
 
+    @staticmethod
+    def _is_rate_limited(exc: Exception) -> bool:
+        msg = str(exc).lower()
+        return (
+            "429" in msg
+            or "resource_exhausted" in msg
+            or "rate limit" in msg
+            or "too many requests" in msg
+        )
+
+    @staticmethod
+    def _rate_limit_delay_seconds() -> int:
+        raw = os.getenv("GOOGLE_429_RETRY_DELAY_SECONDS", "60").strip()
+        try:
+            value = int(raw)
+        except ValueError:
+            return 60
+        return value if value > 0 else 60
+
+    def _invoke_with_rate_limit_retry(self, call):
+        try:
+            return call()
+        except Exception as exc:
+            if not self._is_rate_limited(exc):
+                raise
+            delay = self._rate_limit_delay_seconds()
+            warnings.warn(
+                (
+                    f"Google API rate limit encountered (429). "
+                    f"Retrying once after {delay} seconds."
+                ),
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            time.sleep(delay)
+            return call()
+
+    async def _ainvoke_with_rate_limit_retry(self, call):
+        try:
+            return await call()
+        except Exception as exc:
+            if not self._is_rate_limited(exc):
+                raise
+            delay = self._rate_limit_delay_seconds()
+            warnings.warn(
+                (
+                    f"Google API rate limit encountered (429). "
+                    f"Retrying once after {delay} seconds."
+                ),
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            await asyncio.sleep(delay)
+            return await call()
+
     def invoke(self, input, config=None, **kwargs):
         _get_google_rate_limiter(self.model).acquire()
-        return normalize_content(llm_retry(super().invoke, input, config, **kwargs))
+        parent_invoke = super().invoke
+        response = self._invoke_with_rate_limit_retry(
+            lambda: llm_retry(parent_invoke, input, config, **kwargs)
+        )
+        return normalize_content(response)
+
+    def _generate(self, *args, **kwargs):
+        _get_google_rate_limiter(self.model).acquire()
+        parent_generate = super()._generate
+        return self._invoke_with_rate_limit_retry(
+            lambda: parent_generate(*args, **kwargs)
+        )
+
+    async def _agenerate(self, *args, **kwargs):
+        _get_google_rate_limiter(self.model).acquire()
+        parent_agenerate = super()._agenerate
+        return await self._ainvoke_with_rate_limit_retry(
+            lambda: parent_agenerate(*args, **kwargs)
+        )
 
 
 class GoogleClient(BaseLLMClient):
     """Client for Google Gemini models."""
+
+    _MODEL_ALIASES = {
+        # Removed or short-lived preview IDs: route to stable 2.5 equivalents.
+        "gemini-3.1-flash-lite-preview": "gemini-2.5-flash-lite",
+        "gemini-3.1-pro-preview": "gemini-2.5-pro",
+        "gemini-3-flash-preview": "gemini-2.5-flash",
+    }
 
     def __init__(self, model: str, base_url: Optional[str] = None, **kwargs):
         super().__init__(model, base_url, **kwargs)
@@ -60,7 +143,19 @@ class GoogleClient(BaseLLMClient):
     def get_llm(self) -> Any:
         """Return configured ChatGoogleGenerativeAI instance."""
         self.warn_if_unknown_model()
-        llm_kwargs = {"model": self.model}
+        requested_model = self.model
+        model = self._MODEL_ALIASES.get(requested_model, requested_model)
+        if model != requested_model:
+            warnings.warn(
+                (
+                    f"Google model '{requested_model}' is deprecated or unavailable; "
+                    f"using fallback '{model}'."
+                ),
+                UserWarning,
+                stacklevel=2,
+            )
+
+        llm_kwargs = {"model": model}
 
         if self.base_url:
             llm_kwargs["base_url"] = self.base_url
@@ -80,7 +175,7 @@ class GoogleClient(BaseLLMClient):
         # Gemini 2.5: thinking_budget (0=disable, -1=dynamic)
         thinking_level = self.kwargs.get("thinking_level")
         if thinking_level:
-            model_lower = self.model.lower()
+            model_lower = model.lower()
             if "gemini-3" in model_lower:
                 # Gemini 3 Pro doesn't support "minimal", use "low" instead
                 if "pro" in model_lower and thinking_level == "minimal":

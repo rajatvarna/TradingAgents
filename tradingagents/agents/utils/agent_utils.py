@@ -1,9 +1,12 @@
 import json
-
+from typing import Any, Dict, List, Optional
+import logging
 from langchain_core.messages import HumanMessage, RemoveMessage
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+# Import tools from separate utility files
 from tradingagents.agents.utils.core_stock_tools import get_stock_data
+from tradingagents.agents.utils.technical_indicators_tools import get_indicators
 from tradingagents.agents.utils.fundamental_data_tools import (
     get_balance_sheet,
     get_cashflow,
@@ -15,19 +18,17 @@ from tradingagents.agents.utils.news_data_tools import (
     get_insider_transactions,
     get_news,
 )
-<<<<<<< HEAD
 from tradingagents.agents.utils.range_stats_tool import (
     get_range_stats,
 )
 from tradingagents.agents.utils.trade_levels_tools import (
-    suggest_trade_levels
+    suggest_trade_levels,
+)
+from tradingagents.agents.utils.options_tools import (
+    get_options_chain,
+    calculate_put_call_ratio,
 )
 
-# Re-export the analyst tools imported above so this module remains the
-# single import surface the analysts depend on. Declaring `__all__`
-# explicitly prevents lint/type tools (ruff F401, pyright reportUnusedImport,
-# etc.) from flagging — and potentially auto-deleting — these imports as
-# "unused" in this file.
 __all__ = [
     "build_instrument_context",
     "create_msg_delete",
@@ -41,26 +42,27 @@ __all__ = [
     "get_language_instruction",
     "get_news",
     "get_stock_data",
+    "get_range_stats",
+    "suggest_trade_levels",
+    "get_options_chain",
+    "calculate_put_call_ratio",
+    "build_cacheable_system_content",
+    "get_horizon_instruction",
+    "build_scope_guard",
+    "invoke_with_retry",
+    "get_instrument_context_from_state",
+    "trim_debate_history",
 ]
-=======
-from tradingagents.agents.utils.technical_indicators_tools import get_indicators
->>>>>>> pr/894
 
 
 def get_language_instruction() -> str:
-    """
-    Return a prompt instruction for the configured output language.
+    """Return a prompt instruction for the configured output language.
 
     Returns empty string when English (default), so no extra tokens are used.
-<<<<<<< HEAD
-    Only applied to user-facing agents (analysts, portfolio manager).
-    Internal debate agents stay in English for reasoning quality.
-=======
     Applied to every agent whose output reaches the saved report — analysts,
     researchers, debaters, research manager, trader, and portfolio manager —
     so a non-English run produces a fully localized report rather than a mix
     of languages.
->>>>>>> pr/894
     """
     from tradingagents.dataflows.config import get_config
 
@@ -139,7 +141,6 @@ def build_instrument_context(ticker: str, asset_type: str = "stock") -> str:
     )
 
 
-<<<<<<< HEAD
 def get_instrument_context_from_state(state: dict) -> str:
     """Extract ticker and asset type from state to build tool-calling prompt context."""
     ticker = state["company_of_interest"]
@@ -211,6 +212,8 @@ def _build_workflow_placeholder(state) -> HumanMessage:
             "Do not treat this placeholder as a standalone user request."
         )
     )
+
+
 def create_msg_delete():
     def delete_messages(state):
         """Clear messages and add a context-aware placeholder for compatibility."""

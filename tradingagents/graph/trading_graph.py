@@ -42,6 +42,8 @@ from tradingagents.agents.utils.agent_utils import (
     get_news,
     get_insider_transactions,
     get_global_news,
+    get_options_chain,
+    calculate_put_call_ratio,
 )
 from tradingagents.agents.utils.options_tools import get_options_data
 from tradingagents.agents.utils.esg_data_tools import get_esg_scores, get_esg_news
@@ -188,6 +190,12 @@ class TradingAgentsGraph:
             if thinking_level:
                 kwargs["thinking_level"] = thinking_level
 
+        elif provider == "openrouter":
+            # Free-tier OpenRouter models enforce strict per-minute rate limits and
+            # can be globally congested.  max_retries tells the underlying openai
+            # SDK to honour the Retry-After header and automatically back off.
+            kwargs["max_retries"] = int(self.config.get("openrouter_max_retries", 6))
+
         elif provider == "openai":
             reasoning_effort = self.config.get("openai_reasoning_effort")
             if reasoning_effort:
@@ -215,6 +223,9 @@ class TradingAgentsGraph:
                     get_stock_data,
                     # Technical indicators
                     get_indicators,
+                    # Options chain and put/call ratio analysis
+                    get_options_chain,
+                    calculate_put_call_ratio,
                 ]
             ),
             "social": ToolNode(
@@ -568,12 +579,30 @@ class TradingAgentsGraph:
             )
             final_state = self._stream_graph_with_progress(init_agent_state, args, progress_callback)
         elif self.debug:
-            final_state = None
+            trace = []
+            step = 0
+            _prev: dict = {}
             for chunk in self.graph.stream(init_agent_state, **args):
-                if chunk.get("messages"):
-                    chunk["messages"][-1].pretty_print()
-                # Only keep the latest chunk — avoids unbounded memory in long runs.
-                final_state = chunk
+                msgs = chunk.get("messages", [])
+                if not msgs:
+                    continue
+                step += 1
+                last_msg = msgs[-1]
+                # LangGraph sets .name on AI messages to the node/agent name
+                node_name = getattr(last_msg, "name", None) or chunk.get("sender", "")
+                stage_hint = _stage_from_state(chunk, _prev)
+                label = node_name or stage_hint or "Processing"
+                print(f"\n{'─' * 62}")
+                print(f"[Step {step}] ▶  {label}{('  (' + stage_hint + ')') if stage_hint and stage_hint != label else ''}")
+                print(f"{'─' * 62}")
+                last_msg.pretty_print()
+                trace.append(chunk)
+                _prev = chunk
+            # Streamed chunks are per-node deltas. Merge them so the returned
+            # state matches what graph.invoke() yields in the non-debug path.
+            final_state = {}
+            for chunk in trace:
+                final_state.update(chunk)
         else:
             final_state = self.graph.invoke(init_agent_state, **args)
 
@@ -769,7 +798,6 @@ class TradingAgentsGraph:
             "pre_synthesis_scope_audit": final_state.get("pre_synthesis_scope_audit", {}),
             "raw_tool_outputs": final_state.get("raw_tool_outputs", []),
         }
-
         # Save to file. Reject ticker values that would escape the
         # results directory when joined as a path component.
         safe_ticker = safe_ticker_component(self.ticker)
@@ -918,3 +946,31 @@ class TradingAgentsGraph:
     def process_signal(self, full_signal):
         """Process a signal to extract the core decision."""
         return self.signal_processor.process_signal(full_signal)
+
+
+def _stage_from_state(state: dict, prev: dict) -> str:
+    """Infer which major pipeline stage just completed from newly populated state fields."""
+
+    def _new(key: str) -> bool:
+        return bool(state.get(key)) and not bool(prev.get(key))
+
+    def _new_nested(k1: str, k2: str) -> bool:
+        return bool((state.get(k1) or {}).get(k2)) and not bool((prev.get(k1) or {}).get(k2))
+
+    if _new("final_trade_decision"):
+        return "Portfolio Manager - Final Decision"
+    if _new_nested("risk_debate_state", "judge_decision"):
+        return "Risk Debate Complete"
+    if _new("trader_investment_plan"):
+        return "Trader - Plan Ready"
+    if _new_nested("investment_debate_state", "judge_decision"):
+        return "Research Manager - Debate Concluded"
+    if _new("fundamentals_report"):
+        return "Fundamentals Analyst - Done"
+    if _new("news_report"):
+        return "News Analyst - Done"
+    if _new("sentiment_report"):
+        return "Social Media Analyst - Done"
+    if _new("market_report"):
+        return "Market Analyst - Done"
+    return ""

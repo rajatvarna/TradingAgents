@@ -22,9 +22,9 @@ DEFAULT_CONFIG = {
     # Pending entries are never pruned. None disables rotation entirely.
     "memory_log_max_entries": None,
     # LLM settings
-    "llm_provider": "openai",
-    "deep_think_llm": "gpt-5.4",
-    "quick_think_llm": "gpt-5.4-mini",
+    "llm_provider": "google",
+    "deep_think_llm": "gemini-2.5-pro",
+    "quick_think_llm": "gemini-2.5-flash-lite",
     # T0.1 — deterministic generation defaults.  Reproducibility floor for
     # the audit trail: with these pinned, two runs against the same
     # (ticker, date, prompt, snapshot) should produce ε-close outputs, and

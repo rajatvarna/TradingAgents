@@ -50,12 +50,9 @@ def create_news_analyst(llm):
                     " will help where you left off. Execute what you can to make progress."
                     " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
                     " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
-                    " You have access to the following tools: {tool_names}.
-"
-                    "Analysis context:
-"
-                    "- Current date: {current_date}
-"
+                    " You have access to the following tools: {tool_names}.\n"
+                    "Analysis context:\n"
+                    "- Current date: {current_date}\n"
                     "- Instrument context: {instrument_context}",
                 ),
                 MessagesPlaceholder(variable_name="messages"),

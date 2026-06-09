@@ -46,6 +46,10 @@ dependencies = [
     "pandas-market-calendars>=4.4.0",
     "robin-stocks>=3.0.0",
     "pypdf>=4.0,<6",
+    # Dashboard dependencies (optional — only needed when running the dashboard process)
+    "dash>=2.18.0",
+    "plotly>=5.24.0",
+    "scipy>=1.14.0",
 ]
 
 [project.optional-dependencies]

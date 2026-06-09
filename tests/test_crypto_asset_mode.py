@@ -1,41 +1,56 @@
-import pytest
-from unittest.mock import MagicMock, patch
-from tradingagents.agents.utils.agent_utils import build_instrument_context
-from tradingagents.agents.analysts.market_analyst import create_market_analyst
+import unittest
 
-def test_build_instrument_context_stock():
-    context = build_instrument_context("AAPL", asset_type="stock")
-    assert "instrument" in context
-    assert "asset" not in context
-    assert "Treat it as a crypto asset" not in context
+from cli.models import AnalystType, AssetType
+from cli.utils import detect_asset_type, filter_analysts_for_asset_type
+from tradingagents.graph.propagation import Propagator
 
-def test_build_instrument_context_crypto():
-    context = build_instrument_context("BTC-USD", asset_type="crypto")
-    assert "asset" in context
-    assert "Treat it as a crypto asset rather than a company" in context
-    assert "do not assume company fundamentals are available" in context
 
-def test_market_analyst_crypto_mode():
-    mock_llm = MagicMock()
-    mock_llm.bind_tools.return_value = mock_llm
+class CryptoAssetModeTests(unittest.TestCase):
+    def test_detects_crypto_pair_symbols(self):
+        self.assertEqual(detect_asset_type("BTC-USD"), AssetType.CRYPTO)
+        self.assertEqual(detect_asset_type("eth-usd"), AssetType.CRYPTO)
 
-    node = create_market_analyst(mock_llm)
-    
-    state = {
-        "company_of_interest": "BTC-USD",
-        "trade_date": "2026-05-26",
-        "asset_type": "crypto",
-        "messages": [("human", "BTC-USD")]
-    }
-    
-    with patch("tradingagents.agents.analysts.market_analyst.invoke_with_retry") as mock_invoke, \
-         patch("tradingagents.agents.analysts.market_analyst.load_prompt", return_value="Market analyst prompt."):
-        mock_result = MagicMock()
-        mock_result.tool_calls = []
-        mock_result.content = "Crypto market report"
-        mock_invoke.return_value = mock_result
-        
-        res = node(state)
-        
-    assert res["market_report"] == "Crypto market report"
-    mock_invoke.assert_called_once()
+    def test_defaults_non_crypto_symbols_to_stock(self):
+        self.assertEqual(detect_asset_type("AAPL"), AssetType.STOCK)
+        self.assertEqual(detect_asset_type("SPY"), AssetType.STOCK)
+
+    def test_filters_out_fundamentals_analyst_for_crypto(self):
+        analysts = [
+            AnalystType.MARKET,
+            AnalystType.SOCIAL,
+            AnalystType.NEWS,
+            AnalystType.FUNDAMENTALS,
+        ]
+
+        self.assertEqual(
+            filter_analysts_for_asset_type(analysts, AssetType.CRYPTO),
+            [
+                AnalystType.MARKET,
+                AnalystType.SOCIAL,
+                AnalystType.NEWS,
+            ],
+        )
+
+    def test_keeps_all_analysts_for_stock(self):
+        analysts = [
+            AnalystType.MARKET,
+            AnalystType.SOCIAL,
+            AnalystType.NEWS,
+            AnalystType.FUNDAMENTALS,
+        ]
+
+        self.assertEqual(
+            filter_analysts_for_asset_type(analysts, AssetType.STOCK),
+            analysts,
+        )
+
+    def test_propagator_includes_asset_type_in_initial_state(self):
+        state = Propagator().create_initial_state(
+            "BTC-USD", "2026-04-18", asset_type=AssetType.CRYPTO.value
+        )
+
+        self.assertEqual(state["asset_type"], AssetType.CRYPTO.value)
+
+
+if __name__ == "__main__":
+    unittest.main()

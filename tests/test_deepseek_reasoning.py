@@ -5,9 +5,10 @@ Two pieces verified:
 1. ``reasoning_content`` is captured on receive into the AIMessage's
    ``additional_kwargs`` and re-attached on send so DeepSeek's API
    sees the same value across turns.
-2. ``with_structured_output`` raises NotImplementedError for all
-   DeepSeek models so the agent factories' free-text fallback handles
-   the request instead of failing at runtime with HTTP 400.
+2. ``with_structured_output`` consults the capability table and
+   suppresses ``tool_choice`` for models that reject it (V4 + reasoner),
+   matching DeepSeek's official tool-calling pattern at
+   https://api-docs.deepseek.com/guides/tool_calls.
 """
 
 import os
@@ -15,6 +16,7 @@ import os
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompt_values import ChatPromptValue
+from pydantic import BaseModel
 
 from tradingagents.llm_clients.openai_client import (
     DeepSeekChatOpenAI,
@@ -115,65 +117,111 @@ class TestDeepSeekReasoningContent:
 
 
 # ---------------------------------------------------------------------------
-# deepseek-reasoner: structured output binding and capability-aware dispatch
+# Capability-driven structured output: tool_choice suppressed for V4 + reasoner
 # ---------------------------------------------------------------------------
 
 
+def _bound_kwargs(runnable):
+    """Extract bind() kwargs from a with_structured_output result."""
+    first = runnable.steps[0] if hasattr(runnable, "steps") else runnable
+    return getattr(first, "kwargs", {})
+
+
 @pytest.mark.unit
-class TestDeepSeekReasonerStructuredOutput:
-    def test_with_structured_output_binds_without_tool_choice_for_reasoner(self):
-        """For deepseek-reasoner, structured output is bound using function calling,
-        but tool_choice is suppressed to avoid API errors.
-        """
-        client = DeepSeekChatOpenAI(
-            model="deepseek-reasoner",
-            api_key="placeholder",
-            base_url="https://api.deepseek.com",
+class TestStructuredOutputCapabilityDispatch:
+    """DeepSeek V4 and reasoner reject the tool_choice parameter
+    (official guide: api-docs.deepseek.com/guides/tool_calls passes
+    tools=[...] without tool_choice). Verify the capability dispatch
+    suppresses tool_choice for those models and sends it for chat."""
+
+    class _Sample(BaseModel):
+        answer: str
+
+    def _client(self, model):
+        return DeepSeekChatOpenAI(
+            model=model, api_key="placeholder", base_url="https://api.deepseek.com",
         )
-        from pydantic import BaseModel
 
-        class _Sample(BaseModel):
-            answer: str
+    def test_chat_sends_tool_choice(self):
+        bound = self._client("deepseek-chat").with_structured_output(self._Sample)
+        assert _bound_kwargs(bound).get("tool_choice") is not None
 
-        bound = client.with_structured_output(_Sample)
-        assert bound is not None
-        assert "tool_choice" not in bound.first.kwargs
+    def test_reasoner_suppresses_tool_choice(self):
+        bound = self._client("deepseek-reasoner").with_structured_output(self._Sample)
+        # tool_choice is either absent or explicitly None — both are valid
+        # signals that langchain's bind_tools will skip the parameter.
+        assert _bound_kwargs(bound).get("tool_choice") in (None, ...) or \
+            "tool_choice" not in _bound_kwargs(bound)
 
-    def test_with_structured_output_binds_without_tool_choice_for_v4(self):
-        """Models that do not support tool_choice (like deepseek-v4-flash) bind successfully
-        but suppress tool_choice in kwargs.
-        """
-        for model in ("deepseek-v4-flash", "deepseek-v4-pro"):
-            client = DeepSeekChatOpenAI(
-                model=model,
-                api_key="placeholder",
-                base_url="https://api.deepseek.com",
-            )
-            from pydantic import BaseModel
+    def test_v4_flash_suppresses_tool_choice(self):
+        bound = self._client("deepseek-v4-flash").with_structured_output(self._Sample)
+        assert _bound_kwargs(bound).get("tool_choice") is None or \
+            "tool_choice" not in _bound_kwargs(bound)
 
-            class _Sample(BaseModel):
-                answer: str
+    def test_v4_pro_suppresses_tool_choice(self):
+        bound = self._client("deepseek-v4-pro").with_structured_output(self._Sample)
+        assert _bound_kwargs(bound).get("tool_choice") is None or \
+            "tool_choice" not in _bound_kwargs(bound)
 
-            bound = client.with_structured_output(_Sample)
-            assert bound is not None
-            assert "tool_choice" not in bound.first.kwargs
+    def test_future_v_variant_via_regex(self):
+        """Forward-compat: unknown deepseek-v\\d-* IDs inherit V4 quirks."""
+        bound = self._client("deepseek-v5-hypothetical").with_structured_output(self._Sample)
+        assert _bound_kwargs(bound).get("tool_choice") is None or \
+            "tool_choice" not in _bound_kwargs(bound)
 
-    def test_with_structured_output_binds_with_tool_choice_for_chat(self):
-        """Standard Chat models (like deepseek-chat) support tool_choice and include it in kwargs.
-        """
+    def test_schema_is_still_bound_as_tool(self):
+        """tool_choice is suppressed, but the schema is still bound as a tool —
+        exactly matching DeepSeek's official tool-calling examples."""
+        bound = self._client("deepseek-reasoner").with_structured_output(self._Sample)
+        kwargs = _bound_kwargs(bound)
+        tools = kwargs.get("tools", [])
+        assert any(
+            t.get("function", {}).get("name") == "_Sample" for t in tools
+        ), f"schema not bound as a tool: {tools}"
+
+
+# ---------------------------------------------------------------------------
+# Live API: structured output round-trips against the real DeepSeek backend
+# ---------------------------------------------------------------------------
+
+
+def _has_real_deepseek_key():
+    key = os.environ.get("DEEPSEEK_API_KEY", "")
+    return bool(key) and key != "placeholder"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not _has_real_deepseek_key(),
+    reason="DEEPSEEK_API_KEY not set (or placeholder); skipping live API call",
+)
+class TestDeepSeekLiveStructuredOutput:
+    """End-to-end: a real DeepSeek V4-flash call returns a typed instance.
+
+    Verifies the no-tool_choice path doesn't trigger the 400 reported in
+    issue #678 and that the structured-output binding still parses to a
+    Pydantic instance.
+    """
+
+    class _Pick(BaseModel):
+        action: str
+        confidence: float
+
+    def test_v4_flash_returns_structured_output(self):
         client = DeepSeekChatOpenAI(
-            model="deepseek-chat",
-            api_key="placeholder",
+            model="deepseek-v4-flash",
+            api_key=os.environ["DEEPSEEK_API_KEY"],
             base_url="https://api.deepseek.com",
+            timeout=60,
         )
-        from pydantic import BaseModel
-
-        class _Sample(BaseModel):
-            answer: str
-
-        bound = client.with_structured_output(_Sample)
-        assert bound is not None
-        assert "tool_choice" in bound.first.kwargs
+        bound = client.with_structured_output(self._Pick)
+        result = bound.invoke(
+            "Pick BUY or SELL or HOLD for a tech stock with strong earnings. "
+            "Confidence is a float between 0 and 1."
+        )
+        assert isinstance(result, self._Pick)
+        assert result.action in {"BUY", "SELL", "HOLD"}
+        assert 0.0 <= result.confidence <= 1.0
 
 
 # ---------------------------------------------------------------------------

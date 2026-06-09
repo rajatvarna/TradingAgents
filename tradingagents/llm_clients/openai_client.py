@@ -4,8 +4,10 @@ from typing import Any, Optional
 from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
+from .api_key_env import get_api_key_env
 from .base_client import BaseLLMClient, normalize_content
 from .retry import llm_retry
+from .capabilities import get_capabilities
 from .validators import validate_model
 from .capabilities import get_capabilities
 
@@ -41,7 +43,8 @@ class NormalizedChatOpenAI(ChatOpenAI):
             )
         method = method or caps.preferred_structured_method
         # When the model rejects tool_choice, suppress langchain's hardcoded
-        # value. The schema is still bound as a tool.
+        # value. The schema is still bound as a tool — exactly what
+        # DeepSeek's official tool-calling examples do.
         if method == "function_calling" and not caps.supports_tool_choice:
             kwargs.setdefault("tool_choice", None)
         return super().with_structured_output(schema, method=method, **kwargs)
@@ -113,14 +116,15 @@ class MinimaxChatOpenAI(NormalizedChatOpenAI):
 
     M2.x reasoning models embed ``<think>...</think>`` blocks directly in
     ``message.content`` by default, which would pollute saved reports.
-    Per platform.minimax.io/docs/api-reference/text-openai-api, setting
-    ``reasoning_split=True`` in the request body redirects the thinking
-    block into ``reasoning_details`` so ``content`` stays clean.
+    Per platform.minimax.io/docs/api-reference/text-openai-api,
+    ``reasoning_split=True`` redirects the thinking block into
+    ``reasoning_details`` so ``content`` stays clean. It is sent via
+    ``extra_body`` (not a top-level kwarg) because the openai SDK validates
+    top-level params and rejects unknown ones like reasoning_split (#826).
 
-    The flag is gated by ``ModelCapabilities.requires_reasoning_split``
-    because non-reasoning MiniMax endpoints (Coding Plan, MiniMax-Text-01)
-    reject the parameter via the openai SDK's strict kwarg validation
-    (#826).
+    The flag is gated by ``ModelCapabilities.requires_reasoning_split`` so
+    only M2.x reasoning models receive it; non-reasoning MiniMax endpoints
+    (Coding Plan, MiniMax-Text-01) never see it.
 
     Tool-choice handling for M2.x — those models accept only the string
     enum ``{"none", "auto"}`` and reject langchain's function-spec dict —
@@ -131,33 +135,58 @@ class MinimaxChatOpenAI(NormalizedChatOpenAI):
     def _get_request_payload(self, input_, *, stop=None, **kwargs):
         payload = super()._get_request_payload(input_, stop=stop, **kwargs)
         if get_capabilities(self.model_name).requires_reasoning_split:
-            payload.setdefault("reasoning_split", True)
+            # Pass via extra_body, not as a top-level kwarg: the openai SDK
+            # (>=1.56) validates top-level params against Completions.create
+            # and rejects unknown ones like reasoning_split (#826). extra_body
+            # is forwarded into the request body untouched.
+            extra_body = payload.setdefault("extra_body", {})
+            extra_body.setdefault("reasoning_split", True)
         return payload
 
 # Kwargs forwarded from user config to ChatOpenAI
 _PASSTHROUGH_KWARGS = (
-    "timeout", "max_retries", "reasoning_effort",
+    "timeout", "max_retries", "reasoning_effort", "temperature",
     "api_key", "callbacks", "http_client", "http_async_client",
     "default_headers",
 )
 
-# Provider base URLs and API key env vars
-_PROVIDER_CONFIG = {
-    "xai": ("https://api.x.ai/v1", "XAI_API_KEY"),
-    "deepseek": ("https://api.deepseek.com", "DEEPSEEK_API_KEY"),
-    "qwen": ("https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "DASHSCOPE_API_KEY"),
-    "glm": ("https://api.z.ai/api/paas/v4/", "ZHIPU_API_KEY"),
-    "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
-    "deepinfra": ("https://api.deepinfra.com/v1/openai", "DEEPINFRA_API_KEY"),
-    "github_copilot": ("https://models.github.ai/inference", "GITHUB_TOKEN"),
-    "mimo": ("https://token-plan-sgp.xiaomimimo.com/v1", "MIMO_API_KEY"),
-    "ollama": (os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434/v1", None),
-    "ollama_cloud": ("https://ollama.com/v1", "OLLAMA_API_KEY"),
-    "custom_openai": (os.environ.get("CUSTOM_OPENAI_BASE_URL") or "http://localhost:1234/v1", "CUSTOM_OPENAI_API_KEY"),
-    "lm-studio": (os.environ.get("LM_STUDIO_BASE_URL") or "http://localhost:8000/v1", None),
-    "llama-cpp": (os.environ.get("LLAMA_CPP_BASE_URL") or "http://localhost:8001/v1", None),
-    "minimax": ("https://api.minimax.chat/v1", "MINIMAX_API_KEY"),
+# Provider base URLs. API-key env vars live in api_key_env.PROVIDER_API_KEY_ENV
+_PROVIDER_BASE_URL = {
+    "xai":        "https://api.x.ai/v1",
+    "deepseek":   "https://api.deepseek.com",
+    "qwen":       "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    "qwen-cn":    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "glm":        "https://api.z.ai/api/paas/v4/",
+    "glm-cn":     "https://open.bigmodel.cn/api/paas/v4/",
+    "minimax":    "https://api.minimax.io/v1",
+    "minimax-cn": "https://api.minimaxi.com/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
+    "ollama":     "http://localhost:11434/v1",
+    "deepinfra":  "https://api.deepinfra.com/v1/openai",
+    "github_copilot": "https://models.github.ai/inference",
+    "mimo":       "https://token-plan-sgp.xiaomimimo.com/v1",
+    "ollama_cloud": "https://ollama.com/v1",
+    "custom_openai": "http://localhost:1234/v1",
+    "lm-studio":  "http://localhost:8000/v1",
+    "llama-cpp":  "http://localhost:8001/v1",
 }
+}
+
+
+def _resolve_provider_base_url(provider: str) -> Optional[str]:
+    """Default base URL for ``provider``, with env-var overrides where defined.
+
+    Currently only Ollama supports an env-var override (``OLLAMA_BASE_URL``),
+    matching the convention in the broader Ollama tooling ecosystem so users
+    can point at a remote ollama-serve without editing code. The check is
+    call-time, not import-time, so tests that monkeypatch the env after
+    import behave correctly.
+    """
+    if provider == "ollama":
+        env_url = os.environ.get("OLLAMA_BASE_URL")
+        if env_url:
+            return env_url
+    return _PROVIDER_BASE_URL.get(provider)
 
 
 class OpenAIClient(BaseLLMClient):
@@ -190,13 +219,21 @@ class OpenAIClient(BaseLLMClient):
         # Provider-specific base URL and auth. An explicit base_url on the
         # client (e.g. a corporate proxy) takes precedence over the
         # provider default so users can route through their own gateway.
-        if self.provider in _PROVIDER_CONFIG:
-            default_base, api_key_env = _PROVIDER_CONFIG[self.provider]
-            if self.provider == "ollama":
-                # Support container/network deployments where "localhost"
-                # is not the Ollama host (e.g., docker-compose service name).
-                default_base = os.environ.get("OLLAMA_BASE_URL", default_base)
-            llm_kwargs["base_url"] = self.base_url or default_base
+        from .api_key_env import get_api_key_env
+        def _resolve_provider_base_url(prov):
+            if prov == "ollama":
+                return os.environ.get("OLLAMA_BASE_URL", _PROVIDER_BASE_URL["ollama"])
+            elif prov == "custom_openai":
+                return os.environ.get("CUSTOM_OPENAI_BASE_URL", _PROVIDER_BASE_URL["custom_openai"])
+            elif prov == "lm-studio":
+                return os.environ.get("LM_STUDIO_BASE_URL", _PROVIDER_BASE_URL["lm-studio"])
+            elif prov == "llama-cpp":
+                return os.environ.get("LLAMA_CPP_BASE_URL", _PROVIDER_BASE_URL["llama-cpp"])
+            return _PROVIDER_BASE_URL.get(prov)
+
+        if self.provider in _PROVIDER_BASE_URL:
+            llm_kwargs["base_url"] = self.base_url or _resolve_provider_base_url(self.provider)
+            api_key_env = get_api_key_env(self.provider)
             if api_key_env:
                 api_key = os.environ.get(api_key_env)
                 if api_key:
@@ -205,8 +242,10 @@ class OpenAIClient(BaseLLMClient):
                     llm_kwargs["api_key"] = "not-needed"
                 else:
                     raise ValueError(
-                        f"API key for provider '{self.provider}' is not set."
-                        f" Please set the {api_key_env} environment variable."
+                        f"API key for provider '{self.provider}' is not set. "
+                        f"Please set the {api_key_env} environment variable "
+                        f"in your environment or .env file."
+                    )
                         f"(e.g. add {api_key_env}=your_key to your .env file)."
                     )
             else:
@@ -240,11 +279,11 @@ class OpenAIClient(BaseLLMClient):
         if self.provider == "openai":
             llm_kwargs["use_responses_api"] = True
 
-        # DeepSeek and MiniMax thinking-mode quirks live in their own subclasses
-        # so the base NormalizedChatOpenAI stays free of provider-specific branches.
+        # Provider-specific quirks live in their own subclasses so the
+        # base NormalizedChatOpenAI stays free of provider branches.
         if self.provider == "deepseek":
             chat_cls = DeepSeekChatOpenAI
-        elif self.provider == "minimax":
+        elif self.provider in ("minimax", "minimax-cn"):
             chat_cls = MinimaxChatOpenAI
         else:
             chat_cls = NormalizedChatOpenAI

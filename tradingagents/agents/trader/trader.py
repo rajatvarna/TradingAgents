@@ -17,10 +17,12 @@ from tradingagents.agents.utils.structured import (
     invoke_structured_or_freetext_with_meta,
 )
 from tradingagents.prompts import load_prompt
+from tradingagents.audit.prompt_registry import default_registry
 
 
-def create_trader(llm, cache=None):
+def create_trader(llm, cache=None, prompt_registry=None):
     structured_llm = bind_structured(llm, TraderProposal, "Trader")
+    registry = prompt_registry or default_registry()
 
     def trader_node(state, name):
         company_name = state["company_of_interest"]
@@ -37,30 +39,31 @@ def create_trader(llm, cache=None):
                 f"opinion among many, NOT ground truth):\n{user_research_report}"
             )
 
+        # Trader uses two templates (system + user) rather than one
+        # combined prompt. Record both hashes in metadata so the trace
+        # can reconstruct either side independently.
+        versions = state.get("prompt_versions", {})
+        sys_v = versions.get("trader/trader_system", "v1")
+        usr_v = versions.get("trader/trader_user", "v1")
+
+        system_content, system_hash = registry.render(
+            "trader/trader_system",
+            version=sys_v,
+            language_instruction=get_language_instruction(),
+        )
+        user_content, user_hash = registry.render(
+            "trader/trader_user",
+            version=usr_v,
+            company_name=company_name,
+            instrument_context=instrument_context,
+            scope_guard=scope_guard,
+            user_research_block=user_research_block,
+            investment_plan=investment_plan,
+        )
+
         messages = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a trading agent analyzing market data to make investment decisions. "
-                    "Based on your analysis, provide a specific recommendation to buy, sell, or hold. "
-                    "Anchor your reasoning in the analysts' reports and the research plan. "
-                    "When you provide entry/stop/take-profit levels, explain the technical anchors "
-                    "you used (e.g., recent swing low/high, ATR-based distance, moving averages, "
-                    "support/resistance) and state whether the levels are based on the latest available "
-                    "close for the chosen analysis date."
-                    + get_language_instruction()
-                ),
-            },
-            {
-                "role": "user",
-                "content": load_prompt(
-                    "trader",
-                    company_name=company_name,
-                    instrument_context=instrument_context,
-                    scope_guard=scope_guard,
-                    investment_plan=f"{investment_plan}\n{user_research_block}",
-                ),
-            },
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": user_content},
         ]
 
         trader_plan, structured_valid = invoke_structured_or_freetext_with_meta(
@@ -70,6 +73,14 @@ def create_trader(llm, cache=None):
             render_trader_proposal,
             "Trader",
             cache=cache,
+            config={
+                "metadata": {
+                    "prompt_key": "trader/messages",
+                    "prompt_version": f"system={sys_v},user={usr_v}",
+                    "prompt_hash_system": system_hash,
+                    "prompt_hash_user": user_hash,
+                }
+            },
         )
 
         return {

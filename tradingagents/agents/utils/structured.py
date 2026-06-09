@@ -61,12 +61,12 @@ def bind_structured(llm: Any, schema: type[T], agent_name: str) -> Optional[Any]
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=30), reraise=True)
-def _invoke_structured(llm, prompt):
-    return llm.invoke(prompt)
+def _invoke_structured(llm, prompt, **kwargs):
+    return llm.invoke(prompt, **kwargs)
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=30), reraise=True)
-def _invoke_plain(llm, prompt):
-    return llm.invoke(prompt)
+def _invoke_plain(llm, prompt, **kwargs):
+    return llm.invoke(prompt, **kwargs)
 
 def invoke_structured_or_freetext(
     structured_llm: Optional[Any],
@@ -75,6 +75,8 @@ def invoke_structured_or_freetext(
     render: Callable[[T], str],
     agent_name: str,
     cache: Optional[MutableMapping[str, str]] = None,
+    *,
+    config: Optional[dict] = None,
 ) -> str:
     """Run the structured call and render to markdown; fall back to free-text on any failure.
 
@@ -82,17 +84,24 @@ def invoke_structured_or_freetext(
     invocations, a list of message dicts for chat models that take that
     shape). The same value is forwarded to the free-text path so the
     fallback sees the same input the structured call did.
+
+    ``config`` is forwarded to ``invoke(prompt, config=...)`` so callers
+    can attach metadata (T1.4 uses this to carry prompt provenance —
+    ``prompt_key`` / ``prompt_version`` / ``prompt_hash`` — into the
+    LangChain callback metadata, which TraceCallback then records).
     """
     freetext_key = _cache_key(agent_name, "freetext", prompt)
     if cache is not None and freetext_key in cache:
         return cache[freetext_key]
+
+    invoke_kwargs = {"config": config} if config is not None else {}
 
     if structured_llm is not None:
         key = _cache_key(agent_name, "structured", prompt)
         if cache is not None and key in cache:
             return cache[key]
         try:
-            result = _invoke_structured(structured_llm, prompt)
+            result = _invoke_structured(structured_llm, prompt, **invoke_kwargs)
             rendered = render(result)
             if cache is not None:
                 cache[key] = rendered
@@ -103,7 +112,7 @@ def invoke_structured_or_freetext(
                 agent_name, exc,
             )
 
-    response = _invoke_plain(plain_llm, prompt)
+    response = _invoke_plain(plain_llm, prompt, **invoke_kwargs)
     content = response.content
     if cache is not None:
         cache[freetext_key] = content
@@ -116,10 +125,13 @@ def invoke_structured_or_freetext_with_meta(
     prompt: Any,
     render: Callable[[T], str],
     agent_name: str,
+    *,
+    config: Optional[dict] = None,
 ) -> tuple[str, bool]:
+    invoke_kwargs = {"config": config} if config is not None else {}
     if structured_llm is not None:
         try:
-            result = structured_llm.invoke(prompt)
+            result = structured_llm.invoke(prompt, **invoke_kwargs)
             return render(result), True
         except Exception as exc:
             logger.warning(
@@ -127,5 +139,5 @@ def invoke_structured_or_freetext_with_meta(
                 agent_name, exc,
             )
 
-    response = plain_llm.invoke(prompt)
+    response = plain_llm.invoke(prompt, **invoke_kwargs)
     return response.content, False

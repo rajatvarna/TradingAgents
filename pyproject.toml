@@ -72,7 +72,10 @@ include = ["tradingagents*", "tradingagents_service*", "cli*", "portfolio_adviso
 
 [tool.setuptools.package-data]
 cli = ["static/*", "*.tcss"]
-tradingagents = ["prompts/*.yaml"]
+# T1.4 — versioned prompt templates ship as data files alongside the
+# code that loads them via PromptRegistry.  Without this, ``pip install``
+# would drop the .txt files and every agent would fail at first render.
+tradingagents = ["prompts/*.yaml", "prompts/**/*.txt"]
 automation = ["*.json.example", "*.ps1", "README.md"]
 tradingagents_service = ["api/static/*", "api/templates/*"]
 

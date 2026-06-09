@@ -1175,8 +1175,20 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
             "news_data": "b3",
         }
 
-    # Create stats callback handler for tracking LLM/tool calls and costs
-    stats_handler = StatsCallbackHandler(provider=config["llm_provider"])
+    # Create stats callback handler for tracking LLM/tool calls.
+    # T0.5 — when enabled, every LLM call also lands as one line in
+    # ``audit_dir/calls/{session_id}.jsonl`` so post-run drift detection
+    # and replay (Phase 1) can attribute behavior to a specific provider
+    # snapshot. Disable via ``audit_jsonl_calls_enabled=False``.
+    audit_jsonl_path = None
+    if config.get("audit_jsonl_calls_enabled", True):
+        from pathlib import Path as _Path
+        import uuid as _uuid
+        audit_root = _Path(
+            config.get("audit_dir") or _Path.home() / ".tradingagents" / "audit"
+        ).expanduser()
+        audit_jsonl_path = audit_root / "calls" / f"{_uuid.uuid4()}.jsonl"
+    stats_handler = StatsCallbackHandler(provider=config["llm_provider"], jsonl_path=audit_jsonl_path)
 
     selected_analyst_keys = [a for a in ANALYST_ORDER if a in {analyst.value for analyst in selections["analysts"]}]
 
@@ -1410,7 +1422,12 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
         init_agent_state = graph.propagator.create_initial_state(
             ticker, selections["analysis_date"], asset_type=selections.get("asset_type", "stock")
         )
-        args = graph.propagator.get_graph_args(callbacks=[stats_handler])
+        # Pass callbacks to graph config for tool execution tracking
+        # (LLM tracking is handled separately via LLM constructor)
+        audit_callbacks = [graph.trace_callback] if graph.trace_callback else []
+        args = graph.propagator.get_graph_args(
+            callbacks=[stats_handler, *audit_callbacks]
+        )
 
         tui = TradingApp(
             buffer=message_buffer,

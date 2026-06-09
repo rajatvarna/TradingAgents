@@ -13,10 +13,12 @@ from tradingagents.agents.utils.structured import (
     invoke_structured_or_freetext_with_meta,
 )
 from tradingagents.prompts import load_prompt
+from tradingagents.audit.prompt_registry import default_registry
 
 
-def create_research_manager(llm, cache=None):
+def create_research_manager(llm, cache=None, prompt_registry=None):
     structured_llm = bind_structured(llm, ResearchPlan, "Research Manager")
+    registry = prompt_registry or default_registry()
 
     def research_manager_node(state) -> dict:
         instrument_context = build_instrument_context(state["company_of_interest"])
@@ -34,13 +36,14 @@ def create_research_manager(llm, cache=None):
                 f"{user_research_report}\n"
             )
 
-        prompt = load_prompt(
-            "research_manager",
+        version = state.get("prompt_versions", {}).get("managers/research_manager", "v1")
+        prompt, prompt_hash = registry.render(
+            "managers/research_manager",
+            version=version,
             instrument_context=instrument_context,
-            scope_guard=scope_guard,
             history=history + user_research_block,
+            language_instruction=get_language_instruction(),
         )
-        prompt += get_language_instruction()
 
         investment_plan, structured_valid = invoke_structured_or_freetext_with_meta(
             structured_llm,
@@ -49,6 +52,13 @@ def create_research_manager(llm, cache=None):
             render_research_plan,
             "Research Manager",
             cache=cache,
+            config={
+                "metadata": {
+                    "prompt_key": "managers/research_manager",
+                    "prompt_version": version,
+                    "prompt_hash": prompt_hash,
+                }
+            },
         )
 
         new_investment_debate_state = {

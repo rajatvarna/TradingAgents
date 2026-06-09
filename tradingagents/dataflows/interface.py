@@ -52,6 +52,16 @@ from .twelve_data import (
     get_insider_transactions as get_twelve_data_insider_transactions,
 )
 
+try:
+    from yfinance.exceptions import YFRateLimitError
+except ImportError:
+    # Older yfinance versions don't expose YFRateLimitError as a clean
+    # import path. Fall back to a sentinel class that never matches a
+    # real exception, so the except clause below degrades gracefully
+    # instead of crashing at import time.
+    class YFRateLimitError(Exception):
+        pass
+
 # Configuration and routing logic
 from .config import get_config
 
@@ -218,7 +228,7 @@ def route_to_vendor(method: str, *args, **kwargs):
 
         try:
             return impl_func(*args, **kwargs)
-        except (AlphaVantageRateLimitError, AlphaVantageUnsupportedIndicatorError, SearxngUnavailableError):
+        except (AlphaVantageRateLimitError, AlphaVantageUnsupportedIndicatorError, SearxngUnavailableError, YFRateLimitError):
             continue  # Vendor-availability failures trigger fallback
 
     raise RuntimeError(f"No available vendor for '{method}'")

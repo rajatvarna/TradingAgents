@@ -1,12 +1,13 @@
-from langchain_core.prompts import ChatPromptTemplate
 from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     get_language_instruction,
-    invoke_with_retry,
     trim_debate_history,
 )
+from tradingagents.audit.prompt_registry import default_registry
 
-def create_conservative_debator(llm):
+def create_conservative_debator(llm, prompt_registry=None):
+    registry = prompt_registry or default_registry()
+
     def conservative_node(state) -> dict:
         risk_debate_state = state["risk_debate_state"]
         history = trim_debate_history(risk_debate_state.get("history", ""))
@@ -23,33 +24,32 @@ def create_conservative_debator(llm):
         trader_decision = state["trader_investment_plan"]
         scope_guard = build_scope_guard(state["company_of_interest"])
 
-        prompt = ChatPromptTemplate.from_messages([
-            (
-                "system",
-                "You are the Conservative Risk Analyst. Your primary objective is to protect assets, minimize volatility, and ensure steady, reliable growth. You prioritize stability, security, and risk mitigation, carefully assessing potential losses, economic downturns, and market volatility."
-                " When evaluating the trader's decision or plan, critically examine high-risk elements, pointing out where the decision may expose the firm to undue risk and where more cautious alternatives could secure long-term gains."
-                " Actively counter the arguments of the Aggressive and Neutral Analysts, highlighting where their views may overlook potential threats or fail to prioritize sustainability."
-                + get_language_instruction(),
-            ),
-            (
-                "human",
-                f"""Analysis context:
-- Trader decision: {trader_decision}
-- Scope guard: {scope_guard}
-- Market research report: {market_research_report}
-- Social media sentiment report: {sentiment_report}
-- Latest world affairs report: {news_report}
-- Company fundamentals report: {fundamentals_report}
-- Current conversation history: {history}
-- Last aggressive argument: {current_aggressive_response}
-- Last neutral argument: {current_neutral_response}
+        version = state.get("prompt_versions", {}).get("risk/conservative", "v1")
+        prompt, prompt_hash = registry.render(
+            "risk/conservative",
+            version=version,
+            trader_decision=trader_decision,
+            scope_guard=scope_guard,
+            market_research_report=market_research_report,
+            sentiment_report=sentiment_report,
+            news_report=news_report,
+            fundamentals_report=fundamentals_report,
+            history=history,
+            current_aggressive_response=current_aggressive_response,
+            current_neutral_response=current_neutral_response,
+            language_instruction=get_language_instruction(),
+        )
 
-Engage by questioning their optimism and emphasizing the potential downsides they may have overlooked. Address each of their counterpoints to showcase why a conservative stance is ultimately the safest path for the firm's assets.""",
-            ),
-        ])
-
-        chain = prompt | llm
-        response = invoke_with_retry(chain, {})
+        response = llm.invoke(
+            prompt,
+            config={
+                "metadata": {
+                    "prompt_key": "risk/conservative",
+                    "prompt_version": version,
+                    "prompt_hash": prompt_hash,
+                }
+            },
+        )
 
         argument = f"Conservative Analyst: {response.content}"
 

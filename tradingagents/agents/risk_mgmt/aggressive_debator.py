@@ -1,12 +1,13 @@
-from langchain_core.prompts import ChatPromptTemplate
 from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     get_language_instruction,
-    invoke_with_retry,
     trim_debate_history,
 )
+from tradingagents.audit.prompt_registry import default_registry
 
-def create_aggressive_debator(llm):
+def create_aggressive_debator(llm, prompt_registry=None):
+    registry = prompt_registry or default_registry()
+
     def aggressive_node(state) -> dict:
         risk_debate_state = state["risk_debate_state"]
         history = trim_debate_history(risk_debate_state.get("history", ""))
@@ -23,34 +24,32 @@ def create_aggressive_debator(llm):
         trader_decision = state["trader_investment_plan"]
         scope_guard = build_scope_guard(state["company_of_interest"])
 
-        prompt = ChatPromptTemplate.from_messages([
-            (
-                "system",
-                "You are the Aggressive Risk Analyst. Your role is to actively champion high-reward, high-risk opportunities, emphasizing bold strategies and competitive advantages. When evaluating the trader's decision or plan, focus intently on the potential upside, growth potential, and innovative benefits-even when these come with elevated risk."
-                " Use the provided market data and sentiment analysis to strengthen your arguments and challenge the opposing views."
-                " Specifically, respond directly to each point made by the conservative and neutral analysts, countering with data-driven rebuttals and persuasive reasoning."
-                " Highlight where their caution might miss critical opportunities or where their assumptions may be overly conservative."
-                + get_language_instruction(),
-            ),
-            (
-                "human",
-                f"""Analysis context:
-- Trader decision: {trader_decision}
-- Scope guard: {scope_guard}
-- Market research report: {market_research_report}
-- Social media sentiment report: {sentiment_report}
-- Latest world affairs report: {news_report}
-- Company fundamentals report: {fundamentals_report}
-- Current conversation history: {history}
-- Last conservative argument: {current_conservative_response}
-- Last neutral argument: {current_neutral_response}
+        version = state.get("prompt_versions", {}).get("risk/aggressive", "v1")
+        prompt, prompt_hash = registry.render(
+            "risk/aggressive",
+            version=version,
+            trader_decision=trader_decision,
+            scope_guard=scope_guard,
+            market_research_report=market_research_report,
+            sentiment_report=sentiment_report,
+            news_report=news_report,
+            fundamentals_report=fundamentals_report,
+            history=history,
+            current_conservative_response=current_conservative_response,
+            current_neutral_response=current_neutral_response,
+            language_instruction=get_language_instruction(),
+        )
 
-Your task is to create a compelling case for the trader's decision by questioning and critiquing the conservative and neutral stances to demonstrate why your high-reward perspective offers the best path forward. Engage actively by addressing any specific concerns raised, refuting the weaknesses in their logic, and asserting the benefits of risk-taking to outpace market norms.""",
-            ),
-        ])
-
-        chain = prompt | llm
-        response = invoke_with_retry(chain, {})
+        response = llm.invoke(
+            prompt,
+            config={
+                "metadata": {
+                    "prompt_key": "risk/aggressive",
+                    "prompt_version": version,
+                    "prompt_hash": prompt_hash,
+                }
+            },
+        )
 
         argument = f"Aggressive Analyst: {response.content}"
 

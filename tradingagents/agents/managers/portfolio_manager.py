@@ -37,10 +37,12 @@ from tradingagents.agents.utils.structured import (
 )
 from tradingagents.prompts import load_prompt
 from tradingagents.dataflows.config import get_config
+from tradingagents.audit.prompt_registry import default_registry
 
 
-def create_portfolio_manager(llm, cache=None):
+def create_portfolio_manager(llm, cache=None, prompt_registry=None):
     structured_llm = bind_structured(llm, PortfolioDecision, "Portfolio Manager")
+    registry = prompt_registry or default_registry()
 
     rating_order = list(RATINGS_5_TIER)
 
@@ -166,8 +168,10 @@ def create_portfolio_manager(llm, cache=None):
                 "- If error_count >= 5: output Hold.\n"
             )
 
-        prompt = load_prompt(
-            "portfolio_manager",
+        version = state.get("prompt_versions", {}).get("managers/portfolio_manager", "v1")
+        prompt, prompt_hash = registry.render(
+            "managers/portfolio_manager",
+            version=version,
             instrument_context=instrument_context,
             scope_guard=scope_guard,
             research_plan=research_plan,
@@ -199,6 +203,13 @@ def create_portfolio_manager(llm, cache=None):
             render_pm_decision,
             "Portfolio Manager",
             cache=cache,
+            config={
+                "metadata": {
+                    "prompt_key": "managers/portfolio_manager",
+                    "prompt_version": version,
+                    "prompt_hash": prompt_hash,
+                }
+            },
         )
 
         structured_valid = bool(upstream_structured_valid and pm_structured_valid)

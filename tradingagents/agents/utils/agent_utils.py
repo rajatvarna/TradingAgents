@@ -3,24 +3,19 @@ import json
 from langchain_core.messages import HumanMessage, RemoveMessage
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-# Import tools from separate utility files
-from tradingagents.agents.utils.core_stock_tools import (
-    get_stock_data
-)
-from tradingagents.agents.utils.technical_indicators_tools import (
-    get_indicators
-)
+from tradingagents.agents.utils.core_stock_tools import get_stock_data
 from tradingagents.agents.utils.fundamental_data_tools import (
-    get_fundamentals,
     get_balance_sheet,
     get_cashflow,
-    get_income_statement
+    get_fundamentals,
+    get_income_statement,
 )
 from tradingagents.agents.utils.news_data_tools import (
-    get_news,
+    get_global_news,
     get_insider_transactions,
-    get_global_news
+    get_news,
 )
+<<<<<<< HEAD
 from tradingagents.agents.utils.range_stats_tool import (
     get_range_stats,
 )
@@ -47,19 +42,33 @@ __all__ = [
     "get_news",
     "get_stock_data",
 ]
+=======
+from tradingagents.agents.utils.technical_indicators_tools import get_indicators
+>>>>>>> pr/894
 
 
 def get_language_instruction() -> str:
-    """Return a prompt instruction for the configured output language.
+    """
+    Return a prompt instruction for the configured output language.
 
     Returns empty string when English (default), so no extra tokens are used.
+<<<<<<< HEAD
     Only applied to user-facing agents (analysts, portfolio manager).
     Internal debate agents stay in English for reasoning quality.
+=======
+    Applied to every agent whose output reaches the saved report — analysts,
+    researchers, debaters, research manager, trader, and portfolio manager —
+    so a non-English run produces a fully localized report rather than a mix
+    of languages.
+>>>>>>> pr/894
     """
     from tradingagents.dataflows.config import get_config
+
     lang = get_config().get("output_language", "English")
+
     if lang.strip().lower() == "english":
         return ""
+
     return f" Write your entire response in {lang}."
 
 
@@ -115,11 +124,13 @@ def build_instrument_context(ticker: str, asset_type: str = "stock") -> str:
     name = _resolve_company_name(ticker)
     name_clause = f" ({name})" if name else ""
     instrument_label = "asset" if asset_type == "crypto" else "instrument"
+
     extra_hint = (
         " Treat it as a crypto asset rather than a company, and do not assume company fundamentals are available."
         if asset_type == "crypto"
         else ""
     )
+
     return (
         f"The {instrument_label} to analyze is `{ticker}`{name_clause}. "
         "Use this exact ticker in every tool call, report, and recommendation, "
@@ -128,6 +139,7 @@ def build_instrument_context(ticker: str, asset_type: str = "stock") -> str:
     )
 
 
+<<<<<<< HEAD
 def get_instrument_context_from_state(state: dict) -> str:
     """Extract ticker and asset type from state to build tool-calling prompt context."""
     ticker = state["company_of_interest"]
@@ -183,9 +195,25 @@ def build_scope_guard(ticker: str) -> str:
         "it from the recommendation."
     )
 
+
+def _build_workflow_placeholder(state) -> HumanMessage:
+    ticker = state.get("company_of_interest", "the requested instrument")
+    trade_date = state.get("trade_date", "the requested date")
+    asset_type = state.get("asset_type", "stock")
+
+    return HumanMessage(
+        content=(
+            "Proceed with your assigned analysis for this TradingAgents workflow. "
+            f"The instrument to analyze is `{ticker}`. "
+            "Use this exact ticker in every tool call, report, and recommendation. "
+            f"The asset type is {asset_type}. "
+            f"The analysis date is {trade_date}. "
+            "Do not treat this placeholder as a standalone user request."
+        )
+    )
 def create_msg_delete():
     def delete_messages(state):
-        """Clear messages and add placeholder for Anthropic compatibility"""
+        """Clear messages and add a context-aware placeholder for compatibility."""
         messages = state["messages"]
 
         tool_errors = state.get("tool_errors", [])
@@ -221,8 +249,7 @@ def create_msg_delete():
         # Remove all messages
         removal_operations = [RemoveMessage(id=m.id) for m in messages]
 
-        # Add a minimal placeholder message
-        placeholder = HumanMessage(content="Continue")
+        placeholder = _build_workflow_placeholder(state)
 
         return {
             "messages": removal_operations + [placeholder],

@@ -4,9 +4,9 @@ from .base_client import BaseLLMClient
 
 # Providers that use the OpenAI-compatible chat completions API
 _OPENAI_COMPATIBLE = (
-    "openai", "xai", "deepseek", "qwen", "glm", "ollama", "ollama_cloud",
-    "openrouter", "deepinfra", "mimo", "custom_openai", "lm-studio", "llama-cpp",
-    "minimax",
+    "openai", "xai", "deepseek", "qwen", "qwen-cn", "glm", "glm-cn", "minimax", "minimax-cn",
+    "ollama", "ollama_cloud", "openrouter", "deepinfra", "mimo", "custom_openai",
+    "lmstudio", "lm-studio", "llama-cpp",
 )
 
 

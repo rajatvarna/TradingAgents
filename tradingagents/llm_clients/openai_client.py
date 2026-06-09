@@ -167,23 +167,30 @@ _PROVIDER_BASE_URL = {
     "mimo":       "https://token-plan-sgp.xiaomimimo.com/v1",
     "ollama_cloud": "https://ollama.com/v1",
     "custom_openai": "http://localhost:1234/v1",
+    "lmstudio":   "http://localhost:1234/v1",
     "lm-studio":  "http://localhost:8000/v1",
     "llama-cpp":  "http://localhost:8001/v1",
 }
-}
 
 
-def _resolve_provider_base_url(provider: str) -> Optional[str]:
+def resolve_provider_base_url(provider: str) -> Optional[str]:
     """Default base URL for ``provider``, with env-var overrides where defined.
 
-    Currently only Ollama supports an env-var override (``OLLAMA_BASE_URL``),
-    matching the convention in the broader Ollama tooling ecosystem so users
-    can point at a remote ollama-serve without editing code. The check is
-    call-time, not import-time, so tests that monkeypatch the env after
-    import behave correctly.
+    Ollama and LM Studio both support an env-var override so users can point
+    at a non-default host/port without editing code. The check is call-time,
+    not import-time, so tests that monkeypatch the env after import behave
+    correctly.
+
+    This function is public so the CLI can import it and build its provider
+    dropdown from the same single source of truth as the LLM client, avoiding
+    URL duplication.
     """
     if provider == "ollama":
         env_url = os.environ.get("OLLAMA_BASE_URL")
+        if env_url:
+            return env_url
+    if provider == "lmstudio":
+        env_url = os.environ.get("LMSTUDIO_BASE_URL")
         if env_url:
             return env_url
     return _PROVIDER_BASE_URL.get(provider)
@@ -193,7 +200,7 @@ class OpenAIClient(BaseLLMClient):
     """Client for OpenAI and OpenAI-compatible providers.
 
     Supported providers: OpenAI (native), xAI, DeepSeek, Qwen, GLM, OpenRouter,
-    DeepInfra, Ollama (local/cloud), LM Studio, llama.cpp, and custom servers.
+    DeepInfra, Ollama (local/cloud), LM Studio (lmstudio & lm-studio), llama.cpp, and custom servers.
 
     For native OpenAI models, uses the Responses API (/v1/responses) which
     supports reasoning_effort with function tools across all model families
@@ -232,7 +239,7 @@ class OpenAIClient(BaseLLMClient):
             return _PROVIDER_BASE_URL.get(prov)
 
         if self.provider in _PROVIDER_BASE_URL:
-            llm_kwargs["base_url"] = self.base_url or _resolve_provider_base_url(self.provider)
+            llm_kwargs["base_url"] = self.base_url or resolve_provider_base_url(self.provider)
             api_key_env = get_api_key_env(self.provider)
             if api_key_env:
                 api_key = os.environ.get(api_key_env)
@@ -244,12 +251,12 @@ class OpenAIClient(BaseLLMClient):
                     raise ValueError(
                         f"API key for provider '{self.provider}' is not set. "
                         f"Please set the {api_key_env} environment variable "
-                        f"in your environment or .env file."
-                    )
-                        f"(e.g. add {api_key_env}=your_key to your .env file)."
+                        f"in your environment or .env file (e.g. add {api_key_env}=your_key to your .env file)."
                     )
             else:
-                llm_kwargs["api_key"] = "ollama"
+                # Local runtimes don't authenticate; use the provider name as
+                # a recognisable placeholder rather than hardcoding "ollama".
+                llm_kwargs["api_key"] = self.provider
         elif self.base_url:
             llm_kwargs["base_url"] = self.base_url
 

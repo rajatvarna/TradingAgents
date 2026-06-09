@@ -40,6 +40,7 @@ PROVIDER_API_KEY_ENV: dict[str, Optional[str]] = {
     "bedrock":    None,
     # Local runtimes do not authenticate.
     "ollama":     None,
+    "lmstudio":   None,
 }
 
 

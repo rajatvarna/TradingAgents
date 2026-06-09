@@ -1,5 +1,7 @@
+from langchain_core.messages import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from tradingagents.agents.utils.agent_utils import (
+    build_cacheable_system_content,
     build_instrument_context,
     build_scope_guard,
     get_indicators,
@@ -29,33 +31,41 @@ def create_market_analyst(llm):
             suggest_trade_levels,
         ]
 
-        system_message = (
+        system_message = build_cacheable_system_content(
             load_prompt("market_analyst") 
             + f" {scope_guard}"
             + get_language_instruction() 
             + get_horizon_instruction()
             + "\nAlways call get_range_stats first to anchor today's open/close/volume against 52w/6m/3m/1m ranges before selecting indicators. The returned tables tell you whether the stock is at a 52-week high, near a one-month low, or somewhere mid-range — incorporate this in your trend narrative."
-            + "\nAdditionally, produce a concrete execution plan: when to enter, where to place stop-loss, and where to set take-profit. Use the tool `suggest_trade_levels(symbol, curr_date, ...)` once after retrieving OHLCV to compute technically anchored levels (swing high/low, ATR, moving averages) and then explain why those levels make sense."
+            + "\nAdditionally, produce a concrete execution plan: when to enter, where to place stop-loss, and where to set take-profit. Use the tool `suggest_trade_levels(symbol, curr_date, ...)` once after retrieving OHLCV to compute technically anchored levels (swing high/low, ATR, moving averages) and then explain why those levels make sense.",
+            llm,
         )
 
         prompt = ChatPromptTemplate.from_messages(
             [
+                SystemMessage(
+                    content=system_message,
+                ),
                 (
-                    "system",
+                    "human",
                     "You are a helpful AI assistant, collaborating with other assistants."
                     " Use the provided tools to progress towards answering the question."
                     " If you are unable to fully answer, that's OK; another assistant with different tools"
                     " will help where you left off. Execute what you can to make progress."
                     " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
                     " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
-                    " You have access to the following tools: {tool_names}.\n{system_message}"
-                    "For your reference, the current date is {current_date}. {instrument_context}",
+                    " You have access to the following tools: {tool_names}.
+"
+                    "Analysis context:
+"
+                    "- Current date: {current_date}
+"
+                    "- Instrument context: {instrument_context}",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]
         )
 
-        prompt = prompt.partial(system_message=system_message)
         prompt = prompt.partial(tool_names=", ".join([tool.name for tool in tools]))
         prompt = prompt.partial(current_date=current_date)
         prompt = prompt.partial(instrument_context=instrument_context)

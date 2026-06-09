@@ -39,7 +39,7 @@ from tradingagents.prompts import load_prompt
 from tradingagents.dataflows.config import get_config
 
 
-def create_portfolio_manager(llm):
+def create_portfolio_manager(llm, cache=None):
     structured_llm = bind_structured(llm, PortfolioDecision, "Portfolio Manager")
 
     rating_order = list(RATINGS_5_TIER)
@@ -198,6 +198,7 @@ def create_portfolio_manager(llm):
             prompt,
             render_pm_decision,
             "Portfolio Manager",
+            cache=cache,
         )
 
         structured_valid = bool(upstream_structured_valid and pm_structured_valid)

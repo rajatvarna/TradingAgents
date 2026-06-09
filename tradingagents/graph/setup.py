@@ -58,12 +58,14 @@ class GraphSetup:
         deep_thinking_llm: Any,
         tool_nodes: Dict[str, ToolNode],
         conditional_logic: ConditionalLogic,
+        structured_output_cache: Dict[str, str],
         analyst_concurrency_limit: int = 1,
     ):
         self.quick_thinking_llm = quick_thinking_llm
         self.deep_thinking_llm = deep_thinking_llm
         self.tool_nodes = tool_nodes
         self.conditional_logic = conditional_logic
+        self.structured_output_cache = structured_output_cache
         self.analyst_concurrency_limit = analyst_concurrency_limit
 
     def setup_graph(self, selected_analysts: List[str] = None):
@@ -117,16 +119,21 @@ class GraphSetup:
         """Add researcher, trader, risk analysts, and portfolio manager nodes."""
         workflow.add_node("Bull Researcher", create_bull_researcher(self.quick_thinking_llm))
         workflow.add_node("Bear Researcher", create_bear_researcher(self.quick_thinking_llm))
-        workflow.add_node("Research Manager", create_research_manager(self.deep_thinking_llm))
-        workflow.add_node("Trader", create_trader(self.quick_thinking_llm))
+        workflow.add_node("Research Manager", create_research_manager(
+            self.deep_thinking_llm,
+            cache=self.structured_output_cache,
+        ))
+        workflow.add_node("Trader", create_trader(
+            self.quick_thinking_llm,
+            cache=self.structured_output_cache,
+        ))
         workflow.add_node("Aggressive Analyst", create_aggressive_debator(self.quick_thinking_llm))
         workflow.add_node("Neutral Analyst", create_neutral_debator(self.quick_thinking_llm))
         workflow.add_node("Conservative Analyst", create_conservative_debator(self.quick_thinking_llm))
-        workflow.add_node("Portfolio Manager", create_portfolio_manager(self.deep_thinking_llm))
-
-        # Capture selected_analysts via closure at definition time — populated
-        # in setup_graph before this helper is called.
-        # join_analysts_node is defined per-call in _wire_analyst_branches.
+        workflow.add_node("Portfolio Manager", create_portfolio_manager(
+            self.deep_thinking_llm,
+            cache=self.structured_output_cache,
+        ))
 
     def _wire_analyst_branches(self, workflow: StateGraph, selected_analysts: List[str]) -> None:
         """Wire sequential or parallel analyst fan-out, tool loops, clear nodes, and join."""

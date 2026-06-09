@@ -1,6 +1,8 @@
+from langchain_core.messages import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from tradingagents.agents.utils.agent_utils import (
     get_instrument_context_from_state,
+    build_cacheable_system_content,
     get_balance_sheet,
     get_cashflow,
     get_fundamentals,
@@ -26,26 +28,34 @@ def create_fundamentals_analyst(llm):
             get_income_statement,
         ]
 
-        system_message = load_prompt("fundamentals_analyst") + get_language_instruction() + get_horizon_instruction()
+        system_message = build_cacheable_system_content(
+            load_prompt("fundamentals_analyst") + get_language_instruction() + get_horizon_instruction(),
+            llm,
+        )
 
         prompt = ChatPromptTemplate.from_messages(
             [
+                SystemMessage(content=system_message),
                 (
-                    "system",
+                    "human",
                     "You are a helpful AI assistant, collaborating with other assistants."
                     " Use the provided tools to progress towards answering the question."
                     " If you are unable to fully answer, that's OK; another assistant with different tools"
                     " will help where you left off. Execute what you can to make progress."
                     " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
                     " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
-                    " You have access to the following tools: {tool_names}.\n{system_message}"
-                    "For your reference, the current date is {current_date}. {instrument_context}",
+                    " You have access to the following tools: {tool_names}.
+"
+                    "Analysis context:
+"
+                    "- Current date: {current_date}
+"
+                    "- Instrument context: {instrument_context}",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]
         )
 
-        prompt = prompt.partial(system_message=system_message)
         prompt = prompt.partial(tool_names=", ".join([tool.name for tool in tools]))
         prompt = prompt.partial(current_date=current_date)
         prompt = prompt.partial(instrument_context=instrument_context)

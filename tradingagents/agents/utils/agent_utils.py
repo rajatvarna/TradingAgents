@@ -70,6 +70,26 @@ def _resolve_company_name(ticker: str) -> str | None:
         return None
 
 
+def build_cacheable_system_content(text: str, llm: object, ttl: str = "5m"):
+    """Return a cacheable Anthropic system block when the model supports it.
+
+    Non-Anthropic providers keep the plain string so the prompt shape stays
+    unchanged for OpenAI-compatible and Google models.
+    """
+    class_name = llm.__class__.__name__.lower()
+    module_name = llm.__class__.__module__.lower()
+    is_anthropic = "anthropic" in class_name or "anthropic" in module_name
+    if not is_anthropic or not text.strip():
+        return text
+    return [
+        {
+            "type": "text",
+            "text": text,
+            "cache_control": {"type": "ephemeral", "ttl": ttl},
+        }
+    ]
+
+
 def build_instrument_context(ticker: str, asset_type: str = "stock") -> str:
     """Describe the exact instrument so agents preserve exchange-qualified tickers."""
     name = _resolve_company_name(ticker)
@@ -86,6 +106,14 @@ def build_instrument_context(ticker: str, asset_type: str = "stock") -> str:
         "preserving any exchange suffix (e.g. `.TO`, `.L`, `.HK`, `.T`, `-USD`)."
         + extra_hint
     )
+
+
+def get_instrument_context_from_state(state: dict) -> str:
+    """Extract ticker and asset type from state to build tool-calling prompt context."""
+    ticker = state["company_of_interest"]
+    asset_type = state.get("asset_type", "stock")
+    return build_instrument_context(ticker, asset_type)
+
 
 def trim_debate_history(history: str, max_turns: int = 4) -> str:
     """Keep only the most recent N turns of the debate to prevent context window overflow.

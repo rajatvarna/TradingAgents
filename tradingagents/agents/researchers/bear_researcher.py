@@ -1,11 +1,10 @@
+from langchain_core.prompts import ChatPromptTemplate
 from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     get_language_instruction,
     invoke_with_retry,
     trim_debate_history,
 )
-from tradingagents.prompts import load_prompt
-
 
 def create_bear_researcher(llm):
     def bear_node(state) -> dict:
@@ -30,30 +29,46 @@ def create_bear_researcher(llm):
             )
 
         scope_guard = build_scope_guard(state["company_of_interest"])
-
-        prompt = load_prompt(
-            "bear_researcher",
-            market_research_report=market_research_report,
-            sentiment_report=sentiment_report,
-            news_report=news_report,
-            fundamentals_report=fundamentals_report,
-            esg_report=esg_report,
-            user_research_report=user_research_block,
-            history=history,
-            current_response=current_response,
-            scope_guard=scope_guard,
-        )
         asset_type = state.get("asset_type", "stock")
-        if asset_type != "stock":
-            prompt = (
-                prompt.replace("investing in the stock", "investing in the asset")
-                .replace("the stock's performance", "the asset's performance")
-                .replace("Company fundamentals report", "Asset fundamentals report (may be unavailable for crypto)")
-                .replace("weaknesses of investing in the stock", "weaknesses of investing in the asset")
-            )
-        prompt += get_language_instruction()
+        target_label = "stock" if asset_type == "stock" else "asset"
+        fundamentals_label = (
+            "Company fundamentals report"
+            if asset_type == "stock"
+            else "Asset fundamentals report (may be unavailable for crypto)"
+        )
 
-        response = invoke_with_retry(llm, prompt)
+        prompt = ChatPromptTemplate.from_messages([
+            (
+                "system",
+                "You are a Bear Analyst making the case against investing in the target. Your goal is to present a well-reasoned argument emphasizing risks, challenges, and negative indicators. Leverage the provided research and data to highlight potential downsides and counter bullish arguments effectively."
+                " Key points to focus on:"
+                " - Risks and Challenges: Highlight factors like market saturation, financial instability, or macroeconomic threats that could hinder the stock's performance."
+                " - Competitive Weaknesses: Emphasize vulnerabilities such as weaker market positioning, declining innovation, or threats from competitors."
+                " - Negative Indicators: Use evidence from financial data, market trends, or recent adverse news to support your position."
+                " - Bull Counterpoints: Critically analyze the bull argument with specific data and sound reasoning, exposing weaknesses or over-optimistic assumptions."
+                " - Engagement: Present your argument in a conversational style, directly engaging with the bull analyst's points and debating effectively rather than simply listing facts."
+                + get_language_instruction(),
+            ),
+            (
+                "human",
+                f"""Analysis context:
+- Target label: {target_label}
+- Scope guard: {scope_guard}
+- Market research report: {market_research_report}
+- Social media sentiment report: {sentiment_report}
+- Latest world affairs news: {news_report}
+- {fundamentals_label}: {fundamentals_report}
+- ESG report: {esg_report}
+{user_research_block}
+- Conversation history of the debate: {history}
+- Last bull argument: {current_response}
+
+Use this information to deliver a compelling bear argument, refute the bull's claims, and engage in a dynamic debate that demonstrates the risks and weaknesses of investing in the {target_label}.""",
+            ),
+        ])
+
+        chain = prompt | llm
+        response = invoke_with_retry(chain, {})
 
         argument = f"Bear Analyst: {response.content}"
 

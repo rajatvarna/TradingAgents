@@ -15,7 +15,7 @@ from tradingagents.agents.utils.structured import (
 from tradingagents.prompts import load_prompt
 
 
-def create_research_manager(llm):
+def create_research_manager(llm, cache=None):
     structured_llm = bind_structured(llm, ResearchPlan, "Research Manager")
 
     def research_manager_node(state) -> dict:
@@ -48,6 +48,7 @@ def create_research_manager(llm):
             prompt,
             render_research_plan,
             "Research Manager",
+            cache=cache,
         )
 
         new_investment_debate_state = {

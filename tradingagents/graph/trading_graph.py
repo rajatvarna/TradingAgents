@@ -105,6 +105,7 @@ class TradingAgentsGraph:
         self.quick_thinking_llm = quick_client.get_llm()
         
         self.memory_log = TradingMemoryLog(self.config)
+        self.structured_output_cache: Dict[str, str] = {}
 
         # Create tool nodes
         self.tool_nodes = self._create_tool_nodes()
@@ -119,6 +120,7 @@ class TradingAgentsGraph:
             self.deep_thinking_llm,
             self.tool_nodes,
             self.conditional_logic,
+            self.structured_output_cache,
             analyst_concurrency_limit=self.config.get("analyst_concurrency_limit", 1),
         )
 
@@ -449,6 +451,7 @@ class TradingAgentsGraph:
         successful node on a subsequent invocation with the same ticker+date.
         """
         self.ticker = company_name
+        self.structured_output_cache.clear()
 
         # Resolve any pending memory-log entries for this ticker before the pipeline runs.
         self._resolve_pending_entries(company_name)

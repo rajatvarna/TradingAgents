@@ -1,8 +1,6 @@
 import os
 from typing import Any, Optional
 
-from botocore.config import Config
-
 from .base_client import BaseLLMClient, normalize_content
 from .validators import validate_model
 
@@ -24,6 +22,10 @@ def _load_chat_bedrock_converse():
 
         async def ainvoke(self, input, config=None, **kwargs):
             return normalize_content(await super().ainvoke(input, config, **kwargs))
+
+        def with_structured_output(self, schema, *, method=None, **kwargs):
+            method = method or "function_calling"
+            return super().with_structured_output(schema, method=method, **kwargs)
 
     return NormalizedChatBedrockConverse
 
@@ -51,23 +53,19 @@ class BedrockClient(BaseLLMClient):
 
     def get_llm(self) -> Any:
         """Return configured ChatBedrockConverse instance."""
+        import boto3
+        from botocore.config import Config
+
         self.warn_if_unknown_model()
         chat_cls = _load_chat_bedrock_converse()
 
-        llm_kwargs = {
-            "model": self.model,
-            "endpoint_url": self.base_url,
-            "region_name": (
-                self.kwargs.get("region_name")
-                or os.getenv("AWS_REGION")
-                or os.getenv("AWS_DEFAULT_REGION")
-                or "us-east-1"
-            ),
-        }
-
-        profile_name = self.kwargs.get("credentials_profile_name") or os.getenv("AWS_PROFILE")
-        if profile_name:
-            llm_kwargs["credentials_profile_name"] = profile_name
+        region = (
+            self.kwargs.get("region_name")
+            or os.getenv("AWS_REGION")
+            or os.getenv("AWS_DEFAULT_REGION")
+            or "us-west-2"
+        )
+        profile = self.kwargs.get("credentials_profile_name") or os.getenv("AWS_PROFILE")
 
         connect_timeout = int(
             self.kwargs.get("connect_timeout")
@@ -79,7 +77,7 @@ class BedrockClient(BaseLLMClient):
         )
         max_attempts = int(
             self.kwargs.get("max_attempts")
-            or _env_int("TRADINGAGENTS_BEDROCK_MAX_ATTEMPTS", 5)
+            or _env_int("TRADINGAGENTS_BEDROCK_MAX_ATTEMPTS", 3)
         )
 
         bedrock_config = Config(
@@ -89,14 +87,27 @@ class BedrockClient(BaseLLMClient):
         )
         if self.kwargs.get("config") is not None:
             bedrock_config = self.kwargs["config"].merge(bedrock_config)
-        llm_kwargs["config"] = bedrock_config
 
-        for key in ("callbacks", "temperature", "max_tokens", "top_p", "stop_sequences"):
+        session = boto3.Session(profile_name=profile, region_name=region)
+        client = session.client(
+            "bedrock-runtime",
+            endpoint_url=self.base_url or os.getenv("AWS_BEDROCK_ENDPOINT"),
+            config=bedrock_config,
+        )
+
+        llm_kwargs = {
+            "model": self.model,
+            "region_name": region,
+            "client": client,
+        }
+
+        # Passthrough kwargs
+        for key in ("callbacks", "temperature", "max_tokens", "top_p", "stop_sequences", "timeout", "max_retries"):
             if key in self.kwargs:
                 llm_kwargs[key] = self.kwargs[key]
 
         return chat_cls(**llm_kwargs)
 
     def validate_model(self) -> bool:
-        """Validate model against the known Bedrock model catalog."""
-        return validate_model("bedrock", self.model)
+        """Validate model against Bedrock. Returns True as Bedrock accepts arbitrary model IDs."""
+        return True

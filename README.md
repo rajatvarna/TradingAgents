@@ -155,6 +155,8 @@ For enterprise providers (e.g. Azure OpenAI, AWS Bedrock), add the required prov
 
 For local models, configure Ollama with `llm_provider: "ollama"` in your config.
 
+For AWS Bedrock, set `llm_provider: "bedrock"` and ensure your AWS credentials are configured (via `~/.aws/credentials`, environment variables, or IAM role). Set `AWS_DEFAULT_REGION` and optionally `AWS_PROFILE`. Install the extra dependency with `pip install .[bedrock]`. Use cross-region inference profile IDs (e.g. `us.anthropic.claude-opus-4-6-v1`) as model names.
+
 Alternatively, copy `.env.example` to `.env` and fill in your keys:
 ```bash
 cp .env.example .env

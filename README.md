@@ -343,3 +343,7 @@ Please reference our work if you find *TradingAgents* provides you with some hel
 ```
 ## Beginner Note
 This project is a multi-agent trading system using AI models.
+
+## Indian Market Support
+
+TradingAgents can be used to analyze Indian stocks listed on NSE and BSE exchanges using their respective ticker symbols (e.g., RELIANCE.NS, TCS.NS).

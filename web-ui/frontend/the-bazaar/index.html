@@ -1,0 +1,1868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Bazaar — TradingAgents</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  /* ═══════════════════════════════════════════════════
+     THE BAZAAR — Design Tokens & Global Styles
+     Warm, conversational, character-driven trading interface
+     ═══════════════════════════════════════════════════ */
+  :root {
+    --bg-root:       #1A1410;
+    --bg-surface:    #241C14;
+    --bg-elevated:   #2D241A;
+    --bg-input:      #1E1812;
+    --border-default:#3D3226;
+    --border-active: #8B6B3A;
+    --text-primary:  #F0E6D3;
+    --text-secondary:#A89B85;
+    --text-muted:    #6B5F4E;
+    --accent-amber:  #E8A840;
+    --accent-glow:   #F0C060;
+    --signal-bullish:#4CAF50;
+    --signal-bearish:#E57373;
+    --signal-neutral:#FFB74D;
+
+    /* Character colors */
+    --char-flint:    #8B6B4A;
+    --char-vera:     #C44B4B;
+    --char-reed:     #4B7A9E;
+    --char-sage:     #5C8A6F;
+    --char-balthazar:#D4A030;
+    --char-morwen:   #7B8B9A;
+    --char-kael:     #C07840;
+    --char-aldric:   #9B8BAA;
+
+    --font-sans: 'Georgia', 'Times New Roman', serif;
+    --font-chat: 'Georgia', 'Times New Roman', serif;
+    --font-mono: 'Courier New', monospace;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg-root);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  /* ═══════════════════════════════════════════════════
+     ANIMATIONS
+     ═══════════════════════════════════════════════════ */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-32px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(32px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 8px rgba(232,168,64,0.3); }
+    50%      { box-shadow: 0 0 20px rgba(232,168,64,0.6); }
+  }
+  @keyframes typingBounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-6px); opacity: 1; }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  @keyframes verdictReveal {
+    0% { transform: scale(0.3); opacity: 0; filter: blur(12px); }
+    50% { transform: scale(1.05); opacity: 0.8; filter: blur(0); }
+    100% { transform: scale(1); opacity: 1; filter: blur(0); }
+  }
+  @keyframes sparkle {
+    0%, 100% { opacity: 0; transform: scale(0); }
+    50% { opacity: 1; transform: scale(1); }
+  }
+  @keyframes floatUp {
+    0% { opacity: 0; transform: translateY(40px) scale(0.8); }
+    60% { opacity: 0.7; }
+    100% { opacity: 0; transform: translateY(-40px) scale(1.2); }
+  }
+  @keyframes speakerPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(232,168,64,0.4); }
+    50%      { box-shadow: 0 0 0 8px rgba(232,168,64,0); }
+  }
+  @keyframes clashShake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-3px); }
+    20%, 40%, 60%, 80% { transform: translateX(3px); }
+  }
+  @keyframes scrollUnfurl {
+    from { max-height: 0; opacity: 0; transform: scaleY(0.9); transform-origin: top; }
+    to   { max-height: 500px; opacity: 1; transform: scaleY(1); }
+  }
+  @keyframes gavelStrike {
+    0% { transform: rotate(-20deg) scale(0.5); opacity: 0; }
+    50% { transform: rotate(5deg) scale(1.2); opacity: 1; }
+    70% { transform: rotate(-3deg) scale(0.95); }
+    100% { transform: rotate(0) scale(1); }
+  }
+
+  /* ═══════════════════════════════════════════════════
+     LAYOUT
+     ═══════════════════════════════════════════════════ */
+  .app-container {
+    max-width: 860px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Top Bar ─────────────────────────────────── */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-default);
+    position: sticky; top: 0; z-index: 100;
+    gap: 12px;
+  }
+  .topbar-brand {
+    font-size: 17px; font-weight: bold;
+    color: var(--accent-amber);
+    letter-spacing: 0.02em;
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer;
+    transition: opacity 150ms;
+  }
+  .topbar-brand:hover { opacity: 0.8; }
+  .topbar-brand .icon { font-size: 20px; }
+  .topbar-status {
+    font-size: 12px; color: var(--text-muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .live-indicator {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--signal-bullish);
+    animation: pulseGlow 1.5s ease-in-out infinite;
+  }
+  .live-indicator.inactive { background: var(--text-muted); animation: none; }
+
+  .topbar-nav {
+    display: flex; gap: 4px;
+  }
+  .topbar-nav button {
+    background: transparent; border: 1px solid var(--border-default);
+    border-radius: 8px; padding: 4px 12px;
+    color: var(--text-secondary); font-size: 12px;
+    font-family: var(--font-sans); cursor: pointer;
+    transition: all 150ms;
+  }
+  .topbar-nav button:hover {
+    border-color: var(--accent-amber); color: var(--accent-amber);
+  }
+  .topbar-nav button.active {
+    border-color: var(--accent-amber);
+    background: rgba(232,168,64,0.08);
+    color: var(--accent-amber);
+  }
+
+  /* ── Token Gate ──────────────────────────────── */
+  .token-overlay {
+    position: fixed; inset: 0;
+    background: rgba(26,20,16,0.94);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999;
+  }
+  .token-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 14px; padding: 36px;
+    max-width: 400px; width: 90%;
+    text-align: center;
+    animation: fadeInUp 0.5s ease;
+  }
+  .token-card h2 { color: var(--accent-amber); font-size: 22px; margin-bottom: 8px; }
+  .token-card p { color: var(--text-secondary); font-size: 14px; margin-bottom: 20px; }
+  .token-card input {
+    width: 100%; padding: 12px 16px;
+    background: var(--bg-input); border: 1px solid var(--border-default);
+    border-radius: 10px; color: var(--text-primary); font-size: 14px;
+    font-family: var(--font-mono); text-align: center; margin-bottom: 12px;
+    transition: border-color 200ms;
+  }
+  .token-card input:focus { outline: none; border-color: var(--accent-amber); }
+  .token-card button {
+    width: 100%; padding: 12px; border: none; border-radius: 10px;
+    background: var(--accent-amber); color: #1A1410; font-weight: 700;
+    font-size: 15px; cursor: pointer; font-family: var(--font-sans);
+    transition: all 150ms;
+  }
+  .token-card button:hover { background: var(--accent-glow); transform: translateY(-1px); }
+  .token-error { color: var(--signal-bearish); font-size: 13px; margin-top: 8px; }
+
+  /* ═══════════════════════════════════════════════════
+     SCREEN: BAZAAR INPUT
+     ═══════════════════════════════════════════════════ */
+  .bazaar-input {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 40px 20px;
+    animation: fadeInUp 0.6s ease;
+  }
+  .bazaar-input .welcome-text { text-align: center; margin-bottom: 32px; }
+  .bazaar-input .welcome-text h1 {
+    font-size: 32px; color: var(--accent-amber); margin-bottom: 6px;
+    letter-spacing: 0.01em;
+  }
+  .bazaar-input .welcome-text .tagline {
+    color: var(--text-secondary); font-size: 15px; font-style: italic;
+  }
+  .bazaar-input .agent-roster {
+    display: flex; gap: 4px; justify-content: center;
+    margin-bottom: 28px; flex-wrap: wrap;
+  }
+  .bazaar-input .agent-chip {
+    width: 44px; height: 44px; border-radius: 50%;
+    border: 2px solid var(--border-default);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; cursor: default;
+    transition: all 200ms;
+  }
+  .bazaar-input .agent-chip:hover {
+    border-color: var(--accent-amber);
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(232,168,64,0.2);
+  }
+  .bazaar-input .form-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 14px; padding: 28px;
+    width: 100%; max-width: 480px;
+    animation: fadeInUp 0.6s ease 0.15s both;
+  }
+  .bazaar-input .form-row { display: flex; gap: 12px; margin-bottom: 16px; }
+  .bazaar-input .form-group { flex: 1; }
+  .bazaar-input .form-label {
+    display: block; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--text-muted); margin-bottom: 6px;
+  }
+  .bazaar-input .form-input {
+    width: 100%; padding: 10px 14px;
+    background: var(--bg-input); border: 1px solid var(--border-default);
+    border-radius: 10px; color: var(--text-primary); font-size: 15px;
+    font-family: var(--font-sans); transition: border-color 200ms;
+    outline: none;
+  }
+  .bazaar-input .form-input:focus { border-color: var(--border-active); }
+  .bazaar-input select.form-input {
+    cursor: pointer; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='%23A89B85'%3E%3Cpath d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
+    padding-right: 36px;
+  }
+
+  .bazaar-input .analyst-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    margin-bottom: 20px;
+  }
+  .bazaar-input .analyst-check {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; background: var(--bg-input);
+    border: 1px solid var(--border-default); border-radius: 8px;
+    cursor: pointer; transition: all 150ms; font-size: 13px;
+    user-select: none;
+  }
+  .bazaar-input .analyst-check:hover { border-color: var(--border-active); }
+  .bazaar-input .analyst-check.checked {
+    border-color: var(--accent-amber);
+    background: rgba(232,168,64,0.08);
+  }
+  .bazaar-input .analyst-check .avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0;
+  }
+
+  .bazaar-input .btn-summon {
+    width: 100%; padding: 14px; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent-amber), #D49520);
+    color: #1A1410; font-size: 16px; font-weight: 700;
+    cursor: pointer; font-family: var(--font-sans);
+    letter-spacing: 0.02em;
+    transition: all 200ms;
+    position: relative; overflow: hidden;
+  }
+  .bazaar-input .btn-summon:hover {
+    background: linear-gradient(135deg, var(--accent-glow), #E8A840);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(232,168,64,0.25);
+  }
+  .bazaar-input .btn-summon:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* ═══════════════════════════════════════════════════
+     SCREEN: COUNCIL ARENA (DEBATE)
+     ═══════════════════════════════════════════════════ */
+  .arena {
+    flex: 1; display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Council Table ────────────────────────────── */
+  .council-table {
+    background: var(--bg-surface);
+    border-bottom: 2px solid var(--border-default);
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 6px;
+    overflow-x: auto;
+    position: sticky; top: 0; z-index: 50;
+  }
+  .council-table .councilor {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 4px; min-width: 52px;
+    padding: 6px 4px; border-radius: 10px;
+    border: 2px solid transparent;
+    transition: all 300ms;
+    opacity: 0.5;
+    cursor: default;
+  }
+  .council-table .councilor.spoken {
+    opacity: 0.85;
+  }
+  .council-table .councilor.speaking {
+    opacity: 1;
+    border-color: var(--accent-amber);
+    background: rgba(232,168,64,0.08);
+    animation: speakerPulse 2s ease-in-out infinite;
+  }
+  .council-table .councilor .counc-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    border: 1.5px solid;
+  }
+  .council-table .councilor .counc-initial {
+    font-size: 9px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin-top: 2px;
+  }
+
+  /* ── Arena Header ─────────────────────────────── */
+  .arena-header {
+    padding: 10px 20px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-default);
+    display: flex; align-items: center; gap: 12px;
+    font-size: 13px;
+  }
+  .arena-header .ticker-badge {
+    background: rgba(232,168,64,0.12);
+    color: var(--accent-amber); font-weight: 700;
+    padding: 3px 12px; border-radius: 20px;
+    font-family: var(--font-mono); font-size: 14px;
+  }
+  .arena-header .date-label { color: var(--text-secondary); }
+  .arena-header .clash-counter {
+    margin-left: auto;
+    font-size: 11px; color: var(--text-muted);
+    font-style: italic;
+  }
+
+  /* ── Arena Scroll ─────────────────────────────── */
+  .arena-scroll {
+    flex: 1; overflow-y: auto; padding: 16px 20px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+
+  /* ── Testimony Cards ──────────────────────────── */
+  .testimony-card {
+    animation: slideInLeft 0.4s ease both;
+    max-width: 88%;
+    align-self: flex-start;
+  }
+  .testimony-card.clash-card {
+    animation: slideInRight 0.4s ease both;
+    align-self: flex-end;
+    max-width: 90%;
+  }
+  .testimony-card .testimony-banner {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 6px;
+  }
+  .testimony-card .testimony-banner .test-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    border: 2px solid;
+    background: var(--bg-elevated);
+  }
+  .testimony-card .testimony-banner .test-name {
+    font-size: 13px; font-weight: 700; letter-spacing: 0.03em;
+  }
+  .testimony-card .testimony-banner .test-role {
+    font-size: 10px; color: var(--text-muted); font-weight: 400;
+  }
+  .testimony-card .testimony-body {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 12px; padding: 12px 16px;
+    font-size: 14px; line-height: 1.6;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .testimony-card:not(.clash-card) .testimony-body {
+    border-left: 3px solid;
+  }
+  .testimony-card.clash-card .testimony-body {
+    border-right: 3px solid;
+    text-align: right;
+  }
+  .testimony-card .testimony-meta {
+    font-size: 10px; color: var(--text-muted);
+    margin-top: 4px; padding: 0 4px;
+  }
+  .testimony-card.clash-card .testimony-meta {
+    text-align: right;
+  }
+  /* Report testimony — collapsible */
+  .testimony-card.report-card .testimony-body {
+    max-height: 120px; overflow-y: auto; font-size: 12px;
+    color: var(--text-secondary);
+    border-left: 3px solid var(--border-default);
+  }
+
+  /* ── Herald (System) Message ──────────────────── */
+  .herald-msg {
+    align-self: center; text-align: center;
+    padding: 8px 20px; max-width: 80%;
+    animation: fadeIn 0.5s ease both;
+  }
+  .herald-msg .herald-divider {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 4px;
+  }
+  .herald-msg .herald-divider::before,
+  .herald-msg .herald-divider::after {
+    content: ''; flex: 1; height: 1px;
+    background: var(--border-default);
+  }
+  .herald-msg .herald-divider span {
+    font-size: 13px; color: var(--text-muted);
+    font-style: italic;
+  }
+  .herald-msg .herald-text {
+    font-size: 11px; color: var(--text-muted);
+    font-style: italic;
+  }
+
+  /* ── Gavel (Verdict Preview) ──────────────────── */
+  .gavel-preview {
+    align-self: center; text-align: center;
+    padding: 16px; animation: gavelStrike 0.6s ease both;
+  }
+  .gavel-preview .gavel-icon { font-size: 36px; }
+  .gavel-preview .gavel-text {
+    font-size: 20px; font-weight: 900; margin-top: 4px;
+    animation: pulseGlow 3s ease-in-out infinite;
+  }
+  .gavel-preview .gavel-text.buy  { color: var(--signal-bullish); }
+  .gavel-preview .gavel-text.sell { color: var(--signal-bearish); }
+  .gavel-preview .gavel-text.hold { color: var(--signal-neutral); }
+
+  /* ── Typing Indicator ─────────────────────────── */
+  .typing-indicator {
+    display: flex; gap: 12px; align-items: center;
+    padding: 4px 0;
+    animation: fadeIn 0.3s ease;
+  }
+  .typing-indicator .dots {
+    display: flex; gap: 4px; padding: 8px 14px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 14px;
+  }
+  .typing-indicator .dots span {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent-amber);
+    animation: typingBounce 1.2s ease-in-out infinite;
+  }
+  .typing-indicator .dots span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-indicator .dots span:nth-child(3) { animation-delay: 0.3s; }
+  .typing-indicator .typing-label {
+    font-size: 11px; color: var(--text-muted);
+    font-style: italic;
+  }
+
+  /* ── Jump to bottom button ───────────────────── */
+  .jump-bottom {
+    position: sticky; bottom: 12px; align-self: center;
+    padding: 6px 16px; background: var(--bg-elevated);
+    border: 1px solid var(--border-default); border-radius: 20px;
+    color: var(--text-secondary); font-size: 12px;
+    cursor: pointer; transition: all 150ms;
+    animation: fadeIn 0.3s ease;
+  }
+  .jump-bottom:hover {
+    border-color: var(--accent-amber); color: var(--accent-amber);
+  }
+
+  /* ═══════════════════════════════════════════════════
+     SCREEN: THE LEDGER (VERDICT)
+     ═══════════════════════════════════════════════════ */
+  .ledger {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 40px 20px;
+    animation: fadeIn 0.6s ease;
+  }
+  .ledger-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 18px; padding: 40px 36px;
+    max-width: 500px; width: 100%;
+    text-align: center;
+    animation: verdictReveal 0.7s ease both;
+  }
+  .ledger-card .verdict-icon {
+    font-size: 64px; margin-bottom: 12px;
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+  .ledger-card .verdict-label {
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--text-muted); margin-bottom: 4px;
+  }
+  .ledger-card .verdict-decision {
+    font-size: 36px; font-weight: 900;
+    letter-spacing: 0.03em; margin-bottom: 8px;
+  }
+  .ledger-card .verdict-decision.buy  { color: var(--signal-bullish); }
+  .ledger-card .verdict-decision.sell { color: var(--signal-bearish); }
+  .ledger-card .verdict-decision.hold { color: var(--signal-neutral); }
+  .ledger-card .verdict-ticker {
+    font-family: var(--font-mono); font-size: 14px;
+    color: var(--text-secondary); margin-bottom: 20px;
+  }
+  .ledger-card .verdict-summary {
+    color: var(--text-secondary); font-size: 14px;
+    line-height: 1.6; margin-bottom: 24px;
+    border-top: 1px solid var(--border-default);
+    border-bottom: 1px solid var(--border-default);
+    padding: 16px 0;
+  }
+  .ledger-card .btn-new {
+    padding: 12px 32px; border: 1px solid var(--border-default);
+    border-radius: 10px; background: transparent;
+    color: var(--accent-amber); font-size: 14px;
+    font-family: var(--font-sans); cursor: pointer;
+    transition: all 150ms;
+  }
+  .ledger-card .btn-new:hover {
+    border-color: var(--accent-amber);
+    background: rgba(232,168,64,0.06);
+  }
+
+  /* ── Floating particles for verdict ──────────── */
+  .particle {
+    position: fixed; pointer-events: none;
+    font-size: 20px; animation: floatUp 2s ease-out forwards;
+    z-index: 999;
+  }
+
+  /* ═══════════════════════════════════════════════════
+     SCREEN: HISTORY ARCHIVES
+     ═══════════════════════════════════════════════════ */
+  .archives {
+    flex: 1; display: flex; flex-direction: column;
+    padding: 32px 20px;
+    animation: fadeInUp 0.5s ease;
+    gap: 24px;
+  }
+  .archives-hero {
+    text-align: center; padding: 12px 0;
+  }
+  .archives-hero h2 {
+    font-size: 24px; color: var(--accent-amber);
+    letter-spacing: 0.02em; margin-bottom: 4px;
+  }
+  .archives-hero p {
+    color: var(--text-secondary); font-size: 14px; font-style: italic;
+  }
+  .archives-grid {
+    display: grid; gap: 12px;
+  }
+  .archive-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px; padding: 18px;
+    cursor: pointer;
+    transition: all 200ms;
+    animation: fadeInUp 0.4s ease both;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .archive-card:hover {
+    border-color: var(--border-active);
+    transform: translateX(4px);
+    box-shadow: 0 2px 12px rgba(232,168,64,0.1);
+  }
+  .archive-card .arc-verdict {
+    font-size: 36px; flex-shrink: 0;
+  }
+  .archive-card .arc-info { flex: 1; min-width: 0; }
+  .archive-card .arc-ticker {
+    font-weight: 700; font-size: 20px;
+    font-family: var(--font-mono); color: var(--text-primary);
+  }
+  .archive-card .arc-date {
+    font-size: 12px; color: var(--text-muted);
+  }
+  .archive-card .arc-preview {
+    font-size: 12px; color: var(--text-secondary);
+    margin-top: 4px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 400px;
+  }
+  .archive-card .arc-badge {
+    font-size: 10px; font-weight: 700;
+    padding: 3px 10px; border-radius: 16px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    flex-shrink: 0;
+  }
+  .archive-card .arc-badge.buy  { background: rgba(76,175,80,0.12); color: var(--signal-bullish); }
+  .archive-card .arc-badge.sell { background: rgba(229,115,115,0.12); color: var(--signal-bearish); }
+  .archive-card .arc-badge.hold { background: rgba(255,183,77,0.12); color: var(--signal-neutral); }
+  .archive-card .arc-badge.unknown { background: rgba(107,95,78,0.12); color: var(--text-muted); }
+
+  /* ── Archive Detail View ──────────────────────── */
+  .archive-detail {
+    flex: 1; display: flex; flex-direction: column;
+    padding: 24px 20px; gap: 20px;
+    animation: fadeInUp 0.4s ease;
+  }
+  .archive-detail .detail-verdict {
+    text-align: center; padding: 20px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 14px;
+  }
+  .archive-detail .detail-verdict .dv-icon { font-size: 48px; }
+  .archive-detail .detail-verdict .dv-decision {
+    font-size: 28px; font-weight: 900; margin-top: 4px;
+  }
+  .archive-detail .detail-verdict .dv-decision.buy  { color: var(--signal-bullish); }
+  .archive-detail .detail-verdict .dv-decision.sell { color: var(--signal-bearish); }
+  .archive-detail .detail-verdict .dv-decision.hold { color: var(--signal-neutral); }
+  .archive-detail .detail-verdict .dv-meta {
+    font-size: 13px; color: var(--text-muted); margin-top: 2px;
+  }
+  .archive-detail .detail-section {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px; padding: 16px;
+  }
+  .archive-detail .detail-section h4 {
+    font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-muted); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .archive-detail .detail-content {
+    font-size: 13px; line-height: 1.7;
+    color: var(--text-secondary);
+    white-space: pre-wrap; word-break: break-word;
+    max-height: 300px; overflow-y: auto;
+  }
+  .archive-detail .detail-loading {
+    text-align: center; color: var(--text-muted);
+    padding: 48px; font-style: italic;
+  }
+  .archive-detail .detail-error {
+    text-align: center; color: var(--signal-bearish);
+    padding: 24px;
+  }
+
+  /* ═══════════════════════════════════════════════════
+     SCREEN: DASHBOARD
+     ═══════════════════════════════════════════════════ */
+  .dashboard {
+    flex: 1; display: flex; flex-direction: column;
+    padding: 32px 20px;
+    animation: fadeInUp 0.5s ease;
+    gap: 28px;
+  }
+  .dashboard-hero {
+    text-align: center; padding: 20px 0;
+    animation: fadeIn 0.6s ease;
+  }
+  .dashboard-hero h1 {
+    font-size: 36px; color: var(--accent-amber);
+    letter-spacing: 0.01em; margin-bottom: 6px;
+  }
+  .dashboard-hero .subtitle {
+    color: var(--text-secondary); font-size: 15px;
+    font-style: italic;
+  }
+  .dashboard-hero .quickstart {
+    display: inline-flex; align-items: center; gap: 12px;
+    margin-top: 20px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 14px; padding: 12px 20px;
+    animation: fadeInUp 0.6s ease 0.2s both;
+  }
+  .dashboard-hero .quickstart input {
+    background: var(--bg-input); border: 1px solid var(--border-default);
+    border-radius: 10px; padding: 10px 16px;
+    color: var(--text-primary); font-size: 16px;
+    font-family: var(--font-sans); width: 120px;
+    text-align: center; text-transform: uppercase;
+    transition: border-color 200ms;
+  }
+  .dashboard-hero .quickstart input:focus { outline: none; border-color: var(--accent-amber); }
+  .dashboard-hero .quickstart .btn-go {
+    padding: 10px 24px; border: none; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent-amber), #D49520);
+    color: #1A1410; font-weight: 700; font-size: 15px;
+    cursor: pointer; font-family: var(--font-sans);
+    transition: all 200ms;
+  }
+  .dashboard-hero .quickstart .btn-go:hover {
+    background: linear-gradient(135deg, var(--accent-glow), #E8A840);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(232,168,64,0.25);
+  }
+  .dashboard-hero .quickstart .btn-go:disabled { opacity: 0.5; cursor: not-allowed; }
+  
+  .dashboard .section-title {
+    font-size: 13px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-muted); margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .dashboard .section-title::after {
+    content: ''; flex: 1; height: 1px;
+    background: var(--border-default);
+  }
+  
+  .recent-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+  }
+  .recent-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 12px; padding: 16px;
+    cursor: pointer; transition: all 200ms;
+    animation: fadeInUp 0.4s ease both;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .recent-card:hover {
+    border-color: var(--accent-amber);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(232,168,64,0.12);
+  }
+  .recent-card .rc-icon { font-size: 28px; flex-shrink: 0; }
+  .recent-card .rc-info { flex: 1; min-width: 0; }
+  .recent-card .rc-ticker {
+    font-weight: 700; font-size: 18px;
+    font-family: var(--font-mono); color: var(--text-primary);
+  }
+  .recent-card .rc-date { font-size: 12px; color: var(--text-muted); }
+  .recent-card .rc-arrow {
+    color: var(--text-muted); font-size: 14px;
+    transition: all 200ms;
+  }
+  .recent-card:hover .rc-arrow { color: var(--accent-amber); transform: translateX(2px); }
+  
+  .dashboard-empty {
+    text-align: center; color: var(--text-muted);
+    padding: 40px; font-style: italic;
+  }
+  .dashboard-loading {
+    display: flex; align-items: center; gap: 8px;
+    color: var(--text-muted); font-size: 13px;
+    padding: 12px 0;
+  }
+  .dashboard-loading .spinner {
+    width: 14px; height: 14px; border: 2px solid var(--border-default);
+    border-top-color: var(--accent-amber); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  
+  .agent-showcase {
+    display: flex; gap: 8px; justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .agent-showcase .showcase-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 16px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 24px;
+    transition: all 200ms;
+    cursor: default;
+    animation: fadeInUp 0.4s ease both;
+  }
+  .agent-showcase .showcase-chip:hover {
+    border-color: var(--accent-amber);
+    background: var(--bg-elevated);
+  }
+  .agent-showcase .sc-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .agent-showcase .sc-name { font-size: 13px; font-weight: 600; }
+  .agent-showcase .sc-role { font-size: 10px; color: var(--text-muted); }
+
+  /* ═══════════════════════════════════════════════════
+     ERROR BANNER
+     ═══════════════════════════════════════════════════ */
+  .error-banner {
+    margin: 8px 20px; padding: 10px 16px;
+    background: rgba(229,115,115,0.12);
+    border: 1px solid var(--signal-bearish);
+    border-radius: 10px; color: var(--signal-bearish);
+    font-size: 13px; display: flex; align-items: center; gap: 8px;
+    animation: fadeInUp 0.3s ease;
+  }
+
+  /* ═══════════════════════════════════════════════════
+     RESPONSIVE
+     ═══════════════════════════════════════════════════ */
+  @media (max-width: 600px) {
+    .bazaar-input .analyst-grid { grid-template-columns: 1fr; }
+    .ledger-card { padding: 28px 20px; }
+    .ledger-card .verdict-decision { font-size: 28px; }
+    .dashboard-hero h1 { font-size: 28px; }
+    .dashboard-hero .quickstart { flex-direction: column; width: 100%; }
+    .dashboard-hero .quickstart input { width: 100%; }
+    .dashboard-hero .quickstart .btn-go { width: 100%; }
+    .recent-grid { grid-template-columns: 1fr; }
+    .agent-showcase { gap: 6px; }
+    .agent-showcase .showcase-chip { padding: 6px 12px; font-size: 11px; }
+    .council-table { gap: 2px; padding: 10px 8px; }
+    .council-table .councilor { min-width: 40px; }
+    .council-table .councilor .counc-avatar { width: 24px; height: 24px; font-size: 12px; }
+  }
+
+  /* ── Page Transitions ─────────────────────────── */
+  .screen-enter { animation: fadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .screen-exit { animation: fadeOut 0.2s ease forwards; }
+  @keyframes fadeOut {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+/* ═══════════════════════════════════════════════════
+   AGENT PERSONAS
+   ═══════════════════════════════════════════════════ */
+const AGENTS = {
+  market:     { id:'market', name:'Flint', role:'Market Analyst', avatar:'🐂', color:'#8B6B4A', accent:'#A07654' },
+  social:     { id:'social', name:'Vera', role:'Sentiment Seer', avatar:'🔮', color:'#C44B4B', accent:'#D46060' },
+  news:       { id:'news', name:'Reed', role:'News Herald', avatar:'📜', color:'#4B7A9E', accent:'#5D8DB5' },
+  fundamentals:{ id:'fundamentals', name:'Sage', role:'Fundamentals Scholar', avatar:'📊', color:'#5C8A6F', accent:'#6D9E80' },
+  debater:    { id:'debater', name:'Balthazar', role:'Investment Debater', avatar:'⚖️', color:'#D4A030', accent:'#E8B840' },
+  risk:       { id:'risk', name:'Morwen', role:'Risk Guardian', avatar:'🛡️', color:'#7B8B9A', accent:'#8D9DAC' },
+  trader:     { id:'trader', name:'Kael', role:'Swift Trader', avatar:'🏃', color:'#C07840', accent:'#D48850' },
+  judge:      { id:'judge', name:'Elder Aldric', role:'High Judge', avatar:'👑', color:'#9B8BAA', accent:'#AD9DBC' },
+};
+
+const NARRATOR = { id:'system', name:'The Herald', avatar:'🏛️', color:'#E8A840', accent:'#F0C060' };
+const ALL_AGENTS = Object.values(AGENTS);
+
+/* Map SSE node names to agent personas */
+function resolveAgent(eventType, nodeName, sectionName) {
+  if (eventType === 'report') {
+    if (sectionName === 'market_report') return AGENTS.market;
+    if (sectionName === 'sentiment_report') return AGENTS.social;
+    if (sectionName === 'news_report') return AGENTS.news;
+    if (sectionName === 'fundamentals_report') return AGENTS.fundamentals;
+    if (sectionName === 'trader_plan') return AGENTS.trader;
+  }
+  if (eventType === 'debate') {
+    if (nodeName && nodeName.toLowerCase().includes('risk')) return AGENTS.risk;
+    return AGENTS.debater;
+  }
+  if (eventType === 'decision') return AGENTS.judge;
+  if (eventType === 'status') return NARRATOR;
+  if (nodeName) {
+    const n = nodeName.toLowerCase();
+    if (n.includes('market')) return AGENTS.market;
+    if (n.includes('social') || n.includes('sentiment')) return AGENTS.social;
+    if (n.includes('news')) return AGENTS.news;
+    if (n.includes('fundamentals')) return AGENTS.fundamentals;
+    if (n.includes('risk')) return AGENTS.risk;
+    if (n.includes('debate')) return AGENTS.debater;
+    if (n.includes('trader') || n.includes('invest')) return AGENTS.trader;
+    if (n.includes('judge') || n.includes('final') || n.includes('decision')) return AGENTS.judge;
+  }
+  return NARRATOR;
+}
+
+/* ═══════════════════════════════════════════════════
+   HOOKS
+   ═══════════════════════════════════════════════════ */
+function useQueryParams() {
+  if (typeof window === 'undefined') return {};
+  const params = new URLSearchParams(window.location.search);
+  return {
+    apiBase: params.get('api') || 'http://localhost:8000',
+    urlToken: params.get('token') || '',
+  };
+}
+
+/* ═══════════════════════════════════════════════════
+   COMPONENTS
+   ═══════════════════════════════════════════════════ */
+
+/* ── Token Gate ─────────────────────────────────── */
+function TokenGate({ onUnlock, apiBase }) {
+  const [input, setInput] = useState('');
+  const [error, setError] = useState('');
+  const [validating, setValidating] = useState(false);
+  const { urlToken } = useQueryParams();
+
+  useEffect(() => { if (urlToken) verifyAndUnlock(urlToken); }, []);
+
+  async function verifyAndUnlock(token) {
+    setValidating(true); setError('');
+    try {
+      const resp = await fetch(`${apiBase}/auth/verify?token=${encodeURIComponent(token)}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (resp.ok) { onUnlock(token); }
+      else {
+        const data = await resp.json().catch(() => ({}));
+        setError(data.detail || `Invalid token (HTTP ${resp.status}).`);
+      }
+    } catch (err) {
+      setError(`Cannot reach backend at ${apiBase}. Is the server running?`);
+    } finally { setValidating(false); }
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (!input.trim()) { setError('A token is required.'); return; }
+    verifyAndUnlock(input.trim());
+  }
+
+  return (
+    <div className="token-overlay">
+      <form className="token-card" onSubmit={handleSubmit}>
+        <div style={{fontSize:48, marginBottom:12}}>🏛️</div>
+        <h2>Enter The Bazaar</h2>
+        <p>The gates are sealed. Speak the passphrase to summon the Council of Analysts.</p>
+        <input type="password" placeholder="API token..." value={input}
+               onChange={e => { setInput(e.target.value); setError(''); }}
+               autoFocus disabled={validating} />
+        <button type="submit" disabled={validating}>
+          {validating ? 'Verifying...' : 'Enter the Marketplace'}
+        </button>
+        {error && <div className="token-error">{error}</div>}
+      </form>
+    </div>
+  );
+}
+
+/* ── DeepSeek Model Presets ────────────────────── */
+const DEEPSEEK_PRESETS = [
+  { id: 'v4pro', label: 'V4 Pro + Flash', desc: 'Best quality, fast aux',
+    llm_provider: 'deepseek', deep_think_llm: 'deepseek-v4-pro', quick_think_llm: 'deepseek-v4-flash' },
+  { id: 'v4pro-chat', label: 'V4 Pro + Chat', desc: 'Best quality, balanced aux',
+    llm_provider: 'deepseek', deep_think_llm: 'deepseek-v4-pro', quick_think_llm: 'deepseek-chat' },
+  { id: 'chat', label: 'Chat (Balanced)', desc: 'Good quality, lower cost',
+    llm_provider: 'deepseek', deep_think_llm: 'deepseek-chat', quick_think_llm: 'deepseek-chat' },
+  { id: 'r1', label: 'R1 Reasoning', desc: 'Deep reasoning, slower',
+    llm_provider: 'deepseek', deep_think_llm: 'deepseek-r1', quick_think_llm: 'deepseek-v4-flash' },
+];
+
+/* ── Bazaar Input Screen ────────────────────────── */
+function BazaarInput({ onSubmit, isSubmitting, prefillTicker }) {
+  const [ticker, setTicker] = useState(prefillTicker || '');
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [analysts, setAnalysts] = useState(['market','social','news','fundamentals']);
+  const [depth, setDepth] = useState('standard');
+  const [modelPreset, setModelPreset] = useState('v4pro');
+
+  useEffect(() => { if (prefillTicker) setTicker(prefillTicker); }, [prefillTicker]);
+
+  function toggleAnalyst(id) {
+    setAnalysts(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]);
+  }
+
+  function handleSummon(e) {
+    e.preventDefault();
+    if (!ticker.trim()) return;
+    const preset = DEEPSEEK_PRESETS.find(p => p.id === modelPreset) || DEEPSEEK_PRESETS[0];
+    onSubmit({
+      ticker: ticker.trim().toUpperCase(),
+      date, analysts, depth,
+      llm_provider: preset.llm_provider,
+      deep_think_llm: preset.deep_think_llm,
+      quick_think_llm: preset.quick_think_llm,
+    });
+  }
+
+  const agentEntries = ALL_AGENTS.slice(0, 4);
+
+  return (
+    <div className="bazaar-input">
+      <div className="welcome-text">
+        <h1>🏛️ The Bazaar</h1>
+        <p className="tagline">Where the finest analytical minds gather to debate your trade.</p>
+      </div>
+      <div className="agent-roster">
+        {ALL_AGENTS.map(a => (
+          <div key={a.id} className="agent-chip" title={`${a.name} — ${a.role}`}
+               style={{borderColor: a.color + '44'}}>{a.avatar}</div>
+        ))}
+      </div>
+      <form className="form-card" onSubmit={handleSummon}>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Ticker Symbol</label>
+            <input type="text" className="form-input" placeholder="AAPL"
+                   value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
+                   maxLength={10} autoFocus />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Analysis Date</label>
+            <input type="date" className="form-input" value={date}
+                   onChange={e => setDate(e.target.value)} />
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">The Council</label>
+          <div className="analyst-grid">
+            {agentEntries.map(a => (
+              <div key={a.id} className={`analyst-check ${analysts.includes(a.id) ? 'checked' : ''}`}
+                   onClick={() => toggleAnalyst(a.id)}>
+                <div className="avatar" style={{background: a.color+'22', color: a.color}}>{a.avatar}</div>
+                <div>
+                  <div style={{fontWeight:600, fontSize:13}}>{a.name}</div>
+                  <div style={{fontSize:10, color:'var(--text-muted)'}}>{a.role}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">LLM Model (DeepSeek only)</label>
+            <select className="form-input" value={modelPreset}
+                    onChange={e => setModelPreset(e.target.value)}>
+              {DEEPSEEK_PRESETS.map(p => (
+                <option key={p.id} value={p.id}>{p.label} — {p.desc}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Research Depth</label>
+            <select className="form-input" value={depth} onChange={e => setDepth(e.target.value)}>
+              <option value="standard">Standard</option>
+              <option value="deep">Deep</option>
+            </select>
+          </div>
+        </div>
+        <button className="btn-summon" type="submit" disabled={isSubmitting || !ticker.trim()}>
+          {isSubmitting ? 'Summoning the Council...' : 'Summon the Council ⚡'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+/* ── Council Table ──────────────────────────────── */
+function CouncilTable({ activeAgentId, spokenAgents }) {
+  return (
+    <div className="council-table">
+      {ALL_AGENTS.map(a => {
+        const isSpeaking = activeAgentId === a.id;
+        const hasSpoken = spokenAgents.has(a.id);
+        let cls = 'councilor';
+        if (isSpeaking) cls += ' speaking';
+        else if (hasSpoken) cls += ' spoken';
+        return (
+          <div key={a.id} className={cls}>
+            <div className="counc-avatar" style={{borderColor: a.color, background: isSpeaking ? a.color+'22' : 'transparent'}}>
+              {a.avatar}
+            </div>
+            <div className="counc-initial">{a.name.slice(0,3)}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Testimony Card ─────────────────────────────── */
+function TestimonyCard({ msg, isClash, index }) {
+  const agent = msg.agent;
+  const isReport = msg.kind === 'report';
+
+  return (
+    <div className={`testimony-card ${isClash ? 'clash-card' : ''} ${isReport ? 'report-card' : ''}`}
+         style={{animationDelay: `${index * 0.06}s`}}>
+      <div className="testimony-banner" style={{flexDirection: isClash ? 'row-reverse' : 'row'}}>
+        <div className="test-avatar" style={{borderColor: agent.color}}>{agent.avatar}</div>
+        <div style={{textAlign: isClash ? 'right' : 'left'}}>
+          <div className="test-name" style={{color: agent.color}}>{agent.name}</div>
+          <div className="test-role">{agent.role}</div>
+        </div>
+      </div>
+      <div className="testimony-body" style={isClash ? {borderRightColor: agent.color} : {borderLeftColor: agent.color}}>
+        {msg.content}
+      </div>
+      {msg.timestamp && (
+        <div className="testimony-meta">{msg.timestamp}</div>
+      )}
+    </div>
+  );
+}
+
+/* ── Herald Message ─────────────────────────────── */
+function HeraldMsg({ text, subtext }) {
+  return (
+    <div className="herald-msg">
+      <div className="herald-divider"><span>🏛️ {text}</span></div>
+      {subtext && <div className="herald-text">{subtext}</div>}
+    </div>
+  );
+}
+
+/* ── Typing Indicator ───────────────────────────── */
+function TypingIndicator({ agentName }) {
+  return (
+    <div className="typing-indicator">
+      <div className="dots"><span></span><span></span><span></span></div>
+      <span className="typing-label">{agentName || 'The Council'} deliberates...</span>
+    </div>
+  );
+}
+
+/* ── Council Arena (Debate Hall) ────────────────── */
+function CouncilArena({ messages, isStreaming, streamingAgent, ticker, date, error, activeAgentId, spokenAgents, clashCount }) {
+  const scrollEndRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+
+  useEffect(() => {
+    if (autoScroll && scrollEndRef.current) {
+      scrollEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, autoScroll]);
+
+  function handleScroll() {
+    if (!scrollContainerRef.current) return;
+    const el = scrollContainerRef.current;
+    setAutoScroll(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+  }
+
+  return (
+    <div className="arena">
+      <CouncilTable activeAgentId={activeAgentId} spokenAgents={spokenAgents} />
+      <div className="arena-header">
+        <span className="ticker-badge">{ticker}</span>
+        <span className="date-label">{date}</span>
+        <span className="clash-counter">
+          {clashCount > 0 ? `⚔️ ${clashCount} argument${clashCount !== 1 ? 's' : ''} exchanged` : 'Council assembles...'}
+        </span>
+      </div>
+
+      {error && (
+        <div className="error-banner"><span>⚠️</span> {error}</div>
+      )}
+
+      <div className="arena-scroll" ref={scrollContainerRef} onScroll={handleScroll}>
+        {messages.length === 0 && !isStreaming && (
+          <div style={{textAlign:'center', color:'var(--text-muted)', padding:60}}>
+            <div style={{fontSize:48, marginBottom:12}}>🏛️</div>
+            <p>The Council assembles in the Great Hall.</p>
+            <p style={{fontSize:13, marginTop:6}}>Their debate will appear here as testimony scrolls.</p>
+          </div>
+        )}
+
+        {messages.map((msg, i) => {
+          if (msg.agent.id === 'system') {
+            return <HeraldMsg key={msg.id || i} text={msg.content} subtext={msg.subtext} />;
+          }
+          const isClash = msg.agent.id === 'debater' || msg.agent.id === 'risk';
+          return <TestimonyCard key={msg.id || i} msg={msg} isClash={isClash} index={i} />;
+        })}
+
+        {isStreaming && <TypingIndicator agentName={streamingAgent} />}
+        <div ref={scrollEndRef} />
+
+        {!autoScroll && messages.length > 5 && (
+          <button className="jump-bottom" onClick={() => { setAutoScroll(true); scrollEndRef.current?.scrollIntoView({behavior:'smooth'}); }}>
+            ↓ Latest testimony
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Ledger (Verdict) ───────────────────────────── */
+function Ledger({ decision, ticker, date, onNewAnalysis, onViewHistory }) {
+  const [particles, setParticles] = useState([]);
+
+  useEffect(() => {
+    const emojis = decision === 'BUY' ? ['💰','📈','✨','🚀','💎'] :
+                   decision === 'SELL' ? ['📉','💸','⚠️','🔻','🏃'] :
+                   ['🤝','⚖️','🧘','⏳','📊'];
+    setParticles(Array.from({length: 12}, (_, i) => ({
+      id: i, emoji: emojis[i % emojis.length],
+      left: 20 + Math.random() * 60,
+      delay: Math.random() * 0.8,
+      duration: 1.5 + Math.random() * 1.5,
+    })));
+  }, [decision]);
+
+  const decisionClass = decision === 'BUY' ? 'buy' : decision === 'SELL' ? 'sell' : 'hold';
+  const verdictEmoji = decision === 'BUY' ? '🐂' : decision === 'SELL' ? '🐻' : '🦉';
+
+  return (
+    <div className="ledger">
+      {particles.map(p => (
+        <div key={p.id} className="particle" style={{
+          left: `${p.left}%`, bottom: '40%',
+          animationDelay: `${p.delay}s`, animationDuration: `${p.duration}s`,
+        }}>{p.emoji}</div>
+      ))}
+      <div className="ledger-card" style={{animationDelay: '0.2s'}}>
+        <div className="verdict-icon">{verdictEmoji}</div>
+        <div className="verdict-label">The Council Has Spoken</div>
+        <div className={`verdict-decision ${decisionClass}`}>{decision}</div>
+        <div className="verdict-ticker">{ticker} · {date}</div>
+        <div className="verdict-summary">
+          {decision === 'BUY' && 'The Council sees opportunity. The bulls have carried the day — favorable winds, strong fundamentals, and rising sentiment converge.'}
+          {decision === 'SELL' && 'The Council urges caution. The bears have won the argument — headwinds are too strong, and the risks outweigh the potential rewards.'}
+          {decision === 'HOLD' && 'The Council is divided. Neither bulls nor bears carried enough conviction — patience is the prudent course.'}
+        </div>
+        <div style={{display:'flex', gap:10, justifyContent:'center'}}>
+          <button className="btn-new" onClick={onNewAnalysis}>Summon a New Council →</button>
+          <button className="btn-new" onClick={onViewHistory}>Browse Archives →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Agent Showcase ─────────────────────────────── */
+function AgentShowcase() {
+  return (
+    <div className="agent-showcase">
+      {ALL_AGENTS.map((a, i) => (
+        <div key={a.id} className="showcase-chip"
+             style={{animationDelay: `${i * 0.08}s`, borderLeft: `2px solid ${a.color}`}}>
+          <div className="sc-avatar" style={{background: a.color + '22', color: a.color}}>{a.avatar}</div>
+          <div>
+            <div className="sc-name" style={{color: a.color}}>{a.name}</div>
+            <div className="sc-role">{a.role}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Dashboard ──────────────────────────────────── */
+function Dashboard({ onQuickAnalyze, onViewReport, apiBase, token, onNavHistory }) {
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [quickTicker, setQuickTicker] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchReports() {
+      try {
+        const resp = await fetch(`${apiBase}/reports?token=${encodeURIComponent(token || '')}`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        if (!cancelled) setReports((data.reports || []).slice(0, 6));
+      } catch (err) { if (!cancelled) setError(err.message); }
+      finally { if (!cancelled) setLoading(false); }
+    }
+    fetchReports();
+    return () => { cancelled = true; };
+  }, [apiBase, token]);
+
+  function handleQuickSubmit(e) {
+    e.preventDefault();
+    const ticker = quickTicker.trim().toUpperCase();
+    if (ticker) onQuickAnalyze(ticker);
+  }
+
+  return (
+    <div className="dashboard">
+      <div className="dashboard-hero">
+        <h1>🏛️ The Bazaar</h1>
+        <p className="subtitle">Where the finest analytical minds gather to debate your trade.</p>
+        <form className="quickstart" onSubmit={handleQuickSubmit}>
+          <input type="text" placeholder="AAPL" maxLength={10}
+                 value={quickTicker} onChange={e => setQuickTicker(e.target.value.toUpperCase())} />
+          <button className="btn-go" type="submit" disabled={!quickTicker.trim()}>Analyze →</button>
+        </form>
+      </div>
+
+      <div>
+        <div className="section-title">The Council</div>
+        <AgentShowcase />
+      </div>
+
+      <div>
+        <div className="section-title">Recent Analyses</div>
+        {loading && (
+          <div className="dashboard-loading"><div className="spinner"></div> Consulting the archives...</div>
+        )}
+        {error && (
+          <div className="dashboard-empty">
+            ⚠️ Could not load reports: {error}
+            <br/><span style={{fontSize:12}}>(Is the backend running at {apiBase}?)</span>
+          </div>
+        )}
+        {!loading && !error && reports.length === 0 && (
+          <div className="dashboard-empty">
+            📭 No analyses yet. Summon the Council above to create your first.
+          </div>
+        )}
+        {!loading && reports.length > 0 && (
+          <div className="recent-grid">
+            {reports.map((r, i) => (
+              <div key={`${r.ticker}-${r.date}`} className="recent-card"
+                   style={{animationDelay: `${i * 0.06}s`}}
+                   onClick={() => onViewReport(r)}>
+                <div className="rc-icon">📈</div>
+                <div className="rc-info">
+                  <div className="rc-ticker">{r.ticker}</div>
+                  <div className="rc-date">{r.date}</div>
+                </div>
+                <div className="rc-arrow">→</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── History Archives Screen ────────────────────── */
+function HistoryArchives({ apiBase, token, onViewDetail, onBack }) {
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchAll() {
+      try {
+        const resp = await fetch(`${apiBase}/reports?token=${encodeURIComponent(token || '')}`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        if (!cancelled) setReports(data.reports || []);
+      } catch (err) { if (!cancelled) setError(err.message); }
+      finally { if (!cancelled) setLoading(false); }
+    }
+    fetchAll();
+    return () => { cancelled = true; };
+  }, [apiBase, token]);
+
+  // Try to detect verdict from report data if available
+  function detectVerdict(report) {
+    if (report.signal) {
+      const s = report.signal.toUpperCase();
+      if (s === 'BUY' || s === 'BULLISH') return { emoji: '🐂', cls: 'buy', label: 'BUY' };
+      if (s === 'SELL' || s === 'BEARISH') return { emoji: '🐻', cls: 'sell', label: 'SELL' };
+    }
+    if (report.decision) {
+      const d = report.decision.toUpperCase();
+      if (d === 'BUY') return { emoji: '🐂', cls: 'buy', label: 'BUY' };
+      if (d === 'SELL') return { emoji: '🐻', cls: 'sell', label: 'SELL' };
+      if (d === 'HOLD') return { emoji: '🦉', cls: 'hold', label: 'HOLD' };
+    }
+    return { emoji: '📊', cls: 'unknown', label: 'View' };
+  }
+
+  return (
+    <div className="archives">
+      <div className="archives-hero">
+        <h2>📜 The Council Archives</h2>
+        <p>Past deliberations and verdicts of the trading council.</p>
+      </div>
+
+      {loading && (
+        <div className="dashboard-loading"><div className="spinner"></div> Searching the archives...</div>
+      )}
+      {error && (
+        <div className="dashboard-empty">⚠️ Could not load archives: {error}</div>
+      )}
+      {!loading && !error && reports.length === 0 && (
+        <div className="dashboard-empty">
+          📭 The archives are empty. No councils have been summoned yet.
+        </div>
+      )}
+      {!loading && reports.length > 0 && (
+        <div className="archives-grid">
+          {reports.map((r, i) => {
+            const v = detectVerdict(r);
+            return (
+              <div key={`${r.ticker}-${r.date}-${i}`} className="archive-card"
+                   style={{animationDelay: `${i * 0.05}s`}}
+                   onClick={() => onViewDetail(r)}>
+                <div className="arc-verdict">{v.emoji}</div>
+                <div className="arc-info">
+                  <div className="arc-ticker">{r.ticker}</div>
+                  <div className="arc-date">{r.date}</div>
+                  {r.summary && <div className="arc-preview">{r.summary}</div>}
+                </div>
+                <div className={`arc-badge ${v.cls}`}>{v.label}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── History Detail Screen ──────────────────────── */
+function HistoryDetail({ report, apiBase, token, onBack, onReanalyze }) {
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchDetail() {
+      try {
+        const resp = await fetch(`${apiBase}/reports/${encodeURIComponent(report.ticker)}/${encodeURIComponent(report.date)}?token=${encodeURIComponent(token || '')}`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        if (!cancelled) setDetail(data);
+      } catch (err) { if (!cancelled) setError(err.message); }
+      finally { if (!cancelled) setLoading(false); }
+    }
+    fetchDetail();
+    return () => { cancelled = true; };
+  }, [report.ticker, report.date, apiBase, token]);
+
+  if (loading) {
+    return (
+      <div className="archive-detail">
+        <div className="detail-loading">Loading analysis for {report.ticker}...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="archive-detail">
+        <div className="detail-error">⚠️ Could not load analysis: {error}</div>
+        <button className="btn-new" onClick={onBack} style={{alignSelf:'center'}}>← Back to Archives</button>
+      </div>
+    );
+  }
+
+  const decision = detail?.signal || detail?.final_decision || detail?.decision || 'HOLD';
+  const decisionClass = decision.toUpperCase() === 'BUY' ? 'buy' : decision.toUpperCase() === 'SELL' ? 'sell' : 'hold';
+  const verdictEmoji = decision.toUpperCase() === 'BUY' ? '🐂' : decision.toUpperCase() === 'SELL' ? '🐻' : '🦉';
+
+  return (
+    <div className="archive-detail">
+      <div className="detail-verdict">
+        <div className="dv-icon">{verdictEmoji}</div>
+        <div className={`dv-decision ${decisionClass}`}>{String(decision).toUpperCase()}</div>
+        <div className="dv-meta">{report.ticker} · {report.date}</div>
+      </div>
+
+      {detail?.summary && (
+        <div className="detail-section">
+          <h4>📋 Summary</h4>
+          <div className="detail-content">{detail.summary}</div>
+        </div>
+      )}
+
+      {detail?.market_report && (
+        <div className="detail-section">
+          <h4><span style={{color:AGENTS.market.color}}>{AGENTS.market.avatar} {AGENTS.market.name}</span> · Market Report</h4>
+          <div className="detail-content">{String(detail.market_report)}</div>
+        </div>
+      )}
+
+      {detail?.sentiment_report && (
+        <div className="detail-section">
+          <h4><span style={{color:AGENTS.social.color}}>{AGENTS.social.avatar} {AGENTS.social.name}</span> · Sentiment Report</h4>
+          <div className="detail-content">{String(detail.sentiment_report)}</div>
+        </div>
+      )}
+
+      {detail?.news_report && (
+        <div className="detail-section">
+          <h4><span style={{color:AGENTS.news.color}}>{AGENTS.news.avatar} {AGENTS.news.name}</span> · News Report</h4>
+          <div className="detail-content">{String(detail.news_report)}</div>
+        </div>
+      )}
+
+      {detail?.fundamentals_report && (
+        <div className="detail-section">
+          <h4><span style={{color:AGENTS.fundamentals.color}}>{AGENTS.fundamentals.avatar} {AGENTS.fundamentals.name}</span> · Fundamentals Report</h4>
+          <div className="detail-content">{String(detail.fundamentals_report)}</div>
+        </div>
+      )}
+
+      {detail?.debate && (
+        <div className="detail-section">
+          <h4>⚖️ Council Debate</h4>
+          <div className="detail-content">{String(detail.debate)}</div>
+        </div>
+      )}
+
+      <div style={{display:'flex', gap:10, justifyContent:'center', paddingBottom:20}}>
+        <button className="btn-new" onClick={onBack}>← Back to Archives</button>
+        <button className="btn-new" onClick={() => onReanalyze(report)}>Re-Analyze →</button>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   APP
+   ═══════════════════════════════════════════════════ */
+function App() {
+  const { apiBase, urlToken } = useQueryParams();
+  const [screen, setScreen] = useState('dashboard');
+  const [token, setToken] = useState(() => localStorage.getItem('bazaar_token') || '');
+  const [showTokenGate, setShowTokenGate] = useState(!localStorage.getItem('bazaar_token'));
+  const [messages, setMessages] = useState([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingAgent, setStreamingAgent] = useState('');
+  const [currentTicker, setCurrentTicker] = useState('');
+  const [currentDate, setCurrentDate] = useState('');
+  const [verdict, setVerdict] = useState(null);
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [prefillTicker, setPrefillTicker] = useState('');
+  const [activeAgentId, setActiveAgentId] = useState(null);
+  const [spokenAgents, setSpokenAgents] = useState(new Set());
+  const [clashCount, setClashCount] = useState(0);
+  const [historyDetailReport, setHistoryDetailReport] = useState(null);
+  const eventSourceRef = useRef(null);
+  const messagesRef = useRef([]);
+
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  function handleTokenUnlock(t) {
+    localStorage.setItem('bazaar_token', t);
+    setToken(t);
+    setShowTokenGate(false);
+  }
+
+  function addMessage(agent, content, kind='text', subtext) {
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    setMessages(prev => [...prev, { agent, content, kind, timestamp, subtext, id: Date.now() + Math.random() }]);
+
+    // Track spoken agents & clash count
+    if (agent.id !== 'system') {
+      setSpokenAgents(prev => new Set([...prev, agent.id]));
+      setActiveAgentId(agent.id);
+    }
+    if (agent.id === 'debater' || agent.id === 'risk') {
+      setClashCount(prev => prev + 1);
+    }
+  }
+
+  async function handleSubmit({ ticker, date, analysts, depth, llm_provider, deep_think_llm, quick_think_llm }) {
+    setScreen('debate');
+    setCurrentTicker(ticker);
+    setCurrentDate(date);
+    setMessages([]);
+    setError('');
+    setIsStreaming(true);
+    setActiveAgentId(null);
+    setSpokenAgents(new Set());
+    setClashCount(0);
+
+    addMessage(NARRATOR, `The Council Convenes`, 'system', `Ticker: ${ticker} · Date: ${date}`);
+    setStreamingAgent('The Council');
+
+    try {
+      const resp = await fetch(`${apiBase}/analyze?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ ticker, date, analysts, research_depth: depth, llm_provider, deep_think_llm, quick_think_llm }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || `API returned ${resp.status}`);
+      }
+
+      const { job_id } = await resp.json();
+      addMessage(NARRATOR, 'The Council is seated. Testimonies begin.', 'system');
+
+      const sseUrl = `${apiBase}/stream/${job_id}?token=${encodeURIComponent(token)}`;
+      const es = new EventSource(sseUrl);
+      eventSourceRef.current = es;
+
+      es.onmessage = (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          const { type, data: eventData } = payload;
+
+          switch (type) {
+            case 'status': {
+              const agent = resolveAgent('status');
+              addMessage(agent, eventData.message || 'Processing...');
+              setStreamingAgent(agent.role);
+              break;
+            }
+            case 'report': {
+              const agent = resolveAgent('report', eventData.node, eventData.section);
+              const reportText = eventData.report || '';
+              const displayText = reportText.length > 400
+                ? reportText.slice(0, 400) + '\n\n... (report continues in full analysis)'
+                : reportText;
+              addMessage(agent, displayText, 'report');
+              setStreamingAgent(agent.name);
+              break;
+            }
+            case 'debate': {
+              const agent = resolveAgent('debate', eventData.node);
+              const debateText = eventData.current_response || eventData.judge_decision || '';
+              if (debateText && debateText.length > 10) {
+                addMessage(agent, debateText);
+                setStreamingAgent(agent.name);
+              }
+              break;
+            }
+            case 'decision': {
+              const agent = resolveAgent('decision', eventData.node);
+              const sig = (eventData.signal || '').toUpperCase();
+              const rawDecision = eventData.final_decision || '';
+              const displayDecision = sig || rawDecision;
+              addMessage(agent, `⚡ ${displayDecision}`, 'decision');
+
+              es.close();
+              eventSourceRef.current = null;
+              setIsStreaming(false);
+              setStreamingAgent('');
+              setActiveAgentId('judge');
+
+              setTimeout(() => {
+                setVerdict(sig || rawDecision || 'HOLD');
+                setScreen('ledger');
+              }, 2500);
+              break;
+            }
+            case 'complete': {
+              addMessage(NARRATOR, 'The Council has spoken. The verdict is recorded.', 'system');
+              es.close();
+              eventSourceRef.current = null;
+              setIsStreaming(false);
+              setStreamingAgent('');
+
+              if (eventData.result) {
+                const sig = (eventData.result.signal || '').toUpperCase() || 'HOLD';
+                setTimeout(() => { setVerdict(sig); setScreen('ledger'); }, 2000);
+              }
+              break;
+            }
+            case 'message': {
+              const agent = resolveAgent('message', eventData.node);
+              const text = eventData.content || '';
+              if (text && text.length > 5) {
+                addMessage(agent, text);
+                setStreamingAgent(agent.name);
+              }
+              break;
+            }
+            case 'error': {
+              addMessage(NARRATOR, `❌ ${eventData.message || 'An error occurred during analysis.'}`, 'system');
+              setError(eventData.message || 'Analysis failed');
+              setIsStreaming(false);
+              setStreamingAgent('');
+              es.close();
+              eventSourceRef.current = null;
+              break;
+            }
+            default: break;
+          }
+        } catch (parseErr) { /* ignore malformed */ }
+      };
+
+      es.onerror = () => {
+        if (es.readyState === EventSource.CLOSED) {
+          setIsStreaming(false);
+          setStreamingAgent('');
+          eventSourceRef.current = null;
+        }
+      };
+
+    } catch (err) {
+      addMessage(NARRATOR, `❌ Failed to summon the Council: ${err.message}`, 'system');
+      setError(err.message);
+      setIsStreaming(false);
+      setStreamingAgent('');
+    }
+  }
+
+  function handleNewAnalysis() {
+    if (eventSourceRef.current) { eventSourceRef.current.close(); eventSourceRef.current = null; }
+    setScreen('dashboard');
+    setMessages([]); setVerdict(null); setError('');
+    setIsStreaming(false); setStreamingAgent('');
+    setPrefillTicker('');
+  }
+
+  function handleQuickAnalyze(ticker) {
+    setPrefillTicker(ticker);
+    setScreen('input');
+  }
+
+  function handleViewReport(report) {
+    setPrefillTicker(report.ticker);
+    setScreen('input');
+  }
+
+  function navigateTo(s) {
+    if (eventSourceRef.current && s !== 'debate') {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+      setIsStreaming(false);
+      setStreamingAgent('');
+    }
+    setScreen(s);
+    if (s === 'dashboard') { setMessages([]); setVerdict(null); setError(''); }
+  }
+
+  function handleViewDetail(report) {
+    setHistoryDetailReport(report);
+    setScreen('history-detail');
+  }
+
+  function handleReanalyze(report) {
+    setPrefillTicker(report.ticker);
+    setScreen('input');
+  }
+
+  function handleBackFromDetail() {
+    setScreen('history');
+    setHistoryDetailReport(null);
+  }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => { if (eventSourceRef.current) eventSourceRef.current.close(); };
+  }, []);
+
+  if (showTokenGate) {
+    return <TokenGate onUnlock={handleTokenUnlock} apiBase={apiBase} />;
+  }
+
+  return (
+    <div className="app-container">
+      <div className="topbar">
+        <div className="topbar-brand" onClick={() => navigateTo('dashboard')}>
+          <span className="icon">🏛️</span> The Bazaar
+        </div>
+        <div className="topbar-nav">
+          <button className={screen === 'dashboard' ? 'active' : ''}
+                  onClick={() => navigateTo('dashboard')}>Market Square</button>
+          <button className={screen === 'history' || screen === 'history-detail' ? 'active' : ''}
+                  onClick={() => { setScreen('history'); setHistoryDetailReport(null); }}>
+            📜 Archives
+          </button>
+        </div>
+        <div className="topbar-status">
+          {screen === 'debate' && (
+            <><span className={`live-indicator ${isStreaming ? '' : 'inactive'}`}></span>
+            <span>{isStreaming ? 'Live' : 'Concluded'}</span></>
+          )}
+          {screen === 'ledger' && <span style={{color:'var(--accent-amber)'}}>Verdict Rendered</span>}
+        </div>
+      </div>
+
+      {screen === 'dashboard' && (
+        <Dashboard onQuickAnalyze={handleQuickAnalyze} onViewReport={handleViewReport}
+                   apiBase={apiBase} token={token} onNavHistory={() => setScreen('history')} />
+      )}
+
+      {screen === 'input' && (
+        <BazaarInput onSubmit={handleSubmit} isSubmitting={isSubmitting} prefillTicker={prefillTicker} />
+      )}
+
+      {screen === 'debate' && (
+        <CouncilArena
+          messages={messages} isStreaming={isStreaming} streamingAgent={streamingAgent}
+          ticker={currentTicker} date={currentDate} error={error}
+          activeAgentId={activeAgentId} spokenAgents={spokenAgents} clashCount={clashCount}
+        />
+      )}
+
+      {screen === 'ledger' && verdict && (
+        <Ledger decision={verdict} ticker={currentTicker} date={currentDate}
+                onNewAnalysis={handleNewAnalysis}
+                onViewHistory={() => setScreen('history')} />
+      )}
+
+      {screen === 'history' && (
+        <HistoryArchives apiBase={apiBase} token={token}
+                         onViewDetail={handleViewDetail}
+                         onBack={() => navigateTo('dashboard')} />
+      )}
+
+      {screen === 'history-detail' && historyDetailReport && (
+        <HistoryDetail report={historyDetailReport} apiBase={apiBase} token={token}
+                       onBack={handleBackFromDetail}
+                       onReanalyze={handleReanalyze} />
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   MOUNT
+   ═══════════════════════════════════════════════════ */
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

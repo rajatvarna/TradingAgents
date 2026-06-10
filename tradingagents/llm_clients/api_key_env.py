@@ -38,6 +38,9 @@ PROVIDER_API_KEY_ENV: dict[str, Optional[str]] = {
     "lm-studio":  None,
     "llama-cpp":  None,
     "bedrock":    None,
+    # OAuth — no static API key; device-code flow authenticates via browser.
+    "openai-oauth":  None,
+    "openai_oauth":  None,
     # Local runtimes do not authenticate.
     "ollama":     None,
     "lmstudio":   None,

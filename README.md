@@ -217,6 +217,7 @@ TradingAgents supports multiple LLM providers. Set the API key for your chosen p
 export OPENAI_API_KEY=...          # OpenAI (GPT)
 export GOOGLE_API_KEY=...          # Google (Gemini)
 export ANTHROPIC_API_KEY=...       # Anthropic (Claude)
+export TENCENT_API_KEY=...         # Tencent Cloud LKEAP (Anthropic-compatible)
 export XAI_API_KEY=...             # xAI (Grok)
 export DEEPSEEK_API_KEY=...        # DeepSeek
 export MOONSHOT_API_KEY=...        # Kimi (Moonshot AI) — https://platform.kimi.com/console/api-keys
@@ -284,6 +285,21 @@ Alternatively, copy `.env.example` to `.env` and fill in your keys:
 cp .env.example .env
 ```
 
+Alpha Vantage and data-vendor selection can also be configured from `.env`:
+```bash
+ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
+TRADINGAGENTS_DATA_VENDOR=alpha_vantage
+
+# Optional per-category overrides:
+TRADINGAGENTS_CORE_STOCK_VENDOR=alpha_vantage
+TRADINGAGENTS_TECHNICAL_INDICATORS_VENDOR=alpha_vantage
+TRADINGAGENTS_FUNDAMENTAL_DATA_VENDOR=alpha_vantage
+TRADINGAGENTS_NEWS_DATA_VENDOR=alpha_vantage
+
+# Optional per-tool override:
+TRADINGAGENTS_TOOL_VENDOR_GET_STOCK_DATA=alpha_vantage
+```
+
 ### CLI Usage
 
 Launch the interactive CLI:
@@ -349,7 +365,7 @@ See [**OPENCLAW_INTEGRATION.md**](OPENCLAW_INTEGRATION.md) for detailed setup in
 
 ### Implementation Details
 
-We built TradingAgents with LangGraph to ensure flexibility and modularity. The framework supports multiple LLM providers: OpenAI, Google, Anthropic, xAI, DeepSeek, Qwen (Alibaba DashScope), GLM (Zhipu), OpenRouter, DeepInfra, GitHub Models / Copilot, Ollama for local models, AWS Bedrock, and Azure OpenAI for enterprise.
+We built TradingAgents with LangGraph to ensure flexibility and modularity. The framework supports multiple LLM providers: OpenAI, Google, Anthropic, Tencent Cloud LKEAP, xAI, DeepSeek, Kimi (Moonshot), Qwen (Alibaba DashScope, international and China endpoints), GLM (Zhipu), MiniMax (global + China), OpenRouter, DeepInfra, GitHub Models / Copilot, Ollama for local models, AWS Bedrock, and Azure OpenAI for enterprise.
 
 ### Python Usage
 
@@ -373,7 +389,7 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 
 config = DEFAULT_CONFIG.copy()
-config["llm_provider"] = "openai"        # openai, google, anthropic, xai, deepseek, kimi, qwen, qwen-cn, glm, glm-cn, minimax, minimax-cn, openrouter, deepinfra, github_copilot, ollama, bedrock, azure
+config["llm_provider"] = "openai"        # openai, google, anthropic, tencent, xai, deepseek, kimi, qwen, qwen-cn, glm, glm-cn, minimax, minimax-cn, openrouter, deepinfra, github_copilot, ollama, bedrock, azure
 config["deep_think_llm"] = "gpt-5.4"     # Model for complex reasoning
 config["quick_think_llm"] = "gpt-5.4-mini" # Model for quick tasks
 config["max_debate_rounds"] = 2

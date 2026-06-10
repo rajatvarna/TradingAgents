@@ -19,6 +19,7 @@ PROVIDER_API_KEY_ENV: dict[str, Optional[str]] = {
     # ChatGPT OAuth: nessuna env key; l'auth passa per il token store OAuth.
     "openai-oauth": None,
     "anthropic":  "ANTHROPIC_API_KEY",
+    "tencent":    "TENCENT_API_KEY",
     "google":     "GOOGLE_API_KEY",
     "azure":      "AZURE_OPENAI_API_KEY",
     "xai":        "XAI_API_KEY",

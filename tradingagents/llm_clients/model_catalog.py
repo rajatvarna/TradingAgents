@@ -86,6 +86,25 @@ _KIMI_MODELS: Dict[str, List[ModelOption]] = {
     ],
 }
 
+# Tencent Cloud LKEAP Anthropic-compatible gateway. The platform's model
+# roster changes over time, so the built-ins are starting points and the
+# Custom model option remains important.
+_TENCENT_MODELS: Dict[str, List[ModelOption]] = {
+    "quick": [
+        ("GLM-5 - Tencent LKEAP compatible model", "glm-5"),
+        ("MiniMax-M2.5 - Tencent LKEAP compatible model", "minimax-m2.5"),
+        ("Kimi-K2.5 - Tencent LKEAP compatible model", "kimi-k2.5"),
+        ("Custom model ID", "custom"),
+    ],
+    "deep": [
+        ("GLM-5 - Tencent LKEAP compatible model", "glm-5"),
+        ("Kimi-K2.5 - Tencent LKEAP compatible model", "kimi-k2.5"),
+        ("MiniMax-M2.5 - Tencent LKEAP compatible model", "minimax-m2.5"),
+        ("Custom model ID", "custom"),
+    ],
+}
+
+
 MODEL_OPTIONS: ProviderModeOptions = {
     "openai": {
         "quick": [
@@ -134,6 +153,7 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Claude Sonnet 4.6 - Best speed and intelligence balance", "claude-sonnet-4-6"),
         ],
     },
+    "tencent": _TENCENT_MODELS,
     "google": {
         "quick": [
             ("Gemini 3.5 Flash - Latest, frontier agentic + coding (GA)", "gemini-3.5-flash"),

@@ -1,6 +1,7 @@
 import logging
 import os
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
@@ -310,6 +311,22 @@ def resolve_provider_base_url(provider: str) -> Optional[str]:
     return _PROVIDER_BASE_URL.get(provider)
 
 
+def _is_native_openai_base_url(base_url: Optional[str]) -> bool:
+    """True when ``base_url`` is unset or points at api.openai.com.
+
+    The Responses API (/v1/responses) only exists on native OpenAI. An
+    OpenAI-compatible custom endpoint (third-party gateways, LM Studio,
+    vLLM, ...) only supports Chat Completions, so the Responses API must
+    stay off there.
+    """
+    if not base_url:
+        return True
+    if "://" not in base_url:
+        base_url = "https://" + base_url
+    host = urlparse(base_url).hostname or ""
+    return host == "api.openai.com" or host.endswith(".openai.com")
+
+
 class OpenAIClient(BaseLLMClient):
     """Client for OpenAI and OpenAI-compatible providers.
 
@@ -420,10 +437,10 @@ class OpenAIClient(BaseLLMClient):
             provider=self.provider,
         )
 
-        # Native OpenAI: use Responses API for consistent behavior across
-        # all model families. Third-party providers use Chat Completions.
-        if self.provider == "openai":
-            llm_kwargs["use_responses_api"] = True
+        # Native OpenAI uses the Responses API; OpenAI-compatible custom
+        # endpoints (third-party gateways, LM Studio, vLLM, ...) only speak
+        # Chat Completions, so only enable it for the real api.openai.com host.
+            llm_kwargs["use_responses_api"] = _is_native_openai_base_url(self.base_url)
             # T0.1 caveat: OpenAI Responses API rejects `seed` (it's a
             # Chat Completions parameter). Drop it for native OpenAI;
             # temperature=0 still provides greedy-sampling determinism.

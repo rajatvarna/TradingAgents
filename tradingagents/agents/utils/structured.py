@@ -86,6 +86,8 @@ def invoke_structured_or_freetext(
             return cache[key]
         try:
             result = structured_llm.invoke(prompt)
+            if result is None:
+                raise ValueError("structured output returned None")
             rendered = render(result)
             if cache is not None:
                 cache[key] = rendered
@@ -126,6 +128,8 @@ def invoke_structured_or_freetext_with_meta(
             return cache[key], True
         try:
             result = structured_llm.invoke(prompt, **kwargs)
+            if result is None:
+                raise ValueError("structured output returned None")
             rendered = render(result)
             if cache is not None:
                 cache[key] = rendered

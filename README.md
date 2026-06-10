@@ -233,6 +233,18 @@ For local models, configure Ollama with `llm_provider: "ollama"` in your config.
 
 For AWS Bedrock, set `llm_provider: "bedrock"` and ensure your AWS credentials are configured (via `~/.aws/credentials`, environment variables, or IAM role). Set `AWS_DEFAULT_REGION` and optionally `AWS_PROFILE`. Install the extra dependency with `pip install .[bedrock]`. Use cross-region inference profile IDs (e.g. `us.anthropic.claude-opus-4-6-v1`) as model names.
 
+### Optional APIs
+
+```bash
+export AGENTKEY_API_KEY=ak_...        # AgentKey — Chinese / international social sentiment
+export AGENTKEY_BASE_URL=...          # optional, defaults to https://api.agentkey.app
+```
+
+- **What it does:** When set, the sentiment analyst enriches its report with Chinese / international social platforms via [AgentKey](https://agentkey.app/) — **Weibo** and **Zhihu** for every stock, plus **Xiaohongshu** and **Douyin** for consumer-brand sectors. This is most valuable for A-share / Hong Kong / China-listed or China-exposed tickers, whose sentiment the default US sources (StockTwits, Reddit) miss. Crypto tickers are unaffected.
+- **Impact if unset:** Fully optional. With no key, the analyst silently skips these channels and runs exactly as before — no extra latency, no network calls, no cost. Existing US-only workflows are unchanged.
+- **Cost:** AgentKey bills per successful call, so enabling this adds a small per-run cost (typically a few cents per analyzed ticker).
+- **Where to get a key:** Sign up at [agentkey.app](https://agentkey.app/) and create an API key (format `ak_...`).
+
 Alternatively, copy `.env.example` to `.env` and fill in your keys:
 ```bash
 cp .env.example .env

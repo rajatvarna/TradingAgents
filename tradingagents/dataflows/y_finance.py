@@ -259,6 +259,24 @@ def get_stockstats_indicator(
     return str(indicator_value)
 
 
+def get_instrument_profile(ticker: Annotated[str, "ticker symbol of the company"]) -> dict:
+    """Return ``{name, sector, industry}`` for a ticker, best-effort.
+
+    Used to drive AgentKey social-channel selection (consumer vs. not) and to
+    derive a human search name for Chinese platforms. Degrades to the ticker as
+    name and empty sector/industry on any failure, so callers never break.
+    """
+    try:
+        info = yf_retry(lambda: yf.Ticker(ticker.upper()).info) or {}
+    except Exception:
+        info = {}
+    return {
+        "name": info.get("longName") or info.get("shortName") or ticker,
+        "sector": info.get("sector") or "",
+        "industry": info.get("industry") or "",
+    }
+
+
 @snapshot(
     kind="fundamentals", source="yfinance",
     scope_arg="ticker", date_arg="curr_date",

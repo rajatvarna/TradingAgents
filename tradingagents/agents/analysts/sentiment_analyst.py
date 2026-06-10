@@ -40,8 +40,11 @@ from tradingagents.agents.utils.structured import (
     bind_structured,
     invoke_structured_or_freetext,
 )
+from tradingagents.dataflows.agentkey_client import is_configured as agentkey_configured
+from tradingagents.dataflows.agentkey_social import build_agentkey_social_section
 from tradingagents.dataflows.reddit import fetch_reddit_posts
 from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
+from tradingagents.dataflows.y_finance import get_instrument_profile
 
 
 def _seven_days_back(trade_date: str) -> str:
@@ -71,6 +74,18 @@ def create_sentiment_analyst(llm):
         stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
         reddit_block = fetch_reddit_posts(ticker)
 
+        # Chinese / international social channels via AgentKey. Stock-only:
+        # CN-platform chatter is noise for crypto (whose sentiment is global /
+        # English-Twitter driven). Returns "" when AgentKey is unconfigured, so
+        # existing US-only runs are unchanged and incur no cost. Channels are
+        # industry-selected (consumer brands also get Xiaohongshu/Douyin).
+        agentkey_block = ""
+        if agentkey_configured() and state.get("asset_type", "stock") != "crypto":
+            profile = get_instrument_profile(ticker)
+            agentkey_block = build_agentkey_social_section(
+                ticker, profile["name"], profile["sector"], profile["industry"]
+            )
+
         system_message = build_cacheable_system_content(
             _build_system_message(),
             llm,
@@ -91,6 +106,7 @@ def create_sentiment_analyst(llm):
                     "<start_of_stocktwits>\n{stocktwits_block}\n<end_of_stocktwits>\n\n"
                     "Reddit posts — r/wallstreetbets, r/stocks, r/investing (past 7 days)\n"
                     "<start_of_reddit>\n{reddit_block}\n<end_of_reddit>\n\n"
+                    "{agentkey_block}\n\n"
                     "Use the pre-fetched data to produce a comprehensive sentiment report with source-by-source evidence, divergences, catalysts, risks, and a final markdown table.",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
@@ -102,6 +118,7 @@ def create_sentiment_analyst(llm):
         prompt = prompt.partial(news_block=news_block)
         prompt = prompt.partial(stocktwits_block=stocktwits_block)
         prompt = prompt.partial(reddit_block=reddit_block)
+        prompt = prompt.partial(agentkey_block=agentkey_block)
 
         # Format the template into a concrete message list so the structured
         # and free-text paths receive the same input. No bind_tools — the
@@ -132,6 +149,8 @@ def _build_system_message() -> str:
         " Read StockTwits sentiment as a leading retail signal, look for cross-source divergences,"
         " weight Reddit by engagement, distinguish opinion from event, identify recurring narratives,"
         " flag data limits honestly, and surface catalysts and risks."
+        " Weight the Chinese / international platforms by relevance (Weibo and Zhihu capture China-market"
+        " and China-exposed sentiment; Xiaohongshu / Douyin capture consumer-demand alt-data)."
         " Produce the report in this order: overall sentiment direction, source-by-source breakdown,"
         " divergences and key narratives, catalysts and risks, and a markdown table summary."
         " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"

@@ -424,6 +424,7 @@ def select_llm_provider() -> tuple[str, str | None]:
         ("GLM", "glm", "https://open.bigmodel.cn/api/paas/v4/"),
         ("Kimi", "kimi", os.environ.get("KIMI_BASE_URL") or "https://api.moonshot.ai/v1"),
         ("MiniMax", "minimax", "https://api.minimax.io/v1"),
+        ("NVIDIA NIM", "nvidia_nim", "https://integrate.api.nvidia.com/v1"),
         ("OpenRouter", "openrouter", "https://openrouter.ai/api/v1"),
         ("DeepInfra", "deepinfra", "https://api.deepinfra.com/v1/openai"),
         ("MiMo", "mimo", "https://token-plan-sgp.xiaomimimo.com/v1"),

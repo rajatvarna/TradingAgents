@@ -73,3 +73,30 @@ def invoke_structured_or_freetext(
 
     response = normalize_content(plain_llm.invoke(prompt))
     return response.content
+
+
+def invoke_structured_or_freetext_with_meta(
+    structured_llm: Optional[Any],
+    plain_llm: Any,
+    prompt: Any,
+    render: Callable[[T], str],
+    agent_name: str,
+    cache: Optional[Any] = None,
+    config: Optional[dict] = None,
+) -> tuple[str, bool]:
+    kwargs = {}
+    if config is not None:
+        kwargs["config"] = config
+
+    if structured_llm is not None:
+        try:
+            result = structured_llm.invoke(prompt, **kwargs)
+            return render(result), True
+        except Exception as exc:
+            logger.warning(
+                "%s: structured-output invocation failed (%s); retrying once as free text",
+                agent_name, exc,
+            )
+
+    response = normalize_content(plain_llm.invoke(prompt, **kwargs))
+    return response.content, False

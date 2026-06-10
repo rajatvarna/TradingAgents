@@ -47,12 +47,14 @@ class RunRecorder:
         run_id: str,
         persona_id: Optional[str],
         cost_callback: Any,        # RunCostCallback (duck-typed to ease mocking)
+        queue_job_id: Optional[int] = None,
     ) -> None:
         self._conn = conn
         self._data_dir = Path(data_dir)
         self._run_id = run_id
         self._persona_id = persona_id
         self._cost_callback = cost_callback
+        self._queue_job_id = queue_job_id
         self._artifact_dir_rel = f"runs/{run_id}"
 
     def start(self, ticker: str, *, started_ts: str) -> None:
@@ -63,6 +65,7 @@ class RunRecorder:
             persona_id=self._persona_id,
             started_ts=started_ts,
             artifact_dir=self._artifact_dir_rel,
+            queue_job_id=self._queue_job_id,
         )
 
     def record(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -93,6 +96,11 @@ class RunRecorder:
         (run_path / "pm_synthesis.md").write_text(
             state.get("final_trade_decision", "") or "", encoding="utf-8"
         )
+        # IIC-FORGE F4: write event_context.md when this run was launched
+        # in event_alert mode (Secretary.compose_event_alert path).
+        event_ctx = state.get("event_context_text", "") or ""
+        if event_ctx:
+            (run_path / "event_context.md").write_text(event_ctx, encoding="utf-8")
         (run_path / "meta.json").write_text(json.dumps({
             "run_id": self._run_id,
             "persona_id": self._persona_id,

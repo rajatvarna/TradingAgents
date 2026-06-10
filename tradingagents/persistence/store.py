@@ -23,11 +23,13 @@ def insert_run(
     started_ts: str,
     artifact_dir: str,
     trigger_id: Optional[str] = None,
+    queue_job_id: Optional[int] = None,
 ) -> None:
     conn.execute(
         "INSERT INTO runs (run_id, ticker, persona_id, started_ts, status, "
-        "trigger_id, artifact_dir) VALUES (?, ?, ?, ?, 'running', ?, ?)",
-        (run_id, ticker, persona_id, started_ts, trigger_id, artifact_dir),
+        "trigger_id, artifact_dir, queue_job_id) VALUES (?, ?, ?, ?, 'running', ?, ?, ?)",
+        (run_id, ticker, persona_id, started_ts, trigger_id, artifact_dir,
+         queue_job_id),
     )
     conn.commit()
 
@@ -85,12 +87,13 @@ def insert_brief(
     content_path: str,
     run_ids: Iterable[str],
     parent_brief_id: Optional[str] = None,
+    trigger_event_id: Optional[str] = None,
 ) -> None:
     conn.execute(
         "INSERT INTO briefs (brief_id, mode, scope, generated_ts, content_path, "
-        "run_ids, parent_brief_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "run_ids, parent_brief_id, trigger_event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (brief_id, mode, scope, generated_ts, content_path,
-         json.dumps(list(run_ids)), parent_brief_id),
+         json.dumps(list(run_ids)), parent_brief_id, trigger_event_id),
     )
     conn.commit()
 
@@ -267,3 +270,43 @@ def insert_event_embedding(
         (event_id, vec_id, _now_iso()),
     )
     conn.commit()
+
+
+# --------------------------------------------------------------------
+# F4 helpers — events lookup / suppression / briefs lookup
+# --------------------------------------------------------------------
+
+def get_event(
+    conn: sqlite3.Connection, *, event_id: str
+) -> Optional[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM events WHERE event_id = ?", (event_id,)
+    ).fetchone()
+
+
+def upsert_suppression(
+    conn: sqlite3.Connection,
+    *,
+    key: str,
+    until_ts: str,
+    reason: Optional[str],
+    created_by: str,
+) -> None:
+    conn.execute(
+        "INSERT INTO suppression (key, until_ts, reason, created_by) "
+        "VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET "
+        "until_ts = excluded.until_ts, "
+        "reason = excluded.reason, "
+        "created_by = excluded.created_by",
+        (key, until_ts, reason, created_by),
+    )
+    conn.commit()
+
+
+def get_brief(
+    conn: sqlite3.Connection, *, brief_id: str
+) -> Optional[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM briefs WHERE brief_id = ?", (brief_id,)
+    ).fetchone()

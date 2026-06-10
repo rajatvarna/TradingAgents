@@ -160,6 +160,7 @@ class TradingAgentsGraph:
             run_id=self.run_id,
             persona_id=self.config.get("persona_id"),
             cost_callback=self._cost_cb,
+            queue_job_id=self.config.get("queue_job_id"),
         )
         run_recorder_node = make_run_recorder_node(self.run_recorder)
 
@@ -590,6 +591,9 @@ class TradingAgentsGraph:
             user_research=user_research,
             target_profile=target_profile,
         )
+        # IIC-FORGE F4: event-context injection — seed event text into state.
+        # Empty string when not in event_alert mode (deep-dive path unchanged).
+        init_agent_state["event_context_text"] = self.config.get("event_context", "") or ""
         args = self.propagator.get_graph_args(callbacks=self.callbacks)
 
         from datetime import datetime, timezone

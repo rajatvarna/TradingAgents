@@ -11,6 +11,7 @@ from .y_finance import (
     get_insider_transactions as get_yfinance_insider_transactions,
 )
 from .yfinance_news import get_news_yfinance, get_global_news_yfinance
+from .google_news import get_news_google, get_global_news_google
 from .searxng import (
     get_news_searxng,
     get_global_news_searxng,
@@ -138,6 +139,7 @@ TOOLS_CATEGORIES = {
 
 VENDOR_LIST = [
     "yfinance",
+    "google_news",
     "alpha_vantage",
     "fred",
     "searxng",
@@ -194,6 +196,7 @@ VENDOR_METHODS = {
     "get_news": {
         "alpha_vantage": get_alpha_vantage_news,
         "yfinance": get_news_yfinance,
+        "google_news": get_news_google,
         "searxng": get_news_searxng,
         "b3": get_b3_news,
         "twelve_data": get_twelve_data_news,
@@ -201,6 +204,7 @@ VENDOR_METHODS = {
     },
     "get_global_news": {
         "yfinance": get_global_news_yfinance,
+        "google_news": get_global_news_google,
         "alpha_vantage": get_alpha_vantage_global_news,
         "searxng": get_global_news_searxng,
         "b3": get_b3_global_news,

@@ -229,6 +229,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
         ".BO": "^BSESN",    # Sensex (BSE India)
         ".T":  "^N225",     # Nikkei 225 (Japan)
         ".HK": "^HSI",      # Hang Seng (Hong Kong)
+        ".KL": "^KLSE",     # Malaysia (FTSE Bursa Malaysia KLCI)
         ".L":  "^FTSE",     # FTSE 100 (London)
         ".TO": "^GSPTSE",   # TSX Composite (Toronto)
         "":    "SPY",       # default for US-listed tickers
@@ -263,6 +264,10 @@ DEFAULT_CONFIG = _apply_env_overrides({
         "geopolitical risk trade war sanctions",
         "ECB Bank of England BOJ central bank policy",
         "oil commodities supply chain energy",
+        "Malaysia economy GDP trade ringgit",
+        "Bursa Malaysia KLSE index stocks",
+        "Bank Negara Malaysia interest rate OPR policy",
+        "ASEAN Southeast Asia economic outlook trade",
     ],
     # AgentKey (https://agentkey.app/) — optional. When AGENTKEY_API_KEY is set,
     # the sentiment analyst also pulls Chinese / international social channels
@@ -277,7 +282,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
         "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance, b3
         "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance, b3
         "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance, b3
-        "news_data": "yfinance",             # Options: alpha_vantage, yfinance, searxng, b3
+        "news_data": "google_news",          # Options: yfinance, google_news, alpha_vantage, searxng, b3
         "options_data": "yfinance",          # Options: yfinance (Polygon/Futu via Epic B fallback chain)
         "osint_social": "telegram",          # Options: telegram (Telegram); X tool routes to "x" vendor automatically
     },

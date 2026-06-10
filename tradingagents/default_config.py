@@ -240,6 +240,13 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
     "analyst_concurrency_limit": 5,
+    # Risk constraints are copied into graph state at run start and re-injected
+    # into each risk-agent prompt at invocation time, so message compression
+    # cannot remove them from the active prompt context.
+    "max_position_size_pct": 10.0,
+    "max_risk_per_trade_pct": 2.0,
+    "stop_loss_pct": 5.0,
+    "risk_tolerance": "moderate",
     # News / data fetching parameters
     # Increase for longer lookback strategies or to broaden macro coverage;
     # decrease to reduce token usage in agent prompts.

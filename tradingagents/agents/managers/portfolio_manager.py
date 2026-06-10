@@ -17,6 +17,7 @@ from tradingagents.agents.skills import build_skill_registry
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     build_scope_guard,
+    format_risk_constraints,
     get_language_instruction,
 )
 from tradingagents.agents.utils.recommendation_audit import (
@@ -118,6 +119,7 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
     def portfolio_manager_node(state) -> dict:
         instrument_context = build_instrument_context(state["company_of_interest"])
         scope_guard = build_scope_guard(state["company_of_interest"])
+        constraints_block = format_risk_constraints(state.get("risk_constraints", {}))
 
         history = state["risk_debate_state"]["history"]
         risk_debate_state = state["risk_debate_state"]
@@ -187,6 +189,8 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
             recommendation_scorecard=render_scorecard_for_prompt(recommendation_scorecard),
             language_instruction=get_language_instruction(),
         )
+
+        prompt = constraints_block + prompt
 
         reliability_signals = (
             f"\n\n**Reliability Signals:**\n"

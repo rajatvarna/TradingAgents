@@ -23,6 +23,7 @@ class Propagator:
         past_context: str = "",
         user_research: str = "",
         target_profile: Optional[Dict[str, Any]] = None,
+        risk_constraints: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Create the initial state for the agent graph."""
         return {
@@ -32,6 +33,7 @@ class Propagator:
             "trade_date": str(trade_date),
             "past_context": past_context,
             "user_research_report": user_research,
+            "risk_constraints": risk_constraints or {},
             "tool_errors": [],
             "tool_call_count": 0,
             "error_count": 0,

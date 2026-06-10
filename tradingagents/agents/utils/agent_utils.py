@@ -70,7 +70,16 @@ __all__ = [
     "resolve_instrument_identity",
     "DEBATE_EVIDENCE_GUARDRAIL",
     "truncate_history",
+    "format_risk_constraints",
 ]
+
+
+RISK_CONSTRAINT_DEFAULTS: Mapping[str, Any] = {
+    "max_position_size_pct": 10.0,
+    "max_risk_per_trade_pct": 2.0,
+    "stop_loss_pct": 5.0,
+    "risk_tolerance": "moderate",
+}
 
 
 def get_language_instruction() -> str:
@@ -92,7 +101,31 @@ def get_language_instruction() -> str:
     return f" Write your entire response in {lang}."
 
 
-<<<<<<< HEAD
+def resolve_risk_constraints(values: Mapping[str, Any]) -> dict[str, Any]:
+    """Return risk constraints with defaults substituted for missing or None values."""
+    resolved = {}
+    for key, default in RISK_CONSTRAINT_DEFAULTS.items():
+        value = values.get(key)
+        resolved[key] = default if value is None else value
+    return resolved
+
+
+def format_risk_constraints(constraints: Mapping[str, Any]) -> str:
+    """Render persistent session risk constraints for risk-agent prompts."""
+    if not constraints:
+        return ""
+    resolved = resolve_risk_constraints(constraints)
+    return (
+        "Session Risk Constraints (always apply; do not override):\n"
+        f"- Max position size: {resolved['max_position_size_pct']}% "
+        "of portfolio\n"
+        f"- Max risk per trade: {resolved['max_risk_per_trade_pct']}% "
+        "of portfolio\n"
+        f"- Stop loss: {resolved['stop_loss_pct']}%\n"
+        f"- Risk tolerance: {resolved['risk_tolerance']}\n\n"
+    )
+
+
 def get_horizon_instruction() -> str:
     """Return a prompt instruction for the configured investment horizon."""
     from tradingagents.dataflows.config import get_config

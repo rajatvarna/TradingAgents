@@ -125,19 +125,38 @@ def invoke_structured_or_freetext_with_meta(
     prompt: Any,
     render: Callable[[T], str],
     agent_name: str,
+    cache: Optional[MutableMapping[str, str]] = None,
     *,
     config: Optional[dict] = None,
 ) -> tuple[str, bool]:
+    # Check structured cache first
+    if structured_llm is not None:
+        key = _cache_key(agent_name, "structured", prompt)
+        if cache is not None and key in cache:
+            return cache[key], True
+
+    # Check freetext cache next
+    freetext_key = _cache_key(agent_name, "freetext", prompt)
+    if cache is not None and freetext_key in cache:
+        return cache[freetext_key], False
+
     invoke_kwargs = {"config": config} if config is not None else {}
+
     if structured_llm is not None:
         try:
-            result = structured_llm.invoke(prompt, **invoke_kwargs)
-            return render(result), True
+            result = _invoke_structured(structured_llm, prompt, **invoke_kwargs)
+            rendered = render(result)
+            if cache is not None:
+                cache[key] = rendered
+            return rendered, True
         except Exception as exc:
             logger.warning(
                 "%s: structured-output invocation failed (%s); retrying once as free text",
                 agent_name, exc,
             )
 
-    response = plain_llm.invoke(prompt, **invoke_kwargs)
-    return response.content, False
+    response = _invoke_plain(plain_llm, prompt, **invoke_kwargs)
+    content = response.content
+    if cache is not None:
+        cache[freetext_key] = content
+    return content, False

@@ -534,7 +534,7 @@ class TestDeferredReflection:
             final_decision=DECISION_BUY,
             raw_return=0.04,
             alpha_return=0.02,
-            benchmark="^NSEI",
+            benchmark_name="^NSEI",
         )
         human_content = next(
             c for r, c in mock_llm.invoke.call_args[0][0] if r == "human"

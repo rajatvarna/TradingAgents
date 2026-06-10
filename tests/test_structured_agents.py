@@ -77,11 +77,13 @@ class TestRenderResearchPlan:
             recommendation=PortfolioRating.OVERWEIGHT,
             rationale="Bull case carried; tailwinds intact.",
             strategic_actions="Build position over two weeks; cap at 5%.",
+            bull_weight=0.8,
         )
         md = render_research_plan(p)
         assert "**Recommendation**: Overweight" in md
         assert "**Rationale**: Bull case carried" in md
         assert "**Strategic Actions**: Build position" in md
+        assert "**Bull Weight**: 0.8" in md
 
     def test_all_5_tier_ratings_render(self):
         for rating in PortfolioRating:
@@ -89,6 +91,7 @@ class TestRenderResearchPlan:
                 recommendation=rating,
                 rationale="r",
                 strategic_actions="s",
+                bull_weight=0.5,
             )
             md = render_research_plan(p)
             assert f"**Recommendation**: {rating.value}" in md
@@ -131,11 +134,12 @@ def _structured_portfolio_llm(
     if decision is None:
         decision = PortfolioDecision(
             rating=PortfolioRating.HOLD,
+            confidence=0.5,
             executive_summary="Keep exposure steady while setup matures.",
             investment_thesis="Balanced risk-reward.",
         )
     structured = MagicMock()
-    structured.invoke.side_effect = lambda prompt: (
+    structured.invoke.side_effect = lambda prompt, **kwargs: (
         captured.__setitem__("prompt", prompt) or decision
     )
     llm = MagicMock()
@@ -223,6 +227,7 @@ def _structured_rm_llm(captured: dict, plan: ResearchPlan | None = None):
             recommendation=PortfolioRating.HOLD,
             rationale="Balanced view across both sides.",
             strategic_actions="Hold current position; reassess after earnings.",
+            bull_weight=0.5,
         )
     structured = MagicMock()
     structured.invoke.side_effect = lambda prompt, **kwargs: (
@@ -241,6 +246,7 @@ class TestResearchManagerAgent:
             recommendation=PortfolioRating.OVERWEIGHT,
             rationale="Bull case is stronger; AI tailwind intact.",
             strategic_actions="Build position gradually over two weeks.",
+            bull_weight=0.7,
         )
         llm = _structured_rm_llm(captured, plan)
         rm = create_research_manager(llm)
@@ -249,6 +255,7 @@ class TestResearchManagerAgent:
         assert "**Recommendation**: Overweight" in ip
         assert "**Rationale**: Bull case" in ip
         assert "**Strategic Actions**: Build position" in ip
+        assert "**Bull Weight**: 0.7" in ip
 
     def test_prompt_uses_5_tier_rating_scale(self):
         """The RM prompt must list all five tiers so the schema enum matches user expectations."""

@@ -68,9 +68,22 @@ class TradingMemoryLog:
                     alpha_return REAL,
                     holding_days INTEGER,
                     pending INTEGER NOT NULL DEFAULT 1,
+                    meta TEXT,
+                    outcome TEXT,
                     UNIQUE (ticker, trade_date, pending)
                 )
             """)
+            
+            # Add columns meta and outcome if they are missing from existing database
+            try:
+                conn.execute("ALTER TABLE memory_log ADD COLUMN meta TEXT")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute("ALTER TABLE memory_log ADD COLUMN outcome TEXT")
+            except sqlite3.OperationalError:
+                pass
+
             # Create index for fast lookups by ticker and pending status
             conn.execute("CREATE INDEX IF NOT EXISTS idx_ticker ON memory_log (ticker)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_pending ON memory_log (pending)")
@@ -87,17 +100,18 @@ class TradingMemoryLog:
         """Insert a pending entry at end of propagate()."""
         if not self._db_path:
             return
-        rating = parse_rating(final_trade_decision)
+        rating = parse_rating(final_trade_decision, default="Unknown")
         
+        meta_json = json.dumps(meta or {}, ensure_ascii=False)
         with self._get_conn() as conn:
             # INSERT OR IGNORE respects the UNIQUE(ticker, trade_date, pending) constraint,
             # replacing the previous SELECT + conditional INSERT (two round-trips → one).
             conn.execute(
                 """
-                INSERT OR IGNORE INTO memory_log (ticker, trade_date, rating, decision, reflection, pending)
-                VALUES (?, ?, ?, ?, "", 1)
+                INSERT OR IGNORE INTO memory_log (ticker, trade_date, rating, decision, reflection, pending, meta, outcome)
+                VALUES (?, ?, ?, ?, "", 1, ?, "{}")
                 """,
-                (ticker, trade_date, rating, final_trade_decision)
+                (ticker, trade_date, rating, final_trade_decision, meta_json)
             )
 
     # --- Read path (Phase A) ---
@@ -109,6 +123,21 @@ class TradingMemoryLog:
         alpha_pct = f"{row['alpha_return']:+.1%}" if row['alpha_return'] is not None else None
         holding_str = f"{row['holding_days']}d" if row['holding_days'] is not None else None
         
+        # Safely parse meta and outcome JSON
+        meta_dict = {}
+        if "meta" in row.keys() and row["meta"]:
+            try:
+                meta_dict = json.loads(row["meta"])
+            except Exception:
+                pass
+                
+        outcome_dict = {}
+        if "outcome" in row.keys() and row["outcome"]:
+            try:
+                outcome_dict = json.loads(row["outcome"])
+            except Exception:
+                pass
+
         return {
             "date": row["trade_date"],
             "ticker": row["ticker"],
@@ -119,6 +148,8 @@ class TradingMemoryLog:
             "holding": holding_str,
             "decision": row["decision"],
             "reflection": row["reflection"] or "",
+            "meta": meta_dict,
+            "outcome": outcome_dict,
         }
 
     def load_entries(self) -> List[dict]:
@@ -192,6 +223,7 @@ class TradingMemoryLog:
         if not self._db_path or not self._db_path.exists():
             return
 
+        outcome_json = json.dumps(outcome or {}, ensure_ascii=False)
         with self._get_conn() as conn:
             # Find the ID of the pending entry to update (the first one matching)
             cursor = conn.execute(
@@ -207,10 +239,10 @@ class TradingMemoryLog:
             conn.execute(
                 """
                 UPDATE memory_log
-                SET raw_return = ?, alpha_return = ?, holding_days = ?, reflection = ?, pending = 0
+                SET raw_return = ?, alpha_return = ?, holding_days = ?, reflection = ?, pending = 0, outcome = ?
                 WHERE id = ?
                 """,
-                (raw_return, alpha_return, holding_days, reflection, entry_id)
+                (raw_return, alpha_return, holding_days, reflection, outcome_json, entry_id)
             )
             
             conn.commit()
@@ -229,13 +261,14 @@ class TradingMemoryLog:
                 )
                 row = cursor.fetchone()
                 if row:
+                    outcome_json = json.dumps(upd.get("outcome") or {}, ensure_ascii=False)
                     conn.execute(
                         """
                         UPDATE memory_log
-                        SET raw_return = ?, alpha_return = ?, holding_days = ?, reflection = ?, pending = 0
+                        SET raw_return = ?, alpha_return = ?, holding_days = ?, reflection = ?, pending = 0, outcome = ?
                         WHERE id = ?
                         """,
-                        (upd["raw_return"], upd["alpha_return"], upd["holding_days"], upd["reflection"], row["id"])
+                        (upd["raw_return"], upd["alpha_return"], upd["holding_days"], upd["reflection"], outcome_json, row["id"])
                     )
             conn.commit()
             self._apply_rotation(conn)

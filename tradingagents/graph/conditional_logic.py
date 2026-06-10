@@ -78,7 +78,7 @@ class ConditionalLogic:
 
         if (
             state["investment_debate_state"]["count"] >= 2 * self.max_debate_rounds
-        ):  # 3 rounds of back-and-forth between 2 agents
+        ):  # 2 * max_debate_rounds turns total (default 1 -> bull + bear)
             return "Research Manager"
         if self._early_stop_investment_debate(state):
             return "Research Manager"
@@ -90,7 +90,7 @@ class ConditionalLogic:
         """Determine if risk analysis should continue."""
         if (
             state["risk_debate_state"]["count"] >= 3 * self.max_risk_discuss_rounds
-        ):  # 3 rounds of back-and-forth between 3 agents
+        ):  # 3 * max_risk_discuss_rounds turns total (default 1 -> one per risk agent)
             return "Portfolio Manager"
         if self._early_stop_risk_debate(state):
             return "Portfolio Manager"

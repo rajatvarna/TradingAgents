@@ -1,102 +1,129 @@
+"""Alpha Vantage news fetchers with markdown normalization and date-scoped cache."""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
 from .alpha_vantage_common import _make_api_request, format_datetime_for_api
-from tradingagents.default_config import DEFAULT_CONFIG
-from .snapshots import GLOBAL_SCOPE, snapshot
+from .cache_utils import cache_text
 
-@snapshot(
-    kind="news", source="alpha_vantage",
-    scope_arg="ticker", date_arg="end_date",
-    serialize="json",
-)
-def get_news(ticker, start_date, end_date) -> dict[str, str] | str:
-    """Returns live and historical market news & sentiment data from premier news outlets worldwide.
 
-    Covers stocks, cryptocurrencies, forex, and topics like fiscal policy, mergers & acquisitions, IPOs.
+def _format_score(value: Any) -> str:
+    try:
+        return f"{float(value):.3f}"
+    except (TypeError, ValueError):
+        return str(value) if value is not None else ""
 
-    Args:
-        ticker: Stock symbol for news articles.
-        start_date: Start date for news search.
-        end_date: End date for news search.
 
-    Returns:
-        Dictionary containing news sentiment data or JSON string.
-    """
+def _format_ticker_sentiment(items: list[dict[str, Any]] | None) -> str:
+    if not items:
+        return ""
+    parts = []
+    for item in items[:8]:
+        ticker = item.get("ticker") or item.get("symbol") or "unknown"
+        label = item.get("ticker_sentiment_label") or item.get("relevance_score") or ""
+        score = item.get("ticker_sentiment_score")
+        rendered = ticker
+        if label:
+            rendered += f" {label}"
+        if score is not None:
+            rendered += f" ({_format_score(score)})"
+        parts.append(rendered)
+    return "; ".join(parts)
 
-    params = {
-        "tickers": ticker,
-        "time_from": format_datetime_for_api(start_date),
-        "time_to": format_datetime_for_api(end_date),
-    }
 
-    return _make_api_request("NEWS_SENTIMENT", params)
+def _format_news_sentiment_payload(payload: dict[str, Any], heading: str) -> str:
+    feed = payload.get("feed") if isinstance(payload, dict) else None
+    if not isinstance(feed, list) or not feed:
+        return f"No Alpha Vantage news found for {heading}"
 
-@snapshot(
-    kind="globalnews", source="alpha_vantage",
-    scope_literal=GLOBAL_SCOPE, date_arg="curr_date",
-    serialize="json",
-)
-def get_global_news(curr_date, look_back_days: int | None = None, limit: int | None = None) -> dict[str, str] | str:
-    """Returns global market news & sentiment data without ticker-specific filtering.
+    lines = [f"## Alpha Vantage News Sentiment: {heading}", ""]
+    for article in feed:
+        if not isinstance(article, dict):
+            continue
+        title = article.get("title") or "No title"
+        source = article.get("source") or "Unknown"
+        published = article.get("time_published") or "unknown date"
+        summary = article.get("summary") or ""
+        url = article.get("url") or ""
+        overall_label = article.get("overall_sentiment_label")
+        overall_score = article.get("overall_sentiment_score")
+        ticker_sentiment = _format_ticker_sentiment(article.get("ticker_sentiment"))
 
-    Covers broad market topics like financial markets, economy, and more.
+        lines.append(f"### {title} (source: {source})")
+        lines.append(f"Published: {published}")
+        if overall_label or overall_score is not None:
+            label_part = f" {overall_label}" if overall_label else ""
+            score_part = f" ({_format_score(overall_score)})" if overall_score is not None else ""
+            lines.append(f"Overall sentiment:{label_part}{score_part}".strip())
+        if ticker_sentiment:
+            lines.append(f"Ticker sentiment: {ticker_sentiment}")
+        if summary:
+            lines.append(summary)
+        if url:
+            lines.append(f"Link: {url}")
+        lines.append("")
 
-    Args:
-        curr_date: Current date in yyyy-mm-dd format.
-        look_back_days: Number of days to look back (default 7).
-        limit: Maximum number of articles (default 50).
+    return "\n".join(lines).strip() or f"No Alpha Vantage news found for {heading}"
 
-    Returns:
-        Dictionary containing global news sentiment data or JSON string.
-    """
+
+def _normalize_news_response(response: dict[str, Any] | str, heading: str) -> str:
+    if isinstance(response, dict):
+        return _format_news_sentiment_payload(response, heading)
+    if not isinstance(response, str):
+        return str(response)
+    try:
+        parsed = json.loads(response)
+    except json.JSONDecodeError:
+        return response
+    return _format_news_sentiment_payload(parsed, heading)
+
+
+def get_news(ticker, start_date, end_date) -> str:
+    """Return ticker-specific market news & sentiment as markdown."""
+
+    def fetch() -> str:
+        params = {
+            "tickers": ticker,
+            "time_from": format_datetime_for_api(start_date),
+            "time_to": format_datetime_for_api(end_date),
+        }
+        return _normalize_news_response(
+            _make_api_request("NEWS_SENTIMENT", params),
+            f"{ticker}, from {start_date} to {end_date}",
+        )
+
+    return cache_text("alpha_vantage_news", (str(ticker), str(start_date), str(end_date)), fetch)
+
+
+def get_global_news(curr_date, look_back_days: int = 7, limit: int = 50) -> str:
+    """Return broad market news & sentiment as markdown."""
     from datetime import datetime, timedelta
 
-    if look_back_days is None:
-        look_back_days = DEFAULT_CONFIG.get("global_news_look_back_days", 7)
-    if limit is None:
-        limit = DEFAULT_CONFIG.get("av_global_news_limit", 50)
-
-    # Calculate start date
     curr_dt = datetime.strptime(curr_date, "%Y-%m-%d")
     start_dt = curr_dt - timedelta(days=look_back_days)
     start_date = start_dt.strftime("%Y-%m-%d")
 
-    params = {
-        "topics": "financial_markets,economy_macro,economy_monetary",
-        "time_from": format_datetime_for_api(start_date),
-        "time_to": format_datetime_for_api(curr_date),
-        "limit": str(limit),
-    }
+    def fetch() -> str:
+        params = {
+            "topics": "financial_markets,economy_macro,economy_monetary",
+            "time_from": format_datetime_for_api(start_date),
+            "time_to": format_datetime_for_api(curr_date),
+            "limit": str(limit),
+        }
+        return _normalize_news_response(
+            _make_api_request("NEWS_SENTIMENT", params),
+            f"global markets, from {start_date} to {curr_date}",
+        )
 
-    return _make_api_request("NEWS_SENTIMENT", params)
+    return cache_text(
+        "alpha_vantage_global_news",
+        (str(curr_date), str(look_back_days), str(limit)),
+        fetch,
+    )
 
 
-def get_insider_transactions(symbol: str, curr_date: str = None) -> dict[str, str] | str:
-    """Returns insider transactions by key stakeholders, filtered by curr_date.
-
-    Alpha Vantage returns ALL historical insider transactions; without a date
-    filter this leaks future transactions into a backtest. We drop any
-    transaction whose `transaction_date` is strictly after curr_date.
-
-    Args:
-        symbol: Ticker symbol. Example: "IBM".
-        curr_date: Current date you are trading at, yyyy-mm-dd.
-
-    Returns:
-        Dictionary containing insider transaction data or JSON string.
-    """
-
-    params = {
-        "symbol": symbol,
-    }
-
-    result = _make_api_request("INSIDER_TRANSACTIONS", params)
-
-    if curr_date and isinstance(result, dict) and isinstance(result.get("data"), list):
-        cutoff = curr_date  # ISO YYYY-MM-DD strings compare lexicographically
-        result = dict(result)
-        result["data"] = [
-            tx for tx in result["data"]
-            if str(tx.get("transaction_date", "")) <= cutoff
-        ]
-        result["_as_of_date"] = curr_date
-
-    return result
+def get_insider_transactions(symbol: str) -> dict[str, str] | str:
+    """Returns latest and historical insider transactions by key stakeholders."""
+    return _make_api_request("INSIDER_TRANSACTIONS", {"symbol": symbol})

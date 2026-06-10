@@ -386,13 +386,11 @@ class TradingAgentsGraph:
             for chunk in self.graph.stream(init_agent_state, **args):
                 if on_chunk is not None:
                     on_chunk(chunk)
-                elif len(chunk["messages"]) == 0:
-                    pass
-                else:
+                elif chunk.get("messages"):
                     chunk["messages"][-1].pretty_print()
                 trace.append(chunk)
-            # Streamed chunks are per-node deltas. Merge them so the returned
-            # state matches what graph.invoke() yields in the non-debug path.
+            # stream_mode='values' yields cumulative state snapshots. Merging is
+            # still harmless and keeps returned state parity with graph.invoke().
             final_state = {}
             for chunk in trace:
                 final_state.update(chunk)

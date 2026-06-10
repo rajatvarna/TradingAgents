@@ -1,16 +1,13 @@
 from tradingagents.agents.utils.agent_utils import (
-    build_scope_guard,
+    get_instrument_context_from_state,
     get_language_instruction,
-    trim_debate_history,
 )
-from tradingagents.audit.prompt_registry import default_registry
 
-def create_aggressive_debator(llm, prompt_registry=None):
-    registry = prompt_registry or default_registry()
 
+def create_aggressive_debator(llm):
     def aggressive_node(state) -> dict:
         risk_debate_state = state["risk_debate_state"]
-        history = trim_debate_history(risk_debate_state.get("history", ""))
+        history = risk_debate_state.get("history", "")
         aggressive_history = risk_debate_state.get("aggressive_history", "")
 
         current_conservative_response = risk_debate_state.get("current_conservative_response", "")
@@ -20,36 +17,32 @@ def create_aggressive_debator(llm, prompt_registry=None):
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
+        asset_type = state.get("asset_type", "stock")
+        fundamentals_label = (
+            "Company Fundamentals Report"
+            if asset_type == "stock"
+            else "Asset / Protocol Fundamentals Report"
+        )
+        instrument_context = get_instrument_context_from_state(state)
 
         trader_decision = state["trader_investment_plan"]
-        scope_guard = build_scope_guard(state["company_of_interest"])
 
-        version = state.get("prompt_versions", {}).get("risk/aggressive", "v1")
-        prompt, prompt_hash = registry.render(
-            "risk/aggressive",
-            version=version,
-            trader_decision=trader_decision,
-            scope_guard=scope_guard,
-            market_research_report=market_research_report,
-            sentiment_report=sentiment_report,
-            news_report=news_report,
-            fundamentals_report=fundamentals_report,
-            history=history,
-            current_conservative_response=current_conservative_response,
-            current_neutral_response=current_neutral_response,
-            language_instruction=get_language_instruction(),
-        )
+        prompt = f"""As the Aggressive Risk Analyst, your role is to actively champion high-reward, high-risk opportunities, emphasizing bold strategies and competitive advantages. When evaluating the trader's decision or plan, focus intently on the potential upside, growth potential, and innovative benefits—even when these come with elevated risk. Use the provided market data and sentiment analysis to strengthen your arguments and challenge the opposing views. Specifically, respond directly to each point made by the conservative and neutral analysts, countering with data-driven rebuttals and persuasive reasoning. Highlight where their caution might miss critical opportunities or where their assumptions may be overly conservative. Here is the trader's decision:
 
-        response = llm.invoke(
-            prompt,
-            config={
-                "metadata": {
-                    "prompt_key": "risk/aggressive",
-                    "prompt_version": version,
-                    "prompt_hash": prompt_hash,
-                }
-            },
-        )
+{trader_decision}
+
+Your task is to create a compelling case for the trader's decision by questioning and critiquing the conservative and neutral stances to demonstrate why your high-reward perspective offers the best path forward. Incorporate insights from the following sources into your arguments:
+
+{instrument_context}
+Market Research Report: {market_research_report}
+Social Media Sentiment Report: {sentiment_report}
+Latest World Affairs Report: {news_report}
+{fundamentals_label}: {fundamentals_report}
+Here is the current conversation history: {history} Here are the last arguments from the conservative analyst: {current_conservative_response} Here are the last arguments from the neutral analyst: {current_neutral_response}. If there are no responses from the other viewpoints yet, present your own argument based on the available data.
+
+Engage actively by addressing any specific concerns raised, refuting the weaknesses in their logic, and asserting the benefits of risk-taking to outpace market norms. Maintain a focus on debating and persuading, not just presenting data. Challenge each counterpoint to underscore why a high-risk approach is optimal. Output conversationally as if you are speaking without any special formatting.""" + get_language_instruction()
+
+        response = llm.invoke(prompt)
 
         argument = f"Aggressive Analyst: {response.content}"
 

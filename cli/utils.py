@@ -271,7 +271,7 @@ def _prefer_openrouter_free_models(models: List[Tuple[str, str]]) -> List[Tuple[
     return free_models + paid_models
 
 
-def select_openrouter_model() -> str:
+def select_openrouter_model(mode: str) -> str:
     """Select an OpenRouter model, preferring free-tier models first."""
     models = _prefer_openrouter_free_models(_fetch_openrouter_models())
 
@@ -279,7 +279,7 @@ def select_openrouter_model() -> str:
     choices.append(questionary.Choice("Custom model ID", value="custom"))
 
     choice = questionary.select(
-        "Select OpenRouter Model (free models first):",
+        f"Select Your [{mode.title()}-Thinking] OpenRouter Model (free models first):",
         choices=choices,
         instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
         style=questionary.Style([
@@ -290,10 +290,11 @@ def select_openrouter_model() -> str:
     ).ask()
 
     if choice is None or choice == "custom":
-        return questionary.text(
+        custom_id = questionary.text(
             "Enter OpenRouter model ID (e.g. deepseek/deepseek-r1-0528:free):",
             validate=lambda x: len(x.strip()) > 0 or "Please enter a model ID.",
-        ).ask().strip()
+        ).ask()
+        return custom_id.strip() if custom_id else ""
 
     return choice
 
@@ -306,7 +307,6 @@ def _prompt_custom_model_id() -> str:
     ).ask().strip()
 
 
-<<<<<<< HEAD
 def _oauth_available_model_ids(refresh: bool = False):
     """Modelli usabili dall'account ChatGPT, o None se non scopribili.
 
@@ -324,7 +324,6 @@ def _oauth_available_model_ids(refresh: bool = False):
         return set(models) if models else None
     except Exception:
         return None
-=======
 def _validate_custom_provider_url_input(value: str) -> bool | str:
     try:
         validate_custom_provider_base_url(value)
@@ -343,13 +342,12 @@ def prompt_custom_provider_backend_url() -> str:
         console.print("\n[red]No custom provider backend URL provided. Exiting...[/red]")
         exit(1)
     return validate_custom_provider_base_url(url)
->>>>>>> upstream/pr/995
 
 
 def _select_model(provider: str, mode: str) -> str:
     """Select a model for the given provider and mode (quick/deep)."""
     if provider.lower() == "openrouter":
-        return select_openrouter_model()
+        return select_openrouter_model(mode)
 
     if provider.lower() == "custom_openai":
         saved_key = "shallow_thinker" if mode == "quick" else "deep_thinker"

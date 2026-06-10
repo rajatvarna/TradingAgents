@@ -25,7 +25,7 @@ def test_every_select_llm_provider_choice_has_an_entry():
         "qwen", "qwen-cn",
         "glm", "glm-cn",
         "minimax", "minimax-cn",
-        "openrouter", "opencode", "azure", "ollama", "lmstudio",
+        "openrouter", "opencode", "azure", "ollama", "lmstudio", "custom",
     }
     assert expected.issubset(PROVIDER_API_KEY_ENV.keys())
 
@@ -48,6 +48,7 @@ def test_every_select_llm_provider_choice_has_an_entry():
         ("minimax-cn", "MINIMAX_CN_API_KEY"),
         ("openrouter", "OPENROUTER_API_KEY"),
         ("opencode",   "OPENCODE_API_KEY"),
+        ("custom",     "CUSTOM_PROVIDER_API_KEY"),
     ],
 )
 def test_known_providers_resolve(provider, env_var):

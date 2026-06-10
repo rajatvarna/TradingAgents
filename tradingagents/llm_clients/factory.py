@@ -15,6 +15,7 @@ _OPENAI_COMPATIBLE = (
     "openai", "openai-oauth", "xai", "deepseek", "qwen", "qwen-cn", "glm", "glm-cn", "minimax", "minimax-cn",
     "ollama", "ollama_cloud", "openrouter", "deepinfra", "mimo", "custom_openai",
     "lmstudio", "lm-studio", "llama-cpp", "kimi", "nvidia_nim", "opencode",
+    "custom",
 )
 
 

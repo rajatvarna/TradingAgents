@@ -49,6 +49,7 @@ PROVIDER_API_KEY_ENV: dict[str, Optional[str]] = {
     "openai-oauth":  None,
     "openai_oauth":  None,
     "opencode":   "OPENCODE_API_KEY",
+    "custom":     "CUSTOM_PROVIDER_API_KEY",
     # Local runtimes do not authenticate.
     "ollama":     None,
     "lmstudio":   None,

@@ -9,6 +9,7 @@ from .api_key_env import get_api_key_env
 from .base_client import BaseLLMClient, apply_determinism_kwargs, normalize_content
 from .retry import llm_retry
 from .capabilities import get_capabilities
+from .url_validation import validate_custom_provider_base_url
 from .validators import validate_model
 
 logger = logging.getLogger(__name__)
@@ -344,18 +345,19 @@ class OpenAIClient(BaseLLMClient):
         # client (e.g. a corporate proxy) takes precedence over the
         # provider default so users can route through their own gateway.
         from .api_key_env import get_api_key_env
-        def _resolve_provider_base_url(prov):
-            if prov == "ollama":
-                return os.environ.get("OLLAMA_BASE_URL", _PROVIDER_BASE_URL["ollama"])
-            elif prov == "custom_openai":
-                return os.environ.get("CUSTOM_OPENAI_BASE_URL", _PROVIDER_BASE_URL["custom_openai"])
-            elif prov == "lm-studio":
-                return os.environ.get("LM_STUDIO_BASE_URL", _PROVIDER_BASE_URL["lm-studio"])
-            elif prov == "llama-cpp":
-                return os.environ.get("LLAMA_CPP_BASE_URL", _PROVIDER_BASE_URL["llama-cpp"])
-            return _PROVIDER_BASE_URL.get(prov)
 
-        if self.provider in _PROVIDER_BASE_URL:
+        if self.provider == "custom":
+            llm_kwargs["base_url"] = validate_custom_provider_base_url(self.base_url)
+            api_key = os.environ.get("CUSTOM_PROVIDER_API_KEY")
+            if api_key:
+                llm_kwargs["api_key"] = api_key
+            else:
+                raise ValueError(
+                    "API key for provider 'custom' is not set. "
+                    "Please set the CUSTOM_PROVIDER_API_KEY environment variable "
+                    "(e.g. add CUSTOM_PROVIDER_API_KEY=your_key to your .env file)."
+                )
+        elif self.provider in _PROVIDER_BASE_URL:
             llm_kwargs["base_url"] = self.base_url or resolve_provider_base_url(self.provider)
             api_key_env = get_api_key_env(self.provider)
             if api_key_env:

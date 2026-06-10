@@ -7,6 +7,7 @@ from rich.console import Console
 from cli.models import AnalystType, AssetType
 from cli.preferences import load_preferences
 from tradingagents.llm_clients.model_catalog import get_model_options
+<<<<<<< HEAD
 from tradingagents.llm_clients.custom_provider_config import get_custom_provider_choices
 from tradingagents.llm_clients.oauth import (
     login as oauth_login,
@@ -16,6 +17,9 @@ from tradingagents.llm_clients.oauth import (
     OAuthNotLoggedIn,
     OAuthError,
 )
+=======
+from tradingagents.llm_clients.url_validation import validate_custom_provider_base_url
+>>>>>>> upstream/pr/995
 
 console = Console()
 
@@ -302,6 +306,7 @@ def _prompt_custom_model_id() -> str:
     ).ask().strip()
 
 
+<<<<<<< HEAD
 def _oauth_available_model_ids(refresh: bool = False):
     """Modelli usabili dall'account ChatGPT, o None se non scopribili.
 
@@ -319,6 +324,26 @@ def _oauth_available_model_ids(refresh: bool = False):
         return set(models) if models else None
     except Exception:
         return None
+=======
+def _validate_custom_provider_url_input(value: str) -> bool | str:
+    try:
+        validate_custom_provider_base_url(value)
+        return True
+    except ValueError as exc:
+        return str(exc)
+
+
+def prompt_custom_provider_backend_url() -> str:
+    """Prompt for a custom OpenAI-compatible provider base URL."""
+    url = questionary.text(
+        "Enter custom OpenAI-compatible base URL (e.g. https://api.example.com/v1):",
+        validate=_validate_custom_provider_url_input,
+    ).ask()
+    if url is None:
+        console.print("\n[red]No custom provider backend URL provided. Exiting...[/red]")
+        exit(1)
+    return validate_custom_provider_base_url(url)
+>>>>>>> upstream/pr/995
 
 
 def _select_model(provider: str, mode: str) -> str:
@@ -338,6 +363,16 @@ def _select_model(provider: str, mode: str) -> str:
             console.print(f"\n[red]No {mode} thinking model name provided. Exiting...[/red]")
             exit(1)
         return model_name.strip()
+
+    if provider.lower() == "custom":
+        model = questionary.text(
+            f"Enter custom provider model ID ({mode}-thinking):",
+            validate=lambda x: len(x.strip()) > 0 or "Please enter a model ID.",
+        ).ask()
+        if model is None:
+            console.print("\n[red]No model ID provided. Exiting...[/red]")
+            exit(1)
+        return model.strip()
 
     if provider.lower() == "azure":
         return questionary.text(
@@ -439,6 +474,7 @@ def _llm_provider_table() -> list[tuple[str, str, str | None]]:
         ("Opencode", "opencode", os.environ.get("OPENCODE_BASE_URL") or "https://opencode.ai/zen/go/v1"),
         ("DeepInfra", "deepinfra", "https://api.deepinfra.com/v1/openai"),
         ("MiMo", "mimo", "https://token-plan-sgp.xiaomimimo.com/v1"),
+        ("Custom OpenAI-compatible", "custom", None),
         ("Azure OpenAI", "azure", None),
         ("AWS Bedrock", "bedrock", None),
         ("GitHub Copilot", "github_copilot", "https://models.github.ai/inference"),
@@ -503,7 +539,6 @@ def select_llm_provider() -> tuple[str, str | None]:
         exit(1)
 
     provider, url = choice
-
     if provider == "custom_openai":
         saved_url = _prefs.get("backend_url") or "http://localhost:1234/v1"
         url = questionary.text(
@@ -520,6 +555,8 @@ def select_llm_provider() -> tuple[str, str | None]:
             exit(1)
         url = url.strip()
 
+    if provider == "custom":
+        url = prompt_custom_provider_backend_url()
     return provider, url
 
 
@@ -666,7 +703,11 @@ def confirm_ollama_endpoint(url: str) -> None:
 
     Surfaces three things the user benefits from seeing before model
     selection: which URL we'll actually hit, where it came from
+<<<<<<< HEAD
     (`OLLAMA_BASE_URL` vs default), and a soft warning if the URL is
+=======
+    (``OLLAMA_BASE_URL`` vs default), and a soft warning if the URL is
+>>>>>>> upstream/pr/995
     missing the scheme/port that ollama-serve expects. The warning is
     advisory only — we don't reject malformed input, since the user may
     be doing something deliberately unusual (e.g. a reverse-proxy path).

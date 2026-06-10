@@ -30,6 +30,7 @@ _API_KEY_ENV_VARS = (
     "OPENROUTER_API_KEY",
     "DEEPINFRA_API_KEY",
     "MIMO_API_KEY",
+    "CUSTOM_PROVIDER_API_KEY",
     "AZURE_OPENAI_API_KEY",
     "ALPHA_VANTAGE_API_KEY",
     "AWS_ACCESS_KEY_ID",
@@ -44,7 +45,7 @@ _API_KEY_ENV_VARS = (
 @pytest.fixture(autouse=True)
 def _dummy_api_keys(monkeypatch):
     for env_var in _API_KEY_ENV_VARS:
-        monkeypatch.setenv(env_var, os.environ.get(env_var, "placeholder"))
+        monkeypatch.setenv(env_var, os.environ.get(env_var) or "placeholder")
 
 
 @pytest.fixture()

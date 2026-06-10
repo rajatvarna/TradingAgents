@@ -272,8 +272,6 @@ MODEL_OPTIONS: ProviderModeOptions = {
     # so the two provider keys share one model list.
     "minimax": _MINIMAX_MODELS,
     "minimax-cn": _MINIMAX_MODELS,
-<<<<<<< HEAD
-<<<<<<< HEAD
     "github_copilot": {
         "quick": [
             ("OpenAI GPT-4.1 - Smartest non-reasoning model", "gpt-4.1"),

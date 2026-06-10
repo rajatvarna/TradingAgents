@@ -257,6 +257,7 @@ _PROVIDER_BASE_URL = {
     "minimax-cn": "https://api.minimaxi.com/v1",
     "kimi":       "https://api.moonshot.ai/v1",
     "openrouter": "https://openrouter.ai/api/v1",
+    "nvidia":     "https://integrate.api.nvidia.com/v1",
     "ollama":     "http://localhost:11434/v1",
     "deepinfra":  "https://api.deepinfra.com/v1/openai",
     "github_copilot": "https://models.github.ai/inference",

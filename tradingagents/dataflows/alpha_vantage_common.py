@@ -36,6 +36,12 @@ class AlphaVantageAuthError(ValueError):
     pass
 
 
+class AlphaVantageUnsupportedIndicatorError(ValueError):
+    """Raised when an indicator function is called that is not supported by Alpha Vantage."""
+
+    pass
+
+
 def get_api_key() -> str:
     """Retrieve the API key for Alpha Vantage from environment variables."""
     api_key = os.getenv("ALPHA_VANTAGE_API_KEY")

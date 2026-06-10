@@ -22,10 +22,13 @@ develop-eggs/
 dist/
 downloads/
 eggs/
+back_test/trade_route/
 .eggs/
 lib/
 lib64/
 parts/
+reports/
+results/
 sdist/
 var/
 wheels/
@@ -64,6 +67,12 @@ reports/
 # Translations
 *.mo
 *.pot
+
+# Backtest results
+back_test/*.json
+back_test/strategy/
+back_test/results/
+
 
 # Django stuff:
 *.log

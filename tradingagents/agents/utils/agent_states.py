@@ -1,6 +1,7 @@
-from typing import Annotated
+from typing import Annotated, Any, List
 from typing_extensions import TypedDict
 from langgraph.graph import MessagesState
+from typing import Dict
 
 
 # Researcher team state
@@ -64,6 +65,11 @@ class AgentState(MessagesState):
     esg_report: Annotated[str, "Report from the ESG Analyst"]
     derivatives_report: Annotated[str, "Report from the Derivatives Analyst (options/futures structure, IV, greeks, flow)"]
 
+    # Cross-factor conflict report computed after analysts, before the debate (P0.1)
+    conflict_report: Annotated[
+        Dict[str, Any], "Cross-factor divergence signals/conflicts/notes for downstream agents"
+    ]
+
     # researcher team discussion step
     investment_debate_state: Annotated[
         InvestDebateState, "Current state of the debate on if to invest or not"
@@ -102,3 +108,22 @@ class AgentState(MessagesState):
     trade_filter_reasons: Annotated[list, "Human-readable reasons supporting the trade_filter_score"]
     trade_filtered_out: Annotated[bool, "Whether the trade was filtered out (hard filters or score below threshold)"]
     trade_filter_details: Annotated[object, "Full trade filter output including sub-scores and hard reject reasons"]
+    market_state: Annotated[Dict[str, Any], "Structured latent market state for backtest persistence"]
+    structure_analysis: Annotated[Dict[str, Any], "Deterministic OHLCV structure analysis for backtest persistence"]
+    feature_snapshot: Annotated[Dict[str, Any], "Machine-readable historical feature snapshot for offline policy search"]
+    structured_strategy: Annotated[Dict[str, Any], "Structured strategy for backtest persistence"]
+
+    # Optional current position context for the analyzed ticker
+    holdings_info: Annotated[Dict[str, float], "Current holdings context: quantity and avg_buy_price"]
+
+    # Backtest-only: rolling-window realized PnL summary from prior strategies
+    trading_history_summary: Annotated[
+        Dict[str, Any], "Rolling-window PnL summary of prior backtest trades"
+    ]
+    # Backtest-only: orders from the previous strategy that never filled
+    prior_pending_orders: Annotated[
+        List[Dict[str, Any]], "Unfilled orders carried over from the previous strategy"
+    ]
+
+    # Trading mode: 'live' for real-time analysis or 'backtest' for historical replay
+    trading_mode: Annotated[str, "Trading mode: 'live' or 'backtest'"]

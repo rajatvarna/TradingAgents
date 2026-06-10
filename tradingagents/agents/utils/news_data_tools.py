@@ -52,17 +52,20 @@ def get_global_news(
 @tool
 def get_insider_transactions(
     ticker: Annotated[str, "ticker symbol"],
+    curr_date: Annotated[str, "current date you are trading at, yyyy-mm-dd"] = None,
 ) -> str:
     """
     Retrieve insider transaction information about a company.
     Uses the configured news_data vendor.
     Args:
         ticker (str): Ticker symbol of the company
+        curr_date (str): Current date you are trading at, yyyy-mm-dd. In
+            backtest mode this filters out transactions dated after curr_date.
     Returns:
         str: A report of insider transaction data
     """
     try:
-        return route_to_vendor("get_insider_transactions", ticker)
+        return route_to_vendor("get_insider_transactions", ticker, curr_date)
     except Exception as exc:
         return tool_error_text(tool="get_insider_transactions", error=exc)
 

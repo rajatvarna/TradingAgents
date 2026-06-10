@@ -103,7 +103,6 @@ def clear_checkpoint(data_dir: str | Path, ticker: str, date: str) -> None:
         pass
     finally:
         conn.close()
-<<<<<<< HEAD
 
 
 def archive_checkpoint(

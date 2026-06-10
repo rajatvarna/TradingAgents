@@ -14,7 +14,7 @@ TENCENT_ANTHROPIC_BASE_URL = "https://api.lkeap.cloud.tencent.com/plan/anthropic
 _OPENAI_COMPATIBLE = (
     "openai", "openai-oauth", "xai", "deepseek", "qwen", "qwen-cn", "glm", "glm-cn", "minimax", "minimax-cn",
     "ollama", "ollama_cloud", "openrouter", "deepinfra", "mimo", "custom_openai",
-    "lmstudio", "lm-studio", "llama-cpp", "kimi", "nvidia_nim",
+    "lmstudio", "lm-studio", "llama-cpp", "kimi", "nvidia_nim", "opencode",
 )
 
 

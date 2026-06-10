@@ -436,6 +436,7 @@ def _llm_provider_table() -> list[tuple[str, str, str | None]]:
         ("MiniMax", "minimax", "https://api.minimax.io/v1"),
         ("NVIDIA NIM", "nvidia_nim", "https://integrate.api.nvidia.com/v1"),
         ("OpenRouter", "openrouter", "https://openrouter.ai/api/v1"),
+        ("Opencode", "opencode", os.environ.get("OPENCODE_BASE_URL") or "https://opencode.ai/zen/go/v1"),
         ("DeepInfra", "deepinfra", "https://api.deepinfra.com/v1/openai"),
         ("MiMo", "mimo", "https://token-plan-sgp.xiaomimimo.com/v1"),
         ("Azure OpenAI", "azure", None),

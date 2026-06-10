@@ -48,6 +48,7 @@ PROVIDER_API_KEY_ENV: dict[str, Optional[str]] = {
     # OAuth — no static API key; device-code flow authenticates via browser.
     "openai-oauth":  None,
     "openai_oauth":  None,
+    "opencode":   "OPENCODE_API_KEY",
     # Local runtimes do not authenticate.
     "ollama":     None,
     "lmstudio":   None,

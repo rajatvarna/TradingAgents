@@ -21,7 +21,7 @@ def validate_model(provider: str, model: str) -> bool:
     """
     provider_lower = provider.lower()
 
-    if provider_lower in _OPEN_CATALOG_PROVIDERS:
+    if provider_lower in _OPEN_CATALOG_PROVIDERS or provider_lower == "opencode":
         return True
 
     if provider_lower not in VALID_MODELS:

@@ -270,6 +270,7 @@ _PROVIDER_BASE_URL = {
     "lmstudio":   "http://localhost:1234/v1",
     "lm-studio":  "http://localhost:8000/v1",
     "llama-cpp":  "http://localhost:8001/v1",
+    "opencode":   "https://opencode.ai/zen/go/v1",
 }
 
 
@@ -299,6 +300,10 @@ def resolve_provider_base_url(provider: str) -> Optional[str]:
             return env_url
     if provider == "kimi":
         env_url = os.environ.get("KIMI_BASE_URL")
+        if env_url:
+            return env_url
+    if provider == "opencode":
+        env_url = os.environ.get("OPENCODE_BASE_URL")
         if env_url:
             return env_url
     return _PROVIDER_BASE_URL.get(provider)

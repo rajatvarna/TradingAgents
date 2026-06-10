@@ -388,6 +388,11 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Custom local model (default port 8001)", "custom"),
         ],
     },
+    # Opencode: generic OpenAI-compatible endpoint — any model ID accepted.
+    "opencode": {
+        "quick": [("Custom model ID", "custom")],
+        "deep":  [("Custom model ID", "custom")],
+    },
 }
 
 

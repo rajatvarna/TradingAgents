@@ -483,6 +483,8 @@ We welcome contributions from the community! Whether it's fixing a bug, improvin
 
 Past contributions, including code, design feedback, and bug reports, are credited per release in [`CHANGELOG.md`](CHANGELOG.md).
 
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup, testing, and PR guidelines.
+
 ## Citation
 
 Please reference our work if you find *TradingAgents* provides you with some help :)

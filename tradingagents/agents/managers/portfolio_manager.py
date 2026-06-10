@@ -312,3 +312,180 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
         }
 
     return portfolio_manager_node
+
+
+from typing import Literal, Optional
+from pydantic import BaseModel, Field, model_validator
+
+
+BROAD_INDEX_TICKERS = {
+    "SPY",
+    "VOO",
+    "IVV",
+    "QQQ",
+    "QQQM",
+    "DIA",
+    "IWM",
+    "VTI",
+    "VT",
+    "^GSPC",
+    "^IXIC",
+    "^DJI",
+    "^RUT",
+}
+
+
+class PriceSizeBlock(BaseModel):
+    price: Optional[float] = Field(default=None, description="Plain limit price, or null.")
+    size_pct: float = Field(default=0.0, ge=0.0, le=100.0)
+
+
+class StopLossBlock(BaseModel):
+    price: Optional[float] = Field(default=None, description="Plain stop price, or null.")
+
+
+class PortfolioStrategy(BaseModel):
+    schema_version: Literal["v3"] = "v3"
+    ticker: str
+    as_of_date: str = Field(description="YYYY-MM-DD analysis date.")
+    action: Literal["BUY", "HOLD", "SELL"]
+    entry: PriceSizeBlock
+    add_position: PriceSizeBlock
+    take_profit: PriceSizeBlock = Field(
+        description="Sell on rise. size_pct=100 means full close."
+    )
+    reduce_stop: PriceSizeBlock = Field(
+        description="Partial defensive sell on drop. Price must sit above stop_loss."
+    )
+    stop_loss: StopLossBlock = Field(
+        description="Full-close stop. closes 100% of the position."
+    )
+    rationale_summary: str
+
+    @model_validator(mode="after")
+    def normalize_sell_orders(self):
+        if self.action == "SELL":
+            self.entry = PriceSizeBlock()
+            self.add_position = PriceSizeBlock()
+            self.take_profit = PriceSizeBlock()
+            self.reduce_stop = PriceSizeBlock()
+        return self
+
+    @model_validator(mode="after")
+    def validate_risk_levels(self):
+        if self.action == "SELL":
+            return self
+        rs_price = self.reduce_stop.price
+        sl_price = self.stop_loss.price
+        if (
+            rs_price is not None
+            and sl_price is not None
+            and self.reduce_stop.size_pct > 0
+            and rs_price <= sl_price
+        ):
+            raise ValueError(
+                f"reduce_stop.price ({rs_price}) must be ABOVE stop_loss.price ({sl_price})"
+            )
+        if self.action == "BUY" and self.entry.size_pct > 0 and sl_price is None:
+            raise ValueError("BUY with a non-zero entry must define stop_loss.price.")
+        if self.add_position.size_pct > 0 and sl_price is None:
+            raise ValueError("add_position with size_pct > 0 must be paired with stop_loss.price.")
+        return self
+
+
+def _is_broad_index_instrument(ticker: str) -> bool:
+    normalized = ticker.upper()
+    return normalized in BROAD_INDEX_TICKERS or normalized.endswith((".INDEX", ".IDX"))
+
+
+def _classify_volume_regime(volume_ratio: Optional[float]) -> str:
+    if volume_ratio is None:
+        return "unavailable"
+    if volume_ratio >= 1.5:
+        return "expanding"
+    if volume_ratio < 0.7:
+        return "shrinking"
+    if volume_ratio >= 0.9:
+        return "normal"
+    return "soft"
+
+
+def _clamp_size(block: dict, max_size: float) -> None:
+    block["size_pct"] = min(float(block.get("size_pct") or 0.0), float(max_size))
+    if block["size_pct"] <= 0:
+        block["size_pct"] = 0.0
+        block["price"] = None
+
+
+def _distance_pct(price: Optional[float], current_price: Optional[float]) -> Optional[float]:
+    if price is None or current_price in (None, 0):
+        return None
+    return abs(float(price) - float(current_price)) / float(current_price) * 100.0
+
+
+def _append_rule_note(strategy: dict, note: str) -> None:
+    rationale = strategy.get("rationale_summary") or ""
+    if note not in rationale:
+        strategy["rationale_summary"] = (rationale + " Rule adjustment: " + note).strip()
+
+
+def _clear_entry_orders(strategy: dict) -> None:
+    strategy["entry"] = PriceSizeBlock().model_dump()
+    strategy["add_position"] = PriceSizeBlock().model_dump()
+
+
+def _enforce_strategy_rules(strategy: dict, anchors: Optional[dict], constraints: dict, holdings_info: dict) -> dict:
+    strategy = PortfolioStrategy.model_validate(strategy).model_dump()
+    has_position = float(holdings_info.get("quantity") or 0.0) > 0
+    current_price = anchors.get("current_price") if anchors else None
+
+    if strategy["action"] not in constraints["allowed_actions"]:
+        original_action = strategy["action"]
+        strategy["action"] = "HOLD" if original_action == "SELL" or has_position else "BUY"
+        if strategy["action"] not in constraints["allowed_actions"]:
+            strategy["action"] = constraints["allowed_actions"][0]
+        _append_rule_note(
+            strategy,
+            f"{original_action} was outside allowed_actions={constraints['allowed_actions']}; action set to {strategy['action']}.",
+        )
+        if original_action == "SELL":
+            _clear_entry_orders(strategy)
+
+    _clamp_size(strategy["entry"], constraints["max_entry_size_pct"])
+    _clamp_size(strategy["add_position"], constraints["max_add_position_size_pct"])
+
+    if constraints["entry_mode"] == "no_new_or_add":
+        _clear_entry_orders(strategy)
+        if not has_position and strategy["action"] == "BUY":
+            strategy["action"] = "HOLD"
+        _append_rule_note(strategy, "new entries and adds blocked by deterministic volume divergence rule.")
+
+    entry_distance = _distance_pct(strategy["entry"].get("price"), current_price)
+    if entry_distance is not None and entry_distance > 10:
+        strategy["entry"]["size_pct"] = 0.0
+        strategy["entry"]["price"] = None
+        _append_rule_note(strategy, "entry more than 10% from current price was removed.")
+
+    add_distance = _distance_pct(strategy["add_position"].get("price"), current_price)
+    if add_distance is not None and add_distance > 10:
+        strategy["add_position"]["size_pct"] = 0.0
+        strategy["add_position"]["price"] = None
+        _append_rule_note(strategy, "add-position level more than 10% from current price was removed.")
+
+    if strategy["action"] == "BUY" and strategy["entry"]["size_pct"] <= 0 and strategy["add_position"]["size_pct"] <= 0:
+        strategy["action"] = "HOLD"
+        _append_rule_note(strategy, "BUY without an executable entry/add was converted to HOLD.")
+
+    if strategy["action"] in ("BUY", "HOLD") and (
+        strategy["entry"]["size_pct"] > 0 or strategy["add_position"]["size_pct"] > 0
+    ):
+        if strategy["stop_loss"]["price"] is None and anchors:
+            reference = strategy["entry"]["price"] or current_price
+            stop = min(
+                anchors.get("nearest_support") or reference,
+                float(reference) - 1.5 * float(anchors["atr14"]),
+            )
+            strategy["stop_loss"]["price"] = round(max(stop, 0.01), 4)
+            _append_rule_note(strategy, "missing stop_loss was filled from support/ATR anchor.")
+
+    return PortfolioStrategy.model_validate(strategy).model_dump()

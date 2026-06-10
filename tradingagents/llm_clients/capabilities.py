@@ -126,6 +126,7 @@ _BY_ID: dict[str, ModelCapabilities] = {
     "gpt-5.2": _OPENAI_REASONING,
     # MiniMax — full official model lineup per
     # platform.minimax.io/docs/api-reference/text-openai-api
+    "MiniMax-M3": _MINIMAX_THINKING,
     "MiniMax-M2.7": _MINIMAX_THINKING,
     "MiniMax-M2.7-highspeed": _MINIMAX_THINKING,
     "MiniMax-M2.5": _MINIMAX_THINKING,

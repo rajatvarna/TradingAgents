@@ -19,6 +19,8 @@ all three agents log the same warnings when fallback fires.
 from __future__ import annotations
 
 import logging
+import json
+from collections.abc import MutableMapping
 from typing import Any, Callable, Optional, TypeVar
 
 from pydantic import BaseModel
@@ -28,6 +30,18 @@ from tradingagents.llm_clients.base_client import normalize_content
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
+
+
+def _normalise_prompt_for_cache(prompt: Any) -> str:
+    """Return a deterministic string key for common LLM prompt shapes."""
+    try:
+        return json.dumps(prompt, sort_keys=True, default=str, ensure_ascii=False)
+    except TypeError:
+        return repr(prompt)
+
+
+def _cache_key(agent_name: str, mode: str, prompt: Any) -> str:
+    return f"{agent_name}:{mode}:{_normalise_prompt_for_cache(prompt)}"
 
 
 def bind_structured(llm: Any, schema: type[T], agent_name: str) -> Optional[Any]:
@@ -53,6 +67,7 @@ def invoke_structured_or_freetext(
     prompt: Any,
     render: Callable[[T], str],
     agent_name: str,
+    cache: Optional[MutableMapping[str, str]] = None,
 ) -> str:
     """Run the structured call and render to markdown; fall back to free-text on any failure.
 
@@ -61,10 +76,20 @@ def invoke_structured_or_freetext(
     shape). The same value is forwarded to the free-text path so the
     fallback sees the same input the structured call did.
     """
+    freetext_key = _cache_key(agent_name, "freetext", prompt)
+    if cache is not None and freetext_key in cache:
+        return cache[freetext_key]
+
     if structured_llm is not None:
+        key = _cache_key(agent_name, "structured", prompt)
+        if cache is not None and key in cache:
+            return cache[key]
         try:
             result = structured_llm.invoke(prompt)
-            return render(result)
+            rendered = render(result)
+            if cache is not None:
+                cache[key] = rendered
+            return rendered
         except Exception as exc:
             logger.warning(
                 "%s: structured-output invocation failed (%s); falling back to free-text generation",
@@ -72,7 +97,10 @@ def invoke_structured_or_freetext(
             )
 
     response = normalize_content(plain_llm.invoke(prompt))
-    return response.content
+    content = response.content
+    if cache is not None:
+        cache[freetext_key] = content
+    return content
 
 
 def invoke_structured_or_freetext_with_meta(
@@ -81,17 +109,27 @@ def invoke_structured_or_freetext_with_meta(
     prompt: Any,
     render: Callable[[T], str],
     agent_name: str,
-    cache: Optional[Any] = None,
+    cache: Optional[MutableMapping[str, str]] = None,
     config: Optional[dict] = None,
 ) -> tuple[str, bool]:
     kwargs = {}
     if config is not None:
         kwargs["config"] = config
 
+    freetext_key = _cache_key(agent_name, "freetext", prompt)
+    if cache is not None and freetext_key in cache:
+        return cache[freetext_key], False
+
     if structured_llm is not None:
+        key = _cache_key(agent_name, "structured", prompt)
+        if cache is not None and key in cache:
+            return cache[key], True
         try:
             result = structured_llm.invoke(prompt, **kwargs)
-            return render(result), True
+            rendered = render(result)
+            if cache is not None:
+                cache[key] = rendered
+            return rendered, True
         except Exception as exc:
             logger.warning(
                 "%s: structured-output invocation failed (%s); retrying once as free text",
@@ -99,4 +137,7 @@ def invoke_structured_or_freetext_with_meta(
             )
 
     response = normalize_content(plain_llm.invoke(prompt, **kwargs))
-    return response.content, False
+    content = response.content
+    if cache is not None:
+        cache[freetext_key] = content
+    return content, False

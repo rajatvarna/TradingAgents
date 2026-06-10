@@ -101,6 +101,26 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("GPT-5.5 Pro - Most capable, expensive ($30/$180 per 1M tokens)", "gpt-5.5-pro"),
         ],
     },
+    # ChatGPT OAuth (backend Codex): SOLO i modelli del catalogo Codex sono
+    # accettati dal backend. Modelli generici (gpt-4.1, gpt-5, *-mini/*-nano
+    # non-codex) vengono rifiutati con HTTP 400 "Unsupported model", quindi
+    # questo elenco NON coincide con quello di "openai". Default deep =
+    # gpt-5.3-codex (Codex, non riservato a Pro). Verificato dal catalogo
+    # bundled di openai/codex (models.json, 2026-05-30) e da developers.openai.com/codex/models.
+    "openai-oauth": {
+        "quick": [
+            ("GPT-5.4 Mini - Fast, broadly available (incl. free plan)", "gpt-5.4-mini"),
+            ("GPT-5.5 - Latest frontier, broadly available", "gpt-5.5"),
+            ("GPT-5.3 Codex - Codex-tuned (Plus/Pro plans)", "gpt-5.3-codex"),
+            ("GPT-5.2 - Cost-effective (Plus/Pro plans)", "gpt-5.2"),
+        ],
+        "deep": [
+            ("GPT-5.5 - Latest frontier, broadly available", "gpt-5.5"),
+            ("GPT-5.4 Mini - Fast, broadly available", "gpt-5.4-mini"),
+            ("GPT-5.3 Codex - Codex-tuned (Plus/Pro plans)", "gpt-5.3-codex"),
+            ("GPT-5.4 - Frontier (Plus/Pro plans)", "gpt-5.4"),
+        ],
+    },
     "anthropic": {
         "quick": [
             ("Claude Sonnet 4.6 - Best speed and intelligence balance", "claude-sonnet-4-6"),

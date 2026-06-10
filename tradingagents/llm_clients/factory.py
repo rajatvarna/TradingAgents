@@ -2,9 +2,11 @@ from typing import Optional
 
 from .base_client import BaseLLMClient
 
-# Providers that use the OpenAI-compatible chat completions API
+# Providers that use the OpenAI-compatible chat completions API.
+# "openai-oauth" is OpenAI's Responses API reached via the Codex ChatGPT
+# backend with an OAuth bearer (handled inside OpenAIClient).
 _OPENAI_COMPATIBLE = (
-    "openai", "xai", "deepseek", "qwen", "qwen-cn", "glm", "glm-cn", "minimax", "minimax-cn",
+    "openai", "openai-oauth", "xai", "deepseek", "qwen", "qwen-cn", "glm", "glm-cn", "minimax", "minimax-cn",
     "ollama", "ollama_cloud", "openrouter", "deepinfra", "mimo", "custom_openai",
     "lmstudio", "lm-studio", "llama-cpp", "kimi",
 )

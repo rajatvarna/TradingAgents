@@ -238,6 +238,27 @@ export ALPHA_VANTAGE_API_KEY=...   # Alpha Vantage
 > - If your key only works with a different endpoint (e.g. `https://api.moonshot.cn/v1`), set the `KIMI_BASE_URL` environment variable.
 > - Generate your key from the console that matches your account.
 
+#### Sign in with ChatGPT (OAuth)
+
+Instead of an `OPENAI_API_KEY`, you can authenticate with your **ChatGPT**
+subscription (Plus/Pro) using the same OAuth flow as the Codex CLI:
+
+```bash
+tradingagents login          # opens the browser for the OAuth sign-in
+tradingagents                # then pick "OpenAI (ChatGPT OAuth)" as provider
+```
+
+Tokens are stored in `~/.tradingagents/oauth_openai.json` (mode `0600`) and
+refreshed automatically; model calls go through the ChatGPT Codex backend.
+Only Codex catalog models are available here (e.g. `gpt-5.3-codex`, `gpt-5.4`,
+`gpt-5.5`) — generic API model IDs are rejected by that backend.
+
+> ⚠️ Community/unofficial: this reuses Codex's public OAuth client and an
+> undocumented backend that can change without notice. Whether using it from a
+> non-Codex app complies with OpenAI's Terms is your responsibility.
+
+See [`docs/openai-oauth.md`](docs/openai-oauth.md) for the full technical reference.
+
 For enterprise providers (e.g. Azure OpenAI, AWS Bedrock), copy `.env.enterprise.example` to `.env.enterprise` and fill in your credentials.
 
 For local models, configure Ollama with `llm_provider: "ollama"` in your config.

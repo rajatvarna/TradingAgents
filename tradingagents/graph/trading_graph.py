@@ -222,7 +222,7 @@ class TradingAgentsGraph:
             # SDK to honour the Retry-After header and automatically back off.
             kwargs["max_retries"] = int(self.config.get("openrouter_max_retries", 6))
 
-        elif provider == "openai":
+        elif provider in ("openai", "openai-oauth"):
             reasoning_effort = self.config.get("openai_reasoning_effort")
             if reasoning_effort:
                 kwargs["reasoning_effort"] = reasoning_effort

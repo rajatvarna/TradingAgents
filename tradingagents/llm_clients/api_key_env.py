@@ -54,6 +54,9 @@ PROVIDER_API_KEY_ENV: dict[str, Optional[str]] = {
     # Subscription-backed: auth comes from the local `claude` CLI's
     # OAuth session, not an env-var API key.
     "claude-code": None,
+    # The codex CLI owns its own auth — configured by `codex login` —
+    # so there is no env-var check at the TradingAgents layer.
+    "codex":      None,
 }
 
 

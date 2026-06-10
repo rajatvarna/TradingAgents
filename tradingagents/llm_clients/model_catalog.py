@@ -273,6 +273,7 @@ MODEL_OPTIONS: ProviderModeOptions = {
     "minimax": _MINIMAX_MODELS,
     "minimax-cn": _MINIMAX_MODELS,
 <<<<<<< HEAD
+<<<<<<< HEAD
     "github_copilot": {
         "quick": [
             ("OpenAI GPT-4.1 - Smartest non-reasoning model", "gpt-4.1"),
@@ -316,9 +317,24 @@ MODEL_OPTIONS: ProviderModeOptions = {
         ],
     },
     "kimi": _KIMI_MODELS,
-=======
     "nvidia_nim": _NVIDIA_NIM_MODELS,
->>>>>>> upstream/pr/939
+    # Codex: under ChatGPT-subscription auth the backend whitelists a
+    # small fixed set of GPT-5.x IDs; raw API model names like
+    # ``gpt-5``, ``o4-mini``, ``gpt-5.5-mini`` come back as
+    # ``invalid_request_error``. Users on ``OPENAI_API_KEY`` mode can
+    # enter anything via "Custom model ID".
+    "codex": {
+        "quick": [
+            ("GPT-5.4 Mini - Subscription quick tier, fast", "gpt-5.4-mini"),
+            ("GPT-5.4 - Subscription tier, balanced", "gpt-5.4"),
+            ("Custom model ID", "custom"),
+        ],
+        "deep": [
+            ("GPT-5.5 - Subscription deep tier, latest frontier", "gpt-5.5"),
+            ("GPT-5.4 - Subscription tier, previous-gen frontier", "gpt-5.4"),
+            ("Custom model ID", "custom"),
+        ],
+    },
     # OpenRouter: fetched dynamically. Azure: any deployed model name.
     # Ollama display labels intentionally omit a "local" marker — the
     # endpoint is now configurable via OLLAMA_BASE_URL, so the same labels

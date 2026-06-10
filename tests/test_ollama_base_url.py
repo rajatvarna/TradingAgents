@@ -229,4 +229,4 @@ def test_resolver_prefers_tradingagents_ollama_env(monkeypatch):
     monkeypatch.setenv("TRADINGAGENTS_OLLAMA_BASE_URL", "http://preferred-ollama:11434/v1")
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://legacy-ollama:11434/v1")
     mod = _reload_client()
-    assert mod._resolve_provider_base_url("ollama") == "http://preferred-ollama:11434/v1"
+    assert mod.resolve_provider_base_url("ollama") == "http://preferred-ollama:11434/v1"

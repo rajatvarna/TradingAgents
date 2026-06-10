@@ -263,6 +263,8 @@ def get_vendor(category: str, method: str = None) -> str:
 
 def route_to_vendor(method: str, *args, **kwargs):
     """Route method calls to appropriate vendor implementation with fallback support."""
+    from tradingagents.dataflows.symbol_utils import NoMarketDataError
+
     category = get_category_for_method(method)
     vendor_config = get_vendor(category, method)
     primary_vendors = [v.strip() for v in vendor_config.split(',')]
@@ -277,6 +279,8 @@ def route_to_vendor(method: str, *args, **kwargs):
         if vendor not in fallback_vendors:
             fallback_vendors.append(vendor)
 
+    first_no_data_err = None
+
     for vendor in fallback_vendors:
         if vendor not in VENDOR_METHODS[method]:
             continue
@@ -286,7 +290,21 @@ def route_to_vendor(method: str, *args, **kwargs):
 
         try:
             return impl_func(*args, **kwargs)
-        except (AlphaVantageRateLimitError, AlphaVantageUnsupportedIndicatorError, SearxngUnavailableError, YFRateLimitError, DataVendorError):
+        except NoMarketDataError as exc:
+            if first_no_data_err is None:
+                first_no_data_err = exc
+            continue
+        except (AlphaVantageRateLimitError, AlphaVantageUnsupportedIndicatorError, SearxngUnavailableError, YFRateLimitError, DataVendorError, ValueError):
             continue  # Vendor-availability and rate limit failures trigger fallback
+
+    if first_no_data_err is not None:
+        symbol = first_no_data_err.symbol
+        canonical = first_no_data_err.canonical
+        detail = getattr(first_no_data_err, "detail", "")
+        return (
+            f"NO_DATA_AVAILABLE: No market data for '{symbol}' "
+            f"(queried as '{canonical}'): {detail}. "
+            "Do not estimate, fake, or fabricate any indicators or reports."
+        )
 
     raise RuntimeError(f"No available vendor for '{method}'")

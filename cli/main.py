@@ -843,19 +843,24 @@ def update_research_team_status(status):
 
 
 # Ordered list of analysts for status transitions
-ANALYST_ORDER = ["market", "social", "news", "fundamentals"]
+ANALYST_ORDER = ["market", "social", "news", "fundamentals", "esg", "derivatives"]
 ANALYST_AGENT_NAMES = {
     "market": "Market Analyst",
     "social": "Sentiment Analyst",
     "news": "News Analyst",
     "fundamentals": "Fundamentals Analyst",
+    "esg": "ESG Analyst",
+    "derivatives": "Derivatives Analyst",
 }
 ANALYST_REPORT_MAP = {
     "market": "market_report",
     "social": "sentiment_report",
     "news": "news_report",
     "fundamentals": "fundamentals_report",
+    "esg": "esg_report",
+    "derivatives": "derivatives_report",
 }
+
 
 
 def update_analyst_statuses(message_buffer, chunk, wall_time_tracker=None):
@@ -976,6 +981,73 @@ def format_tool_args(args, max_length=80) -> str:
     if len(result) > max_length:
         return result[:max_length - 3] + "..."
     return result
+
+
+def should_save_report(value: str | None) -> bool:
+    """Return True when the user wants to save the report."""
+    if value is None:
+        return True
+
+    normalized = str(value).strip().lower()
+
+    if normalized == "":
+        return True
+
+    return normalized in {"y", "yes"}
+
+
+def should_display_report(value: str | None) -> bool:
+    """Return True when the user wants to display the report."""
+    if value is None:
+        return True
+
+    normalized = str(value).strip().lower()
+
+    if normalized == "":
+        return True
+
+    return normalized in {"y", "yes"}
+
+
+def resolve_report_save_path(value: str | None, default_path: Path) -> Path:
+    """Resolve the final report save path from prompt input."""
+    if value is None:
+        return default_path
+
+    cleaned = str(value).strip()
+
+    if cleaned == "":
+        return default_path
+
+    return Path(cleaned).expanduser()
+
+
+def _weekly_dates(start: str, end: str) -> list[str]:
+    """Return calendar-weekly review dates, kept for legacy tests/tools."""
+    import pandas as pd
+    dates = []
+    current = pd.Timestamp(start)
+    end_ts = pd.Timestamp(end)
+    while current <= end_ts:
+        dates.append(current.strftime("%Y-%m-%d"))
+        current += pd.Timedelta(days=7)
+    return dates
+
+
+def _weekly_trading_dates(start: str, end: str, trading_dates) -> list[str]:
+    """Return weekly dates shifted to the next available trading day."""
+    import pandas as pd
+    trading_index = sorted(set(pd.to_datetime(trading_dates)))
+    end_ts = pd.Timestamp(end)
+    result = []
+    for weekly in pd.to_datetime(_weekly_dates(start, end)):
+        candidates = [d for d in trading_index if weekly <= d <= end_ts]
+        if candidates:
+            shifted = candidates[0].strftime("%Y-%m-%d")
+            if shifted not in result:
+                result.append(shifted)
+    return result
+
 
 def _configure_file_logging() -> None:
     """Route library logging to a file instead of stderr.
@@ -1306,5 +1378,13 @@ def analyze(
     run_analysis(checkpoint=checkpoint)
 
 
+from cli.deepdive import deepdive as _deepdive_cmd
+app.command(name="deepdive")(_deepdive_cmd)
+
+from cli.forge import app as forge_app
+app.add_typer(forge_app, name="forge")
+
+
 if __name__ == "__main__":
     app()
+

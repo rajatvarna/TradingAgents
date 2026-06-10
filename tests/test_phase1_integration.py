@@ -114,6 +114,7 @@ def _llm_with_trace(cb: TraceCallback):
 
 def _state_for_researchers() -> dict:
     return {
+        "company_of_interest": "AAPL",
         "investment_debate_state": {
             "history": "prior debate",
             "bull_history": "",

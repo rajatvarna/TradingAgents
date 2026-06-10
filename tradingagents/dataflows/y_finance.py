@@ -8,7 +8,12 @@ from .stockstats_utils import StockstatsUtils, _clean_dataframe, yf_retry, load_
 from .symbol_utils import normalize_symbol, NoMarketDataError
 from .cache_utils import cache_text
 from .point_in_time import historical_snapshot_caveat
+from .snapshots import snapshot
 
+@snapshot(
+    kind="prices", source="yfinance",
+    scope_arg="symbol", date_arg="end_date",
+)
 def get_YFin_data_online(
     symbol: Annotated[str, "ticker symbol of the company"],
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],

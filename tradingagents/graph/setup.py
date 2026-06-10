@@ -61,14 +61,14 @@ class GraphSetup:
         deep_thinking_llm: Any,
         tool_nodes: Dict[str, ToolNode],
         conditional_logic: ConditionalLogic,
-        structured_output_cache: Dict[str, str],
+        structured_output_cache: Dict[str, str] = None,
         analyst_concurrency_limit: int = 1,
     ):
         self.quick_thinking_llm = quick_thinking_llm
         self.deep_thinking_llm = deep_thinking_llm
         self.tool_nodes = tool_nodes
         self.conditional_logic = conditional_logic
-        self.structured_output_cache = structured_output_cache
+        self.structured_output_cache = structured_output_cache if structured_output_cache is not None else {}
         self.analyst_concurrency_limit = analyst_concurrency_limit
 
     def setup_graph(
@@ -106,7 +106,7 @@ class GraphSetup:
         self._build_analyst_nodes(workflow, selected_analysts)
         self._build_fixed_nodes(workflow)
         self._wire_analyst_branches(workflow, selected_analysts)
-        self._wire_fixed_flow(workflow, selected_analysts)
+        self._wire_fixed_flow(workflow, selected_analysts, run_recorder_node)
         return workflow
 
     # ------------------------------------------------------------------
@@ -118,7 +118,7 @@ class GraphSetup:
         for analyst_type in selected_analysts:
             factory = _ANALYST_FACTORIES[analyst_type]
             workflow.add_node(analyst_node_name(analyst_type), factory(self.quick_thinking_llm))
-            workflow.add_node(clear_node_name(analyst_type), create_msg_delete())
+            workflow.add_node(clear_node_name(analyst_type), create_msg_delete(self.analyst_concurrency_limit))
             workflow.add_node(tools_node_name(analyst_type), self.tool_nodes[TOOL_NODE_KEY[analyst_type]])
             workflow.add_node(
                 f"Capture Tools {analyst_type.capitalize()}",
@@ -147,7 +147,7 @@ class GraphSetup:
 
     def _wire_analyst_branches(self, workflow: StateGraph, selected_analysts: List[str]) -> None:
         """Wire sequential or parallel analyst fan-out, tool loops, clear nodes, and join."""
-        plan = build_analyst_execution_plan(selected_analysts, concurrency_limit=self.analyst_concurrency_limit)
+        plan = build_analyst_execution_plan(selected_analysts)
 
         if self.analyst_concurrency_limit == 1:
             # Wire analysts sequentially (Upstream sequential flow)
@@ -177,6 +177,7 @@ class GraphSetup:
         else:
             # Wire analysts in parallel (Local parallel flow with Join Analysts)
             def join_analysts_node(state):
+                import json
                 for analyst in selected_analysts:
                     key = ANALYST_REPORT_KEYS.get(analyst)
                     if key and not state.get(key):
@@ -184,9 +185,46 @@ class GraphSetup:
                     if analyst == "sentiment" and not state.get("sentiment_report") and not state.get("social_report"):
                         return {}
                 messages = state.get("messages", [])
-                removal_operations = [RemoveMessage(id=m.id) for m in messages]
+                
+                tool_errors = state.get("tool_errors", [])
+                error_count = int(state.get("error_count", 0) or 0)
+                tool_call_count = int(state.get("tool_call_count", 0) or 0)
+                trade_levels = state.get("trade_levels")
+
+                for m in messages:
+                    mtype = getattr(m, "type", None)
+                    if mtype != "tool":
+                        continue
+                    tool_call_count += 1
+                    content = getattr(m, "content", None)
+                    if not isinstance(content, str):
+                        continue
+                    try:
+                        payload = json.loads(content)
+                    except Exception:
+                        continue
+                    if isinstance(payload, dict) and payload.get("error") is True:
+                        error_count += 1
+                        tool_errors.append(payload)
+                    if (
+                        isinstance(payload, dict)
+                        and payload.get("error") is not True
+                        and "entry_condition" in payload
+                        and "entry_price" in payload
+                        and "stop_loss" in payload
+                        and "anchors" in payload
+                    ):
+                        trade_levels = payload
+
+                removal_operations = [RemoveMessage(id=m.id) for m in messages if m.id is not None]
                 placeholder = HumanMessage(content="Analysts finished their reports.")
-                return {"messages": removal_operations + [placeholder]}
+                return {
+                    "messages": removal_operations + [placeholder],
+                    "tool_errors": tool_errors,
+                    "error_count": error_count,
+                    "tool_call_count": tool_call_count,
+                    "trade_levels": trade_levels,
+                }
 
             workflow.add_node("Join Analysts", join_analysts_node)
 
@@ -214,7 +252,7 @@ class GraphSetup:
                 {"continue": "Bull Researcher", "wait": END},
             )
 
-    def _wire_fixed_flow(self, workflow: StateGraph, selected_analysts: List[str]) -> None:
+    def _wire_fixed_flow(self, workflow: StateGraph, selected_analysts: List[str], run_recorder_node: Any = None) -> None:
         """Wire the research debate, trader, risk debate, and portfolio manager."""
         workflow.add_conditional_edges(
             "Bull Researcher",

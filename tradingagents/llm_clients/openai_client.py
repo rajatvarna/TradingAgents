@@ -415,12 +415,12 @@ class OpenAIClient(BaseLLMClient):
         # providers. ChatOpenAI reads OPENAI_API_KEY from env when api_key
         # is missing, which would send the wrong key to third-party
         # endpoints (e.g. ollama.com, api.x.ai).
+        api_key_env = get_api_key_env(self.provider)
         if (
-            self.provider in _PROVIDER_CONFIG
-            and _PROVIDER_CONFIG[self.provider][1] is not None
+            self.provider != "openai"
+            and api_key_env is not None
             and "api_key" not in llm_kwargs
         ):
-            api_key_env = _PROVIDER_CONFIG[self.provider][1]
             raise ValueError(
                 f"{self.provider} provider requires an API key. "
                 f"Set the {api_key_env} environment variable or pass "
@@ -437,9 +437,7 @@ class OpenAIClient(BaseLLMClient):
             provider=self.provider,
         )
 
-        # Native OpenAI uses the Responses API; OpenAI-compatible custom
-        # endpoints (third-party gateways, LM Studio, vLLM, ...) only speak
-        # Chat Completions, so only enable it for the real api.openai.com host.
+        if self.provider == "openai":
             llm_kwargs["use_responses_api"] = _is_native_openai_base_url(self.base_url)
             # T0.1 caveat: OpenAI Responses API rejects `seed` (it's a
             # Chat Completions parameter). Drop it for native OpenAI;

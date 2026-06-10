@@ -441,7 +441,7 @@ def create_force_finalize(llm, report_key: str, analyst_label: str):
     return force_finalize_node
 
 
-def create_msg_delete():
+def create_msg_delete(concurrency_limit: int = 1):
     def delete_messages(state):
         """Clear messages and add a context-anchored placeholder.
 
@@ -485,7 +485,10 @@ def create_msg_delete():
                 trade_levels = payload
 
         # Remove all messages
-        removal_operations = [RemoveMessage(id=m.id) for m in messages]
+        if concurrency_limit == 1:
+            removal_operations = [RemoveMessage(id=m.id) for m in messages]
+        else:
+            removal_operations = []
 
         instrument_context = get_instrument_context_from_state(state)
         trade_date = state.get("trade_date", "the requested date")
@@ -500,13 +503,18 @@ def create_msg_delete():
             )
         )
 
-        return {
-            "messages": removal_operations + [placeholder],
-            "tool_errors": tool_errors,
-            "error_count": error_count,
-            "tool_call_count": tool_call_count,
-            "trade_levels": trade_levels,
-        }
+        if concurrency_limit == 1:
+            return {
+                "messages": removal_operations + [placeholder],
+                "tool_errors": tool_errors,
+                "error_count": error_count,
+                "tool_call_count": tool_call_count,
+                "trade_levels": trade_levels,
+            }
+        else:
+            return {
+                "messages": [placeholder],
+            }
     return delete_messages
 
 

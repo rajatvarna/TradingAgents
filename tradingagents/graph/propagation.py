@@ -24,12 +24,14 @@ class Propagator:
         user_research: str = "",
         target_profile: Optional[Dict[str, Any]] = None,
         risk_constraints: Optional[Dict[str, Any]] = None,
+        instrument_context: str = "",
     ) -> Dict[str, Any]:
         """Create the initial state for the agent graph."""
         return {
             "messages": [("human", company_name)],
             "company_of_interest": company_name,
             "asset_type": asset_type,
+            "instrument_context": instrument_context,
             "trade_date": str(trade_date),
             "past_context": past_context,
             "user_research_report": user_research,

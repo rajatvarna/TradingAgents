@@ -14,6 +14,7 @@ import logging
 from typing import Any, Callable, Optional
 
 import pytest
+pytest.importorskip("claude_agent_sdk")
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel
 

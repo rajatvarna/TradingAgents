@@ -7,7 +7,6 @@ from rich.console import Console
 from cli.models import AnalystType, AssetType
 from cli.preferences import load_preferences
 from tradingagents.llm_clients.model_catalog import get_model_options
-<<<<<<< HEAD
 from tradingagents.llm_clients.custom_provider_config import get_custom_provider_choices
 from tradingagents.llm_clients.oauth import (
     login as oauth_login,
@@ -17,9 +16,7 @@ from tradingagents.llm_clients.oauth import (
     OAuthNotLoggedIn,
     OAuthError,
 )
-=======
 from tradingagents.llm_clients.url_validation import validate_custom_provider_base_url
->>>>>>> upstream/pr/995
 
 console = Console()
 
@@ -701,11 +698,7 @@ def confirm_ollama_endpoint(url: str) -> None:
 
     Surfaces three things the user benefits from seeing before model
     selection: which URL we'll actually hit, where it came from
-<<<<<<< HEAD
-    (`OLLAMA_BASE_URL` vs default), and a soft warning if the URL is
-=======
     (``OLLAMA_BASE_URL`` vs default), and a soft warning if the URL is
->>>>>>> upstream/pr/995
     missing the scheme/port that ollama-serve expects. The warning is
     advisory only — we don't reject malformed input, since the user may
     be doing something deliberately unusual (e.g. a reverse-proxy path).

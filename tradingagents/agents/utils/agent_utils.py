@@ -31,6 +31,9 @@ from tradingagents.agents.utils.options_tools import (
     get_options_chain,
     calculate_put_call_ratio,
 )
+from tradingagents.agents.utils.market_data_validation_tools import (
+    get_verified_market_snapshot,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +74,7 @@ __all__ = [
     "DEBATE_EVIDENCE_GUARDRAIL",
     "truncate_history",
     "format_risk_constraints",
+    "get_verified_market_snapshot",
 ]
 
 

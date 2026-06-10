@@ -512,6 +512,28 @@ def update_display(layout, spinner_text=None, stats_handler=None, start_time=Non
     layout["footer"].update(Panel(stats_table, border_style="grey50"))
 
 
+CONFIG_DIR = Path.home() / ".tradingagents"
+CONFIG_FILE = CONFIG_DIR / "default_config.json"
+
+
+def load_default_config():
+    if not CONFIG_FILE.exists():
+        return None
+
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def save_default_config(cfg):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2)
+
+
 def get_user_selections(batch_mode: bool = False):
     """Get all user selections before starting the analysis display.
 
@@ -546,6 +568,21 @@ def get_user_selections(batch_mode: bool = False):
     # Fetch and display announcements (silent on failure)
     announcements = fetch_announcements()
     display_announcements(console, announcements)
+
+    saved_config = load_default_config()
+
+    if saved_config:
+        use_saved = questionary.select(
+            "Configuration found:",
+            choices=[
+                questionary.Choice("Use saved configuration", value=True),
+                questionary.Choice("Configure manually", value=False),
+            ],
+        ).ask()
+
+        if use_saved:
+            console.print("[green]Using saved configuration[/green]")
+            return saved_config
 
     # Create a boxed questionnaire for each step
     def create_question_box(title, prompt, default=None):
@@ -747,7 +784,7 @@ def get_user_selections(batch_mode: bool = False):
         )
         llm_timeout = ask_llm_timeout()
 
-    return {
+    res = {
         "tickers": selected_tickers,
         "batch_mode": is_batch_mode,
         "market": selected_market,
@@ -766,6 +803,21 @@ def get_user_selections(batch_mode: bool = False):
         "investment_horizon": selected_horizon,
         "llm_timeout": llm_timeout,
     }
+
+    # For saving default config, convert enums to serializable format
+    try:
+        config_to_save = res.copy()
+        config_to_save["analysts"] = [
+            a.value if hasattr(a, "value") else a for a in selected_analysts
+        ]
+        config_to_save["asset_type"] = (
+            asset_type.value if hasattr(asset_type, "value") else asset_type
+        )
+        save_default_config(config_to_save)
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not save default config: {e}[/yellow]")
+
+    return res
 
 
 def save_report_to_disk(final_state, ticker: str, save_path: Path):
@@ -1255,11 +1307,19 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
         audit_jsonl_path = audit_root / "calls" / f"{_uuid.uuid4()}.jsonl"
     stats_handler = StatsCallbackHandler(provider=config["llm_provider"], jsonl_path=audit_jsonl_path)
 
-    selected_analyst_keys = [a for a in ANALYST_ORDER if a in {analyst.value for analyst in selections["analysts"]}]
+    # Normalize analyst selection to predefined order (selection is a 'set', order is fixed)
+    selected_set = {
+        analyst.value if hasattr(analyst, "value") else analyst
+        for analyst in selections["analysts"]
+    }
+    selected_analyst_keys = [a for a in ANALYST_ORDER if a in selected_set]
 
     # Build analyst execution plan and instantiate wall time tracker
     concurrency_limit = config.get("analyst_concurrency_limit", 1)
-    analyst_execution_plan = build_analyst_execution_plan(selected_analyst_keys, concurrency_limit=concurrency_limit)
+    analyst_execution_plan = build_analyst_execution_plan(
+        selected_analyst_keys,
+        concurrency_limit=concurrency_limit,
+    )
     wall_time_tracker = AnalystWallTimeTracker(analyst_execution_plan)
 
     graph = TradingAgentsGraph(
@@ -1476,7 +1536,7 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
         )
         message_buffer.add_message(
             "System",
-            f"Selected analysts: {', '.join(analyst.value for analyst in selections['analysts'])}",
+            f"Selected analysts: {', '.join(analyst.value if hasattr(analyst, 'value') else analyst for analyst in selections['analysts'])}",
         )
         for analyst in selections["analysts"]:
             analyst_name = MessageBuffer.ANALYST_MAPPING.get(analyst.value.lower(), f"{analyst.value.capitalize()} Analyst")

@@ -96,24 +96,11 @@ class TestMastodonFetcher:
 
 class TestPromptWiring:
     @pytest.mark.unit
-    def test_all_six_blocks_present(self):
-        msg = _build_system_message(
-            ticker="NVDA", start_date="2026-05-22", end_date="2026-05-29",
-            news_block="NEWS_X", stocktwits_block="ST_X", reddit_block="RD_X",
-            bluesky_block="BSKY_X", mastodon_block="MASTO_X", fear_greed_block="FG_X",
-        )
-        for tag in ("news", "stocktwits", "reddit", "bluesky", "mastodon", "fear_greed"):
-            assert f"<start_of_{tag}>" in msg and f"<end_of_{tag}>" in msg
-        for data in ("NEWS_X", "ST_X", "RD_X", "BSKY_X", "MASTO_X", "FG_X"):
-            assert data in msg
-
-    @pytest.mark.unit
-    def test_breakdown_lists_new_sources(self):
-        msg = _build_system_message(
-            ticker="NVDA", start_date="2026-05-22", end_date="2026-05-29",
-            news_block="", stocktwits_block="", reddit_block="",
-        )
-        assert "Bluesky" in msg and "Mastodon" in msg and "Fear & Greed" in msg
+    def test_system_message_is_static(self):
+        msg = _build_system_message()
+        assert "sentiment analyst" in msg.lower()
+        assert "StockTwits" in msg
+        assert "Bluesky" in msg
 
 
 # ─── Node integration ────────────────────────────────────────────────────────
@@ -129,7 +116,7 @@ class TestSentimentNode:
         # A real Runnable so `prompt | llm` builds a valid sequence; it
         # records the fully-rendered prompt the LLM would receive.
         def _capture(prompt_value):
-            captured["text"] = prompt_value.to_string()
+            captured["text"] = "\n".join(str(m) for m in prompt_value)
             return MagicMock(content="report")
 
         fake_llm = RunnableLambda(_capture)

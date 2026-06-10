@@ -89,7 +89,6 @@ class GraphSetup:
                 - "derivatives": Derivatives analyst
             run_recorder_node: Optional node for recording runs
         """
-        """
         if selected_analysts is None:
             selected_analysts = list(_DEFAULT_ANALYSTS)
 

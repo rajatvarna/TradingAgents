@@ -1158,6 +1158,45 @@ def format_tool_args(args, max_length=80) -> str:
         return result[:max_length - 3] + "..."
     return result
 
+def should_save_report(value: str | None) -> bool:
+    """Return True when the user wants to save the report."""
+    if value is None:
+        return True
+
+    normalized = str(value).strip().lower()
+
+    if normalized == "":
+        return True
+
+    return normalized in {"y", "yes"}
+
+
+def should_display_report(value: str | None) -> bool:
+    """Return True when the user wants to display the report."""
+    if value is None:
+        return True
+
+    normalized = str(value).strip().lower()
+
+    if normalized == "":
+        return True
+
+    return normalized in {"y", "yes"}
+
+
+def resolve_report_save_path(value: str | None, default_path: Path) -> Path:
+    """Resolve the final report save path from prompt input."""
+    if value is None:
+        return default_path
+
+    cleaned = str(value).strip()
+
+    if cleaned == "":
+        return default_path
+
+    return Path(cleaned).expanduser()
+
+
 def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: bool = False, checkpoint: bool = False, classic: bool = False):
     """Run analysis for a single ticker."""
 
@@ -1479,6 +1518,7 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
     console.print(Rule("Analyst Wall Time Summary", style="bold cyan"))
     console.print(wall_time_tracker.format_summary())
 
+    save_path = None
     if auto_save:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         save_path = Path.cwd() / "reports" / f"{ticker}_{timestamp}"
@@ -1487,16 +1527,18 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
         console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
         console.print(f"[dim]{wall_time_tracker.format_summary()}[/dim]")
 
-        # Prompt to save report — defaults to the same per-run dir that holds the log.
-        save_choice = typer.prompt("Save report?", default="Y").strip().upper()
-        if save_choice in ("Y", "YES", ""):
+        # Prompt to save report
+        save_choice = typer.prompt("Save report?", default="Y")
+        if should_save_report(save_choice):
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            default_path = Path.cwd() / "reports" / f"{ticker}_{timestamp}"
             save_path_str = typer.prompt(
                 "Save path (press Enter for default)",
-                default=str(results_dir)
-            ).strip()
-            save_path = Path(save_path_str)
-        else:
-            save_path = None
+                default=str(default_path),
+            )
+            save_path = resolve_report_save_path(save_path_str, default_path)
+
+    if save_path is not None:
         try:
             report_file = save_report_to_disk(final_state, ticker, save_path)
             console.print(f"[green]✓ Report saved to:[/green] {save_path.resolve()}")
@@ -1543,25 +1585,10 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
                         console.print(f"  [dim]URL:[/dim] {_url}")
         except Exception as e:
             console.print(f"[red]Error saving report: {e}[/red]")
-    else:
-        save_choice = typer.prompt("Save report?", default="Y").strip().upper()
-        if save_choice in ("Y", "YES", ""):
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            default_path = Path.cwd() / "reports" / f"{ticker}_{timestamp}"
-            save_path_str = typer.prompt(
-                "Save path (press Enter for default)",
-                default=str(default_path)
-            ).strip()
-            save_path = Path(save_path_str)
-            try:
-                report_file = save_report_to_disk(final_state, ticker, save_path)
-                console.print(f"\n[green]✓ Report saved to:[/green] {save_path.resolve()}")
-                console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
-            except Exception as e:
-                console.print(f"[red]Error saving report: {e}[/red]")
 
-        display_choice = typer.prompt("\nDisplay full report on screen?", default="Y").strip().upper()
-        if display_choice in ("Y", "YES", ""):
+    if not auto_save:
+        display_choice = typer.prompt("\nDisplay full report on screen?", default="Y")
+        if should_display_report(display_choice):
             display_complete_report(final_state)
 
     return final_state

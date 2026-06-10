@@ -40,6 +40,7 @@ dependencies = [
     "stockstats>=0.6.5",
     "tenacity>=9.0.0",
     "tqdm>=4.67.1",
+    "truststore>=0.10.0",
     "typing-extensions>=4.14.0",
     "uvicorn>=0.35.0",
     "yfinance>=1.4.1",
@@ -85,6 +86,13 @@ dev = [
     "fakeredis>=2.20",                 # async-compatible Redis fake for unit tests
     "pytest-asyncio>=0.23",            # async test support (declared with asyncio_mode=auto below)
     "freezegun>=1.4",                  # F4: deterministic time control for cooldown tests
+]
+
+[project.optional-dependencies]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "pymdown-extensions>=10.0",
 ]
 
 [project.scripts]

@@ -123,7 +123,12 @@ class MinimaxChatOpenAI(NormalizedChatOpenAI):
 
     The flag is gated by ``ModelCapabilities.requires_reasoning_split`` so
     only M2.x reasoning models receive it; non-reasoning MiniMax endpoints
-    (Coding Plan, MiniMax-Text-01) never see it.
+    (Coding Plan, MiniMax-Text-01) reject the parameter via the openai SDK's
+    strict validation (#826).
+
+    The value is placed under ``extra_body`` (not as a top-level key) so
+    that langchain_openai's ``create(**payload)`` call does not pass an
+    unknown kwarg to the OpenAI SDK, which rejects it with TypeError.
 
     Tool-choice handling for M2.x — those models accept only the string
     enum ``{"none", "auto"}`` and reject langchain's function-spec dict —
@@ -139,9 +144,49 @@ class MinimaxChatOpenAI(NormalizedChatOpenAI):
             # and rejects unknown ones like reasoning_split (#826). extra_body
             # is forwarded into the request body untouched.
             extra_body = payload.setdefault("extra_body", {})
-            extra_body.setdefault("reasoning_split", True)
+            if isinstance(extra_body, dict):
+                extra_body.setdefault("reasoning_split", True)
         return payload
 
+
+class KimiChatOpenAI(NormalizedChatOpenAI):
+    """Kimi-specific overrides.
+
+    K2 models (kimi-k2.6, kimi-k2.5, etc.) emit ``reasoning_content`` by default
+    when thinking is active. This must be echoed back on subsequent turns for
+    multi-turn tool calling to succeed — identical requirement to DeepSeek.
+
+    The roundtrip logic is safe (and a no-op) for legacy moonshot-v1-* models
+    that do not emit reasoning_content.
+    """
+
+    def _get_request_payload(self, input_, *, stop=None, **kwargs):
+        payload = super()._get_request_payload(input_, stop=stop, **kwargs)
+        outgoing = payload.get("messages", [])
+        for message_dict, message in zip(outgoing, _input_to_messages(input_)):
+            if not isinstance(message, AIMessage):
+                continue
+            reasoning = message.additional_kwargs.get("reasoning_content")
+            if reasoning is not None:
+                message_dict["reasoning_content"] = reasoning
+        return payload
+
+    def _create_chat_result(self, response, generation_info=None):
+        chat_result = super()._create_chat_result(response, generation_info)
+        response_dict = (
+            response
+            if isinstance(response, dict)
+            else response.model_dump(
+                exclude={"choices": {"__all__": {"message": {"parsed"}}}}
+            )
+        )
+        for generation, choice in zip(
+            chat_result.generations, response_dict.get("choices", [])
+        ):
+            reasoning = choice.get("message", {}).get("reasoning_content")
+            if reasoning is not None:
+                generation.message.additional_kwargs["reasoning_content"] = reasoning
+        return chat_result
 # Kwargs forwarded from user config to ChatOpenAI
 _PASSTHROUGH_KWARGS = (
     "timeout", "max_retries", "reasoning_effort", "temperature",
@@ -159,6 +204,7 @@ _PROVIDER_BASE_URL = {
     "glm-cn":     "https://open.bigmodel.cn/api/paas/v4/",
     "minimax":    "https://api.minimax.io/v1",
     "minimax-cn": "https://api.minimaxi.com/v1",
+    "kimi":       "https://api.moonshot.ai/v1",
     "openrouter": "https://openrouter.ai/api/v1",
     "ollama":     "http://localhost:11434/v1",
     "deepinfra":  "https://api.deepinfra.com/v1/openai",
@@ -175,10 +221,14 @@ _PROVIDER_BASE_URL = {
 def resolve_provider_base_url(provider: str) -> Optional[str]:
     """Default base URL for ``provider``, with env-var overrides where defined.
 
-    Ollama and LM Studio both support an env-var override so users can point
-    at a non-default host/port without editing code. The check is call-time,
-    not import-time, so tests that monkeypatch the env after import behave
-    correctly.
+    Currently Ollama, LM Studio, and Kimi support env-var overrides (``OLLAMA_BASE_URL``,
+    ``LMSTUDIO_BASE_URL``, and ``KIMI_BASE_URL`` respectively). This matches tool
+    conventions so users can point at custom hosts or consoles without editing code.
+    For Kimi, this is important because Moonshot operates multiple consoles whose
+    keys are not interchangeable and may require different API endpoints (e.g.
+    api.moonshot.ai vs api.moonshot.cn).
+    The check is call-time, not import-time, so tests that monkeypatch the env after
+    import behave correctly.
 
     This function is public so the CLI can import it and build its provider
     dropdown from the same single source of truth as the LLM client, avoiding
@@ -190,6 +240,10 @@ def resolve_provider_base_url(provider: str) -> Optional[str]:
             return env_url
     if provider == "lmstudio":
         env_url = os.environ.get("LMSTUDIO_BASE_URL")
+        if env_url:
+            return env_url
+    if provider == "kimi":
+        env_url = os.environ.get("KIMI_BASE_URL")
         if env_url:
             return env_url
     return _PROVIDER_BASE_URL.get(provider)
@@ -308,6 +362,8 @@ class OpenAIClient(BaseLLMClient):
             chat_cls = DeepSeekChatOpenAI
         elif self.provider in ("minimax", "minimax-cn"):
             chat_cls = MinimaxChatOpenAI
+        elif self.provider == "kimi":
+            chat_cls = KimiChatOpenAI
         else:
             chat_cls = NormalizedChatOpenAI
         return chat_cls(**llm_kwargs)

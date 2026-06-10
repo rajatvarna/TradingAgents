@@ -219,15 +219,26 @@ export GOOGLE_API_KEY=...          # Google (Gemini)
 export ANTHROPIC_API_KEY=...       # Anthropic (Claude)
 export XAI_API_KEY=...             # xAI (Grok)
 export DEEPSEEK_API_KEY=...        # DeepSeek
-export DASHSCOPE_API_KEY=...       # Qwen (Alibaba DashScope)
-export ZHIPU_API_KEY=...           # GLM (Zhipu)
+export MOONSHOT_API_KEY=...        # Kimi (Moonshot AI) — https://platform.kimi.com/console/api-keys
+export DASHSCOPE_API_KEY=...       # Qwen — International (dashscope-intl.aliyuncs.com)
+export DASHSCOPE_CN_API_KEY=...    # Qwen — China (dashscope.aliyuncs.com)
+export ZHIPU_API_KEY=...           # GLM via Z.AI (international)
+export ZHIPU_CN_API_KEY=...        # GLM via BigModel (China, open.bigmodel.cn)
+export MINIMAX_API_KEY=...         # MiniMax — Global (api.minimax.io, M2.x, 204K ctx)
+export MINIMAX_CN_API_KEY=...      # MiniMax — China (api.minimaxi.com, M2.x, 204K ctx)
 export OPENROUTER_API_KEY=...      # OpenRouter
 export DEEPINFRA_API_KEY=...       # DeepInfra
 export GITHUB_TOKEN=...            # GitHub Models / Copilot
 export ALPHA_VANTAGE_API_KEY=...   # Alpha Vantage
 ```
 
-For enterprise providers (e.g. Azure OpenAI, AWS Bedrock), add the required provider-specific variables to your `.env` file.
+> **Important for Kimi users**:
+> - Keys from different Moonshot/Kimi consoles (e.g. `platform.moonshot.ai`, `platform.kimi.com`) are **not interchangeable**.
+> - The provider defaults to `https://api.moonshot.ai/v1`.
+> - If your key only works with a different endpoint (e.g. `https://api.moonshot.cn/v1`), set the `KIMI_BASE_URL` environment variable.
+> - Generate your key from the console that matches your account.
+
+For enterprise providers (e.g. Azure OpenAI, AWS Bedrock), copy `.env.enterprise.example` to `.env.enterprise` and fill in your credentials.
 
 For local models, configure Ollama with `llm_provider: "ollama"` in your config.
 
@@ -244,6 +255,8 @@ export AGENTKEY_BASE_URL=...          # optional, defaults to https://api.agentk
 - **Impact if unset:** Fully optional. With no key, the analyst silently skips these channels and runs exactly as before — no extra latency, no network calls, no cost. Existing US-only workflows are unchanged.
 - **Cost:** AgentKey bills per successful call, so enabling this adds a small per-run cost (typically a few cents per analyzed ticker).
 - **Where to get a key:** Sign up at [agentkey.app](https://agentkey.app/) and create an API key (format `ak_...`).
+
+For Kimi (Moonshot AI), the provider defaults to `https://api.moonshot.ai/v1`. If your API key only works with a different endpoint (e.g. the China portal), set `KIMI_BASE_URL=https://api.moonshot.cn/v1`. Keys from different Moonshot/Kimi consoles are not interchangeable.
 
 Alternatively, copy `.env.example` to `.env` and fill in your keys:
 ```bash
@@ -339,7 +352,7 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 
 config = DEFAULT_CONFIG.copy()
-config["llm_provider"] = "openai"        # openai, google, anthropic, xai, deepseek, qwen, glm, openrouter, deepinfra, github_copilot, ollama, bedrock, azure
+config["llm_provider"] = "openai"        # openai, google, anthropic, xai, deepseek, kimi, qwen, qwen-cn, glm, glm-cn, minimax, minimax-cn, openrouter, deepinfra, github_copilot, ollama, bedrock, azure
 config["deep_think_llm"] = "gpt-5.4"     # Model for complex reasoning
 config["quick_think_llm"] = "gpt-5.4-mini" # Model for quick tasks
 config["max_debate_rounds"] = 2

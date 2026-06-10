@@ -7,6 +7,7 @@ from rich.console import Console
 from cli.models import AnalystType, AssetType
 from cli.preferences import load_preferences
 from tradingagents.llm_clients.model_catalog import get_model_options
+from tradingagents.llm_clients.custom_provider_config import get_custom_provider_choices
 from tradingagents.llm_clients.oauth import (
     login as oauth_login,
     ensure_token,
@@ -401,8 +402,15 @@ def select_deep_thinking_agent(provider) -> str:
     """Select deep thinking llm engine using an interactive selection."""
     return _select_model(provider, "deep")
 
-def select_llm_provider() -> tuple[str, str | None]:
-    """Select the LLM provider and its API endpoint."""
+def _llm_provider_table() -> list[tuple[str, str, str | None]]:
+    """(display_name, provider_key, base_url) for every supported provider.
+
+    Shared by the interactive picker and by env-driven configuration so an
+    env-set provider resolves to the same default endpoint the menu uses.
+    Ollama users can point at a remote ollama-serve via OLLAMA_BASE_URL
+    (convention from the broader Ollama ecosystem); falls back to the
+    localhost default when unset.
+    """
     # Resolve local-runtime URLs through the same function the LLM client uses
     # so default values and env-var overrides live in exactly one place.
     # Imported lazily to avoid pulling langchain_openai into CLI startup.
@@ -436,9 +444,32 @@ def select_llm_provider() -> tuple[str, str | None]:
         ("Ollama", "ollama", ollama_url),
         ("Ollama Cloud", "ollama_cloud", "https://ollama.com/v1"),
         ("LM Studio", "lmstudio", lmstudio_url),
+        ("LM Studio", "lmstudio", lmstudio_url),
         ("Llama.cpp", "llama-cpp", None),
         ("Custom OpenAI-Compatible (vLLM, etc.)", "custom_openai", None),
     ]
+
+    existing_provider_keys = {provider_key for _, provider_key, _ in PROVIDERS}
+    for display, provider_key, url in get_custom_provider_choices():
+        if provider_key not in existing_provider_keys:
+            PROVIDERS.append((display, provider_key, url))
+            existing_provider_keys.add(provider_key)
+
+    return PROVIDERS
+
+
+def provider_default_url(provider_key: str) -> str | None:
+    """Return the default backend URL for a provider key, or None if unknown."""
+    key = provider_key.lower()
+    for _, pk, url in _llm_provider_table():
+        if pk == key:
+            return url
+    return None
+
+
+def select_llm_provider() -> tuple[str, str | None]:
+    """Select the LLM provider and its API endpoint."""
+    PROVIDERS = _llm_provider_table()
 
     saved_provider = _prefs.get("llm_provider")
     provider_choices = [

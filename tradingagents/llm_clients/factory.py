@@ -3,6 +3,7 @@ from typing import Optional
 
 from .base_client import BaseLLMClient
 from .api_key_env import get_api_key_env
+from .custom_provider_config import is_custom_openai_compatible_provider
 
 
 TENCENT_ANTHROPIC_BASE_URL = "https://api.lkeap.cloud.tencent.com/plan/anthropic"
@@ -43,7 +44,7 @@ def create_llm_client(
     """
     provider_lower = provider.lower()
 
-    if provider_lower in _OPENAI_COMPATIBLE:
+    if provider_lower in _OPENAI_COMPATIBLE or is_custom_openai_compatible_provider(provider_lower):
         from .openai_client import OpenAIClient
         return OpenAIClient(model, base_url, provider=provider_lower, **kwargs)
 

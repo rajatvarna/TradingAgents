@@ -69,6 +69,13 @@ ANALYST_NODE_SPECS: Dict[str, AnalystNodeSpec] = {
         tool_node="tools_esg",
         report_key="esg_report",
     ),
+    "derivatives": AnalystNodeSpec(
+        key="derivatives",
+        agent_node="Derivatives Analyst",
+        clear_node="Msg Clear Derivatives",
+        tool_node="tools_derivatives",
+        report_key="derivatives_report",
+    ),
 }
 
 

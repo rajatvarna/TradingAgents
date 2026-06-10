@@ -24,6 +24,7 @@ def create_bear_researcher(llm, prompt_registry=None):
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
         esg_report = state.get("esg_report", "")
+        derivatives_report = state.get("derivatives_report", "")
         user_research_report = state.get("user_research_report", "")
 
         user_research_block = ""
@@ -55,6 +56,7 @@ def create_bear_researcher(llm, prompt_registry=None):
             fundamentals_report=fundamentals_report,
             scope_guard=scope_guard,
             esg_report=esg_report,
+            derivatives_report=derivatives_report,
             user_research_block=user_research_block,
             history=history,
             current_response=current_response,

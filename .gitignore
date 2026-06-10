@@ -161,7 +161,9 @@ activemq-data/
 .env
 .env.enterprise
 .env.flint-shadow
+.env.example
 .envrc
+docker-compose.yml
 .venv
 env/
 venv/
@@ -250,3 +252,6 @@ MEREAD.md
 
 fix_*.py
 inspect_trace.py
+
+# Local artifacts
+Miniconda3-latest-Linux-x86_64.sh

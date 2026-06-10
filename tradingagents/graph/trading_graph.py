@@ -47,6 +47,10 @@ from tradingagents.agents.utils.agent_utils import (
 )
 from tradingagents.agents.utils.options_tools import get_options_data
 from tradingagents.agents.utils.esg_data_tools import get_esg_scores, get_esg_news
+from tradingagents.agents.utils.derivatives_tools import (
+    get_options_chain,
+    get_options_overview,
+)
 
 from .checkpointer import (
     archive_checkpoint,
@@ -109,30 +113,32 @@ class TradingAgentsGraph:
         os.makedirs(self.config["data_cache_dir"], exist_ok=True)
         os.makedirs(self.config["results_dir"], exist_ok=True)
 
-        # Initialize LLMs with provider-specific thinking configuration
-        llm_kwargs = self._get_provider_kwargs()
+        # IIC-FORGE F1: token accumulator — must be in self.callbacks BEFORE
+        # the LLM clients are constructed, so the LLM clients pick it up.
+        from tradingagents.graph.cost_callback import RunCostCallback
+        self._cost_cb = RunCostCallback()
+        self.callbacks = list(self.callbacks or []) + [self._cost_cb]
 
-        # Add callbacks to kwargs if provided (passed to LLM constructor)
-         # Callbacks are registered at graph-stream level (via the
-        # propagator's get_graph_args), NOT here. Registering at LLM
-        # constructor level would only fire on_chat_model_* events
-        # and miss everything LangGraph does between nodes —
-        # ToolNode, chain transitions, node enter/exit. The
-        # stream-level registration sees all of them uniformly and
-        # LangChain's callback chain propagates down to the LLM,
-        # so we don't lose LLM events either.
+        # Initialize LLMs with provider-specific thinking configuration.
+        # Per-tier kwargs let DeepSeek attach reasoning_effort to the deep
+        # client only (quick model stays at default thinking effort).
+        deep_kwargs = self._get_provider_kwargs("deep")
+        quick_kwargs = self._get_provider_kwargs("quick")
+        if self.callbacks:
+            deep_kwargs["callbacks"] = self.callbacks
+            quick_kwargs["callbacks"] = self.callbacks
 
         deep_client = create_llm_client(
             provider=self.config["llm_provider"],
             model=self.config["deep_think_llm"],
             base_url=self.config.get("backend_url"),
-            **llm_kwargs,
+            **deep_kwargs,
         )
         quick_client = create_llm_client(
             provider=self.config["llm_provider"],
             model=self.config["quick_think_llm"],
             base_url=self.config.get("backend_url"),
-            **llm_kwargs,
+            **quick_kwargs,
         )
 
         self.deep_thinking_llm = deep_client.get_llm()
@@ -140,6 +146,22 @@ class TradingAgentsGraph:
         
         self.memory_log = TradingMemoryLog(self.config)
         self.structured_output_cache: Dict[str, str] = {}
+
+        # IIC-FORGE F1: per-run id + persistence + Run Recorder
+        import uuid
+        from tradingagents.persistence.db import connect as _iic_connect
+        from tradingagents.graph.run_recorder import RunRecorder, make_run_recorder_node
+
+        self.run_id = uuid.uuid4().hex
+        self._iic_conn = _iic_connect(self.config["iic_db_path"])
+        self.run_recorder = RunRecorder(
+            conn=self._iic_conn,
+            data_dir=self.config["iic_data_dir"],
+            run_id=self.run_id,
+            persona_id=self.config.get("persona_id"),
+            cost_callback=self._cost_cb,
+        )
+        run_recorder_node = make_run_recorder_node(self.run_recorder)
 
         # Create tool nodes
         self.tool_nodes = self._create_tool_nodes()
@@ -168,12 +190,15 @@ class TradingAgentsGraph:
         self.log_states_dict = {}  # Maps date strings to full state dicts
 
         # Set up the graph: keep the workflow for recompilation with a checkpointer.
-        self.workflow = self.graph_setup.setup_graph(selected_analysts)
+        self.workflow = self.graph_setup.setup_graph(
+            selected_analysts, run_recorder_node=run_recorder_node
+        )
         self.graph = self.workflow.compile()
         self._checkpointer_ctx = None
 
-    def _get_provider_kwargs(self) -> Dict[str, Any]:
-        """Get provider-specific kwargs for LLM client creation."""
+    def _get_provider_kwargs(self, tier: str = "deep") -> Dict[str, Any]:
+        """Get provider-specific kwargs. ``tier`` is "deep" or "quick";
+        high-cost reasoning settings are attached to the deep tier only."""
         kwargs = {}
         provider = self.config.get("llm_provider", "").lower()
 
@@ -205,6 +230,15 @@ class TradingAgentsGraph:
             effort = self.config.get("anthropic_effort")
             if effort:
                 kwargs["effort"] = effort
+
+        elif provider == "deepseek":
+            # reasoning_effort applies to V4 thinking models; only the DEEP
+            # tier gets the explicit (max) setting. The quick tier runs at
+            # DeepSeek's default thinking effort with no override.
+            if tier == "deep":
+                effort = self.config.get("deepseek_reasoning_effort")
+                if effort:
+                    kwargs["reasoning_effort"] = effort
 
         timeout = self.config.get("llm_timeout")
         if timeout is None and provider in ("custom_openai", "ollama"):
@@ -251,15 +285,11 @@ class TradingAgentsGraph:
                     get_income_statement,
                 ]
             ),
-            "options": ToolNode(
+            "derivatives": ToolNode(
                 [
-                    get_options_data,
-                ]
-            ),
-            "esg": ToolNode(
-                [
-                    get_esg_scores,
-                    get_esg_news,
+                    # Options / derivatives tools
+                    get_options_overview,
+                    get_options_chain,
                 ]
             ),
         }
@@ -562,6 +592,12 @@ class TradingAgentsGraph:
         )
         args = self.propagator.get_graph_args(callbacks=self.callbacks)
 
+        from datetime import datetime, timezone
+        self.run_recorder.start(
+            ticker=init_agent_state.get("company_of_interest", "UNKNOWN"),
+            started_ts=datetime.now(timezone.utc).isoformat(),
+        )
+
         # Inject thread_id so same ticker+date resumes, different date starts fresh.
         if self.config.get("checkpoint_enabled"):
             tid = thread_id(company_name, str(trade_date))
@@ -772,6 +808,7 @@ class TradingAgentsGraph:
             "fundamentals_report": final_state["fundamentals_report"],
             "options_report": final_state.get("options_report", ""),
             "esg_report": final_state.get("esg_report", ""),
+            "derivatives_report": final_state.get("derivatives_report", ""),
             "investment_debate_state": {
                 "bull_history": final_state["investment_debate_state"]["bull_history"],
                 "bear_history": final_state["investment_debate_state"]["bear_history"],

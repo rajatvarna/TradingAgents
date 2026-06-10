@@ -22,6 +22,7 @@ from tradingagents.agents import (
     create_sentiment_analyst,
     create_trader,
     create_esg_analyst,
+    create_derivative_analyst,
 )
 from tradingagents.agents.utils.agent_states import AgentState
 from tradingagents.agents.utils.tool_provenance import create_tool_provenance_capture_node
@@ -40,10 +41,12 @@ from .constants import (
 _ANALYST_FACTORIES = {
     "market": create_market_analyst,
     "sentiment": create_sentiment_analyst,
+    "social": create_sentiment_analyst,
     "news": create_news_analyst,
     "fundamentals": create_fundamentals_analyst,
     "options": create_options_analyst,
     "esg": create_esg_analyst,
+    "derivatives": create_derivative_analyst,
 }
 
 _DEFAULT_ANALYSTS = ("market", "sentiment", "news", "fundamentals")
@@ -68,16 +71,24 @@ class GraphSetup:
         self.structured_output_cache = structured_output_cache
         self.analyst_concurrency_limit = analyst_concurrency_limit
 
-    def setup_graph(self, selected_analysts: List[str] = None):
+    def setup_graph(
+        self,
+        selected_analysts: List[str] = None,
+        run_recorder_node: Any = None,
+    ):
         """Set up and compile the agent workflow graph.
 
         Args:
-            selected_analysts: Analyst types to include. Valid values: market,
-                sentiment, news, fundamentals, options. Defaults to all four
-                core analysts when None.
-
-        Raises:
-            ValueError: If selected_analysts is empty or contains unknown names.
+            selected_analysts: Analyst types to include. Valid options are:
+                - "market": Market analyst
+                - "sentiment" / "social": Sentiment analyst
+                - "news": News analyst
+                - "fundamentals": Fundamentals analyst
+                - "options": Options analyst
+                - "esg": ESG analyst
+                - "derivatives": Derivatives analyst
+            run_recorder_node: Optional node for recording runs
+        """
         """
         if selected_analysts is None:
             selected_analysts = list(_DEFAULT_ANALYSTS)
@@ -233,4 +244,11 @@ class GraphSetup:
             self.conditional_logic.should_continue_risk_analysis,
             {"Aggressive Analyst": "Aggressive Analyst", "Portfolio Manager": "Portfolio Manager"},
         )
-        workflow.add_edge("Portfolio Manager", END)
+        if run_recorder_node is not None:
+            workflow.add_node("Run Recorder", run_recorder_node)
+            workflow.add_edge("Portfolio Manager", "Run Recorder")
+            workflow.add_edge("Run Recorder", END)
+        else:
+            workflow.add_edge("Portfolio Manager", END)
+
+        return workflow

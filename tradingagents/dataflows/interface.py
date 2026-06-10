@@ -27,6 +27,22 @@ from .b3 import (
     get_global_news as get_b3_global_news,
     get_insider_transactions as get_b3_insider_transactions,
 )
+from .yfinance_options import (
+    get_options_chain as get_yfinance_options_chain,
+    get_options_overview as get_yfinance_options_overview,
+)
+from .polygon import (
+    get_stock_data as get_polygon_stock,
+    get_options_chain as get_polygon_options_chain,
+    get_options_overview as get_polygon_options_overview,
+    get_news as get_polygon_news,
+)
+from .futu import (
+    get_stock_data as get_futu_stock,
+    get_options_chain as get_futu_options_chain,
+)
+from .telegram_osint import get_telegram_signals as get_telegram_signals_impl
+from .x_osint import get_x_signals as get_x_signals_impl
 from .alpha_vantage import (
     get_stock as get_alpha_vantage_stock,
     get_indicator as get_alpha_vantage_indicator,
@@ -61,6 +77,8 @@ except ImportError:
     # instead of crashing at import time.
     class YFRateLimitError(Exception):
         pass
+
+from .errors import DataVendorError
 
 # Configuration and routing logic
 from .config import get_config
@@ -101,7 +119,21 @@ TOOLS_CATEGORIES = {
         "tools": [
             "get_macro_data"
         ]
-    }
+    },
+    "options_data": {
+        "description": "Options chains, implied volatility, and derivatives analytics",
+        "tools": [
+            "get_options_chain",
+            "get_options_overview",
+        ]
+    },
+    "osint_social": {
+        "description": "OSINT digests from social platforms (Telegram, X)",
+        "tools": [
+            "get_telegram_signals",
+            "get_x_signals",
+        ]
+    },
 }
 
 VENDOR_LIST = [
@@ -111,6 +143,8 @@ VENDOR_LIST = [
     "searxng",
     "b3",
     "twelve_data",
+    "polygon",
+    "futu",
 ]
 
 # Mapping of methods to their vendor-specific implementations
@@ -121,6 +155,8 @@ VENDOR_METHODS = {
         "yfinance": get_YFin_data_online,
         "b3": get_b3_stock,
         "twelve_data": get_twelve_data_stock,
+        "polygon": get_polygon_stock,
+        "futu": get_futu_stock,
     },
     # technical_indicators
     "get_indicators": {
@@ -161,6 +197,7 @@ VENDOR_METHODS = {
         "searxng": get_news_searxng,
         "b3": get_b3_news,
         "twelve_data": get_twelve_data_news,
+        "polygon": get_polygon_news,
     },
     "get_global_news": {
         "yfinance": get_global_news_yfinance,
@@ -178,6 +215,23 @@ VENDOR_METHODS = {
     # macro_data
     "get_macro_data": {
         "fred": get_fred_macro_data,
+    },
+    # options_data
+    "get_options_chain": {
+        "yfinance": get_yfinance_options_chain,
+        "polygon": get_polygon_options_chain,
+        "futu": get_futu_options_chain,
+    },
+    "get_options_overview": {
+        "yfinance": get_yfinance_options_overview,
+        "polygon": get_polygon_options_overview,
+    },
+    # osint_social
+    "get_telegram_signals": {
+        "telegram": get_telegram_signals_impl,
+    },
+    "get_x_signals": {
+        "x": get_x_signals_impl,
     },
 }
 
@@ -228,7 +282,7 @@ def route_to_vendor(method: str, *args, **kwargs):
 
         try:
             return impl_func(*args, **kwargs)
-        except (AlphaVantageRateLimitError, AlphaVantageUnsupportedIndicatorError, SearxngUnavailableError, YFRateLimitError):
-            continue  # Vendor-availability failures trigger fallback
+        except (AlphaVantageRateLimitError, AlphaVantageUnsupportedIndicatorError, SearxngUnavailableError, YFRateLimitError, DataVendorError):
+            continue  # Vendor-availability and rate limit failures trigger fallback
 
     raise RuntimeError(f"No available vendor for '{method}'")

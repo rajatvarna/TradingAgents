@@ -73,6 +73,14 @@ app = typer.Typer(
     add_completion=True,  # Enable shell completion
 )
 
+# IIC-FORGE F2/F3 ops sub-app. Guarded so failures inside cli/forge.py don't
+# break the main CLI.
+try:
+    from cli.forge import app as _forge_app
+    app.add_typer(_forge_app, name="forge")
+except ImportError:
+    pass
+
 
 def _port_open(port: int) -> bool:
     try:
@@ -99,6 +107,7 @@ class MessageBuffer:
         "news": "News Analyst",
         "fundamentals": "Fundamentals Analyst",
         "esg": "ESG Analyst",
+        "derivatives": "Derivatives Analyst",
     }
 
     # Report section mapping: section -> (analyst_key for filtering, finalizing_agent)
@@ -110,6 +119,7 @@ class MessageBuffer:
         "news_report": ("news", "News Analyst"),
         "fundamentals_report": ("fundamentals", "Fundamentals Analyst"),
         "esg_report": ("esg", "ESG Analyst"),
+        "derivatives_report": ("derivatives", "Derivatives Analyst"),
         "investment_plan": (None, "Research Manager"),
         "trader_investment_plan": (None, "Trader"),
         "final_trade_decision": (None, "Portfolio Manager"),
@@ -219,6 +229,7 @@ class MessageBuffer:
                 "news_report": "News Analysis",
                 "fundamentals_report": "Fundamentals Analysis",
                 "esg_report": "ESG Analysis",
+                "derivatives_report": "Derivatives Analysis",
                 "investment_plan": "Research Team Decision",
                 "trader_investment_plan": "Trading Team Plan",
                 "final_trade_decision": "Portfolio Management Decision",
@@ -234,7 +245,7 @@ class MessageBuffer:
         report_parts = []
 
         # Analyst Team Reports - use .get() to handle missing sections
-        analyst_sections = ["market_report", "sentiment_report", "news_report", "fundamentals_report", "esg_report"]
+        analyst_sections = ["market_report", "sentiment_report", "news_report", "fundamentals_report", "esg_report", "derivatives_report"]
         if any(self.report_sections.get(section) for section in analyst_sections):
             report_parts.append("## Analyst Team Reports")
             if self.report_sections.get("market_report"):
@@ -256,6 +267,10 @@ class MessageBuffer:
             if self.report_sections.get("esg_report"):
                 report_parts.append(
                     f"### ESG Analysis\n{self.report_sections['esg_report']}"
+                )
+            if self.report_sections.get("derivatives_report"):
+                report_parts.append(
+                    f"### Derivatives Analysis\n{self.report_sections['derivatives_report']}"
                 )
 
         # Research Team Reports
@@ -777,6 +792,10 @@ def save_report_to_disk(final_state, ticker: str, save_path: Path):
         analysts_dir.mkdir(exist_ok=True)
         (analysts_dir / "esg.md").write_text(final_state["esg_report"], encoding="utf-8")
         analyst_parts.append(("ESG Analyst", final_state["esg_report"]))
+    if final_state.get("derivatives_report"):
+        analysts_dir.mkdir(exist_ok=True)
+        (analysts_dir / "derivatives.md").write_text(final_state["derivatives_report"], encoding="utf-8")
+        analyst_parts.append(("Derivatives Analyst", final_state["derivatives_report"]))
     if analyst_parts:
         content = "\n\n".join(f"### {name}\n{text}" for name, text in analyst_parts)
         sections.append(f"## I. Analyst Team Reports\n\n{content}")
@@ -860,6 +879,8 @@ def display_complete_report(final_state):
         analysts.append(("Fundamentals Analyst", final_state["fundamentals_report"]))
     if final_state.get("esg_report"):
         analysts.append(("ESG Analyst", final_state["esg_report"]))
+    if final_state.get("derivatives_report"):
+        analysts.append(("Derivatives Analyst", final_state["derivatives_report"]))
     if analysts:
         console.print(Panel("[bold]I. Analyst Team Reports[/bold]", border_style="cyan"))
         for title, content in analysts:
@@ -914,13 +935,14 @@ def update_research_team_status(buffer, status):
 
 
 # Ordered list of analysts for status transitions
-ANALYST_ORDER = ["market", "sentiment", "news", "fundamentals", "esg"]
+ANALYST_ORDER = ["market", "sentiment", "social", "news", "fundamentals", "esg", "derivatives"]
 ANALYST_AGENT_NAMES = {
     "market": "Market Analyst",
     "sentiment": "Sentiment Analyst",
     "news": "News Analyst",
     "fundamentals": "Fundamentals Analyst",
     "esg": "ESG Analyst",
+    "derivatives": "Derivatives Analyst",
 }
 from tradingagents.graph.constants import ANALYST_REPORT_KEYS as ANALYST_REPORT_MAP
 
@@ -1255,10 +1277,8 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
                     with open(report_dir / file_name, "w", encoding="utf-8") as f:
                         f.write(text)
         return wrapper
-
     message_buffer.add_message = save_message_decorator(message_buffer, "add_message")
     message_buffer.add_tool_call = save_tool_call_decorator(message_buffer, "add_tool_call")
-    message_buffer.update_report_section = save_report_section_decorator(message_buffer, "update_report_section")
 
     if classic:
         layout = create_layout()
@@ -1462,6 +1482,21 @@ def run_single_analysis(ticker: str, selections: dict, config: dict, auto_save: 
     if auto_save:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         save_path = Path.cwd() / "reports" / f"{ticker}_{timestamp}"
+    else:
+        # Post-analysis prompts (outside Live context for clean interaction)
+        console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
+        console.print(f"[dim]{wall_time_tracker.format_summary()}[/dim]")
+
+        # Prompt to save report — defaults to the same per-run dir that holds the log.
+        save_choice = typer.prompt("Save report?", default="Y").strip().upper()
+        if save_choice in ("Y", "YES", ""):
+            save_path_str = typer.prompt(
+                "Save path (press Enter for default)",
+                default=str(results_dir)
+            ).strip()
+            save_path = Path(save_path_str)
+        else:
+            save_path = None
         try:
             report_file = save_report_to_disk(final_state, ticker, save_path)
             console.print(f"[green]✓ Report saved to:[/green] {save_path.resolve()}")
@@ -1812,6 +1847,11 @@ def cleanup_db(
     
     asyncio.run(do_cleanup())
 
+
+# Bottom-of-file import avoids circular-import risk; cli.deepdive must not
+# import from cli.main. Registering here keeps the command alongside app().
+from cli.deepdive import deepdive as _deepdive_cmd
+app.command(name="deepdive")(_deepdive_cmd)
 
 if __name__ == "__main__":
     app()

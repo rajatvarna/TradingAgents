@@ -14,6 +14,7 @@ Latest world affairs news: ${news_report}
 ${fundamentals_label}: ${fundamentals_report}
 Scope guard: ${scope_guard}
 ESG report: ${esg_report}
+Derivatives / options report: ${derivatives_report}
 ${user_research_block}
 Conversation history of the debate: ${history}
 Last bear argument: ${current_response}

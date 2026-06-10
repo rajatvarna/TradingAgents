@@ -12,11 +12,84 @@ INVESTMENT_HORIZONS = {
 
 _TRADINGAGENTS_HOME = os.path.join(os.path.expanduser("~"), ".tradingagents")
 
-DEFAULT_CONFIG = {
+# Single source of truth for env-var → config-key overrides. To expose
+# a new config key for environment-based override, add a row here — no
+# entry-point script changes required. Coercion is driven by the type
+# of the existing default, so users can keep writing plain strings in
+# their .env file.
+_ENV_OVERRIDES = {
+    "TRADINGAGENTS_LLM_PROVIDER":         "llm_provider",
+    "TRADINGAGENTS_DEEP_THINK_LLM":       "deep_think_llm",
+    "TRADINGAGENTS_QUICK_THINK_LLM":      "quick_think_llm",
+    "TRADINGAGENTS_LLM_BACKEND_URL":      "backend_url",
+    "TRADINGAGENTS_OUTPUT_LANGUAGE":      "output_language",
+    "TRADINGAGENTS_MAX_DEBATE_ROUNDS":    "max_debate_rounds",
+    "TRADINGAGENTS_MAX_RISK_ROUNDS":      "max_risk_discuss_rounds",
+    "TRADINGAGENTS_CHECKPOINT_ENABLED":   "checkpoint_enabled",
+    "TRADINGAGENTS_BENCHMARK_TICKER":     "benchmark_ticker",
+    "TRADINGAGENTS_DEEPSEEK_REASONING_EFFORT": "deepseek_reasoning_effort",
+    "TRADINGAGENTS_IIC_DB_PATH":          "iic_db_path",
+    "TRADINGAGENTS_IIC_DATA_DIR":         "iic_data_dir",
+    "TRADINGAGENTS_COST_GUARD_ENABLED":   "cost_guard_enabled",
+}
+
+
+def _coerce(value: str, reference):
+    """Coerce env-var string to the type of the existing default value."""
+    if isinstance(reference, bool):
+        return value.strip().lower() in ("true", "1", "yes", "on")
+    if isinstance(reference, int) and not isinstance(reference, bool):
+        return int(value)
+    if isinstance(reference, float):
+        return float(value)
+    return value
+
+
+def _apply_env_overrides(config: dict) -> dict:
+    """Apply TRADINGAGENTS_* env vars to the config dict in-place."""
+    for env_var, key in _ENV_OVERRIDES.items():
+        raw = os.environ.get(env_var)
+        if raw is None or raw == "":
+            continue
+        config[key] = _coerce(raw, config.get(key))
+    return config
+
+
+DEFAULT_CONFIG = _apply_env_overrides({
     "project_dir": os.path.abspath(os.path.join(os.path.dirname(__file__), ".")),
     "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR", os.path.join(_TRADINGAGENTS_HOME, "logs")),
     "data_cache_dir": os.getenv("TRADINGAGENTS_CACHE_DIR", os.path.join(_TRADINGAGENTS_HOME, "cache")),
     "memory_log_path": os.getenv("TRADINGAGENTS_MEMORY_LOG_PATH", os.path.join(_TRADINGAGENTS_HOME, "memory", "trading_memory.md")),
+    # IIC-FORGE F1 — persistence + data layout
+    "iic_db_path": os.path.join(_TRADINGAGENTS_HOME, "iic.db"),
+    "iic_data_dir": os.path.join(_TRADINGAGENTS_HOME, "data"),
+    # IIC-FORGE F1 — cost guards (coded but disabled by default — see
+    # docs/superpowers/specs/2026-05-25-iic-forge-program-design.md Appendix A).
+    "cost_guard_enabled": False,
+    # IIC-FORGE F3 — always-on sensing + triage
+    "sensing_redis_url": "redis://127.0.0.1:6379/0",
+    "sensing_ingest_stream": "ingest:raw",
+    "sensing_consumer_group": "triage",
+    "sensing_dead_stream": "ingest:dead",
+    "sensing_triage_consumers": 4,
+    "sensing_triage_max_failures": 5,
+    "sensing_dedupe_cosine_threshold": 0.92,
+    "sensing_dedupe_window_hours": 24,
+    "sensing_fingerprint_ttl_hours": 72,
+    "sensing_watchlist_salience_threshold": 0.7,
+    "sensing_watchlist_confidence_threshold": 0.8,
+    "sensing_watchlist_ttl_days": 7,
+    "sensing_watchlist_refresh_seconds": 60,
+    "sensing_salience_cache_ttl_seconds": 86400,
+    "sensing_embedder_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "sensing_adapters_enabled": {
+        "polygon_news": True,
+        "telegram": True,
+        "rss": True,
+        "gdelt": True,
+        "macro": True,
+        "x": False,   # off by default per spec D8 / R-F3-3
+    },
     # Optional cap on the number of resolved memory log entries. When set,
     # the oldest resolved entries are pruned once this limit is exceeded.
     # Pending entries are never pruned. None disables rotation entirely.
@@ -47,11 +120,10 @@ DEFAULT_CONFIG = {
     "backend_url": None,
     # Provider-specific thinking configuration
     "google_thinking_level": None,      # "high", "minimal", etc.
-    "openai_reasoning_effort": None,    # "medium", "high", "low"
+    "openai_reasoning_effort": "max",    # "medium", "high", "low"
     "anthropic_effort": None,           # "high", "medium", "low"
-    # Request timeout in seconds for LLM API calls. None uses the provider
-    # default. Increase for slow local inference (LM Studio, Ollama, vLLM).
     "llm_timeout": None,
+    "deepseek_reasoning_effort": "max",
     # Checkpoint/resume: when True, LangGraph saves state after each node
     # so a crashed run can resume from the last successful step.
     "checkpoint_enabled": True,
@@ -119,7 +191,7 @@ DEFAULT_CONFIG = {
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
-    "analyst_concurrency_limit": 1,
+    "analyst_concurrency_limit": 5,
     # News / data fetching parameters
     # Increase for longer lookback strategies or to broaden macro coverage;
     # decrease to reduce token usage in agent prompts.
@@ -152,6 +224,8 @@ DEFAULT_CONFIG = {
         "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance, b3
         "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance, b3
         "news_data": "yfinance",             # Options: alpha_vantage, yfinance, searxng, b3
+        "options_data": "yfinance",          # Options: yfinance (Polygon/Futu via Epic B fallback chain)
+        "osint_social": "telegram",          # Options: telegram (Telegram); X tool routes to "x" vendor automatically
     },
     # News parameters
     "ticker_news_count": 20,
@@ -164,4 +238,7 @@ DEFAULT_CONFIG = {
     },
     "trade_filter_enabled": False,
     "trade_filter_threshold": 0.65,
-}
+    "futu_opend_host": "127.0.0.1",
+    "futu_opend_port": 11111,
+    "telegram_channels": [],
+})

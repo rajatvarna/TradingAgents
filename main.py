@@ -35,7 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     # Load environment variables from .env files
-    load_dotenv()
+    load_dotenv(override=True)
     load_dotenv(".env.enterprise", override=False)
     args = build_parser().parse_args()
 

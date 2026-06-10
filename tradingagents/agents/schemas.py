@@ -4,7 +4,7 @@ The framework's primary artifact is still prose: each agent's natural-language
 reasoning is what users read in the saved markdown reports and what the
 downstream agents read as context.  Structured output is layered onto the
 three decision-making agents (Research Manager, Trader, Portfolio Manager)
-so that:
+and the Sentiment Analyst so that:
 
 - Their outputs follow consistent section headers across runs and providers
 - Each provider's native structured-output mode is used (json_schema for
@@ -289,12 +289,15 @@ class SentimentBand(str, Enum):
 class SentimentReport(BaseModel):
     """Structured sentiment report produced by the Sentiment Analyst.
 
-    Replaces the previous free-form prose output so downstream consumers
+    Replaces the previous free-form prose output so that downstream consumers
     (dashboards, audit logs, PDF renderers, other agents) can read
     ``overall_band`` and ``overall_score`` without maintaining fragile regex
-    fallbacks that drift with every model release. ``narrative`` preserves the
-    rich source-by-source analysis; ``render_sentiment_report`` prepends a
-    deterministic header so the saved report stays human-readable.
+    fallbacks that drift with every model release.
+
+    The ``narrative`` field preserves the rich source-by-source analysis that
+    the analyst already produces; ``render_sentiment_report`` formats the
+    structured fields as a header and appends the narrative, keeping the
+    saved report content backwards-compatible.
     """
 
     overall_band: SentimentBand = Field(
@@ -311,18 +314,18 @@ class SentimentReport(BaseModel):
         description=(
             "Numeric sentiment intensity on a 0–10 scale. "
             "0 = maximally bearish, 5 = neutral, 10 = maximally bullish. "
-            "Guideline for consistency with overall_band: "
+            "As a guideline for consistency with overall_band: "
             "Bullish ~6.5–10, Mildly Bullish ~5.5–6.4, Neutral/Mixed ~4.5–5.5, "
             "Mildly Bearish ~3.5–4.4, Bearish ~0–3.4. "
-            "Only the 0–10 bounds are enforced."
+            "These are prompt-level guidelines; only the 0–10 bounds are enforced."
         ),
     )
     confidence: Literal["low", "medium", "high"] = Field(
         description=(
             "Confidence in the assessment based on data quality and sample size. "
             "Use 'low' when one or more sources returned a placeholder or fewer "
-            "than 5 data points; 'medium' when data is present but sparse; "
-            "'high' when all three sources returned substantive data."
+            "than 5 data points. Use 'medium' when data is present but sparse. "
+            "Use 'high' when all three sources returned substantive data."
         ),
     )
     narrative: str = Field(
@@ -343,8 +346,8 @@ def render_sentiment_report(report: SentimentReport) -> str:
     """Render a SentimentReport to the markdown shape the rest of the system expects.
 
     The structured header (band + score + confidence) is prepended to the
-    narrative so the saved report is both human-readable and machine-parseable
-    without regex.
+    narrative so the saved report file is both human-readable and
+    machine-parseable without regex.
     """
     return "\n".join([
         f"**Overall Sentiment:** **{report.overall_band.value}** "

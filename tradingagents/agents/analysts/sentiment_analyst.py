@@ -20,6 +20,11 @@ back to free-text generation for providers that lack native support, so
 the sentiment header (band + score + confidence) is deterministic across
 runs and providers instead of free-form per-model prose.
 
+Structured output is used when the provider supports it (json_schema for
+OpenAI/xAI, response_schema for Gemini, tool-use for Anthropic), falling
+back to free-text generation so the pipeline never blocks on providers
+that lack native structured-output support.
+
 See: https://github.com/TauricResearch/TradingAgents/issues/557
 See: https://github.com/TauricResearch/TradingAgents/issues/796
 """
@@ -120,8 +125,8 @@ def create_sentiment_analyst(llm):
         prompt = prompt.partial(reddit_block=reddit_block)
         prompt = prompt.partial(agentkey_block=agentkey_block)
 
-        # Format the template into a concrete message list so the structured
-        # and free-text paths receive the same input. No bind_tools — the
+        # Format the template into a concrete message list so both the
+        # structured and free-text paths receive the same input. No bind_tools — the
         # data is already in the prompt.
         formatted_messages = prompt.format_messages(messages=state["messages"])
 

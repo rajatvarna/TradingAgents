@@ -3,8 +3,10 @@ load_dotenv(override=True)
 
 import asyncio
 import json
+import os
 import re
 import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -55,11 +57,15 @@ class JobStream:
 import mistune
 _md = mistune.create_markdown(plugins=["table", "strikethrough"])
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from tradingagents.default_config import DEFAULT_CONFIG
+from tradingagents.llm_clients.api_key_env import get_api_key_env
+from tradingagents.llm_clients.model_catalog import get_model_options
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -67,6 +73,15 @@ app = FastAPI(title="TradingAgents")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 jobs: dict[str, JobStream] = {}
+analysis_jobs: dict[str, str] = {}   # analysis_id -> job_id
+analysis_meta: dict[str, dict] = {}  # analysis_id -> {ticker, date}
+
+ANALYST_CATALOG = [
+    {"id": "market", "name": "Market Analyst", "description": "Technical indicators and price trends"},
+    {"id": "social", "name": "Sentiment Analyst", "description": "Social media and public sentiment"},
+    {"id": "news", "name": "News Analyst", "description": "Global news and macro events"},
+    {"id": "fundamentals", "name": "Fundamentals Analyst", "description": "Financial statements and valuation"},
+]
 
 # Maps graph node names → display metadata
 NODE_META = {
@@ -101,10 +116,98 @@ class AnalysisRequest(BaseModel):
     effort: str | None = "high"
 
 
+class StartAnalysisRequest(BaseModel):
+    ticker: str
+    date: str
+    config: dict = {}
+    analysts: list[str] = []
+
+
+def _provider_key_status() -> dict:
+    from cli.utils import _llm_provider_table
+
+    status: dict[str, dict] = {}
+    for _, provider_key, _ in _llm_provider_table():
+        env_var = get_api_key_env(provider_key)
+        if env_var is None:
+            status[provider_key] = {"required": False, "configured": True}
+        else:
+            val = os.environ.get(env_var, "")
+            status[provider_key] = {"required": True, "configured": bool(val.strip())}
+    return status
+
+
+def _build_config_response() -> dict:
+    from cli.utils import _llm_provider_table
+
+    providers = {key: name for name, key, _ in _llm_provider_table()}
+    models_by_provider: dict[str, list] = {}
+    for provider_key in providers:
+        try:
+            models_by_provider[provider_key] = [
+                {"id": value, "name": label}
+                for label, value in get_model_options(provider_key, "deep")
+                if value != "custom"
+            ]
+        except KeyError:
+            models_by_provider[provider_key] = []
+
+    return {
+        "providers": providers,
+        "models_by_provider": models_by_provider,
+        "analysts": ANALYST_CATALOG,
+        "provider_key_status": _provider_key_status(),
+        "default_config": {
+            "llm_provider": DEFAULT_CONFIG.get("llm_provider"),
+            "temperature": DEFAULT_CONFIG.get("llm_temperature", 0.7),
+        },
+    }
+
+
+def _spawn_analysis_job(
+    ticker: str,
+    trade_date: str,
+    analysts: list[str],
+    user_config: dict | None = None,
+) -> tuple[str, str]:
+    """Start a background analysis thread; return (analysis_id, job_id)."""
+    cfg = user_config or {}
+    llm_provider = cfg.get("llm_provider") or DEFAULT_CONFIG["llm_provider"]
+    deep_llm = cfg.get("deep_think_llm") or DEFAULT_CONFIG["deep_think_llm"]
+    quick_llm = cfg.get("quick_think_llm") or deep_llm or DEFAULT_CONFIG["quick_think_llm"]
+    research_depth = int(cfg.get("max_debate_rounds", 1))
+    temperature = cfg.get("temperature")
+    checkpoint_enabled = cfg.get("checkpoint_enabled")
+
+    job_id = str(uuid.uuid4())
+    analysis_id = f"{ticker}_{int(time.time())}"
+    q = JobStream()
+    jobs[job_id] = q
+    analysis_jobs[analysis_id] = job_id
+    analysis_meta[analysis_id] = {"ticker": ticker, "date": trade_date}
+
+    threading.Thread(
+        target=_run_analysis,
+        args=(ticker, trade_date, analysts, q),
+        kwargs={
+            "research_depth": research_depth,
+            "llm_provider": llm_provider,
+            "quick_llm": quick_llm,
+            "deep_llm": deep_llm,
+            "effort": cfg.get("effort", "high"),
+            "temperature": temperature,
+            "checkpoint_enabled": checkpoint_enabled,
+        },
+        daemon=True,
+    ).start()
+    return analysis_id, job_id
+
+
 def _run_analysis(ticker: str, trade_date: str, analysts: list[str], q: JobStream,
                   language: str = "English", research_depth: int = 1,
                   llm_provider: str = "anthropic", quick_llm: str = "claude-sonnet-4-6",
-                  deep_llm: str = "claude-opus-4-7", effort: str | None = "high"):
+                  deep_llm: str = "claude-opus-4-7", effort: str | None = "high",
+                  temperature: float | None = None, checkpoint_enabled: bool | None = None):
     try:
         from tradingagents.graph.trading_graph import TradingAgentsGraph
         from tradingagents.default_config import DEFAULT_CONFIG
@@ -116,6 +219,11 @@ def _run_analysis(ticker: str, trade_date: str, analysts: list[str], q: JobStrea
         config["max_debate_rounds"] = research_depth
         config["max_risk_discuss_rounds"] = research_depth
         config["output_language"] = language
+        if temperature is not None:
+            config["temperature"] = temperature
+            config["llm_temperature"] = temperature
+        if checkpoint_enabled is not None:
+            config["checkpoint_enabled"] = checkpoint_enabled
         if llm_provider == "anthropic":
             config["anthropic_effort"] = effort
         elif llm_provider == "openai":
@@ -229,31 +337,146 @@ def _run_analysis(ticker: str, trade_date: str, analysts: list[str], q: JobStrea
         q.push(None)  # signals stream done
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok", "version": "0.2.5"}
+
+
+@app.get("/api/config")
+async def api_config():
+    return _build_config_response()
+
+
+@app.post("/api/analyze/start")
+async def analyze_start(req: StartAnalysisRequest):
+    ticker = req.ticker.strip().upper()
+    if not ticker:
+        raise HTTPException(status_code=400, detail="Ticker is required")
+    if not req.date:
+        raise HTTPException(status_code=400, detail="Date is required")
+    if not req.analysts:
+        raise HTTPException(status_code=400, detail="Select at least one analyst")
+
+    analysis_id, _ = _spawn_analysis_job(ticker, req.date, req.analysts, req.config)
+    return {"analysis_id": analysis_id, "status": "queued"}
+
+
 @app.post("/api/analyze")
 async def start_analysis(req: AnalysisRequest):
     ticker = req.ticker.strip().upper()
     if not ticker:
         raise HTTPException(status_code=400, detail="Ticker is required")
 
-    job_id = str(uuid.uuid4())
-    q = JobStream()
-    jobs[job_id] = q
-
-    threading.Thread(
-        target=_run_analysis,
-        args=(ticker, req.date, req.analysts, q),
-        kwargs={
-            "language": req.language,
-            "research_depth": req.research_depth,
-            "llm_provider": req.llm_provider,
-            "quick_llm": req.quick_llm,
-            "deep_llm": req.deep_llm,
-            "effort": req.effort,
-        },
-        daemon=True,
-    ).start()
-
+    user_config = {
+        "llm_provider": req.llm_provider,
+        "deep_think_llm": req.deep_llm,
+        "quick_think_llm": req.quick_llm,
+        "max_debate_rounds": req.research_depth,
+        "effort": req.effort,
+    }
+    _, job_id = _spawn_analysis_job(ticker, req.date, req.analysts, user_config)
     return {"job_id": job_id}
+
+
+def _next_stream_item(sub):
+    return next(sub)
+
+
+@app.websocket("/ws/analyze/{analysis_id}")
+async def ws_analyze(websocket: WebSocket, analysis_id: str):
+    await websocket.accept()
+    job_id = analysis_jobs.get(analysis_id)
+    meta = analysis_meta.get(analysis_id, {})
+    ticker = meta.get("ticker", "")
+    date = meta.get("date", "")
+
+    if not job_id or job_id not in jobs:
+        await websocket.send_json({
+            "type": "complete",
+            "data": {"status": "failed", "error": "Analysis session not found", "result": None},
+        })
+        await websocket.close()
+        return
+
+    await websocket.send_json({
+        "type": "status",
+        "data": {"id": analysis_id, "ticker": ticker, "date": date, "status": "running"},
+    })
+
+    stream = jobs[job_id]
+    sub = stream.subscribe(start=0)
+    loop = asyncio.get_event_loop()
+    last_stage = 0
+    finished = False
+
+    try:
+        while not finished:
+            kind, payload = await loop.run_in_executor(None, _next_stream_item, sub)
+            if kind == "event":
+                evt = payload
+                etype = evt.get("type")
+                if etype == "agent_update":
+                    last_stage = max(last_stage, evt.get("stage", 0))
+                    progress = min(90, last_stage * 18)
+                    label = evt.get("label", evt.get("node", "Agent"))
+                    content = evt.get("content", "")
+                    preview = content[:300] + ("..." if len(content) > 300 else "")
+                    await websocket.send_json({
+                        "type": "message",
+                        "data": {"level": "agent", "content": f"{label}: {preview}"},
+                    })
+                    await websocket.send_json({
+                        "type": "progress",
+                        "data": {"progress": progress, "status": "running"},
+                    })
+                elif etype == "done":
+                    signal = evt.get("signal", "Hold")
+                    rating = signal if isinstance(signal, str) else "Hold"
+                    await websocket.send_json({
+                        "type": "complete",
+                        "data": {
+                            "status": "completed",
+                            "result": {
+                                "ticker": ticker,
+                                "date": date,
+                                "rating": rating,
+                                "decision": rating,
+                                "action": rating.lower(),
+                            },
+                            "error": None,
+                            "proposed_order": None,
+                            "order_result": None,
+                        },
+                    })
+                    finished = True
+                elif etype == "error":
+                    await websocket.send_json({
+                        "type": "complete",
+                        "data": {
+                            "status": "failed",
+                            "result": None,
+                            "error": evt.get("message", "Unknown error"),
+                        },
+                    })
+                    finished = True
+            elif kind == "complete":
+                if not finished:
+                    await websocket.send_json({
+                        "type": "complete",
+                        "data": {
+                            "status": "failed",
+                            "result": None,
+                            "error": "Analysis ended unexpectedly",
+                        },
+                    })
+                finished = True
+    except (StopIteration, WebSocketDisconnect):
+        pass
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 @app.get("/api/jobs")

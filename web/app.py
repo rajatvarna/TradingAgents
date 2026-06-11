@@ -573,4 +573,4 @@ async def get_chart(ticker: str, date: str):
 
 @app.get("/")
 async def root():
-    return HTMLResponse((STATIC_DIR / "index.html").read_text())
+    return HTMLResponse((STATIC_DIR / "index.html").read_text(encoding="utf-8"))

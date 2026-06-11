@@ -333,7 +333,15 @@ class TradingAgentsGraph:
         identity = resolve_instrument_identity(ticker)
         return build_instrument_context(ticker, asset_type, identity)
 
-    def propagate(self, company_name, trade_date, asset_type: str = "stock", on_chunk=None):
+    def propagate(
+        self,
+        company_name,
+        trade_date,
+        asset_type: str = "stock",
+        on_chunk=None,
+        progress_callback=None,
+        target_profile=None,
+    ):
         """Run the trading agents graph for a company on a specific date.
 
         ``asset_type`` selects between the stock pipeline (default) and the
@@ -373,6 +381,8 @@ class TradingAgentsGraph:
                 trade_date,
                 asset_type=asset_type,
                 on_chunk=on_chunk,
+                progress_callback=progress_callback,
+                target_profile=target_profile,
             )
         finally:
             if self._checkpointer_ctx is not None:
@@ -380,7 +390,15 @@ class TradingAgentsGraph:
                 self._checkpointer_ctx = None
                 self.graph = self.workflow.compile()
 
-    def _run_graph(self, company_name, trade_date, asset_type: str = "stock", on_chunk=None):
+    def _run_graph(
+        self,
+        company_name,
+        trade_date,
+        asset_type: str = "stock",
+        on_chunk=None,
+        progress_callback=None,
+        target_profile=None,
+    ):
         """Execute the graph and write the resulting state to disk and memory log."""
         # Initialize state — inject memory log context for PM and the
         # deterministically resolved instrument identity for all agents.
@@ -394,6 +412,7 @@ class TradingAgentsGraph:
             past_context=past_context,
             instrument_context=instrument_context,
             risk_constraints=risk_constraints,
+            target_profile=target_profile,
         )
         args = self.propagator.get_graph_args(callbacks=self.callbacks)
 

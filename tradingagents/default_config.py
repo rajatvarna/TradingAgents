@@ -32,6 +32,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_IIC_DATA_DIR":         "iic_data_dir",
     "TRADINGAGENTS_COST_GUARD_ENABLED":   "cost_guard_enabled",
     "TRADINGAGENTS_ORCHESTRATOR_ENABLED": "orchestrator_enabled",
+    "TRADINGAGENTS_TEMPERATURE":          "temperature",
 }
 
 _DATA_VENDOR_ENV_OVERRIDES = {
@@ -159,6 +160,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # base_client.apply_determinism_kwargs.
     "llm_temperature": 0.0,
     "llm_seed": 42,
+    "temperature": None,
     # When None, each provider's client falls back to its own default endpoint
     # (api.openai.com for OpenAI, generativelanguage.googleapis.com for Gemini, ...).
     # The CLI overrides this per provider when the user picks one. Keeping a

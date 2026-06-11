@@ -21,8 +21,17 @@ from rich.tree import Tree
 from rich import box
 from rich.align import Align
 from rich.rule import Rule
+import socket
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
+
+
+def _port_open(port: int) -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+            return True
+    except OSError:
+        return False
 from tradingagents.graph.analyst_execution import (
     AnalystWallTimeTracker,
     build_analyst_execution_plan,
@@ -911,20 +920,13 @@ def extract_content_string(content):
     """Extract string content from various message formats.
     Returns None if no meaningful text content is found.
     """
-    import ast
 
     def is_empty(val):
         """Check if value is empty using Python's truthiness."""
         if val is None or val == '':
             return True
         if isinstance(val, str):
-            s = val.strip()
-            if not s:
-                return True
-            try:
-                return not bool(ast.literal_eval(s))
-            except (ValueError, SyntaxError):
-                return False  # Can't parse = real text
+            return not val.strip()
         return not bool(val)
 
     if is_empty(content):

@@ -182,6 +182,10 @@ _BULL_INPUTS = {
     "fundamentals_report": "FUND",
     "history": "HIST",
     "current_response": "BEAR_LAST",
+    "scope_guard": "SCOPE",
+    "esg_report": "ESG",
+    "derivatives_report": "DERIV",
+    "user_research_block": "USER_RES",
 }
 
 
@@ -207,10 +211,14 @@ Market research report: {i['market_research_report']}
 Social media sentiment report: {i['sentiment_report']}
 Latest world affairs news: {i['news_report']}
 {i['fundamentals_label']}: {i['fundamentals_report']}
+Scope guard: {i['scope_guard']}
+ESG report: {i['esg_report']}
+Derivatives / options report: {i['derivatives_report']}
+{i['user_research_block']}
 Conversation history of the debate: {i['history']}
 Last bear argument: {i['current_response']}
 Use this information to deliver a compelling bull argument, refute the bear's concerns, and engage in a dynamic debate that demonstrates the strengths of the bull position.
-""" + language_instruction
+{language_instruction}"""
 
 
 @pytest.mark.unit
@@ -275,6 +283,7 @@ class TestAgentFactoryRecordsPromptMetadata:
             "news_report": "n",
             "fundamentals_report": "f",
             "asset_type": "stock",
+            "company_of_interest": "AAPL",
         }
 
     def test_bull_researcher_passes_prompt_metadata(self):

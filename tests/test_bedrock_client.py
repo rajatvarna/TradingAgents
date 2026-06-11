@@ -1,6 +1,6 @@
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -23,7 +23,12 @@ class TestBedrockClient(unittest.TestCase):
 
         self.assertIsInstance(client, BedrockClient)
 
-    def test_bedrock_client_uses_aws_env_region_and_profile(self):
+    @patch("boto3.Session")
+    def test_bedrock_client_uses_aws_env_region_and_profile(self, mock_session_cls):
+        mock_session = mock_session_cls.return_value
+        mock_client = MagicMock()
+        mock_session.client.return_value = mock_client
+
         fake_module = types.SimpleNamespace(ChatBedrockConverse=FakeChatBedrockConverse)
 
         with patch.dict("sys.modules", {"langchain_aws": fake_module}):
@@ -42,13 +47,20 @@ class TestBedrockClient(unittest.TestCase):
                     max_tokens=2048,
                 ).get_llm()
 
+        mock_session_cls.assert_called_once_with(profile_name="tradingagents", region_name="ap-southeast-1")
+        mock_session.client.assert_called_once()
         self.assertEqual(llm.kwargs["model"], "anthropic.claude-3-5-haiku-20241022-v1:0")
         self.assertEqual(llm.kwargs["region_name"], "ap-southeast-1")
-        self.assertEqual(llm.kwargs["credentials_profile_name"], "tradingagents")
+        self.assertEqual(llm.kwargs["client"], mock_client)
         self.assertEqual(llm.kwargs["temperature"], 0)
         self.assertEqual(llm.kwargs["max_tokens"], 2048)
 
-    def test_bedrock_client_uses_long_read_timeout_defaults(self):
+    @patch("boto3.Session")
+    def test_bedrock_client_uses_long_read_timeout_defaults(self, mock_session_cls):
+        mock_session = mock_session_cls.return_value
+        mock_client = MagicMock()
+        mock_session.client.return_value = mock_client
+
         fake_module = types.SimpleNamespace(ChatBedrockConverse=FakeChatBedrockConverse)
 
         with patch.dict("sys.modules", {"langchain_aws": fake_module}):
@@ -65,13 +77,19 @@ class TestBedrockClient(unittest.TestCase):
                     "us.anthropic.claude-haiku-4-5-20251001-v1:0"
                 ).get_llm()
 
-        config = llm.kwargs["config"]
+        call_args = mock_session.client.call_args
+        config = call_args.kwargs["config"]
         self.assertEqual(config.connect_timeout, 10)
         self.assertEqual(config.read_timeout, 300)
-        self.assertEqual(config.retries["max_attempts"], 5)
+        self.assertEqual(config.retries["max_attempts"], 3)
         self.assertEqual(config.retries["mode"], "standard")
 
-    def test_bedrock_timeout_env_overrides_defaults(self):
+    @patch("boto3.Session")
+    def test_bedrock_timeout_env_overrides_defaults(self, mock_session_cls):
+        mock_session = mock_session_cls.return_value
+        mock_client = MagicMock()
+        mock_session.client.return_value = mock_client
+
         fake_module = types.SimpleNamespace(ChatBedrockConverse=FakeChatBedrockConverse)
 
         with patch.dict("sys.modules", {"langchain_aws": fake_module}):
@@ -88,7 +106,8 @@ class TestBedrockClient(unittest.TestCase):
                     "us.anthropic.claude-haiku-4-5-20251001-v1:0"
                 ).get_llm()
 
-        config = llm.kwargs["config"]
+        call_args = mock_session.client.call_args
+        config = call_args.kwargs["config"]
         self.assertEqual(config.connect_timeout, 20)
         self.assertEqual(config.read_timeout, 600)
         self.assertEqual(config.retries["max_attempts"], 7)

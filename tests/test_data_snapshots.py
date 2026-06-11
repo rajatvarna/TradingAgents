@@ -386,8 +386,9 @@ class TestAlphaVantageNewsSnapshot:
 
         r1 = avm.get_news("AAPL", "2026-01-14", "2026-01-15")
         r2 = avm.get_news("AAPL", "2026-01-14", "2026-01-15")
-        assert r1 == r2 == fake_response
-        assert isinstance(r2, dict)
+        assert r1 == r2
+        assert isinstance(r2, str)
+        assert "Macro update" in r2
         assert call_count["n"] == 1
         files = list((snap_dir / "AAPL" / "2026-01-15").glob("news_alpha_vantage_*.json"))
         assert len(files) == 1

@@ -17,7 +17,7 @@ class TestTemperatureForwarding:
         "provider,model",
         [
             ("openai", "gpt-4.1"),
-            ("anthropic", "claude-sonnet-4-6"),
+            ("anthropic", "claude-haiku-4-5"),
             ("google", "gemini-2.5-flash"),
             ("deepseek", "deepseek-chat"),
             ("mistral", "mistral-small-2603"),

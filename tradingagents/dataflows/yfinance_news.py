@@ -8,7 +8,7 @@ from dateutil.relativedelta import relativedelta
 
 from .config import get_config
 from .stockstats_utils import yf_retry
-from .cache_utils import cache_text
+from .snapshots import GLOBAL_SCOPE, replay_formatted, write_snapshot
 
 
 def _extract_article_data(article: dict) -> dict:
@@ -52,18 +52,39 @@ def _extract_article_data(article: dict) -> dict:
         }
 
 
-def _get_news_yfinance_uncached(
+def get_news_yfinance(
     ticker: str,
     start_date: str,
     end_date: str,
 ) -> str:
+    """
+    Retrieve news for a specific stock ticker using yfinance.
+
+    The result is cached by ticker and date range so historical/replay runs
+    reuse the same fetched article set instead of silently drifting with
+    yfinance's latest feed.
+    """
+    cached, hit = replay_formatted(
+        kind="news", source="yfinance", scope=ticker, date=end_date,
+    )
+    if hit:
+        return cached
+
     article_limit = get_config()["news_article_limit"]
     try:
         stock = yf.Ticker(ticker)
         news = yf_retry(lambda: stock.get_news(count=article_limit))
 
         if not news:
-            return f"No news found for {ticker}"
+            output = f"No news found for {ticker}"
+            write_snapshot(
+                kind="news", source="yfinance", scope=ticker, date=end_date,
+                params={"ticker": ticker, "start_date": start_date, "end_date": end_date,
+                        "article_limit": article_limit},
+                raw_response=[],
+                formatted_output=output,
+            )
+            return output
 
         # Parse date range for filtering
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
@@ -90,50 +111,36 @@ def _get_news_yfinance_uncached(
             filtered_count += 1
 
         if filtered_count == 0:
-            return f"No news found for {ticker} between {start_date} and {end_date}"
+            output = f"No news found for {ticker} between {start_date} and {end_date}"
+        else:
+            output = f"## {ticker} News, from {start_date} to {end_date}:\n\n{news_str}"
 
-        return f"## {ticker} News, from {start_date} to {end_date}:\n\n{news_str}"
+        write_snapshot(
+            kind="news", source="yfinance", scope=ticker, date=end_date,
+            params={"ticker": ticker, "start_date": start_date, "end_date": end_date,
+                    "article_limit": article_limit},
+            raw_response=news,
+            formatted_output=output,
+        )
+        return output
 
     except Exception as e:
         return f"Error fetching news for {ticker}: {str(e)}"
 
 
-def get_news_yfinance(
-    ticker: str,
-    start_date: str,
-    end_date: str,
-) -> str:
-    """
-    Retrieve news for a specific stock ticker using yfinance.
-
-    The result is cached by ticker and date range so historical/replay runs
-    reuse the same fetched article set instead of silently drifting with
-    yfinance's latest feed.
-    """
-    return cache_text(
-        "yfinance_news",
-        (str(ticker), str(start_date), str(end_date)),
-        lambda: _get_news_yfinance_uncached(ticker, start_date, end_date),
-    )
-
-def _get_global_news_yfinance_uncached(
+def get_global_news_yfinance(
     curr_date: str,
     look_back_days: Optional[int] = None,
     limit: Optional[int] = None,
 ) -> str:
-    """
-    Retrieve global/macro economic news using yfinance Search.
+    """Retrieve global/macro news with date-scoped cache."""
+    cached, hit = replay_formatted(
+        kind="globalnews", source="yfinance",
+        scope=GLOBAL_SCOPE, date=curr_date,
+    )
+    if hit:
+        return cached
 
-    Args:
-        curr_date: Current date in yyyy-mm-dd format
-        look_back_days: Number of days to look back. ``None`` falls back to
-            ``global_news_lookback_days`` from the active config.
-        limit: Maximum number of articles to return. ``None`` falls back to
-            ``global_news_article_limit`` from the active config.
-
-    Returns:
-        Formatted string containing global news articles
-    """
     config = get_config()
     if look_back_days is None:
         look_back_days = config["global_news_lookback_days"]
@@ -170,7 +177,16 @@ def _get_global_news_yfinance_uncached(
                 break
 
         if not all_news:
-            return f"No global news found for {curr_date}"
+            output = f"No global news found for {curr_date}"
+            write_snapshot(
+                kind="globalnews", source="yfinance",
+                scope=GLOBAL_SCOPE, date=curr_date,
+                params={"curr_date": curr_date, "look_back_days": look_back_days,
+                        "limit": limit, "queries": list(search_queries)},
+                raw_response=[],
+                formatted_output=output,
+            )
+            return output
 
         # Calculate date range
         curr_dt = datetime.strptime(curr_date, "%Y-%m-%d")
@@ -204,24 +220,16 @@ def _get_global_news_yfinance_uncached(
                 news_str += f"Link: {link}\n"
             news_str += "\n"
 
-        return f"## Global Market News, from {start_date} to {curr_date}:\n\n{news_str}"
+        output = f"## Global Market News, from {start_date} to {curr_date}:\n\n{news_str}"
+        write_snapshot(
+            kind="globalnews", source="yfinance",
+            scope=GLOBAL_SCOPE, date=curr_date,
+            params={"curr_date": curr_date, "look_back_days": look_back_days,
+                    "limit": limit, "queries": list(search_queries)},
+            raw_response=all_news[:limit],
+            formatted_output=output,
+        )
+        return output
 
     except Exception as e:
         return f"Error fetching global news: {str(e)}"
-
-
-
-def get_global_news_yfinance(
-    curr_date: str,
-    look_back_days: Optional[int] = None,
-    limit: Optional[int] = None,
-) -> str:
-    """Retrieve global/macro news with date-scoped cache."""
-    config = get_config()
-    effective_lookback = look_back_days if look_back_days is not None else config["global_news_lookback_days"]
-    effective_limit = limit if limit is not None else config["global_news_article_limit"]
-    return cache_text(
-        "yfinance_global_news",
-        (str(curr_date), str(effective_lookback), str(effective_limit)),
-        lambda: _get_global_news_yfinance_uncached(curr_date, look_back_days, limit),
-    )

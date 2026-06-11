@@ -73,6 +73,12 @@ class TradingAgentsGraph:
         self.config = config or DEFAULT_CONFIG
         self.callbacks = callbacks or []
 
+        # IIC-FORGE F1: token accumulator — must be in self.callbacks BEFORE
+        # the LLM clients are constructed, so the LLM clients pick it up.
+        from tradingagents.graph.cost_callback import RunCostCallback
+        self._cost_cb = RunCostCallback()
+        self.callbacks = list(self.callbacks or []) + [self._cost_cb]
+
         # Update the interface's config
         set_config(self.config)
 
@@ -104,6 +110,24 @@ class TradingAgentsGraph:
         self.quick_thinking_llm = quick_client.get_llm()
         
         self.memory_log = TradingMemoryLog(self.config)
+
+        # IIC-FORGE F1: per-run id + persistence + Run Recorder
+        import uuid
+        from tradingagents.persistence.db import connect as _iic_connect
+        from tradingagents.graph.run_recorder import RunRecorder, make_run_recorder_node
+
+        self.run_id = uuid.uuid4().hex
+        self._iic_conn = _iic_connect(self.config["iic_db_path"])
+        self.run_recorder = RunRecorder(
+            conn=self._iic_conn,
+            data_dir=self.config["iic_data_dir"],
+            run_id=self.run_id,
+            persona_id=self.config.get("persona_id"),
+            cost_callback=self._cost_cb,
+            queue_job_id=self.config.get("queue_job_id"),
+        )
+        run_recorder_node = make_run_recorder_node(self.run_recorder)
+
         self.structured_output_cache: Dict[str, str] = {}
 
         # Create tool nodes
@@ -135,7 +159,9 @@ class TradingAgentsGraph:
         self.log_states_dict = {}  # date to full state dict
 
         # Set up the graph: keep the workflow for recompilation with a checkpointer.
-        self.workflow = self.graph_setup.setup_graph(selected_analysts)
+        self.workflow = self.graph_setup.setup_graph(
+            selected_analysts, run_recorder_node=run_recorder_node
+        )
         self.graph = self.workflow.compile()
         self._checkpointer_ctx = None
 
@@ -414,7 +440,17 @@ class TradingAgentsGraph:
             risk_constraints=risk_constraints,
             target_profile=target_profile,
         )
+        # IIC-FORGE F4: event-context injection — seed event text into state.
+        # Empty string when not in event_alert mode (deep-dive path unchanged).
+        init_agent_state["event_context_text"] = self.config.get("event_context", "") or ""
+
         args = self.propagator.get_graph_args(callbacks=self.callbacks)
+
+        from datetime import datetime, timezone
+        self.run_recorder.start(
+            ticker=init_agent_state.get("company_of_interest", "UNKNOWN"),
+            started_ts=datetime.now(timezone.utc).isoformat(),
+        )
 
         # Inject thread_id so same ticker+date resumes, different date starts fresh.
         if self.config.get("checkpoint_enabled"):

@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 from .alpha_vantage_common import _make_api_request, format_datetime_for_api
-from .cache_utils import cache_text
+from .snapshots import GLOBAL_SCOPE, snapshot
 
 
 def _format_score(value: Any) -> str:
@@ -80,23 +80,29 @@ def _normalize_news_response(response: dict[str, Any] | str, heading: str) -> st
     return _format_news_sentiment_payload(parsed, heading)
 
 
+@snapshot(
+    kind="news", source="alpha_vantage",
+    scope_arg="ticker", date_arg="end_date",
+    serialize="str",
+)
 def get_news(ticker, start_date, end_date) -> str:
     """Return ticker-specific market news & sentiment as markdown."""
-
-    def fetch() -> str:
-        params = {
-            "tickers": ticker,
-            "time_from": format_datetime_for_api(start_date),
-            "time_to": format_datetime_for_api(end_date),
-        }
-        return _normalize_news_response(
-            _make_api_request("NEWS_SENTIMENT", params),
-            f"{ticker}, from {start_date} to {end_date}",
-        )
-
-    return cache_text("alpha_vantage_news", (str(ticker), str(start_date), str(end_date)), fetch)
+    params = {
+        "tickers": ticker,
+        "time_from": format_datetime_for_api(start_date),
+        "time_to": format_datetime_for_api(end_date),
+    }
+    return _normalize_news_response(
+        _make_api_request("NEWS_SENTIMENT", params),
+        f"{ticker}, from {start_date} to {end_date}",
+    )
 
 
+@snapshot(
+    kind="globalnews", source="alpha_vantage",
+    scope_literal=GLOBAL_SCOPE, date_arg="curr_date",
+    serialize="str",
+)
 def get_global_news(curr_date, look_back_days: int = 7, limit: int = 50) -> str:
     """Return broad market news & sentiment as markdown."""
     from datetime import datetime, timedelta
@@ -105,22 +111,15 @@ def get_global_news(curr_date, look_back_days: int = 7, limit: int = 50) -> str:
     start_dt = curr_dt - timedelta(days=look_back_days)
     start_date = start_dt.strftime("%Y-%m-%d")
 
-    def fetch() -> str:
-        params = {
-            "topics": "financial_markets,economy_macro,economy_monetary",
-            "time_from": format_datetime_for_api(start_date),
-            "time_to": format_datetime_for_api(curr_date),
-            "limit": str(limit),
-        }
-        return _normalize_news_response(
-            _make_api_request("NEWS_SENTIMENT", params),
-            f"global markets, from {start_date} to {curr_date}",
-        )
-
-    return cache_text(
-        "alpha_vantage_global_news",
-        (str(curr_date), str(look_back_days), str(limit)),
-        fetch,
+    params = {
+        "topics": "financial_markets,economy_macro,economy_monetary",
+        "time_from": format_datetime_for_api(start_date),
+        "time_to": format_datetime_for_api(curr_date),
+        "limit": str(limit),
+    }
+    return _normalize_news_response(
+        _make_api_request("NEWS_SENTIMENT", params),
+        f"global markets, from {start_date} to {curr_date}",
     )
 
 

@@ -27,6 +27,7 @@ PROVIDER_API_KEY_ENV: dict[str, Optional[str]] = {
     "xai":        "XAI_API_KEY",
     "deepseek":   "DEEPSEEK_API_KEY",
     "kimi":       "MOONSHOT_API_KEY",
+    "mistral":    "MISTRAL_API_KEY",
     # Dual-region providers each carry their own account; keys are not
     # interchangeable between the international and China endpoints.
     "qwen":       "DASHSCOPE_API_KEY",

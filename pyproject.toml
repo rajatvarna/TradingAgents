@@ -101,7 +101,7 @@ tradingagents-worker = "tradingagents_service.worker.main:main"
 tradingagents-mcp = "mcp_server.tradingagents_mcp_server:main"
 
 [tool.setuptools.packages.find]
-include = ["tradingagents*", "tradingagents_service*", "cli*", "portfolio_advisor*", "automation*", "mcp_server*"]
+include = ["tradingagents*", "tradingagents_service*", "cli*", "portfolio_advisor*", "automation*", "mcp_server*", "back_test*"]
 
 [tool.setuptools.package-data]
 cli = ["static/*", "*.tcss"]

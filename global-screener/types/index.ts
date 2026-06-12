@@ -30,6 +30,44 @@ export interface PerformanceMetrics {
   five_y: number | null;
 }
 
+export interface Fundamentals {
+  pe: number | null;
+  forwardPe: number | null;
+  eps: number | null;
+  epsForward: number | null;
+  pbRatio: number | null;
+  psRatio: number | null;
+  evEbitda: number | null;
+  debtToEquity: number | null;
+  returnOnEquity: number | null;
+  returnOnAssets: number | null;
+  profitMargin: number | null;
+  revenueGrowthYoy: number | null;
+  earningsGrowthYoy: number | null;
+  dividendYield: number | null;
+  beta: number | null;
+  analystRating: string | null;
+  targetPrice: number | null;
+  analystCount: number | null;
+}
+
+export interface SentimentPost {
+  title: string;
+  url: string;
+  source: "reddit" | "news";
+  score: number;
+  timestamp: string;
+  subreddit?: string;
+}
+
+export interface SentimentData {
+  score: number | null;        // -1 to +1
+  label: "Bullish" | "Bearish" | "Neutral" | null;
+  mentionCount: number;
+  posts: SentimentPost[];
+  fetchedAt: string;
+}
+
 export interface StockData {
   symbol: string;
   name: string;
@@ -45,6 +83,8 @@ export interface StockData {
   fiftyTwoWeekLow: number | null;
   fiftyTwoWeekHighChangePct: number | null;
   performance: PerformanceMetrics;
+  fundamentals?: Fundamentals;
+  sentiment?: SentimentData;
   isStale?: boolean;
   starred?: boolean;
   error?: string;

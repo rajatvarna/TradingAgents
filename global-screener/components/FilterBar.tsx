@@ -27,6 +27,7 @@ const PRESETS: { name: PresetName; label: string }[] = [
   { name: "most-active",         label: "🔥 Most Active" },
   { name: "52w-highs",           label: "🏔 52W Highs" },
   { name: "starred",             label: "⭐ Starred" },
+  { name: "volume-surge",        label: "🔥 Vol Surge" },
 ];
 
 interface Props {

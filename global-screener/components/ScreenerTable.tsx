@@ -7,6 +7,18 @@ import { fmtPct, fmtMarketCap, pctColor, MARKET_FLAG, cn } from "@/lib/utils";
 import FilterBar from "./FilterBar";
 import MiniSparkline from "./MiniSparkline";
 
+const COLUMN_KEYS = ["company","market","price","daily","wtd","mtd","ytd","one_y","three_y","five_y","rs","52wHigh","52wChg","volAvg","marketCap","chart"] as const;
+type ColumnKey = typeof COLUMN_KEYS[number];
+
+const COLUMN_LABELS: Record<ColumnKey, string> = {
+  company: "Company", market: "Market", price: "Price", daily: "1D %",
+  wtd: "WTD %", mtd: "MTD %", ytd: "YTD %", one_y: "1Y %", three_y: "3Y %*",
+  five_y: "5Y %*", rs: "RS", "52wHigh": "52W H", "52wChg": "52W Chg%",
+  volAvg: "Vol/Avg", marketCap: "Mkt Cap", chart: "Chart (1M)",
+};
+
+const DEFAULT_VISIBLE = new Set<ColumnKey>(COLUMN_KEYS);
+
 const REFRESH_INTERVAL = Number(process.env.NEXT_PUBLIC_REFRESH_INTERVAL_MS ?? 720_000);
 const VIRTUAL_THRESHOLD = Number(process.env.NEXT_PUBLIC_VIRTUAL_ROW_THRESHOLD ?? 100);
 

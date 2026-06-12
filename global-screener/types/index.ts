@@ -49,6 +49,7 @@ export interface Fundamentals {
   analystRating: string | null;
   targetPrice: number | null;
   analystCount: number | null;
+  earningsDate?: string | null;
 }
 
 export interface SentimentPost {
@@ -88,6 +89,8 @@ export interface StockData {
   isStale?: boolean;
   starred?: boolean;
   error?: string;
+  rsScore?: number | null;
+  earningsDate?: string | null;
 }
 
 export interface BatchResponse {
@@ -114,7 +117,8 @@ export type SortField =
   | "price"
   | "marketCap"
   | "volume"
-  | "fiftyTwoWeekHighChangePct";
+  | "fiftyTwoWeekHighChangePct"
+  | "rsScore";
 
 export type SortDirection = "asc" | "desc";
 
@@ -137,4 +141,5 @@ export type PresetName =
   | "five-year-compounders"
   | "most-active"
   | "52w-highs"
-  | "starred";
+  | "starred"
+  | "volume-surge";

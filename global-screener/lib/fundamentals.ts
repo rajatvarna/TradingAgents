@@ -13,6 +13,7 @@ export async function fetchFundamentals(yahooSuffix: string): Promise<Fundamenta
     "financialData",
     "summaryDetail",
     "recommendationTrend",
+    "calendarEvents",
   ].join(",");
 
   const url = `${BASE}/v10/finance/quoteSummary/${yahooSuffix}?modules=${modules}`;
@@ -27,6 +28,7 @@ export async function fetchFundamentals(yahooSuffix: string): Promise<Fundamenta
   const fd  = result.financialData ?? {};
   const sd  = result.summaryDetail ?? {};
   const rt  = result.recommendationTrend?.trend?.[0] ?? {};
+  const ce  = result.calendarEvents ?? {};
 
   // Analyst consensus from recommendationTrend
   const strongBuy = rt.strongBuy ?? 0;
@@ -65,5 +67,6 @@ export async function fetchFundamentals(yahooSuffix: string): Promise<Fundamenta
     analystRating,
     targetPrice:        v(fd,  "targetMeanPrice"),
     analystCount:       total > 0 ? total : null,
+    earningsDate:       (ce?.earnings?.earningsDate?.[0] as { fmt?: string } | undefined)?.fmt ?? null,
   };
 }

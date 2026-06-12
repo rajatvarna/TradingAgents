@@ -26,6 +26,9 @@ back_test/trade_route/
 .eggs/
 lib/
 lib64/
+# Allow the global-screener Next.js lib directory (lib/ above is a Python packaging rule)
+!global-screener/lib/
+!global-screener/lib/**
 parts/
 reports/
 results/

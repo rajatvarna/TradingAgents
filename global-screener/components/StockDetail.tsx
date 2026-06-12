@@ -148,6 +148,14 @@ export default function StockDetail({ stock }: Props) {
                 <MetricRow label="EPS (Forward)"      value={fundamentals.epsForward} format="currency" />
                 <MetricRow label="Dividend Yield"     value={fundamentals.dividendYield} format="pct" />
                 <MetricRow label="Beta"               value={fundamentals.beta}     suffix="×" />
+                {fundamentals.earningsDate && (
+                  <div className="mt-3 p-2 rounded-lg bg-slate-800 border border-slate-700">
+                    <p className="text-xs text-slate-400">Next Earnings</p>
+                    <p className="text-sm font-semibold text-white mt-0.5">
+                      {new Date(fundamentals.earningsDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </p>
+                  </div>
+                )}
               </div>
               {/* Profitability & Growth */}
               <div>

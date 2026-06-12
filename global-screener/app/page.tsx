@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { StockData } from "@/types";
 
@@ -12,10 +12,17 @@ const ChartPanel       = dynamic(() => import("@/components/ChartPanel"),       
 const SectorHeatmap    = dynamic(() => import("@/components/SectorHeatmap"),    { ssr: false });
 const ThemeToggle      = dynamic(() => import("@/components/ThemeToggle"),      { ssr: false });
 const StockDetail      = dynamic(() => import("@/components/StockDetail"),      { ssr: false });
+const FearGreed        = dynamic(() => import("@/components/FearGreed"),        { ssr: false });
+const PriceAlerts      = dynamic(() => import("@/components/PriceAlerts"),      { ssr: false });
 
 export default function Home() {
   const [selectedStock, setSelectedStock] = useState<StockData | null>(null);
   const [visibleData, setVisibleData] = useState<StockData[]>([]);
+
+  const latestPrices = useMemo(
+    () => new Map(visibleData.map((s) => [s.symbol, s.price ?? 0])),
+    [visibleData]
+  );
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
@@ -31,6 +38,7 @@ export default function Home() {
              className="text-slate-500 hover:text-slate-300 hidden md:block">
             Powered by TradingView
           </a>
+          <PriceAlerts latestPrices={latestPrices} />
           <ThemeToggle />
         </div>
       </header>
@@ -47,7 +55,12 @@ export default function Home() {
 
       {/* Main content */}
       <main className="flex-1 px-4 md:px-6 py-4 space-y-4 max-w-[1800px] mx-auto w-full">
-        <MarketIndexCards />
+        <div className="flex items-start gap-4 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <MarketIndexCards />
+          </div>
+          <FearGreed />
+        </div>
         <SectorHeatmap data={visibleData} />
         <ScreenerTable onSelectStock={setSelectedStock} onDataLoaded={setVisibleData} />
 

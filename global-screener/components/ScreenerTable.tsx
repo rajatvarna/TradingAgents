@@ -98,6 +98,7 @@ function applyPreset(preset: PresetName): FilterState {
     case "most-active":    return { ...base, sortField: "volume",  sortDir: "desc", topN: 25 };
     case "52w-highs":      return { ...base, sortField: "daily",   sortDir: "desc", search: "__52w-highs__" };
     case "starred":        return { ...base, onlyStarred: true };
+    case "volume-surge":   return { ...base, sortField: "volume", sortDir: "desc", topN: 25 };
     default: return base;
   }
 }
@@ -222,9 +223,71 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
     return applyFilters(data, filters, starred);
   }, [data, filters, starred]);
 
+  // Compute RS score: percentile rank within full dataset based on 1Y performance
+  const rowsWithRS = useMemo(() => {
+    if (!rows.length) return rows;
+    const all = data ?? [];
+    const scores = all.map((d) => d.performance.one_y ?? -Infinity);
+    scores.sort((a, b) => a - b);
+    return rows.map((r) => {
+      const val = r.performance.one_y ?? -Infinity;
+      const rank = scores.filter((s) => s <= val).length;
+      const rs = Math.round((rank / scores.length) * 99) + 1;
+      return { ...r, rsScore: rs };
+    });
+  }, [rows, data]);
+
   useEffect(() => {
-    if (onDataLoaded) onDataLoaded(rows);
-  }, [rows, onDataLoaded]);
+    if (onDataLoaded) onDataLoaded(rowsWithRS);
+  }, [rowsWithRS, onDataLoaded]);
+
+  // Column visibility
+  const [visibleCols, setVisibleCols] = useState<Set<ColumnKey>>(DEFAULT_VISIBLE);
+  const [colMenuOpen, setColMenuOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("visibleCols");
+      if (stored) setVisibleCols(new Set(JSON.parse(stored)));
+    } catch {}
+  }, []);
+
+  function toggleCol(k: ColumnKey) {
+    setVisibleCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) { next.delete(k); } else { next.add(k); }
+      try { localStorage.setItem("visibleCols", JSON.stringify(Array.from(next))); } catch {}
+      return next;
+    });
+  }
+
+  // Keyboard navigation
+  const [focusedIdx, setFocusedIdx] = useState<number>(-1);
+  const tableRef = useRef<HTMLTableElement>(null);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setFocusedIdx((i) => Math.min(i + 1, rowsWithRS.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setFocusedIdx((i) => Math.max(i - 1, 0));
+      } else if (e.key === "Enter" && focusedIdx >= 0) {
+        const stock = rowsWithRS[focusedIdx];
+        if (stock) onSelectStock(stock);
+      } else if (e.key === "Escape") {
+        setFocusedIdx(-1);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [focusedIdx, rowsWithRS, onSelectStock]);
+
+  // Reset focus when filters change
+  useEffect(() => { setFocusedIdx(-1); }, [filters]);
 
   const handleSort = useCallback((field: SortField) => {
     setFilters((f) => ({
@@ -235,9 +298,9 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
   }, []);
 
   const exportCSV = useCallback(() => {
-    if (!rows.length) return;
+    if (!rowsWithRS.length) return;
     const headers = ["#","Ticker","Company","Market","Price","Currency","Daily%","WTD%","MTD%","YTD%","1Y%","3Y%","5Y%","52wHigh","52wLow","52wHighChg%","MarketCap","Volume","Timestamp"];
-    const lines = rows.map((r, i) => [
+    const lines = rowsWithRS.map((r, i) => [
       i + 1, r.symbol, `"${r.name}"`, r.market,
       r.price ?? "", r.currency,
       r.performance.daily ?? "N/A",
@@ -269,7 +332,7 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
     ? "bg-amber-400 animate-pulse"
     : "bg-emerald-400";
 
-  const isVirtual = rows.length > VIRTUAL_THRESHOLD;
+  const isVirtual = rowsWithRS.length > VIRTUAL_THRESHOLD;
 
   return (
     <div className="flex flex-col gap-3">
@@ -294,6 +357,29 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
           >
             ↓ CSV
           </button>
+          <div className="relative">
+            <button
+              onClick={() => setColMenuOpen((v) => !v)}
+              className="px-2 py-1 rounded border border-slate-700 hover:border-slate-500 hover:text-white transition-colors ml-1"
+            >
+              Columns ▼
+            </button>
+            {colMenuOpen && (
+              <div className="absolute right-0 top-full mt-1 z-20 bg-slate-900 border border-slate-700 rounded-xl p-3 grid grid-cols-2 gap-x-4 gap-y-1 shadow-xl min-w-[220px]">
+                {COLUMN_KEYS.map((k) => (
+                  <label key={k} className="flex items-center gap-2 cursor-pointer text-xs text-slate-300 hover:text-white">
+                    <input
+                      type="checkbox"
+                      checked={visibleCols.has(k)}
+                      onChange={() => toggleCol(k)}
+                      className="rounded"
+                    />
+                    {COLUMN_LABELS[k]}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -307,42 +393,43 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
       {/* Desktop Table */}
       <div className="rounded-xl border border-slate-700 overflow-hidden hidden md:block">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table ref={tableRef} className="w-full text-sm">
             <thead className="bg-slate-900 sticky top-0 z-10">
               <tr className="border-b border-slate-700">
                 <th className="px-3 py-2 text-left text-xs text-slate-500 w-8">#</th>
                 <th className="px-3 py-2 text-left text-xs text-slate-400 w-6">⭐</th>
                 <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">Ticker</th>
-                <th className="px-3 py-2 text-left text-xs text-slate-400">Company</th>
-                <th className="px-3 py-2 text-left text-xs text-slate-400">Market</th>
-                <SortHeader label="Price"  field="price"    current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />
-                <SortHeader label="1D %"   field="daily"    current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />
-                <SortHeader label="WTD %"  field="wtd"      current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />
-                <SortHeader label="MTD %"  field="mtd"      current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />
-                <SortHeader label="YTD %"  field="ytd"      current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />
-                <SortHeader label="1Y %"   field="one_y"    current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />
-                <SortHeader label="3Y %*"  field="three_y"  current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />
-                <SortHeader label="5Y %*"  field="five_y"   current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />
-                <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">52W High</th>
-                <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">52W Chg%</th>
-                <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">Vol/Avg</th>
-                <SortHeader label="Mkt Cap" field="marketCap" current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />
-                <th className="px-3 py-2 text-left text-xs text-slate-400">Chart (1M)</th>
+                {visibleCols.has("company") && <th className="px-3 py-2 text-left text-xs text-slate-400">Company</th>}
+                {visibleCols.has("market") && <th className="px-3 py-2 text-left text-xs text-slate-400">Market</th>}
+                {visibleCols.has("price") && <SortHeader label="Price"  field="price"    current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
+                {visibleCols.has("daily") && <SortHeader label="1D %"   field="daily"    current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
+                {visibleCols.has("wtd") && <SortHeader label="WTD %"  field="wtd"      current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
+                {visibleCols.has("mtd") && <SortHeader label="MTD %"  field="mtd"      current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
+                {visibleCols.has("ytd") && <SortHeader label="YTD %"  field="ytd"      current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
+                {visibleCols.has("one_y") && <SortHeader label="1Y %"   field="one_y"    current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
+                {visibleCols.has("three_y") && <SortHeader label="3Y %*"  field="three_y"  current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
+                {visibleCols.has("five_y") && <SortHeader label="5Y %*"  field="five_y"   current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
+                {visibleCols.has("rs") && <SortHeader label="RS" field="rsScore" current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
+                {visibleCols.has("52wHigh") && <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">52W High</th>}
+                {visibleCols.has("52wChg") && <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">52W Chg%</th>}
+                {visibleCols.has("volAvg") && <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">Vol/Avg</th>}
+                {visibleCols.has("marketCap") && <SortHeader label="Mkt Cap" field="marketCap" current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
+                {visibleCols.has("chart") && <th className="px-3 py-2 text-left text-xs text-slate-400">Chart (1M)</th>}
               </tr>
             </thead>
             <tbody>
               {isLoading
                 ? Array.from({ length: 10 }).map((_, i) => <SkeletonRow key={i} />)
-                : rows.map((stock, idx) => {
+                : rowsWithRS.map((stock, idx) => {
                     const volRatio = stock.volume && stock.avgVolume20d ? stock.volume / stock.avgVolume20d : null;
                     const isStarred = starred.has(stock.symbol);
                     return (
                       <tr
                         key={stock.symbol}
-                        onClick={() => onSelectStock(stock)}
+                        onClick={() => { setFocusedIdx(idx); onSelectStock(stock); }}
                         className={cn(
                           "border-b border-slate-800 cursor-pointer transition-colors",
-                          "hover:bg-slate-800/60",
+                          focusedIdx === idx ? "bg-blue-900/30 ring-1 ring-inset ring-blue-600" : "hover:bg-slate-800/60",
                           isRefetching && "opacity-70",
                           stock.isStale && "opacity-60"
                         )}
@@ -363,47 +450,73 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
                             <span className="ml-1 text-xs text-amber-500 font-normal">STALE</span>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-slate-300 max-w-[180px] truncate">{stock.name}</td>
-                        <td className="px-3 py-2 text-slate-400 whitespace-nowrap">
-                          {MARKET_FLAG[stock.market]} {stock.market}
-                        </td>
-                        <td className="px-3 py-2 text-white font-mono tabular-nums whitespace-nowrap">
-                          {stock.price !== null
-                            ? stock.price.toLocaleString(undefined, { maximumFractionDigits: 4 })
-                            : "N/A"}
-                          {" "}
-                          <span className="text-slate-600 text-xs">{stock.currency}</span>
-                        </td>
-                        <td className="px-3 py-2"><PctCell value={stock.performance.daily}   sortField={filters.sortField} /></td>
-                        <td className="px-3 py-2"><PctCell value={stock.performance.wtd}     sortField={filters.sortField} /></td>
-                        <td className="px-3 py-2"><PctCell value={stock.performance.mtd}     sortField={filters.sortField} /></td>
-                        <td className="px-3 py-2"><PctCell value={stock.performance.ytd}     sortField={filters.sortField} /></td>
-                        <td className="px-3 py-2"><PctCell value={stock.performance.one_y}   sortField={filters.sortField} /></td>
-                        <td className="px-3 py-2"><PctCell value={stock.performance.three_y} sortField={filters.sortField} /></td>
-                        <td className="px-3 py-2"><PctCell value={stock.performance.five_y}  sortField={filters.sortField} /></td>
-                        <td className="px-3 py-2 text-slate-300 font-mono tabular-nums text-xs whitespace-nowrap">
-                          {stock.fiftyTwoWeekHigh !== null ? stock.fiftyTwoWeekHigh.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "N/A"}
-                        </td>
-                        <td className="px-3 py-2">
-                          <span className={cn("font-mono tabular-nums text-xs", pctColor(stock.fiftyTwoWeekHighChangePct))}>
-                            {stock.fiftyTwoWeekHighChangePct !== null ? `${stock.fiftyTwoWeekHighChangePct.toFixed(1)}%` : "N/A"}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-xs font-mono tabular-nums">
-                          {volRatio !== null ? (
-                            <span className={volRatio > 2 ? "text-amber-400 font-semibold" : "text-slate-400"}>
-                              {volRatio.toFixed(1)}×
+                        {visibleCols.has("company") && <td className="px-3 py-2 text-slate-300 max-w-[180px] truncate">{stock.name}</td>}
+                        {visibleCols.has("market") && (
+                          <td className="px-3 py-2 text-slate-400 whitespace-nowrap">
+                            {MARKET_FLAG[stock.market]} {stock.market}
+                          </td>
+                        )}
+                        {visibleCols.has("price") && (
+                          <td className="px-3 py-2 text-white font-mono tabular-nums whitespace-nowrap">
+                            {stock.price !== null
+                              ? stock.price.toLocaleString(undefined, { maximumFractionDigits: 4 })
+                              : "N/A"}
+                            {" "}
+                            <span className="text-slate-600 text-xs">{stock.currency}</span>
+                          </td>
+                        )}
+                        {visibleCols.has("daily") && <td className="px-3 py-2"><PctCell value={stock.performance.daily}   sortField={filters.sortField} /></td>}
+                        {visibleCols.has("wtd") && <td className="px-3 py-2"><PctCell value={stock.performance.wtd}     sortField={filters.sortField} /></td>}
+                        {visibleCols.has("mtd") && <td className="px-3 py-2"><PctCell value={stock.performance.mtd}     sortField={filters.sortField} /></td>}
+                        {visibleCols.has("ytd") && <td className="px-3 py-2"><PctCell value={stock.performance.ytd}     sortField={filters.sortField} /></td>}
+                        {visibleCols.has("one_y") && <td className="px-3 py-2"><PctCell value={stock.performance.one_y}   sortField={filters.sortField} /></td>}
+                        {visibleCols.has("three_y") && <td className="px-3 py-2"><PctCell value={stock.performance.three_y} sortField={filters.sortField} /></td>}
+                        {visibleCols.has("five_y") && <td className="px-3 py-2"><PctCell value={stock.performance.five_y}  sortField={filters.sortField} /></td>}
+                        {visibleCols.has("rs") && (
+                          <td className="px-3 py-2 text-xs font-mono tabular-nums">
+                            <span className={cn(
+                              "font-semibold",
+                              (stock.rsScore ?? 0) >= 90 ? "text-emerald-400" :
+                              (stock.rsScore ?? 0) >= 70 ? "text-blue-400" :
+                              (stock.rsScore ?? 0) >= 50 ? "text-slate-300" : "text-slate-500"
+                            )}>
+                              {stock.rsScore ?? "—"}
                             </span>
-                          ) : (
-                            <span className="text-slate-600">N/A</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-slate-400 tabular-nums text-xs">
-                          {fmtMarketCap(stock.marketCap)}
-                        </td>
-                        <td className="px-2 py-1">
-                          {!isVirtual && <MiniSparkline tvSymbol={stock.tvSymbol} />}
-                        </td>
+                          </td>
+                        )}
+                        {visibleCols.has("52wHigh") && (
+                          <td className="px-3 py-2 text-slate-300 font-mono tabular-nums text-xs whitespace-nowrap">
+                            {stock.fiftyTwoWeekHigh !== null ? stock.fiftyTwoWeekHigh.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "N/A"}
+                          </td>
+                        )}
+                        {visibleCols.has("52wChg") && (
+                          <td className="px-3 py-2">
+                            <span className={cn("font-mono tabular-nums text-xs", pctColor(stock.fiftyTwoWeekHighChangePct))}>
+                              {stock.fiftyTwoWeekHighChangePct !== null ? `${stock.fiftyTwoWeekHighChangePct.toFixed(1)}%` : "N/A"}
+                            </span>
+                          </td>
+                        )}
+                        {visibleCols.has("volAvg") && (
+                          <td className="px-3 py-2 text-xs font-mono tabular-nums">
+                            {volRatio !== null ? (
+                              <span className={volRatio > 2 ? "text-amber-400 font-semibold" : "text-slate-400"}>
+                                {volRatio.toFixed(1)}×{volRatio > 2 && <span className="ml-1">🔥</span>}
+                              </span>
+                            ) : (
+                              <span className="text-slate-600">N/A</span>
+                            )}
+                          </td>
+                        )}
+                        {visibleCols.has("marketCap") && (
+                          <td className="px-3 py-2 text-slate-400 tabular-nums text-xs">
+                            {fmtMarketCap(stock.marketCap)}
+                          </td>
+                        )}
+                        {visibleCols.has("chart") && (
+                          <td className="px-2 py-1">
+                            {!isVirtual && <MiniSparkline tvSymbol={stock.tvSymbol} />}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -412,7 +525,7 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
         </div>
         <div className="px-4 py-2 bg-slate-900 border-t border-slate-800 flex justify-between text-xs text-slate-600">
           <span>
-            Showing {rows.length} stocks · *3Y and 5Y are cumulative total returns
+            Showing {rowsWithRS.length} stocks · *3Y and 5Y are cumulative total returns · ↑↓ keyboard navigation
           </span>
           <span>Prices delayed up to 15 minutes</span>
         </div>
@@ -427,7 +540,7 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
                 <div className="h-3 bg-slate-800 rounded w-full" />
               </div>
             ))
-          : rows.map((stock) => {
+          : rowsWithRS.map((stock) => {
               const isStarred = starred.has(stock.symbol);
               return (
                 <div

@@ -30,11 +30,13 @@ export interface YahooQuote {
   averageDailyVolume3Month: number;
   longName: string;
   shortName: string;
+  fiftyTwoWeekHigh: number;
+  fiftyTwoWeekLow: number;
 }
 
 /** Fetches up to 10 live quotes in one request. */
 export async function fetchBatchQuotes(symbols: string[]): Promise<YahooQuote[]> {
-  const url = `${BASE}/v7/finance/quote?symbols=${symbols.join(",")}&fields=regularMarketPrice,currency,marketCap,regularMarketVolume,averageDailyVolume3Month,longName,shortName`;
+  const url = `${BASE}/v7/finance/quote?symbols=${symbols.join(",")}&fields=regularMarketPrice,currency,marketCap,regularMarketVolume,averageDailyVolume3Month,longName,shortName,fiftyTwoWeekHigh,fiftyTwoWeekLow`;
   const res = await fetchWithBackoff(url);
   const json = await res.json();
   return json?.quoteResponse?.result ?? [];

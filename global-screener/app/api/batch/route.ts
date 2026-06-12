@@ -26,7 +26,9 @@ async function resolveStock(
   currency?: string,
   marketCap?: number,
   volume?: number,
-  avgVolume?: number
+  avgVolume?: number,
+  fiftyTwoWeekHigh?: number,
+  fiftyTwoWeekLow?: number
 ): Promise<StockData> {
   const cacheKey = `hist:${yahooSuffix}`;
   let closes = await cacheGet<Array<{ date: string; close: number }>>(cacheKey);
@@ -53,6 +55,11 @@ async function resolveStock(
     marketCap: marketCap ?? null,
     volume: volume ?? null,
     avgVolume20d: avgVolume ?? null,
+    fiftyTwoWeekHigh: fiftyTwoWeekHigh ?? null,
+    fiftyTwoWeekLow: fiftyTwoWeekLow ?? null,
+    fiftyTwoWeekHighChangePct: (price !== null && fiftyTwoWeekHigh)
+      ? (price - fiftyTwoWeekHigh) / fiftyTwoWeekHigh * 100
+      : null,
     performance: price ? computePerformance(closes ?? [], price) : {
       daily: null, wtd: null, mtd: null, ytd: null, one_y: null, three_y: null, five_y: null,
     },
@@ -68,7 +75,7 @@ export async function POST(req: NextRequest) {
     const allTickers = getTickers(marketFilter);
 
     // Batch fetch live quotes (10 per request)
-    const quoteMap = new Map<string, { price: number; currency: string; marketCap: number; volume: number; avgVolume: number }>();
+    const quoteMap = new Map<string, { price: number; currency: string; marketCap: number; volume: number; avgVolume: number; fiftyTwoWeekHigh: number; fiftyTwoWeekLow: number }>();
     const suffixes = allTickers.map((t) => t.yahooSuffix);
 
     for (const batch of chunk(suffixes, 10)) {
@@ -81,6 +88,8 @@ export async function POST(req: NextRequest) {
             marketCap: q.marketCap,
             volume: q.regularMarketVolume,
             avgVolume: q.averageDailyVolume3Month,
+            fiftyTwoWeekHigh: q.fiftyTwoWeekHigh,
+            fiftyTwoWeekLow: q.fiftyTwoWeekLow,
           });
         }
       } catch {
@@ -96,7 +105,8 @@ export async function POST(req: NextRequest) {
           const q = quoteMap.get(t.yahooSuffix);
           return resolveStock(
             t.yahooSuffix, t.symbol, t.name, t.market, t.sector, t.tvSymbol,
-            q?.price, q?.currency, q?.marketCap, q?.volume, q?.avgVolume
+            q?.price, q?.currency, q?.marketCap, q?.volume, q?.avgVolume,
+            q?.fiftyTwoWeekHigh, q?.fiftyTwoWeekLow
           );
         })
       );

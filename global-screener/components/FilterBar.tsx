@@ -14,25 +14,30 @@ const SORT_OPTIONS: { value: SortField; label: string }[] = [
   { value: "one_y",   label: "1Y %" },
   { value: "three_y", label: "3Y %" },
   { value: "five_y",  label: "5Y %" },
+  { value: "fiftyTwoWeekHighChangePct", label: "52W H %" },
   { value: "marketCap", label: "Mkt Cap" },
   { value: "volume",  label: "Volume" },
 ];
 
 const PRESETS: { name: PresetName; label: string }[] = [
-  { name: "top-gainers",         label: "Top Gainers" },
-  { name: "top-losers",          label: "Top Losers" },
-  { name: "ytd-leaders",         label: "YTD Leaders" },
-  { name: "five-year-compounders", label: "5Y Compounders" },
-  { name: "most-active",         label: "Most Active" },
+  { name: "top-gainers",         label: "🚀 Top Gainers" },
+  { name: "top-losers",          label: "📉 Top Losers" },
+  { name: "ytd-leaders",         label: "📅 YTD Leaders" },
+  { name: "five-year-compounders", label: "📈 5Y Best" },
+  { name: "most-active",         label: "🔥 Most Active" },
+  { name: "52w-highs",           label: "🏔 52W Highs" },
+  { name: "starred",             label: "⭐ Starred" },
 ];
 
 interface Props {
   filters: FilterState;
   onChange: (f: FilterState) => void;
   onPreset: (p: PresetName) => void;
+  searchInput: string;
+  onSearchChange: (v: string) => void;
 }
 
-export default function FilterBar({ filters, onChange, onPreset }: Props) {
+export default function FilterBar({ filters, onChange, onPreset, searchInput, onSearchChange }: Props) {
   const sectors = getAllSectors();
 
   const toggleMarket = (m: Market) => {
@@ -148,8 +153,8 @@ export default function FilterBar({ filters, onChange, onPreset }: Props) {
       <input
         type="search"
         placeholder="Search ticker / name..."
-        value={filters.search}
-        onChange={(e) => onChange({ ...filters, search: e.target.value })}
+        value={searchInput}
+        onChange={(e) => onSearchChange(e.target.value)}
         className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-3 py-1 w-44 ml-auto"
       />
 

@@ -41,8 +41,12 @@ export interface StockData {
   marketCap: number | null;
   volume: number | null;
   avgVolume20d: number | null;
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
+  fiftyTwoWeekHighChangePct: number | null;
   performance: PerformanceMetrics;
   isStale?: boolean;
+  starred?: boolean;
   error?: string;
 }
 
@@ -69,7 +73,8 @@ export type SortField =
   | "five_y"
   | "price"
   | "marketCap"
-  | "volume";
+  | "volume"
+  | "fiftyTwoWeekHighChangePct";
 
 export type SortDirection = "asc" | "desc";
 
@@ -81,6 +86,8 @@ export interface FilterState {
   topN: number | null;
   minChangePct: number | null;
   search: string;
+  onlyStarred: boolean;
+  only52wHigh: boolean;
 }
 
 export type PresetName =
@@ -89,4 +96,5 @@ export type PresetName =
   | "ytd-leaders"
   | "five-year-compounders"
   | "most-active"
-  | "52w-highs";
+  | "52w-highs"
+  | "starred";

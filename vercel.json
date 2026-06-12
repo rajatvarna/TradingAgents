@@ -1,0 +1,7 @@
+{
+  "buildCommand": "cd global-screener && npm install && npm run build",
+  "outputDirectory": "global-screener/.next",
+  "installCommand": "cd global-screener && npm install",
+  "framework": "nextjs",
+  "rootDirectory": "global-screener"
+}

@@ -44,6 +44,7 @@ async function resolveStock(
 
   return {
     symbol,
+    yahooSuffix,
     name,
     market,
     sector,

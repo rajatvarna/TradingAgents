@@ -7,6 +7,15 @@ import { fmtPct, fmtMarketCap, pctColor, MARKET_FLAG, cn } from "@/lib/utils";
 import FilterBar from "./FilterBar";
 import MiniSparkline from "./MiniSparkline";
 
+interface FxRates {
+  USD: number;
+  INR: number;
+  AED: number;
+  SAR: number;
+}
+
+type DisplayCurrency = "local" | "USD";
+
 const REFRESH_INTERVAL = Number(process.env.NEXT_PUBLIC_REFRESH_INTERVAL_MS ?? 720_000);
 const VIRTUAL_THRESHOLD = Number(process.env.NEXT_PUBLIC_VIRTUAL_ROW_THRESHOLD ?? 100);
 
@@ -261,16 +270,27 @@ function ColumnCustomizer({
 
 interface Props {
   onSelectStock: (s: StockData) => void;
+  onDataLoaded?: (stocks: StockData[]) => void;
 }
 
-export default function ScreenerTable({ onSelectStock }: Props) {
+export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [searchInput, setSearchInput] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [countdown, setCountdown] = useState<string>("");
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(loadVisibleColumns);
+  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>("local");
   const nextRefreshRef = useRef<number>(Date.now() + REFRESH_INTERVAL);
+
+  const { data: fxRates } = useQuery<FxRates>({
+    queryKey: ["fx"],
+    queryFn: async () => {
+      const res = await fetch("/api/fx");
+      return res.json() as Promise<FxRates>;
+    },
+    staleTime: 60 * 60 * 1000,
+  });
 
   // Debounce search
   useEffect(() => {
@@ -293,6 +313,12 @@ export default function ScreenerTable({ onSelectStock }: Props) {
       nextRefreshRef.current = dataUpdatedAt + REFRESH_INTERVAL;
     }
   }, [dataUpdatedAt]);
+
+  useEffect(() => {
+    if (data && onDataLoaded) {
+      onDataLoaded(data);
+    }
+  }, [data, onDataLoaded]);
 
   // Countdown timer
   useEffect(() => {
@@ -409,6 +435,18 @@ export default function ScreenerTable({ onSelectStock }: Props) {
           <span>Next in {countdown}</span>
           <ColumnCustomizer visibleColumns={vis} onChange={setVisibleColumns} />
           <button
+            onClick={() => setDisplayCurrency((c) => (c === "local" ? "USD" : "local"))}
+            className={cn(
+              "px-2 py-1 rounded border transition-colors text-xs",
+              displayCurrency === "USD"
+                ? "border-blue-500 text-blue-400"
+                : "border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white"
+            )}
+            title="Toggle price display currency"
+          >
+            {displayCurrency === "USD" ? "USD" : "Local"}
+          </button>
+          <button
             onClick={exportCSV}
             className="px-2 py-1 rounded border border-slate-700 hover:border-slate-500 hover:text-white transition-colors ml-1"
           >
@@ -488,15 +526,36 @@ export default function ScreenerTable({ onSelectStock }: Props) {
                             {MARKET_FLAG[stock.market]} {stock.market}
                           </td>
                         )}
-                        {vis.has("price")     && (
-                          <td className="px-3 py-2 text-white font-mono tabular-nums whitespace-nowrap">
-                            {stock.price !== null
-                              ? stock.price.toLocaleString(undefined, { maximumFractionDigits: 4 })
-                              : "N/A"}
-                            {" "}
-                            <span className="text-slate-600 text-xs">{stock.currency}</span>
-                          </td>
-                        )}
+                        {vis.has("price")     && (() => {
+                          let displayPrice = stock.price;
+                          let displayCurr = stock.currency;
+                          if (
+                            displayCurrency === "USD" &&
+                            stock.price !== null &&
+                            fxRates &&
+                            stock.currency !== "USD"
+                          ) {
+                            const rate =
+                              stock.currency === "INR" ? fxRates.INR
+                              : stock.currency === "AED" ? fxRates.AED
+                              : stock.currency === "SAR" ? fxRates.SAR
+                              : 1;
+                            displayPrice = stock.price / rate;
+                            displayCurr = "USD";
+                          }
+                          return (
+                            <td className="px-3 py-2 text-white font-mono tabular-nums whitespace-nowrap">
+                              {displayPrice !== null
+                                ? (displayCurr === "USD" ? "$" : "") +
+                                  displayPrice.toLocaleString(undefined, { maximumFractionDigits: 4 })
+                                : "N/A"}
+                              {" "}
+                              <span className="text-slate-600 text-xs">
+                                {displayCurr !== "USD" ? displayCurr : ""}
+                              </span>
+                            </td>
+                          );
+                        })()}
                         {vis.has("daily")     && <td className="px-3 py-2"><PctCell value={stock.performance.daily} /></td>}
                         {vis.has("wtd")       && <td className="px-3 py-2"><PctCell value={stock.performance.wtd} /></td>}
                         {vis.has("mtd")       && <td className="px-3 py-2"><PctCell value={stock.performance.mtd} /></td>}

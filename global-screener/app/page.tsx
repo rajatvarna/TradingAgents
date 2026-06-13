@@ -4,15 +4,19 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import { StockData } from "@/types";
 
-const TickerTape       = dynamic(() => import("@/components/TickerTape"),        { ssr: false });
-const MarketIndexCards = dynamic(() => import("@/components/MarketIndexCards"),   { ssr: false });
-const ScreenerTable    = dynamic(() => import("@/components/ScreenerTable"),      { ssr: false });
-const ChartPanel       = dynamic(() => import("@/components/ChartPanel"),         { ssr: false });
-const FearGreed        = dynamic(() => import("@/components/FearGreed"),          { ssr: false });
-const PriceAlerts      = dynamic(() => import("@/components/PriceAlerts"),        { ssr: false });
+const TickerTape        = dynamic(() => import("@/components/TickerTape"),        { ssr: false });
+const MarketIndexCards  = dynamic(() => import("@/components/MarketIndexCards"),   { ssr: false });
+const ScreenerTable     = dynamic(() => import("@/components/ScreenerTable"),      { ssr: false });
+const ChartPanel        = dynamic(() => import("@/components/ChartPanel"),         { ssr: false });
+const FearGreed         = dynamic(() => import("@/components/FearGreed"),          { ssr: false });
+const PriceAlerts       = dynamic(() => import("@/components/PriceAlerts"),        { ssr: false });
+const PortfolioTracker  = dynamic(() => import("@/components/PortfolioTracker"),   { ssr: false });
+const EconomicCalendar  = dynamic(() => import("@/components/EconomicCalendar"),   { ssr: false });
 
 export default function Home() {
   const [selectedStock, setSelectedStock] = useState<StockData | null>(null);
+  // Lift screener data up so PortfolioTracker can use current prices
+  const [screenerStocks, setScreenerStocks] = useState<StockData[]>([]);
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
@@ -54,10 +58,16 @@ export default function Home() {
         <FearGreed />
 
         {/* Screener table */}
-        <ScreenerTable onSelectStock={setSelectedStock} />
+        <ScreenerTable onSelectStock={setSelectedStock} onDataLoaded={setScreenerStocks} />
 
         {/* Chart panel */}
         <ChartPanel stock={selectedStock} />
+
+        {/* Portfolio tracker */}
+        <PortfolioTracker stocks={screenerStocks} />
+
+        {/* Economic calendar */}
+        <EconomicCalendar />
       </main>
 
       <footer className="px-6 py-3 border-t border-slate-800 text-xs text-slate-600 flex justify-between">

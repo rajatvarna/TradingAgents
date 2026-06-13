@@ -32,6 +32,7 @@ class MarketHealthSnapshot:
 
 
 def _safe_float(val, default=0.0) -> float:
+    """Coerce val to float, returning default on NaN or any exception."""
     try:
         v = float(val)
         return v if not math.isnan(v) else default
@@ -40,6 +41,7 @@ def _safe_float(val, default=0.0) -> float:
 
 
 def _fetch_index(symbol: str, start: str, end: str):
+    """Download OHLCV history for symbol between start and end dates via yfinance."""
     import pandas as pd
     import yfinance as yf
     tk = yf.Ticker(symbol)
@@ -49,6 +51,7 @@ def _fetch_index(symbol: str, start: str, end: str):
 
 
 def _count_distribution_days(df, avg_vol: float, window: int = 25) -> int:
+    """Count down-days with volume above avg_vol * 1.05 in the last window sessions."""
     last = df.tail(window)
     count = 0
     for i in range(len(last)):
@@ -177,6 +180,7 @@ def fetch_market_health(as_of_date: str) -> MarketHealthSnapshot:
 
 
 def _fallback_snapshot(as_of_date: str) -> MarketHealthSnapshot:
+    """Return a neutral MarketHealthSnapshot when live data is unavailable."""
     return MarketHealthSnapshot(
         as_of_date=as_of_date,
         index_above_50d=True,

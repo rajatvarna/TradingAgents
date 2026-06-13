@@ -9,7 +9,7 @@ Usage:
 
 Universe options (--universe flag):
     sp500_ndx100  — S&P 500 + Nasdaq 100 components (default)
-    custom        — tickers from global-screener/watchlist.json
+    custom        — tickers from global-screener/data/watchlist.json
     file:<path>   — one ticker per line in a text file
 """
 

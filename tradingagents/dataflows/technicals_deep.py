@@ -201,7 +201,9 @@ def _compute_base_pattern(df: pd.DataFrame, avg_vol_50: float) -> BasePattern:
             breakout_volume_ratio=None, weeks_since_breakout=None,
         )
 
-    high = _safe_float(window["High"].max())
+    # Compute pivot from all bars except the most recent (prevents including the breakout candle)
+    base_window = window.iloc[:-1] if len(window) > 1 else window
+    high = _safe_float(base_window["High"].max())
     low = _safe_float(window["Low"].min())
     depth = ((high - low) / high * 100) if high else 0.0
     duration_weeks = len(window) // 5
@@ -328,45 +330,55 @@ def _compute_relative_strength(ticker: str, df, as_of_date: str) -> RelativeStre
     end = as_of_date
     start_12m = (datetime.strptime(as_of_date, "%Y-%m-%d") - timedelta(days=380)).strftime("%Y-%m-%d")
 
+    spy = None
     try:
         import pandas as pd
         import yfinance as yf
-        spy = yf.Ticker("SPY").history(start=start_12m, end=end, auto_adjust=True)["Close"]
-        spy.index = pd.to_datetime(spy.index).tz_localize(None)
+        _spy_raw = yf.Ticker("SPY").history(start=start_12m, end=end, auto_adjust=True)["Close"]
+        _spy_raw.index = pd.to_datetime(_spy_raw.index).tz_localize(None)
+        if len(_spy_raw) >= 10:
+            spy = _spy_raw
     except Exception:
-        import pandas as pd
-        spy = pd.Series(dtype=float)
+        pass
 
     stock_close = df["Close"]
 
     def _return(series, days):
-        if len(series) < days:
-            return 0.0
+        if series is None or len(series) < days:
+            return None
         return _safe_float((series.iloc[-1] - series.iloc[-days]) / max(series.iloc[-days], 0.01) * 100)
 
     trading_days_3m = 63
     trading_days_6m = 126
     trading_days_12m = 252
 
-    rs_3m = _return(stock_close, trading_days_3m) - _return(spy, trading_days_3m)
-    rs_6m = _return(stock_close, trading_days_6m) - _return(spy, trading_days_6m)
-    rs_12m = _return(stock_close, trading_days_12m) - _return(spy, trading_days_12m)
+    def _rs(stock_ret, spy_ret):
+        if stock_ret is None or spy_ret is None:
+            return None
+        return stock_ret - spy_ret
+
+    rs_3m = _rs(_return(stock_close, trading_days_3m), _return(spy, trading_days_3m))
+    rs_6m = _rs(_return(stock_close, trading_days_6m), _return(spy, trading_days_6m))
+    rs_12m = _rs(_return(stock_close, trading_days_12m), _return(spy, trading_days_12m))
 
     # RS percentile: approximate from the 12m return vs SPY
     # A rough but fast estimation without fetching full universe
     stock_12m_ret = _return(stock_close, trading_days_12m)
     spy_12m_ret = _return(spy, trading_days_12m)
-    rs_raw = stock_12m_ret - spy_12m_ret
-    # Map [-100, +200] → [0, 100] percentile approximation
-    rs_percentile = max(0.0, min(100.0, 50 + rs_raw / 4))
+    if stock_12m_ret is not None and spy_12m_ret is not None:
+        rs_raw = stock_12m_ret - spy_12m_ret
+        rs_percentile = max(0.0, min(100.0, 50 + rs_raw / 4))
+    else:
+        rs_percentile = 50.0
 
     # RS line trend: compare last 10 weeks of RS line
     rs_line_values = []
+    spy_len = len(spy) if spy is not None else 0
     for i in range(min(50, len(stock_close))):
         idx = len(stock_close) - 1 - i
-        spy_idx = max(0, len(spy) - 1 - i) if len(spy) > 0 else 0
+        spy_idx = max(0, spy_len - 1 - i) if spy_len > 0 else 0
         s_val = _safe_float(stock_close.iloc[idx])
-        spy_val = _safe_float(spy.iloc[spy_idx]) if len(spy) > 0 else 1.0
+        spy_val = _safe_float(spy.iloc[spy_idx]) if spy_len > 0 else 1.0
         rs_line_values.append(s_val / max(spy_val, 0.01))
     rs_line_values.reverse()
 
@@ -383,15 +395,15 @@ def _compute_relative_strength(ticker: str, df, as_of_date: str) -> RelativeStre
 
     # Held up during market decline: RS line made new high while market fell
     held_up = False
-    if len(spy) >= 20 and len(rs_line_values) >= 20:
+    if spy is not None and len(spy) >= 20 and len(rs_line_values) >= 20:
         spy_recent_return = (_safe_float(spy.iloc[-1]) - _safe_float(spy.iloc[-20])) / max(_safe_float(spy.iloc[-20]), 0.01)
         if spy_recent_return < -0.03 and rs_line_values[-1] > max(rs_line_values[:-5] or [0]):
             held_up = True
 
     return RelativeStrength(
-        rs_vs_spy_3m=round(rs_3m, 2),
-        rs_vs_spy_6m=round(rs_6m, 2),
-        rs_vs_spy_12m=round(rs_12m, 2),
+        rs_vs_spy_3m=round(rs_3m, 2) if rs_3m is not None else None,
+        rs_vs_spy_6m=round(rs_6m, 2) if rs_6m is not None else None,
+        rs_vs_spy_12m=round(rs_12m, 2) if rs_12m is not None else None,
         rs_percentile=round(rs_percentile, 1),
         rs_line_trend=rs_line_trend,
         held_up_during_market_decline=held_up,

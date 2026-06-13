@@ -220,12 +220,15 @@ def _score_annual_eps_trend(fund: DeepFundamentals) -> CriterionScore:
     if len(ann) < 2:
         return CriterionScore("Annual EPS Trend", 3, w, "WARN", "Fewer than 2 years of annual EPS data.")
     growing = sum(1 for a in ann if a.eps_yoy_growth is not None and a.eps_yoy_growth > 0)
-    ratio = growing / len(ann)
+    denom = sum(1 for a in ann if a.eps_yoy_growth is not None)
+    if denom == 0:
+        return CriterionScore("Annual EPS Trend", 3, w, "WARN", "No annual EPS growth data available.")
+    ratio = growing / denom
     if ratio >= 0.8:
-        return CriterionScore("Annual EPS Trend", 9, w, "PASS", f"EPS grew in {growing}/{len(ann)} of the last {len(ann)} fiscal years.")
+        return CriterionScore("Annual EPS Trend", 9, w, "PASS", f"EPS grew in {growing}/{denom} of the last {denom} fiscal years.")
     if ratio >= 0.6:
-        return CriterionScore("Annual EPS Trend", 6, w, "WARN", f"EPS grew in {growing}/{len(ann)} fiscal years — acceptable but not ideal.")
-    return CriterionScore("Annual EPS Trend", 2, w, "FAIL", f"Annual EPS trend weak: only {growing}/{len(ann)} years of growth.")
+        return CriterionScore("Annual EPS Trend", 6, w, "WARN", f"EPS grew in {growing}/{denom} fiscal years — acceptable but not ideal.")
+    return CriterionScore("Annual EPS Trend", 2, w, "FAIL", f"Annual EPS trend weak: only {growing}/{denom} years of growth.")
 
 
 def _score_roe(fund: DeepFundamentals) -> CriterionScore:

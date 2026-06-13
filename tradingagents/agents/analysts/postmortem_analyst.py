@@ -54,6 +54,7 @@ def create_postmortem_analyst(llm):
     """Create the Post-Mortem Analyst node for weekly review runs."""
 
     def postmortem_analyst_node(state):
+        """Compare past recommendation against actual outcome and append a postmortem report."""
         past_rec = state.get("postmortem_past_recommendation", "No past recommendation provided.")
         outcome = state.get("postmortem_outcome_data", "No outcome data provided.")
 

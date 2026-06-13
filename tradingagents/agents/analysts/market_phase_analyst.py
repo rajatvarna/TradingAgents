@@ -83,6 +83,7 @@ def create_market_phase_analyst(llm):
     """Create the Market Phase Analyst node."""
 
     def market_phase_analyst_node(state):
+        """Fetch market health snapshot and append a phase-analysis report to agent messages."""
         from tradingagents.dataflows.market_health import fetch_market_health
 
         current_date = state["trade_date"]

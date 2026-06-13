@@ -64,6 +64,7 @@ def create_group_sector_analyst(llm):
     """Create the Group & Sector Leadership Analyst node."""
 
     def group_sector_analyst_node(state):
+        """Run group & sector leadership analysis and append a report to agent messages."""
         from tradingagents.dataflows.sector_groups import fetch_group_leadership
         from tradingagents.dataflows.market_health import fetch_market_health
 

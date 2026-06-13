@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { StockData, FilterState, SortField, SortDirection, Market, PresetName } from "@/types";
 import { fmtPct, fmtMarketCap, pctColor, MARKET_FLAG, cn } from "@/lib/utils";
+import { getMarketState } from "@/lib/marketHours";
 import FilterBar from "./FilterBar";
 import MiniSparkline from "./MiniSparkline";
 
@@ -54,6 +55,8 @@ function filtersToParams(f: FilterState): string {
   p.set("dir", f.sortDir);
   if (f.topN) p.set("topN", String(f.topN));
   if (f.minChangePct !== null) p.set("min", String(f.minChangePct));
+  if (f.minMarketCap !== null) p.set("minCap", String(f.minMarketCap));
+  if (f.maxMarketCap !== null) p.set("maxCap", String(f.maxMarketCap));
   if (f.search) p.set("q", f.search);
   if (f.volSurge) p.set("volSurge", "1");
   if (f.watchlistOnly) p.set("watchlist", "1");
@@ -70,6 +73,8 @@ function paramsToFilters(search: string, base: FilterState): FilterState {
   const sortDir = (p.get("dir") ?? base.sortDir) as SortDirection;
   const topN = p.get("topN") ? Number(p.get("topN")) : null;
   const minChangePct = p.get("min") ? Number(p.get("min")) : null;
+  const minMarketCap = p.get("minCap") ? Number(p.get("minCap")) : null;
+  const maxMarketCap = p.get("maxCap") ? Number(p.get("maxCap")) : null;
   const search2 = p.get("q") ?? "";
   const volSurge = p.get("volSurge") === "1";
   const watchlistOnly = p.get("watchlist") === "1";
@@ -81,6 +86,8 @@ function paramsToFilters(search: string, base: FilterState): FilterState {
     sortDir,
     topN,
     minChangePct,
+    minMarketCap,
+    maxMarketCap,
     search: search2,
     volSurge,
     watchlistOnly,
@@ -95,7 +102,12 @@ const DEFAULT_FILTERS: FilterState = {
   sortDir: "desc",
   topN: null,
   minChangePct: null,
+  minMarketCap: null,
+  maxMarketCap: null,
   search: "",
+  volSurge: false,
+  watchlistOnly: false,
+  near52wHigh: false,
 };
 
 // ─── Column definitions ────────────────────────────────────────────────────
@@ -170,9 +182,19 @@ function applyFilters(
     });
   }
 
+  if (f.minMarketCap !== null) {
+    rows = rows.filter((d) => d.marketCap !== null && d.marketCap >= (f.minMarketCap as number));
+  }
+  if (f.maxMarketCap !== null) {
+    rows = rows.filter((d) => d.marketCap !== null && d.marketCap <= (f.maxMarketCap as number));
+  }
+
   if (f.minChangePct !== null) {
     rows = rows.filter((d) => {
-      const v = d.performance[f.sortField as keyof typeof d.performance] as number | null;
+      const perfField = (f.sortField in d.performance)
+        ? f.sortField as keyof typeof d.performance
+        : "daily";
+      const v = d.performance[perfField] as number | null;
       return v !== null && v >= (f.minChangePct as number);
     });
   }
@@ -187,6 +209,7 @@ function applyFilters(
 
   rows.sort((a, b) => {
     const getVal = (d: StockData): number => {
+      if (f.sortField === "price")         return d.price ?? -Infinity;
       if (f.sortField === "marketCap")    return d.marketCap ?? -Infinity;
       if (f.sortField === "volume")       return d.volume ?? -Infinity;
       if (f.sortField === "rs")           return rsMap.get(d.symbol) ?? -Infinity;
@@ -211,9 +234,9 @@ function applyPreset(preset: PresetName): FilterState {
     case "ytd-leaders":    return { ...base, sortField: "ytd",     sortDir: "desc", topN: 25 };
     case "five-year-compounders": return { ...base, sortField: "five_y", sortDir: "desc", topN: 25 };
     case "most-active":    return { ...base, sortField: "volume",  sortDir: "desc", topN: 25 };
-    case "vol-surge":      return { ...base, sortField: "volume",  sortDir: "desc", topN: 25, volSurge: true };
-    case "near-52w-high":  return { ...base, sortField: "daily",   sortDir: "desc", near52wHigh: true, topN: 25 };
-    case "watchlist":      return { ...base, watchlistOnly: true };
+    case "vol-surge":      return { ...base, sortField: "volume",  sortDir: "desc", topN: 25, volSurge: true, watchlistOnly: false, near52wHigh: false };
+    case "near-52w-high":  return { ...base, sortField: "daily",   sortDir: "desc", near52wHigh: true, topN: 25, volSurge: false, watchlistOnly: false };
+    case "watchlist":      return { ...base, watchlistOnly: true, volSurge: false, near52wHigh: false };
     default: return base;
   }
 }
@@ -436,6 +459,13 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextRefreshRef = useRef<number>(Date.now() + REFRESH_INTERVAL);
   const [shareMsg, setShareMsg] = useState(false);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+
+  const allMarketsClosed = useMemo(
+    () => filters.markets.every((m) => getMarketState(m) === "closed"),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filters.markets]
+  );
 
   const { data: fxRates } = useQuery<FxRates>({
     queryKey: ["fx"],
@@ -462,7 +492,7 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
   const { data, isLoading, isRefetching, isError, dataUpdatedAt } = useQuery({
     queryKey: ["screener", filters.markets],
     queryFn: () => fetchBatch(filters.markets),
-    refetchInterval: REFRESH_INTERVAL,
+    refetchInterval: allMarketsClosed ? false : REFRESH_INTERVAL,
     refetchIntervalInBackground: true,
     staleTime: REFRESH_INTERVAL,
     placeholderData: keepPreviousData,
@@ -526,7 +556,10 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
     return () => document.removeEventListener("keydown", handler);
   }, [rows, selectedIdx, onSelectStock]);
 
-  useEffect(() => { setSelectedIdx(null); }, [rows]);
+  useEffect(() => {
+    setSelectedIdx(null);
+    tableScrollRef.current?.scrollTo(0, 0);
+  }, [rows]);
 
   const handleSort = useCallback((field: SortField) => {
     setFilters((f) => ({
@@ -662,7 +695,7 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
 
       {/* Table */}
       <div className="rounded-xl border border-slate-700 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" ref={tableScrollRef}>
           <table className="w-full text-sm">
             <thead className="bg-slate-900 sticky top-0 z-10">
               <tr className="border-b border-slate-700">

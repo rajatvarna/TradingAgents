@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { StockData } from "@/types";
+import { StockData, EarningsData, InsiderTransaction, AnalystRatings, FundamentalsData, NewsItem } from "@/types";
 import { fmtPct, fmtMarketCap, pctColor, MARKET_FLAG, cn } from "@/lib/utils";
 import ComparisonChart from "./ComparisonChart";
 
@@ -20,51 +20,6 @@ declare global {
 
 type Tab = "chart" | "insider" | "fundamentals" | "news" | "compare";
 
-interface EarningsData {
-  nextEarningsDate: string | null;
-  epsEstimate: number | null;
-}
-
-interface InsiderTransaction {
-  name: string;
-  relation: string;
-  transactionDate: string;
-  transactionType: string;
-  shares: number;
-  value: number | null;
-}
-
-interface AnalystRatings {
-  strongBuy: number;
-  buy: number;
-  hold: number;
-  underperform: number;
-  sell: number;
-}
-
-interface FundamentalsData {
-  shortPercentOfFloat: number | null;
-  shortRatio: number | null;
-  forwardPE: number | null;
-  pegRatio: number | null;
-  priceToBook: number | null;
-  returnOnEquity: number | null;
-  debtToEquity: number | null;
-  analystRatings: AnalystRatings | null;
-  beta: number | null;
-  dividendYield: number | null;
-  dividendRate: number | null;
-  exDividendDate: number | null;
-}
-
-interface NewsItem {
-  uuid: string;
-  title: string;
-  publisher: string;
-  link: string;
-  providerPublishTime: number;
-  thumbnail: string | null;
-}
 
 function fmtNum(v: number | null, decimals = 2): string {
   if (v === null) return "—";

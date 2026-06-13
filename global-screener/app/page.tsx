@@ -37,7 +37,7 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-3 text-xs text-slate-400">
           <span className="hidden md:block">Prices delayed 15 min · Free data</span>
-          <PriceAlerts />
+          <PriceAlerts stocks={screenerStocks} />
           <ThemeToggle />
           <a
             href="https://www.tradingview.com"

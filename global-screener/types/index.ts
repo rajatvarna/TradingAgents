@@ -95,10 +95,59 @@ export interface FilterState {
   sortDir: SortDirection;
   topN: number | null;
   minChangePct: number | null;
+  minMarketCap: number | null;
+  maxMarketCap: number | null;
   search: string;
-  volSurge?: boolean;
-  watchlistOnly?: boolean;
-  near52wHigh?: boolean;
+  volSurge: boolean;
+  watchlistOnly: boolean;
+  near52wHigh: boolean;
+}
+
+/** Types shared between ChartPanel and any future consumers */
+export interface EarningsData {
+  nextEarningsDate: string | null;
+  epsEstimate: number | null;
+}
+
+export interface InsiderTransaction {
+  name: string;
+  relation: string;
+  transactionDate: string;
+  transactionType: string;
+  shares: number;
+  value: number | null;
+}
+
+export interface AnalystRatings {
+  strongBuy: number;
+  buy: number;
+  hold: number;
+  underperform: number;
+  sell: number;
+}
+
+export interface FundamentalsData {
+  shortPercentOfFloat: number | null;
+  shortRatio: number | null;
+  forwardPE: number | null;
+  pegRatio: number | null;
+  priceToBook: number | null;
+  returnOnEquity: number | null;
+  debtToEquity: number | null;
+  analystRatings: AnalystRatings | null;
+  beta: number | null;
+  dividendYield: number | null;
+  dividendRate: number | null;
+  exDividendDate: number | null;
+}
+
+export interface NewsItem {
+  uuid: string;
+  title: string;
+  publisher: string;
+  link: string;
+  providerPublishTime: number;
+  thumbnail: string | null;
 }
 
 export type PresetName =

@@ -8,6 +8,15 @@ import { getMarketState } from "@/lib/marketHours";
 
 const MARKETS: Market[] = ["US", "India", "UAE", "Saudi"];
 const TOP_N_OPTIONS = [10, 25, 50, 100, 0]; // 0 = All
+
+// Market cap size presets in USD
+const CAP_PRESETS: { label: string; min: number | null; max: number | null }[] = [
+  { label: "All Sizes",  min: null,         max: null },
+  { label: "Mega >200B", min: 200e9,        max: null },
+  { label: "Large 10-200B", min: 10e9,      max: 200e9 },
+  { label: "Mid 2-10B",  min: 2e9,          max: 10e9 },
+  { label: "Small <2B",  min: null,         max: 2e9 },
+];
 const SORT_OPTIONS: { value: SortField; label: string }[] = [
   { value: "daily",        label: "1D %" },
   { value: "wtd",          label: "WTD %" },
@@ -178,6 +187,27 @@ export default function FilterBar({ filters, onChange, onPreset }: Props) {
         >
           {TOP_N_OPTIONS.map((n) => (
             <option key={n} value={n}>{n === 0 ? "All" : `Top ${n}`}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Market cap size filter */}
+      <div className="flex items-center gap-1">
+        <span className="text-slate-500 text-xs">Cap:</span>
+        <select
+          value={
+            CAP_PRESETS.findIndex(
+              (p) => p.min === filters.minMarketCap && p.max === filters.maxMarketCap
+            ) ?? 0
+          }
+          onChange={(e) => {
+            const preset = CAP_PRESETS[Number(e.target.value)];
+            onChange({ ...filters, minMarketCap: preset.min, maxMarketCap: preset.max });
+          }}
+          className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1"
+        >
+          {CAP_PRESETS.map((p, i) => (
+            <option key={p.label} value={i}>{p.label}</option>
           ))}
         </select>
       </div>

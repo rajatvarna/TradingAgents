@@ -53,11 +53,11 @@ function fmtPct2(v: number | null): string {
   return (v * 100).toFixed(1) + "%";
 }
 
-function EarningsBadge({ symbol }: { symbol: string }) {
+function EarningsBadge({ yahooSuffix }: { yahooSuffix: string }) {
   const { data } = useQuery<EarningsData>({
-    queryKey: ["earnings", symbol],
+    queryKey: ["earnings", yahooSuffix],
     queryFn: async () => {
-      const res = await fetch(`/api/earnings?symbol=${encodeURIComponent(symbol)}`);
+      const res = await fetch(`/api/earnings?symbol=${encodeURIComponent(yahooSuffix)}`);
       return res.json() as Promise<EarningsData>;
     },
     staleTime: 60 * 60 * 1000,
@@ -89,11 +89,11 @@ function EarningsBadge({ symbol }: { symbol: string }) {
   );
 }
 
-function InsiderTab({ symbol }: { symbol: string }) {
+function InsiderTab({ yahooSuffix }: { yahooSuffix: string }) {
   const { data, isLoading } = useQuery<InsiderTransaction[]>({
-    queryKey: ["insider", symbol],
+    queryKey: ["insider", yahooSuffix],
     queryFn: async () => {
-      const res = await fetch(`/api/insider?symbol=${encodeURIComponent(symbol)}`);
+      const res = await fetch(`/api/insider?symbol=${encodeURIComponent(yahooSuffix)}`);
       return res.json() as Promise<InsiderTransaction[]>;
     },
     staleTime: 60 * 60 * 1000,
@@ -163,11 +163,11 @@ function InsiderTab({ symbol }: { symbol: string }) {
   );
 }
 
-function FundamentalsTab({ symbol }: { symbol: string }) {
+function FundamentalsTab({ yahooSuffix }: { yahooSuffix: string }) {
   const { data, isLoading } = useQuery<FundamentalsData>({
-    queryKey: ["fundamentals", symbol],
+    queryKey: ["fundamentals", yahooSuffix],
     queryFn: async () => {
-      const res = await fetch(`/api/fundamentals?symbol=${encodeURIComponent(symbol)}`);
+      const res = await fetch(`/api/fundamentals?symbol=${encodeURIComponent(yahooSuffix)}`);
       return res.json() as Promise<FundamentalsData>;
     },
     staleTime: 60 * 60 * 1000,
@@ -310,7 +310,7 @@ export default function ChartPanel({ stock }: Props) {
         <span className={`font-mono text-sm ${pctColor(stock.performance.ytd)}`}>
           {fmtPct(stock.performance.ytd)} YTD
         </span>
-        <EarningsBadge symbol={stock.symbol} />
+        <EarningsBadge yahooSuffix={stock.yahooSuffix} />
         <span className="text-slate-500 text-sm ml-auto">
           MCap: {fmtMarketCap(stock.marketCap)}
         </span>
@@ -345,12 +345,12 @@ export default function ChartPanel({ stock }: Props) {
       )}
       {activeTab === "insider" && (
         <div className="min-h-[200px]">
-          <InsiderTab symbol={stock.symbol} />
+          <InsiderTab yahooSuffix={stock.yahooSuffix} />
         </div>
       )}
       {activeTab === "fundamentals" && (
         <div className="min-h-[200px]">
-          <FundamentalsTab symbol={stock.symbol} />
+          <FundamentalsTab yahooSuffix={stock.yahooSuffix} />
         </div>
       )}
     </div>

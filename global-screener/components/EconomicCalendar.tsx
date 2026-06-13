@@ -5,11 +5,9 @@ import { useEffect, useRef, useState } from "react";
 export default function EconomicCalendar() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const injectedRef = useRef(false);
 
   useEffect(() => {
-    if (!open || injectedRef.current || !containerRef.current) return;
-    injectedRef.current = true;
+    if (!open || !containerRef.current) return;
 
     const container = containerRef.current;
     container.innerHTML = "";

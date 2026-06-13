@@ -26,9 +26,13 @@ export async function GET(req: NextRequest) {
     let epsEstimate: number | null = null;
 
     if (cal) {
-      const dates: number[] = cal?.earnings?.earningsDate ?? [];
-      if (dates.length > 0) {
-        nextEarningsDate = new Date(dates[0] * 1000).toISOString().split("T")[0];
+      const rawDates: Array<number | { raw: number }> = cal?.earnings?.earningsDate ?? [];
+      if (rawDates.length > 0) {
+        const entry = rawDates[0];
+        const ts = typeof entry === "object" && entry !== null ? entry.raw : entry;
+        if (typeof ts === "number" && !isNaN(ts)) {
+          nextEarningsDate = new Date(ts * 1000).toISOString().split("T")[0];
+        }
       }
       const eps = cal?.earnings?.earningsAverage?.raw ?? null;
       epsEstimate = typeof eps === "number" ? eps : null;

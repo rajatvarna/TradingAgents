@@ -38,6 +38,7 @@ export interface PerformanceMetrics {
 
 export interface StockData {
   symbol: string;
+  yahooSuffix: string;
   name: string;
   market: Market;
   sector: string;

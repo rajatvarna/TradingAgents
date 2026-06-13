@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     const quoteMap = new Map<string, { price: number; currency: string; marketCap: number; volume: number; avgVolume: number; fiftyTwoWeekLow: number; fiftyTwoWeekHigh: number; dividendYield: number; exDividendDate: number; beta: number }>();
     const suffixes = allTickers.map((t) => t.yahooSuffix);
 
-    for (const batch of chunk(suffixes, 10)) {
+    for (const batch of chunk(suffixes, 50)) {
       try {
         const quotes = await fetchBatchQuotes(batch);
         for (const q of quotes) {
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
 
     // Resolve each stock with history + performance (parallelised in groups of 5)
     const results: StockData[] = [];
-    for (const batch of chunk(allTickers, 5)) {
+    for (const batch of chunk(allTickers, 20)) {
       const batchResults = await Promise.all(
         batch.map((t) => {
           const q = quoteMap.get(t.yahooSuffix);

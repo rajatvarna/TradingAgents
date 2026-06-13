@@ -178,12 +178,11 @@ function applyFilters(
   }
 
   if (f.search.trim()) {
-    const q = f.search.trim().toLowerCase();
-    rows = rows.filter(
-      (d) =>
-        d.symbol.toLowerCase().includes(q) ||
-        d.name.toLowerCase().includes(q)
-    );
+    const terms = f.search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    rows = rows.filter((d) => {
+      const haystack = [d.symbol, d.name, d.sector, d.market].join(" ").toLowerCase();
+      return terms.every((term) => haystack.includes(term));
+    });
   }
 
   rows.sort((a, b) => {

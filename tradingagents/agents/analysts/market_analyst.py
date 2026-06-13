@@ -14,7 +14,7 @@ from tradingagents.agents.utils.tool_fallback import bind_tools_or_none, safe_to
 
 def _format_technical_monster_context(mss: dict) -> str:
     """Format Monster Stock technical/MVP scores for the Market Analyst prompt."""
-    if not mss or not mss.get("composite_score"):
+    if not mss or mss.get("composite_score") is None:
         return ""
 
     def _cs(key: str) -> str:

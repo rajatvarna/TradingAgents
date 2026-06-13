@@ -13,7 +13,7 @@ from tradingagents.agents.utils.tool_fallback import bind_tools_or_none, safe_to
 
 def _format_fundamental_monster_context(mss: dict) -> str:
     """Format Monster Stock fundamental + sponsorship scores for prompt injection."""
-    if not mss or not mss.get("composite_score"):
+    if not mss or mss.get("composite_score") is None:
         return ""
 
     def _cs(key: str) -> str:

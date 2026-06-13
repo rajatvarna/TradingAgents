@@ -8,7 +8,7 @@ from tradingagents.audit.prompt_registry import default_registry
 
 def _format_monster_block_for_researcher(mss: dict) -> str:
     """Summarise the MonsterStockScore for researcher prompt injection."""
-    if not mss or not mss.get("composite_score"):
+    if not mss or mss.get("composite_score") is None:
         return ""
     blockers = mss.get("hard_blockers") or []
     strengths = mss.get("key_strengths") or []

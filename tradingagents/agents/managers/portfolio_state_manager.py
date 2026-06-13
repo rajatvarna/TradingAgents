@@ -13,23 +13,15 @@ import logging
 import re
 import warnings
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from back_test.policy_config import (
+    _DEFAULT_VOLUME_MULTIPLIER,
     PortfolioStatePolicyConfig,
     coerce_portfolio_state_policy_config,
-    _DEFAULT_VOLUME_MULTIPLIER,
-)
-from tradingagents.agents.utils.agent_utils import (
-    build_instrument_context,
-    get_language_instruction,
-)
-from tradingagents.agents.utils.structure_patterns import (
-    analyze_ohlcv_structure,
-    format_structure_analysis_for_prompt,
 )
 from tradingagents.agents.managers.portfolio_manager import (
     PortfolioStrategy,
@@ -38,6 +30,14 @@ from tradingagents.agents.managers.portfolio_manager import (
     _classify_volume_regime,
     _enforce_strategy_rules,
     _is_broad_index_instrument,
+)
+from tradingagents.agents.utils.agent_utils import (
+    build_instrument_context,
+    get_language_instruction,
+)
+from tradingagents.agents.utils.structure_patterns import (
+    analyze_ohlcv_structure,
+    format_structure_analysis_for_prompt,
 )
 from tradingagents.dataflows.stockstats_utils import load_ohlcv
 
@@ -550,7 +550,7 @@ class MarketState(BaseModel):
         )
 
 
-def _find_market_state(value, seen: Optional[set[int]] = None) -> Optional[MarketState]:
+def _find_market_state(value, seen: set[int] | None = None) -> MarketState | None:
     if value is None:
         return None
     if isinstance(value, MarketState):
@@ -597,7 +597,7 @@ def _find_market_state(value, seen: Optional[set[int]] = None) -> Optional[Marke
     return None
 
 
-def _market_state_from_text(text: str) -> Optional[MarketState]:
+def _market_state_from_text(text: str) -> MarketState | None:
     """Parse a free-text JSON MarketState fallback response."""
     candidates = [text.strip()]
     fenced = re.search(r"```(?:json)?\s*(.*?)```", text, flags=re.DOTALL | re.IGNORECASE)
@@ -646,7 +646,7 @@ def _compute_short_term_market_anchors(
     ticker: str,
     trade_date: str,
     lookback_days: int = 80,
-) -> Optional[dict]:
+) -> dict | None:
     """Return short-horizon numeric anchors for 1-5 trading day decisions."""
     try:
         df = load_ohlcv(ticker, trade_date)
@@ -681,22 +681,22 @@ def _compute_short_term_market_anchors(
         axis=1,
     ).max(axis=1)
 
-    def _sma(window: int) -> Optional[float]:
+    def _sma(window: int) -> float | None:
         if len(close) < window:
             return None
         return float(close.tail(window).mean())
 
-    def _ema(window: int) -> Optional[float]:
+    def _ema(window: int) -> float | None:
         if len(close) < window:
             return None
         return float(close.ewm(span=window, adjust=False).mean().iloc[-1])
 
-    def _nearest_resistance(window: int) -> Optional[float]:
+    def _nearest_resistance(window: int) -> float | None:
         slice_ = high.tail(window)
         above = slice_[slice_ > current_close]
         return float(above.min()) if not above.empty else None
 
-    def _nearest_support(window: int) -> Optional[float]:
+    def _nearest_support(window: int) -> float | None:
         slice_ = low.tail(window)
         below = slice_[slice_ < current_close]
         return float(below.max()) if not below.empty else None
@@ -813,8 +813,8 @@ def _build_feature_snapshot(
     trading_history_summary: dict,
     prior_pending_orders: list[dict],
     strategy_dict: dict,
-    market_context_state: Optional[MarketState],
-    market_context_ticker: Optional[str],
+    market_context_state: MarketState | None,
+    market_context_ticker: str | None,
     market_context_volume_regime: str,
     recent_phases: list[str],
 ) -> dict[str, Any]:
@@ -941,7 +941,7 @@ def _is_new_short_high_with_weak_volume(anchors: dict) -> bool:
     return current >= recent_high and all(ratio < 0.8 for ratio in ratios)
 
 
-def _derive_short_term_rule_constraints(anchors: Optional[dict], holdings_info: dict, ticker: str) -> dict:
+def _derive_short_term_rule_constraints(anchors: dict | None, holdings_info: dict, ticker: str) -> dict:
     if not anchors:
         return {
             "available": False,
@@ -1339,7 +1339,7 @@ def _load_recent_phases(ticker: str, trade_date: str, n: int = 2) -> list[str]:
 def _add_confirmation_passes(
     anchors: dict,
     config: PortfolioStatePolicyConfig,
-    support: Optional[float],
+    support: float | None,
 ) -> tuple[bool, str]:
     if not config.add_requires_confirmation or config.add_confirmation_mode == "disabled":
         return True, "add confirmation disabled."
@@ -1382,7 +1382,7 @@ def _add_confirmation_passes(
 def _close_hold_confirmation_passes(
     anchors: dict,
     config: PortfolioStatePolicyConfig,
-    support: Optional[float],
+    support: float | None,
 ) -> bool:
     key_level = support or anchors.get("ema10") or anchors.get("ema20")
     if key_level is None:
@@ -1400,10 +1400,10 @@ def _obvious_bull_trend_following_override(
     state: MarketState,
     anchors: dict,
     config: PortfolioStatePolicyConfig,
-    market_context_state: Optional[MarketState],
+    market_context_state: MarketState | None,
     market_context_blocks_add: bool,
     volume_regime: str,
-    support: Optional[float],
+    support: float | None,
 ) -> bool:
     if not config.obvious_bull_trend_following_enabled:
         return False
@@ -1453,11 +1453,7 @@ def _obvious_bull_trend_following_override(
             return False
 
     volume_confirmation = short.get("volume_confirmation")
-    if (
-        volume_confirmation == "shrinking" or volume_regime == "shrinking"
-    ) and not _close_hold_confirmation_passes(anchors, config, support):
-        return False
-    return True
+    return not ((volume_confirmation == "shrinking" or volume_regime == "shrinking") and not _close_hold_confirmation_passes(anchors, config, support))
 
 
 def policy_from_market_state(
@@ -1466,11 +1462,11 @@ def policy_from_market_state(
     holdings_info: dict,
     constraints: dict,
     volume_regime: str,
-    recent_phases: Optional[list[str]] = None,
-    policy_config: Optional[PortfolioStatePolicyConfig] = None,
-    market_context_state: Optional[MarketState] = None,
-    market_context_ticker: Optional[str] = None,
-    trading_history_summary: Optional[dict] = None,
+    recent_phases: list[str] | None = None,
+    policy_config: PortfolioStatePolicyConfig | None = None,
+    market_context_state: MarketState | None = None,
+    market_context_ticker: str | None = None,
+    trading_history_summary: dict | None = None,
 ) -> PortfolioStrategy:
     """Deterministically convert MarketState → PortfolioStrategy.
 
@@ -1628,7 +1624,7 @@ def policy_from_market_state(
 
     phase_mod = phase_modifiers.get(effective_phase, {})
 
-    def _rationale(extra: Optional[list[str]] = None) -> str:
+    def _rationale(extra: list[str] | None = None) -> str:
         all_notes = notes + (extra or [])
         parts = [
             state.state_summary,
@@ -1939,7 +1935,7 @@ def policy_from_market_state(
     if bearish_div:
         notes.append("bearish_volume_divergence: blocking new entries.")
         target_weight = 0.0
-    
+
     if obvious_bull_override:
         target_weight = max(
             target_weight,
@@ -2240,7 +2236,7 @@ def _passthrough_debate_state(risk_debate_state: dict, decision_text: str) -> di
 def _compute_market_context_state(
     context_ticker: str,
     trade_date: str,
-) -> tuple[Optional[MarketState], Optional[dict], str]:
+) -> tuple[MarketState | None, dict | None, str]:
     context_anchors = _compute_short_term_market_anchors(context_ticker, trade_date)
     if context_anchors is None:
         return None, None, "unavailable"
@@ -2257,7 +2253,7 @@ def _compute_market_context_state(
 def create_portfolio_state_manager(
     llm,
     memory,
-    policy_config: Optional[dict[str, Any] | PortfolioStatePolicyConfig] = None,
+    policy_config: dict[str, Any] | PortfolioStatePolicyConfig | None = None,
 ):
     """Backtest-only Portfolio Manager that uses MarketState + deterministic policy.
 
@@ -2585,7 +2581,7 @@ def create_portfolio_state_manager(
 def create_market_aware_portfolio_state_manager(
     llm,
     memory,
-    policy_config: Optional[dict[str, Any] | PortfolioStatePolicyConfig] = None,
+    policy_config: dict[str, Any] | PortfolioStatePolicyConfig | None = None,
 ):
     """Backtest PortfolioState manager with continuous stock + index context."""
     return create_portfolio_state_manager(llm, memory, policy_config=policy_config)

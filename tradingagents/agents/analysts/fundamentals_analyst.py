@@ -1,11 +1,11 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from tradingagents.llm_clients.base_client import normalize_content
+
 from tradingagents.agents.utils.agent_utils import (
-    get_instrument_context_from_state,
     get_balance_sheet,
     get_cashflow,
     get_fundamentals,
     get_income_statement,
+    get_instrument_context_from_state,
     get_language_instruction,
 )
 from tradingagents.agents.utils.tool_fallback import bind_tools_or_none, safe_tool_text

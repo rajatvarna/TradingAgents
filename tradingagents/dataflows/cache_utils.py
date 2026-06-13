@@ -9,8 +9,8 @@ quota use.  Callers should cache successful, deterministic payloads only.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from .config import get_config
 from .utils import safe_ticker_component
@@ -35,7 +35,7 @@ def cache_path(namespace: str, *parts: str) -> Path:
     return base.joinpath(*safe_parts).with_suffix(".txt")
 
 
-def read_text_cache(namespace: str, *parts: str) -> Optional[str]:
+def read_text_cache(namespace: str, *parts: str) -> str | None:
     path = cache_path(namespace, *parts)
     try:
         if path.exists():

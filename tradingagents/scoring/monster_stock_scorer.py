@@ -9,14 +9,14 @@ This module has no LLM dependency — it is pure computation.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Optional
-
-from tradingagents.scoring.criteria_weights import WEIGHTS
+from dataclasses import dataclass
 
 # Type annotations only — actual classes imported lazily to avoid circular deps
 # and keep the scorer importable in test environments without network dependencies.
 from typing import TYPE_CHECKING
+
+from tradingagents.scoring.criteria_weights import WEIGHTS
+
 if TYPE_CHECKING:
     from tradingagents.dataflows.fundamentals_deep import DeepFundamentals
     from tradingagents.dataflows.market_health import MarketHealthSnapshot
@@ -232,7 +232,6 @@ def _score_roe(fund: DeepFundamentals) -> CriterionScore:
     """Score return on equity against the 17% Boik minimum guideline (0–10)."""
     w = WEIGHTS["roe"]
     try:
-        info = fund  # ROE not directly on DeepFundamentals; use quarterly roe field
         roe = None
         for q in fund.quarterly_history:
             if q.roe is not None:
@@ -457,7 +456,6 @@ def _score_extension_risk(tech: DeepTechnicals) -> CriterionScore:
     """Score extension above key MAs; higher extension = higher risk score deduction (0–10)."""
     w = WEIGHTS["extension_risk"]
     pct_50d = tech.ma_state.pct_above_50d
-    pct_21d = tech.ma_state.pct_above_21d
     if pct_50d > 40:
         return CriterionScore("Extension Risk", 0, w, "FAIL", f"Dangerously extended {pct_50d:.0f}% above 50d MA — climax zone.")
     if pct_50d > 25:
@@ -473,7 +471,6 @@ def _score_group_rank(group: GroupLeadershipData) -> CriterionScore:
     """Score the industry group's RS rank percentile (0–10)."""
     w = WEIGHTS["group_rank"]
     pct = group.group_rs_rank_percentile
-    weeks = group.group_weeks_leading
     if pct >= 80:
         return CriterionScore("Group Rank", 10, w, "PASS", f"{group.industry_group} group at {pct:.0f}th percentile — top-tier leadership.")
     if pct >= 66:
@@ -501,9 +498,9 @@ def _score_market_health(market: MarketHealthSnapshot) -> CriterionScore:
     w = WEIGHTS["market_health"]
     phase = market.ibd_phase
     if phase == "confirmed_uptrend":
-        return CriterionScore("Market Health", 9, w, "PASS", f"IBD Confirmed Uptrend — optimal environment for longs.")
+        return CriterionScore("Market Health", 9, w, "PASS", "IBD Confirmed Uptrend — optimal environment for longs.")
     if phase == "uptrend_resumes":
-        return CriterionScore("Market Health", 7, w, "PASS", f"Uptrend resuming after correction — cautious buying warranted.")
+        return CriterionScore("Market Health", 7, w, "PASS", "Uptrend resuming after correction — cautious buying warranted.")
     if phase == "under_pressure":
         return CriterionScore("Market Health", 4, w, "WARN", f"Market under pressure ({market.distribution_days_nasdaq} distribution days) — reduce exposure.")
     if phase == "correction":

@@ -22,7 +22,6 @@ Configuration:
 """
 
 import os
-from typing import Any, Optional
 
 from langchain_openai import ChatOpenAI
 
@@ -63,8 +62,8 @@ class OpenClawClient(BaseLLMClient):
     def __init__(
         self,
         model: str,
-        base_url: Optional[str] = None,
-        api_key: Optional[str] = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
         **kwargs,
     ):
         """Initialize OpenClaw client.

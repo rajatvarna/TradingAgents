@@ -1,14 +1,14 @@
 """F3 exit-gate smoke — synthetic data through the evaluator end-to-end."""
 
 import json
-import pytest
+from datetime import UTC, datetime, timedelta
+
 import fakeredis.aioredis
-from datetime import datetime, timezone, timedelta
+import pytest
 
 from tradingagents.persistence.db import connect
 from tradingagents.persistence.store import upsert_ticker
 from tradingagents.sensing.envelope import Envelope
-
 
 pytestmark = pytest.mark.smoke
 
@@ -23,9 +23,9 @@ def _llm():
 
 
 async def test_f3_smoke_synthetic_24h_window(tmp_path):
-    from tradingagents.sensing.triage import Triage
-    from tradingagents.sensing.embeddings import MockEmbedder
     from scripts.f3_exit_gate import evaluate
+    from tradingagents.sensing.embeddings import MockEmbedder
+    from tradingagents.sensing.triage import Triage
 
     db = tmp_path / "iic.db"
     conn = connect(str(db))
@@ -38,7 +38,7 @@ async def test_f3_smoke_synthetic_24h_window(tmp_path):
                data_dir=str(tmp_path / "data"))
 
     # Push 120 unique events + 80 duplicates of the first 80 of them.
-    base = datetime.now(timezone.utc) - timedelta(hours=12)
+    base = datetime.now(UTC) - timedelta(hours=12)
     uniques = []
     for i in range(120):
         env = Envelope(

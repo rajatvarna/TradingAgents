@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 import pytest
@@ -25,8 +25,8 @@ def _run(run_id):
             "provider": "ollama",
             "model": "llama3.2:latest",
             "status": type("S", (), {"value": "succeeded"})(),
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
+            "updated_at": datetime.now(UTC),
             "error_message": None,
         },
     )()

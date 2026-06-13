@@ -32,9 +32,7 @@ shape of metadata it should handle.
 
 from __future__ import annotations
 
-import json
 import uuid
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -42,16 +40,13 @@ from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
 
 from tradingagents.audit import (
-    GENESIS_HASH,
     PromptRegistry,
     Replayer,
     TraceCallback,
-    default_registry,
     reset_default_registry,
     verify_ledger,
 )
 from tradingagents.dataflows.config import set_config
-
 
 # -------------------------------------------------------------------- #
 # Shared helpers
@@ -281,8 +276,8 @@ class TestMultiAgentSession:
         set_config({"output_language": "English"})
 
     def test_three_agents_record_provenance(self, tmp_path):
-        from tradingagents.agents.researchers.bull_researcher import create_bull_researcher
         from tradingagents.agents.researchers.bear_researcher import create_bear_researcher
+        from tradingagents.agents.researchers.bull_researcher import create_bull_researcher
 
         trace_path = tmp_path / "trace.jsonl"
         cb = TraceCallback(jsonl_path=trace_path, session_id="multi")
@@ -334,8 +329,9 @@ class TestDataSnapshotsInsideAgentRun:
             "news_snapshot_dir": str(tmp_path / "snapshots"),
         })
 
-        from tradingagents.dataflows import y_finance as yfm
         import pandas as pd
+
+        from tradingagents.dataflows import y_finance as yfm
 
         fake_df = pd.DataFrame(
             {"Open": [100.0], "Close": [101.0], "Volume": [1_000_000]},
@@ -398,8 +394,9 @@ class TestFullAuditDirLayout:
         bull(_state_for_researchers())
 
         # 2) Fire a snapshot-decorated data fetch
-        from tradingagents.dataflows import y_finance as yfm
         import pandas as pd
+
+        from tradingagents.dataflows import y_finance as yfm
         fake_df = pd.DataFrame(
             {"Open": [100.0]}, index=pd.to_datetime(["2026-01-15"]),
         )
@@ -450,9 +447,10 @@ class TestCrossSessionContinuity:
             "news_snapshot_dir": str(snap_dir),
         })
 
+        import pandas as pd
+
         from tradingagents.agents.researchers.bull_researcher import create_bull_researcher
         from tradingagents.dataflows import y_finance as yfm
-        import pandas as pd
 
         fake_df = pd.DataFrame(
             {"Open": [100.0]}, index=pd.to_datetime(["2026-01-15"]),

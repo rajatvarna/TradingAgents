@@ -1,20 +1,23 @@
-import questionary
 import os
-from typing import List, Optional, Tuple, Dict
 
+import questionary
 from rich.console import Console
 
 from cli.models import AnalystType, AssetType
 from cli.preferences import load_preferences
-from tradingagents.llm_clients.model_catalog import get_model_options
 from tradingagents.llm_clients.custom_provider_config import get_custom_provider_choices
+from tradingagents.llm_clients.model_catalog import get_model_options
+from tradingagents.llm_clients.oauth import (
+    OAuthError,
+    OAuthNotLoggedIn,
+    OAuthTokenStore,
+    ensure_token,
+)
+from tradingagents.llm_clients.oauth import (
+    available_models as oauth_available_models,
+)
 from tradingagents.llm_clients.oauth import (
     login as oauth_login,
-    ensure_token,
-    available_models as oauth_available_models,
-    OAuthTokenStore,
-    OAuthNotLoggedIn,
-    OAuthError,
 )
 from tradingagents.llm_clients.url_validation import validate_custom_provider_base_url
 
@@ -45,8 +48,8 @@ def detect_asset_type(ticker: str) -> AssetType:
 
 
 def filter_analysts_for_asset_type(
-    analysts: List[AnalystType], asset_type: AssetType
-) -> List[AnalystType]:
+    analysts: list[AnalystType], asset_type: AssetType
+) -> list[AnalystType]:
     """Filter out fundamentals analyst for crypto assets."""
     if asset_type != AssetType.CRYPTO:
         return analysts
@@ -99,7 +102,7 @@ def normalize_ticker_symbol(ticker: str) -> str:
     return ticker.strip().upper()
 
 
-def get_batch_tickers() -> List[str]:
+def get_batch_tickers() -> list[str]:
     """Prompt the user to enter multiple ticker symbols (comma-separated)."""
     tickers_input = questionary.text(
         f"Enter tickers separated by commas ({TICKER_INPUT_EXAMPLES}):",
@@ -165,7 +168,7 @@ def get_analysis_date() -> str:
     return date.strip()
 
 
-def select_analysts(asset_type: AssetType = AssetType.STOCK) -> List[AnalystType]:
+def select_analysts(asset_type: AssetType = AssetType.STOCK) -> list[AnalystType]:
     """Select analysts using an interactive checkbox.
 
     The Derivatives Analyst is mandatory on every run (enforced in
@@ -242,7 +245,7 @@ def select_research_depth() -> int:
     return choice
 
 
-def _fetch_openrouter_models() -> List[Tuple[str, str]]:
+def _fetch_openrouter_models() -> list[tuple[str, str]]:
     """Fetch available models from the OpenRouter API."""
     import requests
     try:
@@ -255,10 +258,10 @@ def _fetch_openrouter_models() -> List[Tuple[str, str]]:
         return []
 
 
-def _prefer_openrouter_free_models(models: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+def _prefer_openrouter_free_models(models: list[tuple[str, str]]) -> list[tuple[str, str]]:
     """Return models ordered with free OpenRouter models first."""
-    free_models: List[Tuple[str, str]] = []
-    paid_models: List[Tuple[str, str]] = []
+    free_models: list[tuple[str, str]] = []
+    paid_models: list[tuple[str, str]] = []
     for name, mid in models:
         model_id = (mid or "").strip().lower()
         if model_id.endswith(":free"):
@@ -748,7 +751,7 @@ def confirm_lmstudio_endpoint(url: str) -> None:
         )
 
 
-def ensure_api_key(provider: str) -> Optional[str]:
+def ensure_api_key(provider: str) -> str | None:
     """Make sure the API key for `provider` is available in the environment.
 
     If the env var is already set, returns its value untouched. Otherwise
@@ -759,10 +762,12 @@ def ensure_api_key(provider: str) -> Optional[str]:
     Returns None for providers that do not require a key (e.g. ollama)
     and for providers not found in the canonical mapping.
     """
-    from tradingagents.llm_clients.api_key_env import get_api_key_env
-    from dotenv import find_dotenv, set_key
     from pathlib import Path
-    
+
+    from dotenv import find_dotenv, set_key
+
+    from tradingagents.llm_clients.api_key_env import get_api_key_env
+
     env_var = get_api_key_env(provider)
     if env_var is None:
         return None  # ollama / unknown — no key check possible

@@ -1,7 +1,8 @@
 import json
-import pytest
+from datetime import UTC, datetime
+
 import fakeredis.aioredis
-from datetime import datetime, timezone
+import pytest
 
 from tradingagents.persistence.db import connect
 from tradingagents.sensing.envelope import Envelope
@@ -20,7 +21,7 @@ async def test_envelope_writer_xadds_and_advances_cursor(conn, tmp_path):
                         stream="ingest:raw", staging_root=str(tmp_path / "staging"))
     env = Envelope(
         source="polygon_news",
-        ingested_ts=datetime.now(timezone.utc).isoformat(),
+        ingested_ts=datetime.now(UTC).isoformat(),
         external_id="pn:1", text="Apple beats", source_tags={},
         raw_path="",
     )

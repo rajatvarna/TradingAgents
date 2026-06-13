@@ -9,15 +9,13 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
-from typing import Any, Optional
-from unittest.mock import MagicMock
+from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from tradingagents.llm_clients import codex_client as mod
 from tradingagents.llm_clients.factory import create_llm_client
-
 
 ADAPTER_LOGGER = "tradingagents.llm_clients.codex_client"
 

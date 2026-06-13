@@ -1,13 +1,13 @@
 import json
 from datetime import datetime, timedelta
 from io import StringIO
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any
 
 import pandas as pd
 from langchain_core.tools import tool
 
-from tradingagents.dataflows.interface import route_to_vendor
 from tradingagents.agents.utils.tool_errors import tool_error_text
+from tradingagents.dataflows.interface import route_to_vendor
 
 
 def _extract_csv(text: str) -> str:
@@ -73,7 +73,7 @@ def _sma_series(close: pd.Series, period: int) -> pd.Series:
     return close.rolling(period).mean()
 
 
-def _round_price(x: Optional[float]) -> Optional[float]:
+def _round_price(x: float | None) -> float | None:
     if x is None:
         return None
     return float(round(float(x), 2))
@@ -95,7 +95,7 @@ def suggest_trade_levels(
     direction: Annotated[str, "auto|long|short"] = "auto",
     adaptive_rr: Annotated[bool, "if true, adjust RR using trend strength + volatility"] = True,
     confirmation: Annotated[bool, "if true, use breakout + retest confirmation entry rules in trend regime"] = True,
-    account_size: Annotated[Optional[float], "optional portfolio/account notional to compute sizing"] = None,
+    account_size: Annotated[float | None, "optional portfolio/account notional to compute sizing"] = None,
     risk_per_trade_pct: Annotated[float, "risk per trade as % of account (e.g. 1.0)"] = 1.0,
     max_position_pct: Annotated[float, "max position size as % of account (e.g. 10.0)"] = 10.0,
 ) -> str:
@@ -291,7 +291,7 @@ def suggest_trade_levels(
                 "Also cap by max_position_pct of account."
             )
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "symbol": symbol.upper(),
             "asof": curr_date,
             "regime": regime,

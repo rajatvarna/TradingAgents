@@ -12,30 +12,25 @@ verify clean, and a tampered trace must verify dirty.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 
 import pytest
 
 from tradingagents.audit.ledger import (
     GENESIS_HASH,
     HashChainLedger,
-    VerifyResult,
     _hash_line,
     verify_ledger,
 )
 from tradingagents.audit.schemas import (
-    LLM_END,
     LLM_START,
     TraceRecord,
     canonical_json,
     hash_payload,
 )
 from tradingagents.audit.trace_callback import TraceCallback
-
 
 # -------------------------------------------------------------------- #
 # Helpers
@@ -49,7 +44,7 @@ def _make_record(seq: int, prev_hash: str = "") -> TraceRecord:
     return TraceRecord(
         record_id=f"rec-{seq:04d}",
         session_id="sess-test",
-        ts=datetime(2026, 1, 15, 14, seq % 60, 0, tzinfo=timezone.utc),
+        ts=datetime(2026, 1, 15, 14, seq % 60, 0, tzinfo=UTC),
         type=LLM_START,
         payload=payload,
         payload_hash=hash_payload(payload),

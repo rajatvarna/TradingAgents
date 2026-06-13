@@ -27,10 +27,9 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
-
 
 # Event type constants. Strings rather than enum so JSON-on-disk stays
 # readable without a translation layer; also matches the LangChain
@@ -59,7 +58,7 @@ def canonical_json(obj: Any) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str)
 
 
-def hash_payload(payload: Dict[str, Any]) -> str:
+def hash_payload(payload: dict[str, Any]) -> str:
     """SHA-256 of the payload's canonical JSON encoding, hex-encoded."""
     return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
 
@@ -79,7 +78,7 @@ class TraceRecord(BaseModel):
     session_id: str = Field(
         description="UUID of the TraceCallback instance that emitted this record."
     )
-    parent_record_id: Optional[str] = Field(
+    parent_record_id: str | None = Field(
         default=None,
         description=(
             "record_id of the enclosing event, when one exists. Tool calls "
@@ -94,14 +93,14 @@ class TraceRecord(BaseModel):
     type: TraceType = Field(
         description="Which lifecycle event this record represents."
     )
-    node: Optional[str] = Field(
+    node: str | None = Field(
         default=None,
         description=(
             "Graph node name when extractable from LangChain's metadata "
             "(``langgraph_node`` key). None for events outside a graph."
         ),
     )
-    payload: Dict[str, Any] = Field(
+    payload: dict[str, Any] = Field(
         default_factory=dict,
         description=(
             "Event-specific contents. For llm_start: messages list, model "
@@ -127,7 +126,7 @@ class TraceRecord(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
-    def to_canonical_dict(self) -> Dict[str, Any]:
+    def to_canonical_dict(self) -> dict[str, Any]:
         """Return the dict used for hashing this record.
 
         Excludes ``prev_hash`` because by definition that points BACKWARD

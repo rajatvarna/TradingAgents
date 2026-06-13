@@ -15,9 +15,6 @@ Two layers:
 from __future__ import annotations
 
 import hashlib
-import textwrap
-import uuid
-from pathlib import Path
 
 import pytest
 
@@ -29,7 +26,6 @@ from tradingagents.audit.prompt_registry import (
     reset_default_registry,
 )
 from tradingagents.dataflows.config import set_config
-
 
 # -------------------------------------------------------------------- #
 # Registry contract
@@ -288,6 +284,7 @@ class TestAgentFactoryRecordsPromptMetadata:
 
     def test_bull_researcher_passes_prompt_metadata(self):
         from unittest.mock import MagicMock
+
         from tradingagents.agents.researchers.bull_researcher import create_bull_researcher
 
         llm = MagicMock()
@@ -305,6 +302,7 @@ class TestAgentFactoryRecordsPromptMetadata:
 
     def test_bear_researcher_passes_prompt_metadata(self):
         from unittest.mock import MagicMock
+
         from tradingagents.agents.researchers.bear_researcher import create_bear_researcher
 
         llm = MagicMock()
@@ -320,6 +318,7 @@ class TestAgentFactoryRecordsPromptMetadata:
 
     def test_aggressive_debator_passes_prompt_metadata(self):
         from unittest.mock import MagicMock
+
         from tradingagents.agents.risk_mgmt.aggressive_debator import create_aggressive_debator
 
         llm = MagicMock()

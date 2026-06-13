@@ -10,35 +10,34 @@ back gracefully to free-text generation.
 
 from __future__ import annotations
 
-from tradingagents.agents.schemas import PortfolioDecision, render_pm_decision
 from tradingagents.agents.claims import build_claim_graph
-from tradingagents.agents.source_registry import build_source_registry
+from tradingagents.agents.schemas import PortfolioDecision, render_pm_decision
 from tradingagents.agents.skills import build_skill_registry
+from tradingagents.agents.source_registry import build_source_registry
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     build_scope_guard,
     format_risk_constraints,
     get_language_instruction,
 )
+from tradingagents.agents.utils.rating import RATINGS_5_TIER, extract_rating, parse_rating
 from tradingagents.agents.utils.recommendation_audit import (
     build_pre_synthesis_scope_audit,
     build_raw_tool_source_objects,
     build_recommendation_scorecard,
     build_source_objects,
     render_raw_tool_sources_for_prompt,
-    render_scorecard_for_prompt,
     render_scope_audit_for_prompt,
+    render_scorecard_for_prompt,
     render_sources_for_prompt,
 )
-from tradingagents.agents.utils.rating import RATINGS_5_TIER, extract_rating, parse_rating
-from tradingagents.agents.utils.trade_filter import compute_trade_filter
 from tradingagents.agents.utils.structured import (
     bind_structured,
     invoke_structured_or_freetext_with_meta,
 )
-from tradingagents.prompts import load_prompt
-from tradingagents.dataflows.config import get_config
+from tradingagents.agents.utils.trade_filter import compute_trade_filter
 from tradingagents.audit.prompt_registry import default_registry
+from tradingagents.dataflows.config import get_config
 
 
 def create_portfolio_manager(llm, cache=None, prompt_registry=None):
@@ -314,9 +313,9 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
     return portfolio_manager_node
 
 
-from typing import Literal, Optional
-from pydantic import BaseModel, Field, model_validator
+from typing import Literal
 
+from pydantic import BaseModel, Field, model_validator
 
 BROAD_INDEX_TICKERS = {
     "SPY",
@@ -336,12 +335,12 @@ BROAD_INDEX_TICKERS = {
 
 
 class PriceSizeBlock(BaseModel):
-    price: Optional[float] = Field(default=None, description="Plain limit price, or null.")
+    price: float | None = Field(default=None, description="Plain limit price, or null.")
     size_pct: float = Field(default=0.0, ge=0.0, le=100.0)
 
 
 class StopLossBlock(BaseModel):
-    price: Optional[float] = Field(default=None, description="Plain stop price, or null.")
+    price: float | None = Field(default=None, description="Plain stop price, or null.")
 
 
 class PortfolioStrategy(BaseModel):
@@ -398,7 +397,7 @@ def _is_broad_index_instrument(ticker: str) -> bool:
     return normalized in BROAD_INDEX_TICKERS or normalized.endswith((".INDEX", ".IDX"))
 
 
-def _classify_volume_regime(volume_ratio: Optional[float]) -> str:
+def _classify_volume_regime(volume_ratio: float | None) -> str:
     if volume_ratio is None:
         return "unavailable"
     if volume_ratio >= 1.5:
@@ -417,7 +416,7 @@ def _clamp_size(block: dict, max_size: float) -> None:
         block["price"] = None
 
 
-def _distance_pct(price: Optional[float], current_price: Optional[float]) -> Optional[float]:
+def _distance_pct(price: float | None, current_price: float | None) -> float | None:
     if price is None or current_price in (None, 0):
         return None
     return abs(float(price) - float(current_price)) / float(current_price) * 100.0
@@ -434,7 +433,7 @@ def _clear_entry_orders(strategy: dict) -> None:
     strategy["add_position"] = PriceSizeBlock().model_dump()
 
 
-def _enforce_strategy_rules(strategy: dict, anchors: Optional[dict], constraints: dict, holdings_info: dict) -> dict:
+def _enforce_strategy_rules(strategy: dict, anchors: dict | None, constraints: dict, holdings_info: dict) -> dict:
     strategy = PortfolioStrategy.model_validate(strategy).model_dump()
     has_position = float(holdings_info.get("quantity") or 0.0) > 0
     current_price = anchors.get("current_price") if anchors else None
@@ -478,14 +477,13 @@ def _enforce_strategy_rules(strategy: dict, anchors: Optional[dict], constraints
 
     if strategy["action"] in ("BUY", "HOLD") and (
         strategy["entry"]["size_pct"] > 0 or strategy["add_position"]["size_pct"] > 0
-    ):
-        if strategy["stop_loss"]["price"] is None and anchors:
-            reference = strategy["entry"]["price"] or current_price
-            stop = min(
-                anchors.get("nearest_support") or reference,
-                float(reference) - 1.5 * float(anchors["atr14"]),
-            )
-            strategy["stop_loss"]["price"] = round(max(stop, 0.01), 4)
-            _append_rule_note(strategy, "missing stop_loss was filled from support/ATR anchor.")
+    ) and strategy["stop_loss"]["price"] is None and anchors:
+        reference = strategy["entry"]["price"] or current_price
+        stop = min(
+            anchors.get("nearest_support") or reference,
+            float(reference) - 1.5 * float(anchors["atr14"]),
+        )
+        strategy["stop_loss"]["price"] = round(max(stop, 0.01), 4)
+        _append_rule_note(strategy, "missing stop_loss was filled from support/ATR anchor.")
 
     return PortfolioStrategy.model_validate(strategy).model_dump()

@@ -1,13 +1,14 @@
 """ESG (Environmental, Social, Governance) Analyst agent module."""
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_language_instruction,
 )
 from tradingagents.agents.utils.esg_data_tools import (
-    get_esg_scores,
     get_esg_news,
+    get_esg_scores,
 )
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 import pytest
@@ -9,7 +9,10 @@ from fastapi.testclient import TestClient
 from tradingagents_service.api.app import create_app
 from tradingagents_service.api.dependencies import get_shadow_run_repository
 from tradingagents_service.db.models import EvaluationRunStatus
-from tradingagents_service.evaluations import build_shadow_run_evaluation_input, compute_shadow_run_evaluation
+from tradingagents_service.evaluations import (
+    build_shadow_run_evaluation_input,
+    compute_shadow_run_evaluation,
+)
 
 
 def _run_obj(run_id):
@@ -22,8 +25,8 @@ def _run_obj(run_id):
             "ticker": "MSFT",
             "trade_date": date(2026, 4, 29),
             "selected_analysts": ["news"],
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
+            "updated_at": datetime.now(UTC),
             "provider": "ollama",
             "model": "llama3.2:latest",
             "error_message": None,
@@ -187,8 +190,8 @@ class _EvalStubRepo:
                 "status": kwargs["status"],
                 "description": kwargs["description"],
                 "definition_json": kwargs["definition_json"],
-                "created_at": datetime.now(timezone.utc),
-                "updated_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC),
             },
         )()
 
@@ -216,8 +219,8 @@ class _EvalStubRepo:
                 "input_json": kwargs["input_json"],
                 "result_json": kwargs["result_json"],
                 "error": None,
-                "created_at": datetime.now(timezone.utc),
-                "updated_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC),
             },
         )()
 
@@ -235,7 +238,7 @@ class _EvalStubRepo:
                     "basis": "heuristic",
                     "rationale": "Overall gate.",
                     "evidence_json": {"quality_status": "failed"},
-                    "created_at": datetime.now(timezone.utc),
+                    "created_at": datetime.now(UTC),
                 },
             )()
         ]
@@ -255,7 +258,7 @@ class _EvalStubRepo:
                     "annotator_role": "evaluator",
                     "notes": "Shadow run lacks enough cited, in-scope evidence for reliable judgement.",
                     "evidence_json": {"quality_status": "failed"},
-                    "created_at": datetime.now(timezone.utc),
+                    "created_at": datetime.now(UTC),
                 },
             )()
         ]

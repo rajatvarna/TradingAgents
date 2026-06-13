@@ -45,6 +45,8 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_MARKET_PHASE_GATE":           "market_phase_gate",
     "TRADINGAGENTS_POSTMORTEM_LOOKBACK_WEEKS":   "postmortem_lookback_weeks",
     "TRADINGAGENTS_SPONSORSHIP_REFRESH_WEEKLY":  "sponsorship_refresh_weekly",
+    "TRADINGAGENTS_PORTFOLIO_MAX_WORKERS":       "portfolio_propagation_max_workers",
+    "TRADINGAGENTS_OUTCOME_HOLDING_DAYS":        "outcome_holding_days",
 }
 
 _DATA_VENDOR_ENV_OVERRIDES = {
@@ -248,6 +250,13 @@ DEFAULT_CONFIG = _apply_env_overrides({
         ".TO": "^GSPTSE",   # TSX Composite (Toronto)
         "":    "SPY",       # default for US-listed tickers
     },
+    # Portfolio propagation settings
+    # Max parallel threads in propagate_portfolio(). Keep below your LLM
+    # provider's rate-limit threshold. Set to 1 to run sequentially.
+    "portfolio_propagation_max_workers": 4,
+    # How many trading days forward to measure outcome returns in deferred
+    # reflection (used by _fetch_returns when computing raw/alpha return).
+    "outcome_holding_days": 5,
     # Debate and discussion settings
     "investment_horizon": "medium_term",
     "max_debate_rounds": 1,

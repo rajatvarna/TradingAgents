@@ -9,6 +9,7 @@ Comportamento allineato a openai/codex (login/src/{token_data.rs,auth/manager.rs
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
 import os
 import re
@@ -16,7 +17,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -81,11 +82,11 @@ def _auth_claims(token: str) -> dict[str, Any]:
 _HEADER_CLAIM_RE = re.compile(r"^[A-Za-z0-9._:-]+$")
 
 
-def _clean_header_claim(value: Any) -> Optional[str]:
+def _clean_header_claim(value: Any) -> str | None:
     return value if isinstance(value, str) and _HEADER_CLAIM_RE.match(value) else None
 
 
-def account_id_from_id_token(id_token: str) -> Optional[str]:
+def account_id_from_id_token(id_token: str) -> str | None:
     return _clean_header_claim(_auth_claims(id_token).get("chatgpt_account_id"))
 
 
@@ -93,7 +94,7 @@ def is_fedramp_from_id_token(id_token: str) -> bool:
     return bool(_auth_claims(id_token).get("chatgpt_account_is_fedramp", False))
 
 
-def residency_from_id_token(id_token: str) -> Optional[str]:
+def residency_from_id_token(id_token: str) -> str | None:
     claims = _auth_claims(id_token)
     return _clean_header_claim(
         claims.get("chatgpt_data_residency") or claims.get("chatgpt_compute_residency")
@@ -117,9 +118,9 @@ class StoredTokens:
     refresh_token: str
     id_token: str
     expires_at: float
-    account_id: Optional[str]
+    account_id: str | None
     is_fedramp: bool = False
-    residency: Optional[str] = None
+    residency: str | None = None
 
     def is_expired(self, skew: int = DEFAULT_SKEW_SECONDS) -> bool:
         return time.time() >= (self.expires_at - skew)
@@ -128,7 +129,7 @@ class StoredTokens:
 class OAuthTokenStore:
     """Legge/scrive i token OAuth su file con permessi 0600."""
 
-    def __init__(self, path: Optional[Path] = None):
+    def __init__(self, path: Path | None = None):
         self.path = Path(path) if path else default_store_path()
 
     # -- serializzazione -----------------------------------------------------
@@ -161,10 +162,8 @@ class OAuthTokenStore:
                 fh.write(json.dumps(record))
             os.replace(tmp_name, self.path)
         except BaseException:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(tmp_name)
-            except OSError:
-                pass
             raise
         return self._to_tokens(record)
 

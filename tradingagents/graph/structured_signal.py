@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
-
+from typing import Any
 
 _VALID_ACTIONS = {"BUY", "HOLD", "SELL"}
 _SCHEMA_VERSION = "v3"
@@ -15,9 +14,9 @@ class StructuredStrategyError(ValueError):
 
 def extract_structured_strategy(
     structured_strategy: Any,
-    ticker: Optional[str] = None,
-    trade_date: Optional[str] = None,
-) -> Dict[str, Any]:
+    ticker: str | None = None,
+    trade_date: str | None = None,
+) -> dict[str, Any]:
     """Return a normalized structured strategy dict.
 
     The Portfolio Manager is expected to populate `structured_strategy` via
@@ -45,7 +44,7 @@ def extract_structured_strategy(
     return data
 
 
-def _validate(data: Dict[str, Any]) -> None:
+def _validate(data: dict[str, Any]) -> None:
     version = data.get("schema_version")
     if version not in (None, _SCHEMA_VERSION):
         raise StructuredStrategyError(

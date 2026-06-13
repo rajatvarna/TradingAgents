@@ -1,12 +1,13 @@
-import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
-from tradingagents.persistence.db import connect
+import pytest
+
 from tradingagents.persistence import store
+from tradingagents.persistence.db import connect
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @pytest.fixture
@@ -74,7 +75,7 @@ def test_duplicate_status_event_is_skipped(conn):
 def test_suppressed_ticker_is_skipped(conn):
     from tradingagents.orchestrator.candidates import fetch_candidates
     _seed_event(conn, ev_id="ev1", ticker="AAPL", salience=0.9, confidence=0.9)
-    until = (datetime.now(timezone.utc) + timedelta(minutes=60)).isoformat()
+    until = (datetime.now(UTC) + timedelta(minutes=60)).isoformat()
     store.upsert_suppression(conn, key="event_alert:AAPL", until_ts=until,
                               reason="cooldown", created_by="test")
     assert fetch_candidates(conn, salience_threshold=0.7,
@@ -85,7 +86,7 @@ def test_suppressed_ticker_is_skipped(conn):
 def test_expired_suppression_does_not_skip(conn):
     from tradingagents.orchestrator.candidates import fetch_candidates
     _seed_event(conn, ev_id="ev1", ticker="AAPL", salience=0.9, confidence=0.9)
-    past = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    past = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
     store.upsert_suppression(conn, key="event_alert:AAPL", until_ts=past,
                               reason="cooldown", created_by="test")
     rows = fetch_candidates(conn, salience_threshold=0.7,
@@ -109,7 +110,7 @@ def test_already_enqueued_event_is_skipped(conn):
 @pytest.mark.unit
 def test_limit_respected_and_ordered_by_ingested_ts(conn):
     from tradingagents.orchestrator.candidates import fetch_candidates
-    base = datetime.now(timezone.utc)
+    base = datetime.now(UTC)
     for i in range(3):
         ts = (base + timedelta(seconds=i)).isoformat()
         conn.execute(

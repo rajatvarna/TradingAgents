@@ -10,13 +10,13 @@ Wired into the main `tradingagents` CLI by ``cli/main.py``.
 from __future__ import annotations
 
 import json
+
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.persistence.db import connect
-
 
 app = typer.Typer(name="forge", help="IIC-FORGE operational commands")
 console = Console()
@@ -86,7 +86,6 @@ def watchlist_remove(ticker: str) -> None:
 from tradingagents.sensing.seed_tickers import seed_all, seed_crypto
 from tradingagents.sensing.watchlist import sweep_expired
 
-
 sense_app = typer.Typer(name="sense", help="Sensing operational commands")
 app.add_typer(sense_app, name="sense")
 
@@ -130,6 +129,7 @@ app.add_typer(orch_app, name="orchestrator")
 def orchestrator_promoter() -> None:
     """Run the promoter loop in the foreground (systemd wraps this)."""
     import logging
+
     from tradingagents.orchestrator.promoter import main
     logging.basicConfig(
         level=logging.INFO,
@@ -142,6 +142,7 @@ def orchestrator_promoter() -> None:
 def orchestrator_worker() -> None:
     """Run the worker loop in the foreground (systemd wraps this)."""
     import logging
+
     from tradingagents.orchestrator.worker import main
     logging.basicConfig(
         level=logging.INFO,

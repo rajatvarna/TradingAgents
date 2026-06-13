@@ -134,9 +134,8 @@ def test_cli_custom_provider_model_prompt_cancel_exits(monkeypatch):
         cli_utils.questionary,
         "text",
         return_value=_Prompt(None),
-    ), mock.patch.object(cli_utils.console, "print") as print_msg:
-        with pytest.raises(SystemExit):
-            cli_utils.select_shallow_thinking_agent("custom")
+    ), mock.patch.object(cli_utils.console, "print") as print_msg, pytest.raises(SystemExit):
+        cli_utils.select_shallow_thinking_agent("custom")
 
     print_msg.assert_called_once()
 
@@ -210,9 +209,8 @@ def test_cli_env_custom_provider_invalid_backend_url_exits_gracefully(monkeypatc
          mock.patch.object(m, "select_analysts", return_value=[]), \
          mock.patch.object(m, "select_research_depth", return_value=1), \
          mock.patch.object(m, "ensure_api_key") as ensure_key, \
-         mock.patch.object(m.console, "print") as print_msg:
-        with pytest.raises(SystemExit):
-            m.get_user_selections()
+         mock.patch.object(m.console, "print") as print_msg, pytest.raises(SystemExit):
+        m.get_user_selections()
 
     ensure_key.assert_not_called()
     assert any("Error:" in str(call) for call in print_msg.call_args_list)

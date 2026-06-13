@@ -1,15 +1,15 @@
 import json
-import pytest
-from pathlib import Path
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
-from tradingagents.persistence.db import connect
+import pytest
+
 from tradingagents.persistence import store
+from tradingagents.persistence.db import connect
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @pytest.fixture

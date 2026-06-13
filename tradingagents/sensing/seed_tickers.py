@@ -16,7 +16,6 @@ import yaml
 
 from tradingagents.persistence.store import upsert_ticker
 
-
 _POLYGON_BASE = "https://api.polygon.io/v3/reference/tickers"
 
 

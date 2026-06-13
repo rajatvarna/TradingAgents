@@ -10,6 +10,7 @@ import json
 import sqlite3
 import uuid
 from dataclasses import dataclass
+from datetime import UTC
 from pathlib import Path
 from typing import Protocol
 
@@ -46,8 +47,8 @@ class EnvelopeWriter:
         Path(self.staging_root).mkdir(parents=True, exist_ok=True)
 
     def _write_raw(self, payload: dict) -> str:
-        from datetime import datetime, timezone
-        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        from datetime import datetime
+        day = datetime.now(UTC).strftime("%Y-%m-%d")
         day_dir = Path(self.staging_root) / day
         day_dir.mkdir(parents=True, exist_ok=True)
         path = day_dir / f"{uuid.uuid4().hex}.json"

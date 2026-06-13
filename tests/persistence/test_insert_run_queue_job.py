@@ -1,8 +1,9 @@
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from tradingagents.persistence.db import connect
+import pytest
+
 from tradingagents.persistence import store
+from tradingagents.persistence.db import connect
 
 
 @pytest.mark.unit
@@ -12,7 +13,7 @@ def test_insert_run_with_queue_job_id(tmp_path):
     cur = conn.execute(
         "INSERT INTO queue_jobs (job_type, payload, state, enqueued_ts) "
         "VALUES ('event_alert', '{}', 'running', ?)",
-        (datetime.now(timezone.utc).isoformat(),),
+        (datetime.now(UTC).isoformat(),),
     )
     job_id = cur.lastrowid
     conn.commit()
@@ -20,7 +21,7 @@ def test_insert_run_with_queue_job_id(tmp_path):
     store.insert_run(
         conn,
         run_id="r1", ticker="AAPL", persona_id="macro",
-        started_ts=datetime.now(timezone.utc).isoformat(),
+        started_ts=datetime.now(UTC).isoformat(),
         artifact_dir="runs/r1",
         trigger_id=None,
         queue_job_id=job_id,
@@ -35,7 +36,7 @@ def test_insert_run_queue_job_id_defaults_none(tmp_path):
     store.insert_run(
         conn,
         run_id="r1", ticker="AAPL", persona_id=None,
-        started_ts=datetime.now(timezone.utc).isoformat(),
+        started_ts=datetime.now(UTC).isoformat(),
         artifact_dir="runs/r1",
     )
     row = conn.execute("SELECT * FROM runs WHERE run_id='r1'").fetchone()

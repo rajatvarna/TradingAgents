@@ -1,5 +1,4 @@
-from tradingagents.agents.utils.trade_filter_calibration import evaluate_config
-from tradingagents.agents.utils.trade_filter_calibration import TradeCalibrationRow
+from tradingagents.agents.utils.trade_filter_calibration import TradeCalibrationRow, evaluate_config
 
 
 def test_evaluate_config_selects_higher_scores():

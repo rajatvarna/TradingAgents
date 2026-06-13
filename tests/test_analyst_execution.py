@@ -1,10 +1,12 @@
+
 import pytest
-from time import sleep
+
 from tradingagents.graph.analyst_execution import (
-    build_analyst_execution_plan,
     AnalystWallTimeTracker,
+    build_analyst_execution_plan,
     sync_analyst_tracker_from_chunk,
 )
+
 
 def test_build_analyst_execution_plan():
     selected = ["market", "news", "sentiment"]

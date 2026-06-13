@@ -1,7 +1,7 @@
-import pandas as pd
-from io import StringIO
 
-from .twelve_data_common import _make_api_request, _filter_csv_by_date_range
+import pandas as pd
+
+from .twelve_data_common import _make_api_request
 
 
 def get_stock(symbol: str, start_date: str, end_date: str) -> str:

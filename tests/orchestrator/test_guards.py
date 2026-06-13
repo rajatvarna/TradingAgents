@@ -1,17 +1,18 @@
 import logging
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from tradingagents.persistence.db import connect
-from tradingagents.persistence import store
+import pytest
+
 from tradingagents.orchestrator import queue_store as qs
+from tradingagents.persistence import store
+from tradingagents.persistence.db import connect
 
 
 @pytest.fixture
 def conn(tmp_path):
     c = connect(str(tmp_path / "iic.db"))
     store.insert_event(c, event_id="ev1", source="rss",
-                       ingested_ts=datetime.now(timezone.utc).isoformat(),
+                       ingested_ts=datetime.now(UTC).isoformat(),
                        salience=0.9, raw_path=None,
                        status="triaged", deduped_of=None)
     return c

@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from tradingagents.llm_clients.base_client import normalize_content
+
 from tradingagents.agents.utils.agent_utils import (
-    get_instrument_context_from_state,
     get_indicators,
+    get_instrument_context_from_state,
     get_language_instruction,
     get_stock_data,
     get_verified_market_snapshot,
@@ -191,9 +191,7 @@ Write a very detailed and nuanced report of the trends you observe. Provide spec
 
             result = chain.invoke(state["messages"])
 
-            report = ""
-            if len(result.tool_calls) == 0:
-                report = result.content
+            report = result.content if isinstance(result.content, str) else ""
 
             return {
                 "messages": [result],

@@ -1,7 +1,8 @@
-import pytest
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 from unittest.mock import MagicMock
+
+import pytest
 
 
 @pytest.fixture
@@ -45,7 +46,7 @@ def test_run_recorder_writes_db_row_and_artifact_files(db_and_dir, sample_state)
             "deepseek-v4-pro": {"in_tokens": 1000, "out_tokens": 500}
         }),
     )
-    rec.start("AAPL", started_ts=datetime.now(timezone.utc).isoformat())
+    rec.start("AAPL", started_ts=datetime.now(UTC).isoformat())
     new_state = rec.record(sample_state)
 
     # DB: one runs row, status=complete, decision parsed

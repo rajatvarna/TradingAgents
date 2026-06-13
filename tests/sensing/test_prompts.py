@@ -1,5 +1,6 @@
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
 
 from tradingagents.sensing.envelope import Envelope
 
@@ -7,7 +8,7 @@ from tradingagents.sensing.envelope import Envelope
 def _env(text="Apple beats", source_tags=None):
     return Envelope(
         source="polygon_news",
-        ingested_ts=datetime.now(timezone.utc).isoformat(),
+        ingested_ts=datetime.now(UTC).isoformat(),
         external_id="x:1", text=text,
         source_tags=source_tags or {},
         raw_path="p",

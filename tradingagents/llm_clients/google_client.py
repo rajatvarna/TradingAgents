@@ -3,7 +3,7 @@ import os
 import threading
 import time
 import warnings
-from typing import Any, Optional
+from typing import Any
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -137,7 +137,7 @@ class GoogleClient(BaseLLMClient):
         "gemini-3-flash-preview": "gemini-2.5-flash",
     }
 
-    def __init__(self, model: str, base_url: Optional[str] = None, **kwargs):
+    def __init__(self, model: str, base_url: str | None = None, **kwargs):
         super().__init__(model, base_url, **kwargs)
 
     def get_llm(self) -> Any:

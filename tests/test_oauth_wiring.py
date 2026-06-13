@@ -1,9 +1,9 @@
 """Test wiring del provider openai-oauth: factory, env, validators, catalogo."""
-from tradingagents.llm_clients.factory import create_llm_client
-from tradingagents.llm_clients.openai_client import OpenAIClient
 from tradingagents.llm_clients.api_key_env import get_api_key_env
+from tradingagents.llm_clients.factory import create_llm_client
+from tradingagents.llm_clients.model_catalog import get_known_models, get_model_options
+from tradingagents.llm_clients.openai_client import OpenAIClient
 from tradingagents.llm_clients.validators import validate_model
-from tradingagents.llm_clients.model_catalog import get_model_options, get_known_models
 
 
 def test_factory_dispatches_openai_oauth():

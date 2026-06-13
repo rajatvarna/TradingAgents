@@ -5,9 +5,6 @@ from __future__ import annotations
 import importlib
 from unittest.mock import patch
 
-import pytest
-
-
 # ---- openai_client side: resolve_provider_base_url -----------------------
 
 

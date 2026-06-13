@@ -11,7 +11,6 @@ from tradingagents.agents.source_registry import (
     normalize_source_objects,
 )
 
-
 REPORT_CLAIM_SPECS = (
     ("market_report", "market", "market"),
     ("news_report", "news", "news"),
@@ -85,13 +84,13 @@ def _normalize(text: str) -> str:
 
 
 def _stable_claim_id(state_key: str, text: str) -> str:
-    digest = hashlib.sha256(f"{state_key}|{_normalize(text)}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{state_key}|{_normalize(text)}".encode()).hexdigest()
     return f"CLAIM-{digest[:12].upper()}"
 
 
 def _stable_claim_id_with_sources(state_key: str, text: str, source_ids: list[str]) -> str:
     digest = hashlib.sha256(
-        f"{state_key}|{_normalize(text)}|{'|'.join(sorted(source_ids))}".encode("utf-8")
+        f"{state_key}|{_normalize(text)}|{'|'.join(sorted(source_ids))}".encode()
     ).hexdigest()
     return f"CLAIM-{digest[:12].upper()}"
 
@@ -209,7 +208,7 @@ def _build_claim(
     source_ids: list[str],
     sentence_index: int,
 ) -> Claim:
-    claim_hash = hashlib.sha256(f"{state_key}|{_normalize(text)}".encode("utf-8")).hexdigest()
+    claim_hash = hashlib.sha256(f"{state_key}|{_normalize(text)}".encode()).hexdigest()
     return Claim(
         claim_id=_stable_claim_id_with_sources(state_key, text, source_ids),
         claim_type=claim_type,

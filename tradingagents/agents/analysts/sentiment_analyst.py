@@ -42,8 +42,8 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from tradingagents.agents.schemas import SentimentReport, render_sentiment_report
 from tradingagents.agents.utils.agent_utils import (
-    get_instrument_context_from_state,
     build_cacheable_system_content,
+    get_instrument_context_from_state,
     get_language_instruction,
     get_news,
 )

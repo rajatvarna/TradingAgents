@@ -20,11 +20,14 @@ from langchain_core.messages import AIMessage
 
 from tradingagents.agents.analysts import (
     fundamentals_analyst as fund_mod,
+)
+from tradingagents.agents.analysts import (
     market_analyst as market_mod,
+)
+from tradingagents.agents.analysts import (
     news_analyst as news_mod,
 )
 from tradingagents.agents.utils.tool_fallback import bind_tools_or_none, safe_tool_text
-
 
 # ---------------------------------------------------------------------------
 # bind_tools_or_none

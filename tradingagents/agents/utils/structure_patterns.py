@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from importlib import resources
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -90,7 +90,7 @@ class SwingPoint:
 def analyze_ohlcv_structure(
     df: pd.DataFrame,
     ticker: str,
-    as_of_date: Optional[str] = None,
+    as_of_date: str | None = None,
 ) -> dict[str, Any]:
     """Return deterministic structure analysis for a ticker through as_of_date."""
     clean = _prepare_ohlcv(df)
@@ -150,7 +150,7 @@ def analyze_ohlcv_structure(
     }
 
 
-def format_structure_analysis_for_prompt(analysis: Optional[dict[str, Any]]) -> str:
+def format_structure_analysis_for_prompt(analysis: dict[str, Any] | None) -> str:
     """Compact deterministic structure analysis for PortfolioState prompts."""
     if not analysis:
         return "**Deterministic structure analysis:** unavailable\n"
@@ -270,7 +270,7 @@ def _atr(df: pd.DataFrame, window: int) -> pd.Series:
     return true_range.rolling(window).mean()
 
 
-def _empty_analysis(ticker: str, as_of_date: Optional[str], reason: str) -> dict[str, Any]:
+def _empty_analysis(ticker: str, as_of_date: str | None, reason: str) -> dict[str, Any]:
     return {
         "schema_version": "structure_v1",
         "ticker": ticker,
@@ -1015,7 +1015,7 @@ def _detect_smc_ict_patterns(df: pd.DataFrame) -> list[dict[str, Any]]:
     return patterns
 
 
-def _latest_fvg(df: pd.DataFrame) -> Optional[tuple[str, float, float, int]]:
+def _latest_fvg(df: pd.DataFrame) -> tuple[str, float, float, int] | None:
     if len(df) < 3:
         return None
     start = max(2, len(df) - 20)
@@ -1029,7 +1029,7 @@ def _latest_fvg(df: pd.DataFrame) -> Optional[tuple[str, float, float, int]]:
     return None
 
 
-def _latest_displacement_index(df: pd.DataFrame) -> Optional[int]:
+def _latest_displacement_index(df: pd.DataFrame) -> int | None:
     atr = df["atr14"].fillna(0.0)
     start = max(1, len(df) - 10)
     for idx in range(len(df) - 1, start - 1, -1):
@@ -1197,7 +1197,7 @@ def _structure_conflicts(
     return conflicts
 
 
-def _dominant_pattern(patterns: list[dict[str, Any]], categories: set[str]) -> Optional[dict[str, Any]]:
+def _dominant_pattern(patterns: list[dict[str, Any]], categories: set[str]) -> dict[str, Any] | None:
     for pattern in patterns:
         if pattern["category"] in categories:
             return pattern
@@ -1261,12 +1261,12 @@ def _mean(values: list[float]) -> float:
     return sum(values) / len(values)
 
 
-def _nearest_level_below(levels: list[float], price: float) -> Optional[float]:
+def _nearest_level_below(levels: list[float], price: float) -> float | None:
     below = [level for level in levels if level < price]
     return max(below) if below else None
 
 
-def _nearest_level_above(levels: list[float], price: float) -> Optional[float]:
+def _nearest_level_above(levels: list[float], price: float) -> float | None:
     above = [level for level in levels if level > price]
     return min(above) if above else None
 

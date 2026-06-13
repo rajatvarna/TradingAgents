@@ -1,10 +1,10 @@
 """Shared pytest fixtures that prevent CI hangs when API keys are absent."""
 
+import json
 import os
 import sys
-from unittest.mock import MagicMock, patch
 from pathlib import Path
-import json
+from unittest.mock import MagicMock, patch
 
 import pytest
 

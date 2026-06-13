@@ -5,14 +5,14 @@ from uuid import uuid4
 
 from langchain_core.messages import ToolMessage
 
-from tradingagents.agents.utils.tool_provenance import create_tool_provenance_capture_node
+from tradingagents.agents.claims import build_claim_graph
+from tradingagents.agents.skills import build_skill_registry
+from tradingagents.agents.source_registry import build_source_registry, validate_source_citations
 from tradingagents.agents.utils.recommendation_audit import (
     build_pre_synthesis_scope_audit,
     build_recommendation_scorecard,
 )
-from tradingagents.agents.claims import build_claim_graph
-from tradingagents.agents.source_registry import build_source_registry, validate_source_citations
-from tradingagents.agents.skills import build_skill_registry
+from tradingagents.agents.utils.tool_provenance import create_tool_provenance_capture_node
 from tradingagents_service.provenance import (
     RunTelemetryRecorder,
     ToolProvenanceRecorder,

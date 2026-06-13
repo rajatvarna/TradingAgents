@@ -1,17 +1,15 @@
-import pandas as pd
-import pytest
 from unittest.mock import patch
 
-from tradingagents.dataflows.range_stats import (
-    compute_range_stats,
-    RangeStatsUnavailable,
-)
+import pandas as pd
+import pytest
 
 from tradingagents.dataflows.range_stats import (
-    format_range_stats_markdown,
-    format_range_stats_for_webui,
-    format_range_stats_telegram,
+    RangeStatsUnavailable,
     _color_for_window,
+    compute_range_stats,
+    format_range_stats_for_webui,
+    format_range_stats_markdown,
+    format_range_stats_telegram,
 )
 
 

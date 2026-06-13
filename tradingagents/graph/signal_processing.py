@@ -19,6 +19,23 @@ from tradingagents.agents.utils.rating import extract_rating, parse_rating
 
 logger = logging.getLogger(__name__)
 
+# Valid signal strings returned by process_signal / parse_rating.
+# Import these instead of comparing against raw string literals.
+SIGNAL_BUY = "Buy"
+SIGNAL_OVERWEIGHT = "Overweight"
+SIGNAL_HOLD = "Hold"
+SIGNAL_UNDERWEIGHT = "Underweight"
+SIGNAL_SELL = "Sell"
+
+# Conviction weights for portfolio ranking (higher = more bullish).
+SIGNAL_CONVICTION_WEIGHTS: dict[str, float] = {
+    SIGNAL_BUY: 2.0,
+    SIGNAL_OVERWEIGHT: 1.0,
+    SIGNAL_HOLD: 0.0,
+    SIGNAL_UNDERWEIGHT: -1.0,
+    SIGNAL_SELL: -2.0,
+}
+
 
 class SignalProcessor:
     """Read the 5-tier rating out of a Portfolio Manager decision."""

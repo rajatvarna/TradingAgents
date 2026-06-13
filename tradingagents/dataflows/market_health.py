@@ -13,7 +13,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional
+
 
 @dataclass
 class MarketHealthSnapshot:
@@ -21,7 +21,7 @@ class MarketHealthSnapshot:
     index_above_50d: bool
     index_above_200d: bool
     distribution_days_nasdaq: int
-    hlg_raw: Optional[int]
+    hlg_raw: int | None
     hlg_trend: str
     hlg_consecutive_negative: int
     ibd_phase: str

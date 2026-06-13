@@ -1,17 +1,18 @@
 import json
 import time
-import pytest
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
-from tradingagents.persistence.db import connect
+import pytest
+
+from tradingagents.orchestrator import promoter, queue_store, worker
 from tradingagents.persistence import store
-from tradingagents.orchestrator import queue_store, promoter, worker
+from tradingagents.persistence.db import connect
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @pytest.mark.smoke
@@ -27,6 +28,7 @@ def test_f4_synthetic_event_produces_brief_under_60s(tmp_path, monkeypatch):
 
     # Reload config so the env vars take effect.
     import importlib
+
     import tradingagents.default_config as m
     importlib.reload(m)
 

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from typing import Any
 
 import backtrader as bt
 import pandas as pd
 import yfinance as yf
-
 
 _TARGETS = {
     "Buy": 1.0,

@@ -1,7 +1,8 @@
-import pytest
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 from unittest.mock import MagicMock
+
+import pytest
 
 from tradingagents.persistence.db import connect
 
@@ -21,7 +22,7 @@ def test_run_recorder_writes_event_context_md_when_present(tmp_path):
         run_id="r1", persona_id="macro",
         cost_callback=cost_cb, queue_job_id=None,
     )
-    rec.start("AAPL", started_ts=datetime.now(timezone.utc).isoformat())
+    rec.start("AAPL", started_ts=datetime.now(UTC).isoformat())
     rec.record({
         "company_of_interest": "AAPL",
         "trade_date": "2026-05-27",
@@ -46,7 +47,7 @@ def test_run_recorder_skips_event_context_md_when_absent(tmp_path):
         run_id="r2", persona_id="macro",
         cost_callback=cost_cb, queue_job_id=None,
     )
-    rec.start("AAPL", started_ts=datetime.now(timezone.utc).isoformat())
+    rec.start("AAPL", started_ts=datetime.now(UTC).isoformat())
     rec.record({
         "company_of_interest": "AAPL",
         "trade_date": "2026-05-27",
@@ -66,6 +67,7 @@ def test_trading_graph_seeds_event_context_into_initial_state(monkeypatch, tmp_p
 
     # Reload default_config so the env vars take effect.
     import importlib
+
     import tradingagents.default_config as m
     importlib.reload(m)
 

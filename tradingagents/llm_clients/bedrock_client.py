@@ -1,8 +1,7 @@
 import os
-from typing import Any, Optional
+from typing import Any
 
 from .base_client import BaseLLMClient, normalize_content
-from .validators import validate_model
 
 
 def _load_chat_bedrock_converse():
@@ -48,7 +47,7 @@ class BedrockClient(BaseLLMClient):
     AWS_REGION, and AWS_DEFAULT_REGION can be loaded from .env.enterprise.
     """
 
-    def __init__(self, model: str, base_url: Optional[str] = None, **kwargs):
+    def __init__(self, model: str, base_url: str | None = None, **kwargs):
         super().__init__(model, base_url, **kwargs)
 
     def get_llm(self) -> Any:

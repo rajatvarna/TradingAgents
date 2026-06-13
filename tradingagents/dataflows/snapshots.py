@@ -26,9 +26,9 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from .config import get_config
 
@@ -99,7 +99,7 @@ def force_refresh() -> bool:
 
 def _utc_now_iso_compact() -> str:
     """UTC ``YYYYMMDDTHHMMSSffffffZ`` — sortable, filesystem-safe, microsecond precision."""
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
 
 
 def write_snapshot(
@@ -108,10 +108,10 @@ def write_snapshot(
     source: str,
     scope: str,
     date: str,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     raw_response: Any,
     formatted_output: str,
-) -> Optional[Path]:
+) -> Path | None:
     """Persist one fetch to ``snapshot_dir/{kind}_{source}_{ts}.json``.
 
     Returns the file path written, or None if snapshotting is disabled or
@@ -179,7 +179,7 @@ def load_latest_snapshot(
     source: str,
     scope: str,
     date: str,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Return the most recent matching snapshot's parsed payload, or None.
 
     "Most recent" = greatest ``fetched_at`` in filename. Files that don't
@@ -224,7 +224,7 @@ def replay_formatted(
     source: str,
     scope: str,
     date: str,
-) -> Tuple[Optional[str], bool]:
+) -> tuple[str | None, bool]:
     """Return ``(formatted_output, hit)``.
 
     ``hit=True`` means the caller may skip the live fetch entirely; the
@@ -257,7 +257,7 @@ def replay_raw(
     source: str,
     scope: str,
     date: str,
-) -> Tuple[Any, bool]:
+) -> tuple[Any, bool]:
     """Return ``(raw_response, hit)``.
 
     Companion to :func:`replay_formatted` for sources whose return type
@@ -282,8 +282,8 @@ def snapshot(
     *,
     kind: str,
     source: str,
-    scope_arg: Optional[str] = None,
-    scope_literal: Optional[str] = None,
+    scope_arg: str | None = None,
+    scope_literal: str | None = None,
     date_arg: str,
     serialize: str = "str",
 ):

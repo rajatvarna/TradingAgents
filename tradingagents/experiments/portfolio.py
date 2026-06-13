@@ -6,7 +6,6 @@ from typing import Any
 import pandas as pd
 import yfinance as yf
 
-
 _RATING_TILTS = {
     "Buy": 1.5,
     "Overweight": 1.2,

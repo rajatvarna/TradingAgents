@@ -6,11 +6,13 @@ from back_test.policy_config import (
 )
 from tradingagents.agents.managers.portfolio_state_manager import (
     MarketState,
-    PortfolioStatePolicyConfig as ManagerPortfolioStatePolicyConfig,
     _fallback_market_state,
     _invoke_market_state,
     _market_state_response_to_model,
     policy_from_market_state,
+)
+from tradingagents.agents.managers.portfolio_state_manager import (
+    PortfolioStatePolicyConfig as ManagerPortfolioStatePolicyConfig,
 )
 
 

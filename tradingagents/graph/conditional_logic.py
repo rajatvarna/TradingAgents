@@ -1,12 +1,12 @@
 # TradingAgents/graph/conditional_logic.py
 
 import difflib
-from typing import Callable
+from collections.abc import Callable
+
 from tradingagents.agents.utils.agent_states import AgentState
 from tradingagents.agents.utils.rating import extract_rating
 from tradingagents.graph.constants import (
     ANALYST_REPORT_KEYS,
-    analyst_node_name,
     clear_node_name,
     tools_node_name,
 )
@@ -123,10 +123,7 @@ class ConditionalLogic:
 
         r_bull = extract_rating(bull_last or "")
         r_bear = extract_rating(bear_last or "")
-        if r_bull == "Hold" and r_bear == "Hold":
-            return True
-
-        return False
+        return bool(r_bull == "Hold" and r_bear == "Hold")
 
     def _early_stop_risk_debate(self, state: AgentState) -> bool:
         risk = state["risk_debate_state"]
@@ -141,10 +138,7 @@ class ConditionalLogic:
         else:
             last, prev = self._last_two_blocks(risk.get("neutral_history") or "")
 
-        if last and prev and self._similar(last, prev) >= 0.98:
-            return True
-
-        return False
+        return bool(last and prev and self._similar(last, prev) >= 0.98)
 
     def _last_two_blocks(self, history: str) -> tuple[str, str]:
         blocks = [b.strip() for b in history.splitlines() if b.strip()]

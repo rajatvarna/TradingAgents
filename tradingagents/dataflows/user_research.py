@@ -9,16 +9,16 @@ the LLM-summary ingest pipeline land in subsequent tasks.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import io
 import json
 import os
 import re
 import time
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable, Optional
-
 
 SUPPORTED_TEXT_EXT = {".txt", ".md", ".markdown"}
 SUPPORTED_PDF_EXT = {".pdf"}
@@ -72,10 +72,10 @@ def _research_root(user_root: Path) -> Path:
 def _save(
     file_bytes: bytes,
     summary_md: str,
-    ticker: Optional[str],
+    ticker: str | None,
     user_root: Path,
     original_filename: str,
-    run_id: Optional[str],
+    run_id: str | None,
 ) -> dict:
     """Persist original + summary + meta. Returns metadata dict."""
     safe_orig = _safe_filename(original_filename)
@@ -101,7 +101,7 @@ def _save(
         meta_path.write_text(
             json.dumps({
                 "filename": original_filename,
-                "uploaded_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "uploaded_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "size": len(file_bytes),
                 "hash": digest,
                 "ticker": ticker.upper() if ticker else None,
@@ -171,10 +171,8 @@ def delete_research(user_root: Path, ticker: str, digest: str) -> None:
     if not d.exists():
         return
     for f in d.glob(f"{digest}*"):
-        try:
+        with contextlib.suppress(OSError):
             f.unlink()
-        except OSError:
-            pass
 
 
 def clear_run_dir(user_root: Path, run_id: str) -> None:
@@ -200,12 +198,12 @@ Source:
 """
 
 
-def _summarize(text: str, ticker: Optional[str], summarize_fn) -> str:
+def _summarize(text: str, ticker: str | None, summarize_fn) -> str:
     """Call the LLM to compress the report. summarize_fn is a langchain BaseLLM
     or similar with an .invoke(prompt) -> message-with-.content interface."""
     ticker_clause = f" for ticker {ticker}" if ticker else ""
     prompt = SUMMARY_PROMPT_TMPL.format(ticker_clause=ticker_clause, text=text)
-    last_err: Optional[Exception] = None
+    last_err: Exception | None = None
     for attempt in range(2):
         try:
             response = summarize_fn.invoke(prompt)
@@ -226,10 +224,10 @@ def _summarize(text: str, ticker: Optional[str], summarize_fn) -> str:
 def ingest_research(
     file_bytes: bytes,
     filename: str,
-    ticker: Optional[str],
+    ticker: str | None,
     user_root: Path,
     summarize_fn: Callable,
-    run_id: Optional[str] = None,
+    run_id: str | None = None,
 ) -> dict:
     """Extract → summarize → persist. Returns metadata dict including summary."""
     text = _extract_text(file_bytes, filename)

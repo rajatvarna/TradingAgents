@@ -3,8 +3,8 @@ from __future__ import annotations
 import hashlib
 import math
 import sqlite3
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 
 def embed_text(text: str, dimensions: int = 96) -> list[float]:

@@ -13,6 +13,7 @@ def test_default_config_has_f1_keys():
 @pytest.mark.unit
 def test_iic_paths_are_absolute():
     import os
+
     from tradingagents.default_config import DEFAULT_CONFIG as C
     assert os.path.isabs(C["iic_db_path"])
     assert os.path.isabs(C["iic_data_dir"])

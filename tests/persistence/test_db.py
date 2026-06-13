@@ -1,7 +1,5 @@
+
 import pytest
-import tempfile
-import os
-from pathlib import Path
 
 
 @pytest.fixture
@@ -69,6 +67,7 @@ def test_concurrent_connect_does_not_race_on_vec_index(tmp_db):
     loser crashing as `sqlite3.OperationalError: table vec_index already
     exists`. The fix wraps the CREATE in try/except 'already exists'."""
     from concurrent.futures import ThreadPoolExecutor
+
     from tradingagents.persistence.db import connect
 
     def _open():

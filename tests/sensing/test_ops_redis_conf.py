@@ -1,5 +1,6 @@
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 @pytest.mark.unit
@@ -15,7 +16,7 @@ def test_redis_conf_has_required_settings():
 
 @pytest.mark.unit
 def test_backup_script_is_executable_and_handles_both_stores():
-    import os, stat
+    import stat
     path = Path("ops/backup.sh")
     text = path.read_text()
     assert ".backup" in text                     # SQLite

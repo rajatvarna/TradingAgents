@@ -4,17 +4,16 @@ Migrated from Markdown flat-file parsing to SQLite for high-performance,
 concurrent, and scalable memory lookups. Automatically migrates old .md logs.
 """
 
-import sqlite3
+import contextlib
 import json
 import logging
-from typing import Any, Dict, List, Optional
-from pathlib import Path
 import re
-import logging
+import sqlite3
+import threading
+from pathlib import Path
+from typing import Any
 
-from tradingagents.agents.utils.rating import extract_rating, parse_rating
-
-logger = logging.getLogger(__name__)
+from tradingagents.agents.utils.rating import parse_rating
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,10 @@ class TradingMemoryLog:
     def __init__(self, config: dict = None):
         cfg = config or {}
         self._db_path = None
-        
+        # Per-instance thread-local storage so each instance caches its own
+        # connection without cross-instance interference.
+        self._thread_local = threading.local()
+
         path = cfg.get("memory_log_path")
         if path:
             # Change the suffix from .md to .db if user passed an md path
@@ -35,7 +37,7 @@ class TradingMemoryLog:
             self._db_path = base_path.with_suffix(".db")
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
             self._init_db()
-            
+
             # One-time migration
             if base_path.exists() and base_path.suffix == ".md":
                 self._migrate_from_markdown(base_path)
@@ -43,18 +45,25 @@ class TradingMemoryLog:
         # Optional cap on resolved entries. None disables rotation.
         self._max_entries = cfg.get("memory_log_max_entries")
 
-    def _get_conn(self):
-        """Returns a new SQLite connection."""
-        # Check_same_thread=False allows sharing between threads safely in LangGraph
-        conn = sqlite3.connect(self._db_path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
+    def _get_conn(self) -> sqlite3.Connection:
+        """Return a per-thread cached SQLite connection.
+
+        Each (instance, thread) pair gets its own connection, avoiding the
+        overhead of opening a new file descriptor on every query while
+        remaining safe under LangGraph's multi-threaded executor.
+        """
+        conn = getattr(self._thread_local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(self._db_path, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            self._thread_local.conn = conn
         return conn
 
     def _init_db(self):
         """Initialize the SQLite schema."""
         if not self._db_path:
             return
-            
+
         with self._get_conn() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS memory_log (
@@ -73,16 +82,12 @@ class TradingMemoryLog:
                     UNIQUE (ticker, trade_date, pending)
                 )
             """)
-            
+
             # Add columns meta and outcome if they are missing from existing database
-            try:
+            with contextlib.suppress(sqlite3.OperationalError):
                 conn.execute("ALTER TABLE memory_log ADD COLUMN meta TEXT")
-            except sqlite3.OperationalError:
-                pass
-            try:
+            with contextlib.suppress(sqlite3.OperationalError):
                 conn.execute("ALTER TABLE memory_log ADD COLUMN outcome TEXT")
-            except sqlite3.OperationalError:
-                pass
 
             # Create index for fast lookups by ticker and pending status
             conn.execute("CREATE INDEX IF NOT EXISTS idx_ticker ON memory_log (ticker)")
@@ -95,13 +100,13 @@ class TradingMemoryLog:
         ticker: str,
         trade_date: str,
         final_trade_decision: str,
-        meta: Optional[Dict[str, Any]] = None,
+        meta: dict[str, Any] | None = None,
     ) -> None:
         """Insert a pending entry at end of propagate()."""
         if not self._db_path:
             return
         rating = parse_rating(final_trade_decision, default="Unknown")
-        
+
         meta_json = json.dumps(meta or {}, ensure_ascii=False)
         with self._get_conn() as conn:
             # INSERT OR IGNORE respects the UNIQUE(ticker, trade_date, pending) constraint,
@@ -122,21 +127,21 @@ class TradingMemoryLog:
         raw_pct = f"{row['raw_return']:+.1%}" if row['raw_return'] is not None else None
         alpha_pct = f"{row['alpha_return']:+.1%}" if row['alpha_return'] is not None else None
         holding_str = f"{row['holding_days']}d" if row['holding_days'] is not None else None
-        
+
         # Safely parse meta and outcome JSON
         meta_dict = {}
-        if "meta" in row.keys() and row["meta"]:
+        if "meta" in row and row["meta"]:
             try:
                 meta_dict = json.loads(row["meta"])
-            except Exception:
-                pass
-                
+            except (json.JSONDecodeError, ValueError) as exc:
+                logger.warning("Failed to parse meta JSON for row %s: %s", dict(row).get("id"), exc)
+
         outcome_dict = {}
-        if "outcome" in row.keys() and row["outcome"]:
+        if "outcome" in row and row["outcome"]:
             try:
                 outcome_dict = json.loads(row["outcome"])
-            except Exception:
-                pass
+            except (json.JSONDecodeError, ValueError) as exc:
+                logger.warning("Failed to parse outcome JSON for row %s: %s", dict(row).get("id"), exc)
 
         return {
             "date": row["trade_date"],
@@ -152,20 +157,20 @@ class TradingMemoryLog:
             "outcome": outcome_dict,
         }
 
-    def load_entries(self) -> List[dict]:
+    def load_entries(self) -> list[dict]:
         """Fetch all entries from log. Returns list of dicts."""
         if not self._db_path or not self._db_path.exists():
             return []
-            
+
         with self._get_conn() as conn:
             cursor = conn.execute("SELECT * FROM memory_log ORDER BY id ASC")
             return [self._row_to_dict(row) for row in cursor.fetchall()]
 
-    def get_pending_entries(self) -> List[dict]:
+    def get_pending_entries(self) -> list[dict]:
         """Return entries with outcome:pending (for Phase B)."""
         if not self._db_path or not self._db_path.exists():
             return []
-            
+
         with self._get_conn() as conn:
             cursor = conn.execute("SELECT * FROM memory_log WHERE pending = 1 ORDER BY id ASC")
             return [self._row_to_dict(row) for row in cursor.fetchall()]
@@ -174,7 +179,7 @@ class TradingMemoryLog:
         """Return formatted past context string for agent prompt injection."""
         if not self._db_path or not self._db_path.exists():
             return ""
-            
+
         parts = []
         with self._get_conn() as conn:
             # Fetch same-ticker resolved entries
@@ -183,28 +188,28 @@ class TradingMemoryLog:
                 (ticker, n_same)
             )
             same_rows = cursor.fetchall()
-            
+
             if same_rows:
                 parts.append(f"Past analyses of {ticker} (most recent first):")
                 # Format full
                 for row in same_rows:
                     e = self._row_to_dict(row)
                     parts.append(self._format_full(e))
-            
+
             # Fetch cross-ticker resolved entries
             cursor = conn.execute(
                 "SELECT * FROM memory_log WHERE ticker != ? AND pending = 0 ORDER BY id DESC LIMIT ?",
                 (ticker, n_cross)
             )
             cross_rows = cursor.fetchall()
-            
+
             if cross_rows:
                 parts.append("Recent cross-ticker lessons:")
                 # Format reflection only
                 for row in cross_rows:
                     e = self._row_to_dict(row)
                     parts.append(self._format_reflection_only(e))
-                    
+
         return "\n\n".join(parts)
 
     # --- Update path (Phase B) ---
@@ -217,7 +222,7 @@ class TradingMemoryLog:
         alpha_return: float,
         holding_days: int,
         reflection: str,
-        outcome: Optional[Dict[str, Any]] = None,
+        outcome: dict[str, Any] | None = None,
     ) -> None:
         """Update a pending entry with the measured outcome and reflection."""
         if not self._db_path or not self._db_path.exists():
@@ -233,9 +238,9 @@ class TradingMemoryLog:
             row = cursor.fetchone()
             if not row:
                 return
-                
+
             entry_id = row["id"]
-            
+
             conn.execute(
                 """
                 UPDATE memory_log
@@ -244,11 +249,11 @@ class TradingMemoryLog:
                 """,
                 (raw_return, alpha_return, holding_days, reflection, outcome_json, entry_id)
             )
-            
+
             conn.commit()
             self._apply_rotation(conn)
 
-    def batch_update_with_outcomes(self, updates: List[dict]) -> None:
+    def batch_update_with_outcomes(self, updates: list[dict]) -> None:
         """Apply multiple outcome updates in a single transaction."""
         if not self._db_path or not self._db_path.exists() or not updates:
             return
@@ -281,10 +286,10 @@ class TradingMemoryLog:
         """
         if not self._max_entries or self._max_entries <= 0:
             return
-            
+
         cursor = conn.execute("SELECT COUNT(id) as c FROM memory_log WHERE pending = 0")
         resolved_count = cursor.fetchone()["c"]
-        
+
         if resolved_count > self._max_entries:
             to_drop = resolved_count - self._max_entries
             # Delete the oldest 'to_drop' resolved entries
@@ -321,12 +326,12 @@ class TradingMemoryLog:
         return f"{tag}\n{text}{suffix}"
 
     # --- Migration Path (From old .md format to .db) ---
-    
+
     def _migrate_from_markdown(self, md_path: Path):
         """Parse old trading_memory.md format and insert into SQLite."""
         if not md_path.exists():
             return
-            
+
         try:
             logger.info("Migrating legacy trading_memory.md to SQLite DB...")
             text = md_path.read_text(encoding="utf-8")
@@ -334,29 +339,29 @@ class TradingMemoryLog:
             _REFLECTION_RE = re.compile(r"REFLECTION:\n(.*?)$", re.DOTALL)
 
             raw_entries = [e.strip() for e in text.split(self._SEPARATOR) if e.strip()]
-            
+
             with self._get_conn() as conn:
                 # Check if we already have entries in DB to avoid double migration
                 cursor = conn.execute("SELECT COUNT(*) as c FROM memory_log")
                 if cursor.fetchone()["c"] > 0:
                     return
-                
+
                 for raw in raw_entries:
                     lines = raw.splitlines()
                     if not lines: continue
                     tag_line = lines[0].strip()
                     if not (tag_line.startswith("[") and tag_line.endswith("]")):
                         continue
-                        
+
                     fields = [f.strip() for f in tag_line[1:-1].split("|")]
                     if len(fields) < 4:
                         continue
-                        
+
                     date = fields[0]
                     ticker = fields[1]
                     rating = fields[2]
                     is_pending = 1 if fields[3] == "pending" else 0
-                    
+
                     raw_ret, alpha_ret, holding = None, None, None
                     if not is_pending and len(fields) >= 6:
                         # try parse '+4.2%' to 0.042
@@ -369,13 +374,13 @@ class TradingMemoryLog:
                             holding = int(holding_str)
                         except Exception:
                             pass
-                            
+
                     body = "\n".join(lines[1:]).strip()
                     decision_match = _DECISION_RE.search(body)
                     reflection_match = _REFLECTION_RE.search(body)
                     decision = decision_match.group(1).strip() if decision_match else ""
                     reflection = reflection_match.group(1).strip() if reflection_match else ""
-                    
+
                     conn.execute(
                         """
                         INSERT INTO memory_log (ticker, trade_date, rating, decision, reflection, raw_return, alpha_return, holding_days, pending)
@@ -384,12 +389,10 @@ class TradingMemoryLog:
                         (ticker, date, rating, decision, reflection, raw_ret, alpha_ret, holding, is_pending)
                     )
                 conn.commit()
-            
+
             # Optionally rename the old md file to .md.bak to prevent re-parsing
-            try:
+            with contextlib.suppress(Exception):
                 md_path.rename(md_path.with_suffix('.md.bak'))
-            except Exception:
-                pass
-                
+
         except Exception as e:
             logger.error(f"Failed to migrate markdown memory log: {e}")

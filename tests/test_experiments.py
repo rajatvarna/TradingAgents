@@ -1,15 +1,14 @@
-import json
 
 import pandas as pd
 import pytest
 
+from tradingagents.agents.managers.portfolio_manager import create_portfolio_manager
+from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
 from tradingagents.experiments.backtest import calculate_metrics, rating_to_target
 from tradingagents.experiments.charts import render_technical_chart
 from tradingagents.experiments.portfolio import allocate_risk_parity
 from tradingagents.experiments.postmortem import StrategyRuleStore
 from tradingagents.experiments.semantic_memory import SemanticMemory
-from tradingagents.agents.managers.portfolio_manager import create_portfolio_manager
-from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
 from tradingagents.graph.propagation import Propagator
 
 

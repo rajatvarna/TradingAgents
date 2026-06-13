@@ -3,18 +3,18 @@ import logging
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.outputs import LLMResult
 from langchain_core.messages import AIMessage
+from langchain_core.outputs import LLMResult
 
 logger = logging.getLogger(__name__)
 
 
-def _extract_fingerprint(response: LLMResult) -> Dict[str, Optional[str]]:
+def _extract_fingerprint(response: LLMResult) -> dict[str, str | None]:
     """Best-effort extraction of model identity + fingerprint from an LLM result.
 
     Returns ``{"model": str|None, "fingerprint": str|None}``. We look in a few
@@ -30,8 +30,8 @@ def _extract_fingerprint(response: LLMResult) -> Dict[str, Optional[str]]:
     even when None, so drift detection can distinguish "provider didn't return one"
     from "we forgot to look".
     """
-    model: Optional[str] = None
-    fingerprint: Optional[str] = None
+    model: str | None = None
+    fingerprint: str | None = None
 
     llm_output = getattr(response, "llm_output", None)
     if isinstance(llm_output, dict):
@@ -65,8 +65,8 @@ class StatsCallbackHandler(BaseCallbackHandler):
         self,
         provider: str = "google",
         *,
-        jsonl_path: Optional[Union[str, Path]] = None,
-        session_id: Optional[str] = None,
+        jsonl_path: str | Path | None = None,
+        session_id: str | None = None,
     ) -> None:
         super().__init__()
         self._lock = threading.Lock()
@@ -78,11 +78,11 @@ class StatsCallbackHandler(BaseCallbackHandler):
         self.total_cost = 0.0
 
         # Per-call identity records
-        self.fingerprints: List[Dict[str, Optional[str]]] = []
+        self.fingerprints: list[dict[str, str | None]] = []
 
         # JSONL persistence
         self.session_id: str = session_id or str(uuid.uuid4())
-        self.jsonl_path: Optional[Path] = (
+        self.jsonl_path: Path | None = (
             Path(jsonl_path).expanduser() if jsonl_path else None
         )
         if self.jsonl_path is not None:
@@ -91,8 +91,8 @@ class StatsCallbackHandler(BaseCallbackHandler):
         self._call_seq = 0
 
         # Role-specific stats
-        self.role_stats: Dict[str, Dict[str, Union[int, float]]] = {}
-        self._run_context: Dict[str, Dict[str, Union[str, float]]] = {}
+        self.role_stats: dict[str, dict[str, int | float]] = {}
+        self._run_context: dict[str, dict[str, str | float]] = {}
 
     @staticmethod
     def _normalize_role(raw_role: str) -> str:
@@ -118,7 +118,7 @@ class StatsCallbackHandler(BaseCallbackHandler):
     @classmethod
     def _extract_role(
         cls,
-        serialized: Dict[str, Any],
+        serialized: dict[str, Any],
         **kwargs: Any,
     ) -> str:
         metadata = kwargs.get("metadata") or {}
@@ -147,7 +147,7 @@ class StatsCallbackHandler(BaseCallbackHandler):
         run_id = kwargs.get("run_id")
         return str(run_id) if run_id is not None else ""
 
-    def _ensure_role_bucket(self, role: str) -> Dict[str, Union[int, float]]:
+    def _ensure_role_bucket(self, role: str) -> dict[str, int | float]:
         if role not in self.role_stats:
             self.role_stats[role] = {
                 "llm_calls": 0,
@@ -158,7 +158,7 @@ class StatsCallbackHandler(BaseCallbackHandler):
             }
         return self.role_stats[role]
 
-    def _register_start(self, serialized: Dict[str, Any], **kwargs: Any) -> None:
+    def _register_start(self, serialized: dict[str, Any], **kwargs: Any) -> None:
         role = self._extract_role(serialized, **kwargs)
         run_id = self._run_id_from_kwargs(**kwargs)
         started_at = time.perf_counter()
@@ -175,9 +175,9 @@ class StatsCallbackHandler(BaseCallbackHandler):
 
     def on_llm_start(
         self,
-        serialized: Dict[str, Any],
-        prompts: List[str],
-        run_id: Optional[uuid.UUID] = None,
+        serialized: dict[str, Any],
+        prompts: list[str],
+        run_id: uuid.UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """Increment LLM call counter when an LLM starts."""
@@ -187,9 +187,9 @@ class StatsCallbackHandler(BaseCallbackHandler):
 
     def on_chat_model_start(
         self,
-        serialized: Dict[str, Any],
-        messages: List[List[Any]],
-        run_id: Optional[uuid.UUID] = None,
+        serialized: dict[str, Any],
+        messages: list[list[Any]],
+        run_id: uuid.UUID | None = None,
         **kwargs: Any,
     ) -> None:
         """Increment LLM call counter when a chat model starts."""
@@ -200,9 +200,9 @@ class StatsCallbackHandler(BaseCallbackHandler):
     def on_llm_end(
         self,
         response: LLMResult,
-        run_id: Optional[uuid.UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        run_id: uuid.UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         """Extract token usage, fingerprint, and write a per-call JSONL line."""
@@ -261,7 +261,7 @@ class StatsCallbackHandler(BaseCallbackHandler):
 
             if self.jsonl_path is not None:
                 record = {
-                    "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                     "type": "llm_end",
                     "session_id": self.session_id,
                     "call_seq": seq,
@@ -299,7 +299,7 @@ class StatsCallbackHandler(BaseCallbackHandler):
 
     def on_tool_start(
         self,
-        serialized: Dict[str, Any],
+        serialized: dict[str, Any],
         input_str: str,
         **kwargs: Any,
     ) -> None:
@@ -311,7 +311,7 @@ class StatsCallbackHandler(BaseCallbackHandler):
     # Public read API
     # ------------------------------------------------------------------ #
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Return current statistics."""
         with self._lock:
             role_stats = {}

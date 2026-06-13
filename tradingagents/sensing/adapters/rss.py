@@ -10,8 +10,7 @@ import json
 import logging
 import sqlite3
 import time
-from datetime import datetime, timezone
-from typing import List
+from datetime import UTC, datetime
 
 import feedparser
 import redis.asyncio as aioredis
@@ -19,7 +18,6 @@ import redis.asyncio as aioredis
 from tradingagents.sensing.adapters.base import EnvelopeWriter
 from tradingagents.sensing.cursor import CursorStore
 from tradingagents.sensing.envelope import Envelope
-
 
 log = logging.getLogger(__name__)
 NAME = "rss"
@@ -29,15 +27,15 @@ POLL_INTERVAL = 5 * 60
 def _entry_ts(entry) -> str:
     if getattr(entry, "published_parsed", None):
         dt = datetime.fromtimestamp(time.mktime(entry.published_parsed),
-                                     tz=timezone.utc)
+                                     tz=UTC)
         return dt.isoformat()
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class RssAdapter:
     name = NAME
 
-    def __init__(self, *, feeds: List[str], staging_root: str, stream: str) -> None:
+    def __init__(self, *, feeds: list[str], staging_root: str, stream: str) -> None:
         self._feeds = list(feeds)
         self._staging = staging_root
         self._stream = stream
@@ -74,7 +72,7 @@ class RssAdapter:
                 ]))
                 env = Envelope(
                     source=NAME,
-                    ingested_ts=datetime.now(timezone.utc).isoformat(),
+                    ingested_ts=datetime.now(UTC).isoformat(),
                     external_id=ext_id, text=text,
                     source_tags={"feed": feed_url,
                                  "link": getattr(entry, "link", "")},

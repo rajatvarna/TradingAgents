@@ -19,11 +19,11 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
-from typing import Any, List, Optional
+from typing import Any
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 from .base_client import BaseLLMClient
@@ -58,7 +58,7 @@ _TOOL_SILENCE_INSTRUCTION = (
 )
 
 
-def _flatten_messages(messages: List[BaseMessage]) -> tuple[Optional[str], str]:
+def _flatten_messages(messages: list[BaseMessage]) -> tuple[str | None, str]:
     """Collapse a LangChain message list into ``(system_prompt, user_text)``.
 
     TradingAgents calls ``llm.invoke(single_string)`` which LangChain
@@ -109,7 +109,7 @@ class ClaudeCodeChatModel(BaseChatModel):
     # Set by ``bind_tools(tools)``; when non-None each ``_aquery`` call
     # spins up an SDK MCP server exposing these LangChain tools so the
     # model can call them inside its agent loop.
-    bound_tools: Optional[List[Any]] = None
+    bound_tools: list[Any] | None = None
 
     model_config = {"protected_namespaces": (), "arbitrary_types_allowed": True}
 
@@ -121,7 +121,7 @@ class ClaudeCodeChatModel(BaseChatModel):
     def _identifying_params(self) -> dict:
         return {"model": self.model, "provider": "claude-code"}
 
-    async def _aquery(self, system_prompt: Optional[str], user_text: str) -> str:
+    async def _aquery(self, system_prompt: str | None, user_text: str) -> str:
         # Lazy import keeps simply loading this module cheap when the SDK
         # is absent (and lets the install-error point at the right place).
         try:
@@ -296,9 +296,9 @@ class ClaudeCodeChatModel(BaseChatModel):
 
     def _generate(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         system_prompt, user_text = _flatten_messages(messages)
@@ -309,8 +309,8 @@ class ClaudeCodeChatModel(BaseChatModel):
 
     async def _agenerate(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
         run_manager=None,
         **kwargs: Any,
     ) -> ChatResult:
@@ -330,7 +330,7 @@ class ClaudeCodeChatModel(BaseChatModel):
         )
 
     @staticmethod
-    def _build_mcp_server(tools: List[Any]) -> Any:
+    def _build_mcp_server(tools: list[Any]) -> Any:
         """Wrap each LangChain tool as an ``SdkMcpTool`` and create an
         in-process MCP server exposing the lot under one namespace.
         """
@@ -419,7 +419,7 @@ class ClaudeCodeClient(BaseLLMClient):
 
     provider = "claude-code"
 
-    def __init__(self, model: str, base_url: Optional[str] = None, **kwargs):
+    def __init__(self, model: str, base_url: str | None = None, **kwargs):
         if base_url is not None:
             raise ValueError(
                 "The 'claude-code' provider has no base_url — endpoint and "

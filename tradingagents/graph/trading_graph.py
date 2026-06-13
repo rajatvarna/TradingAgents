@@ -1,11 +1,11 @@
 # TradingAgents/graph/trading_graph.py
 
+import json
 import logging
 import os
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-import json
-from datetime import datetime, timedelta
-from typing import Dict, Any, Tuple, List, Optional
+from typing import Any
 
 import yfinance as yf
 
@@ -13,37 +13,30 @@ logger = logging.getLogger(__name__)
 
 from langgraph.prebuilt import ToolNode
 
-from tradingagents.llm_clients import create_llm_client
-
-from tradingagents.agents import *
-from tradingagents.default_config import DEFAULT_CONFIG
-from tradingagents.agents.utils.memory import TradingMemoryLog
-from tradingagents.dataflows.utils import safe_ticker_component
-from tradingagents.dataflows.symbol_utils import normalize_symbol
-from tradingagents.agents.utils.agent_states import (
-    AgentState,
-    InvestDebateState,
-    RiskDebateState,
-)
-from tradingagents.dataflows.config import set_config
-
 # Import the new abstract tool methods from agent_utils
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
-    resolve_instrument_identity,
-    get_stock_data,
-    get_indicators,
-    get_fundamentals,
     get_balance_sheet,
     get_cashflow,
-    get_income_statement,
-    get_news,
-    get_insider_transactions,
+    get_fundamentals,
     get_global_news,
+    get_income_statement,
+    get_indicators,
+    get_insider_transactions,
+    get_news,
+    get_stock_data,
+    resolve_instrument_identity,
     resolve_risk_constraints,
 )
+from tradingagents.agents.utils.memory import TradingMemoryLog
+from tradingagents.dataflows.config import set_config
+from tradingagents.dataflows.symbol_utils import normalize_symbol
+from tradingagents.dataflows.utils import safe_ticker_component
+from tradingagents.default_config import DEFAULT_CONFIG
+from tradingagents.llm_clients import create_llm_client
 
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
+
 
 def _precompute_monster_score(ticker: str, trade_date: str, config: dict) -> dict:
     """Pre-compute MonsterStockScore before the graph runs.
@@ -55,10 +48,11 @@ def _precompute_monster_score(ticker: str, trade_date: str, config: dict) -> dic
         return {}
     try:
         import dataclasses
+
         from tradingagents.dataflows.fundamentals_deep import fetch_deep_fundamentals
-        from tradingagents.dataflows.technicals_deep import compute_deep_technicals
         from tradingagents.dataflows.market_health import fetch_market_health
         from tradingagents.dataflows.sector_groups import fetch_group_leadership
+        from tradingagents.dataflows.technicals_deep import compute_deep_technicals
         from tradingagents.scoring.monster_stock_scorer import score_stock
 
         fund = fetch_deep_fundamentals(ticker)
@@ -71,10 +65,10 @@ def _precompute_monster_score(ticker: str, trade_date: str, config: dict) -> dic
         logger.warning("Monster Stock pre-score failed for %s on %s: %s", ticker, trade_date, exc)
         return {}
 from .conditional_logic import ConditionalLogic
-from .setup import GraphSetup
 from .propagation import Propagator
 from .reflection import Reflector
-from .signal_processing import SignalProcessor
+from .setup import GraphSetup
+from .signal_processing import SIGNAL_CONVICTION_WEIGHTS, SignalProcessor
 
 
 class TradingAgentsGraph:
@@ -84,8 +78,8 @@ class TradingAgentsGraph:
         self,
         selected_analysts=["market", "social", "news", "fundamentals"],
         debug=False,
-        config: Dict[str, Any] = None,
-        callbacks: Optional[List] = None,
+        config: dict[str, Any] = None,
+        callbacks: list | None = None,
     ):
         """Initialize the trading agents graph and components.
 
@@ -98,6 +92,7 @@ class TradingAgentsGraph:
         self.debug = debug
         self.config = config or DEFAULT_CONFIG
         self.callbacks = callbacks or []
+        self.selected_analysts = selected_analysts
 
         # IIC-FORGE F1: token accumulator — must be in self.callbacks BEFORE
         # the LLM clients are constructed, so the LLM clients pick it up.
@@ -134,13 +129,14 @@ class TradingAgentsGraph:
 
         self.deep_thinking_llm = deep_client.get_llm()
         self.quick_thinking_llm = quick_client.get_llm()
-        
+
         self.memory_log = TradingMemoryLog(self.config)
 
         # IIC-FORGE F1: per-run id + persistence + Run Recorder
         import uuid
-        from tradingagents.persistence.db import connect as _iic_connect
+
         from tradingagents.graph.run_recorder import RunRecorder, make_run_recorder_node
+        from tradingagents.persistence.db import connect as _iic_connect
 
         self.run_id = uuid.uuid4().hex
         self._iic_conn = _iic_connect(self.config["iic_db_path"])
@@ -154,7 +150,7 @@ class TradingAgentsGraph:
         )
         run_recorder_node = make_run_recorder_node(self.run_recorder)
 
-        self.structured_output_cache: Dict[str, str] = {}
+        self.structured_output_cache: dict[str, str] = {}
 
         # Create tool nodes
         self.tool_nodes = self._create_tool_nodes()
@@ -191,7 +187,7 @@ class TradingAgentsGraph:
         self.graph = self.workflow.compile()
         self._checkpointer_ctx = None
 
-    def _get_provider_kwargs(self) -> Dict[str, Any]:
+    def _get_provider_kwargs(self) -> dict[str, Any]:
         """Get provider-specific kwargs for LLM client creation."""
         kwargs = {}
         provider = self.config.get("llm_provider", "").lower()
@@ -230,11 +226,11 @@ class TradingAgentsGraph:
 
         return kwargs
 
-    def _risk_constraints_from_config(self) -> Dict[str, Any]:
+    def _risk_constraints_from_config(self) -> dict[str, Any]:
         """Return session risk constraints to persist outside message history."""
         return resolve_risk_constraints(self.config)
 
-    def _create_tool_nodes(self) -> Dict[str, ToolNode]:
+    def _create_tool_nodes(self) -> dict[str, ToolNode]:
         """Create tool nodes for different data sources using abstract methods."""
         return {
             "market": ToolNode(
@@ -291,10 +287,19 @@ class TradingAgentsGraph:
                 return benchmark
         return benchmark_map.get("", "SPY")
 
+    @staticmethod
+    def _coerce_positive_int(value, default: int) -> int:
+        """Coerce value to a positive int, falling back to default on failure."""
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return default
+        return parsed if parsed > 0 else default
+
     def _fetch_returns(
-        self, ticker: str, trade_date: str, holding_days: int = 5,
+        self, ticker: str, trade_date: str, holding_days: int = None,
         benchmark: str = "SPY",
-    ) -> Tuple[Optional[float], Optional[float], Optional[int]]:
+    ) -> tuple[float | None, float | None, int | None]:
         """Fetch raw and alpha return for ticker over holding_days from trade_date.
 
         ``benchmark`` is the index used as the alpha baseline (resolved by the
@@ -302,6 +307,9 @@ class TradingAgentsGraph:
         actual_holding_days)`` or ``(None, None, None)`` if price data is
         unavailable (too recent, delisted, or network error).
         """
+        if holding_days is None:
+            cfg = getattr(self, "config", {}) or {}
+            holding_days = self._coerce_positive_int(cfg.get("outcome_holding_days", 5), 5)
         try:
             start = datetime.strptime(trade_date, "%Y-%m-%d")
             end = start + timedelta(days=holding_days + 7)  # buffer for weekends/holidays
@@ -478,10 +486,10 @@ class TradingAgentsGraph:
 
         args = self.propagator.get_graph_args(callbacks=self.callbacks)
 
-        from datetime import datetime, timezone
+        from datetime import datetime
         self.run_recorder.start(
             ticker=init_agent_state.get("company_of_interest", "UNKNOWN"),
-            started_ts=datetime.now(timezone.utc).isoformat(),
+            started_ts=datetime.now(UTC).isoformat(),
         )
 
         # Inject thread_id so same ticker+date resumes, different date starts fresh.
@@ -528,35 +536,33 @@ class TradingAgentsGraph:
 
     def _log_state(self, trade_date, final_state):
         """Log the final state to a JSON file."""
+        ids = final_state.get("investment_debate_state") or {}
+        rds = final_state.get("risk_debate_state") or {}
         self.log_states_dict[str(trade_date)] = {
-            "company_of_interest": final_state["company_of_interest"],
-            "trade_date": final_state["trade_date"],
-            "market_report": final_state["market_report"],
-            "sentiment_report": final_state["sentiment_report"],
-            "news_report": final_state["news_report"],
-            "fundamentals_report": final_state["fundamentals_report"],
+            "company_of_interest": final_state.get("company_of_interest"),
+            "trade_date": final_state.get("trade_date"),
+            "market_report": final_state.get("market_report"),
+            "sentiment_report": final_state.get("sentiment_report"),
+            "news_report": final_state.get("news_report"),
+            "fundamentals_report": final_state.get("fundamentals_report"),
             "risk_constraints": final_state.get("risk_constraints", {}),
             "investment_debate_state": {
-                "bull_history": final_state["investment_debate_state"]["bull_history"],
-                "bear_history": final_state["investment_debate_state"]["bear_history"],
-                "history": final_state["investment_debate_state"]["history"],
-                "current_response": final_state["investment_debate_state"][
-                    "current_response"
-                ],
-                "judge_decision": final_state["investment_debate_state"][
-                    "judge_decision"
-                ],
+                "bull_history": ids.get("bull_history"),
+                "bear_history": ids.get("bear_history"),
+                "history": ids.get("history"),
+                "current_response": ids.get("current_response"),
+                "judge_decision": ids.get("judge_decision"),
             },
-            "trader_investment_decision": final_state["trader_investment_plan"],
+            "trader_investment_decision": final_state.get("trader_investment_plan"),
             "risk_debate_state": {
-                "aggressive_history": final_state["risk_debate_state"]["aggressive_history"],
-                "conservative_history": final_state["risk_debate_state"]["conservative_history"],
-                "neutral_history": final_state["risk_debate_state"]["neutral_history"],
-                "history": final_state["risk_debate_state"]["history"],
-                "judge_decision": final_state["risk_debate_state"]["judge_decision"],
+                "aggressive_history": rds.get("aggressive_history"),
+                "conservative_history": rds.get("conservative_history"),
+                "neutral_history": rds.get("neutral_history"),
+                "history": rds.get("history"),
+                "judge_decision": rds.get("judge_decision"),
             },
-            "investment_plan": final_state["investment_plan"],
-            "final_trade_decision": final_state["final_trade_decision"],
+            "investment_plan": final_state.get("investment_plan"),
+            "final_trade_decision": final_state.get("final_trade_decision"),
         }
 
         # Save to file. Reject ticker values that would escape the
@@ -575,10 +581,10 @@ class TradingAgentsGraph:
 
     def propagate_portfolio(
         self,
-        tickers: List[str],
+        tickers: list[str],
         trade_date: str,
-        max_workers: int = 4,
-    ) -> Dict[str, Any]:
+        max_workers: int = None,
+    ) -> dict[str, Any]:
         """Analyze a basket of tickers in parallel and return a ranked summary.
 
         Each ticker is analysed independently by cloning the graph's config so
@@ -590,7 +596,9 @@ class TradingAgentsGraph:
             tickers: List of ticker symbols to analyse.
             trade_date: Analysis date in YYYY-MM-DD format.
             max_workers: Maximum parallel threads (default 4; keep below API
-                rate-limit thresholds for your provider).
+                rate-limit thresholds for your provider).  Set to 1 to run
+                sequentially if your ``propagate`` implementation is not
+                thread-safe (e.g. when using a shared SQLite checkpointer).
 
         Returns:
             A dict with keys:
@@ -598,12 +606,23 @@ class TradingAgentsGraph:
                 ``summary`` — high-level counts (buy/hold/sell) and top pick.
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
+        if max_workers is None:
+            max_workers = self._coerce_positive_int(
+                self.config.get("portfolio_propagation_max_workers", 4), 4
+            )
         if not tickers:
             return {"results": [], "summary": {}}
 
-        def _analyse_one(ticker: str) -> Dict[str, Any]:
+        # Capture the propagate method reference before entering threads so that
+        # test patches on self.propagate are honoured, and so that subclasses
+        # overriding propagate are respected.  Under true concurrency, callers
+        # must ensure their propagate implementation is thread-safe or pass
+        # max_workers=1.
+        _propagate = self.propagate
+
+        def _analyse_one(ticker: str) -> dict[str, Any]:
             try:
-                final_state, signal = self.propagate(ticker, trade_date)
+                final_state, signal = _propagate(ticker, trade_date)
                 decision_text = final_state.get("final_trade_decision", "")
                 confidence = self._extract_confidence(decision_text)
                 rating = self._extract_rating(decision_text)
@@ -629,7 +648,7 @@ class TradingAgentsGraph:
                     "error": str(exc),
                 }
 
-        results: List[Dict[str, Any]] = []
+        results: list[dict[str, Any]] = []
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = {pool.submit(_analyse_one, t): t for t in tickers}
             for future in as_completed(futures):
@@ -641,9 +660,9 @@ class TradingAgentsGraph:
         for i, r in enumerate(results, start=1):
             r["rank"] = i
 
-        buy_count = sum(1 for r in results if r["signal"] in ("BUY", "OVERWEIGHT"))
-        sell_count = sum(1 for r in results if r["signal"] in ("SELL", "UNDERWEIGHT"))
-        hold_count = sum(1 for r in results if r["signal"] == "HOLD")
+        buy_count = sum(1 for r in results if r["signal"].title() in ("Buy", "Overweight"))
+        sell_count = sum(1 for r in results if r["signal"].title() in ("Sell", "Underweight"))
+        hold_count = sum(1 for r in results if r["signal"].title() == "Hold")
         top_pick = results[0]["ticker"] if results else None
 
         return {
@@ -671,7 +690,7 @@ class TradingAgentsGraph:
         return 0.5  # neutral fallback
 
     @staticmethod
-    def _extract_rating(decision_text: str) -> Optional[str]:
+    def _extract_rating(decision_text: str) -> str | None:
         """Parse **Rating**: <value> from the Portfolio Manager's markdown."""
         import re
         match = re.search(r"\*\*Rating\*\*:\s*(\w+)", decision_text)
@@ -683,11 +702,6 @@ class TradingAgentsGraph:
 
         Positive score -> bullish, negative -> bearish, magnitude = conviction.
         """
-        direction = {
-            "BUY": 2.0,
-            "OVERWEIGHT": 1.0,
-            "HOLD": 0.0,
-            "UNDERWEIGHT": -1.0,
-            "SELL": -2.0,
-        }.get(signal.upper(), 0.0)
+        # Normalise to title-case to match SIGNAL_CONVICTION_WEIGHTS keys.
+        direction = SIGNAL_CONVICTION_WEIGHTS.get(signal.title(), 0.0)
         return direction * confidence

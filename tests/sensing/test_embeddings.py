@@ -22,6 +22,7 @@ def test_mock_embedder_deterministic():
 def test_mock_embedder_l2_normalized():
     """Vectors must be unit-norm so cosine == dot product."""
     import math
+
     from tradingagents.sensing.embeddings import MockEmbedder
     v = MockEmbedder(dim=384).embed("x")
     norm = math.sqrt(sum(x * x for x in v))

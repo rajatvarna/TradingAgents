@@ -1,5 +1,5 @@
 import os
-from typing import Any, Optional
+from typing import Any
 
 from .openai_client import OpenAIClient
 
@@ -41,7 +41,7 @@ class GitHubCopilotClient(OpenAIClient):
     no other file needs to move.
     """
 
-    def __init__(self, model: str, base_url: Optional[str] = None, **kwargs):
+    def __init__(self, model: str, base_url: str | None = None, **kwargs):
         # Pre-bake the ``X-GitHub-Api-Version`` header into kwargs at
         # construction time so ``get_llm()`` stays a pure read of
         # ``self.kwargs`` and is safe to call repeatedly. Caller-supplied

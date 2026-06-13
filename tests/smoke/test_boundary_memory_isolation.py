@@ -1,5 +1,6 @@
-import pytest
+from datetime import UTC
 
+import pytest
 
 pytestmark = pytest.mark.smoke
 
@@ -36,16 +37,17 @@ def test_persona_memory_store_has_no_api_to_read_other_personas(tmp_path):
 def test_outcome_log_is_intentionally_shared(tmp_path):
     """Contrast test: the OutcomeLog *is* shared across personas. This
     documents the design and guards against an accidental future scoping."""
+    import uuid
+    from datetime import datetime
+
+    from tradingagents.persistence import store
     from tradingagents.persistence.db import connect
     from tradingagents.persistence.memory import OutcomeLog
-    from tradingagents.persistence import store
-    from datetime import datetime, timezone
-    import uuid
 
     conn = connect(str(tmp_path / "iic.db"))
     macro_run = uuid.uuid4().hex
     momentum_run = uuid.uuid4().hex
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     store.insert_run(conn, run_id=macro_run, ticker="AAPL", persona_id="macro",
                      started_ts=now, artifact_dir="x")
     store.insert_run(conn, run_id=momentum_run, ticker="AAPL", persona_id="momentum",

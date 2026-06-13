@@ -14,21 +14,17 @@ Four layers:
 
 from __future__ import annotations
 
-import io
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
 
 from tradingagents.audit import (
-    GENESIS_HASH,
     HashChainLedger,
-    PromptRegistry,
     Replayer,
     TraceCallback,
 )
@@ -37,11 +33,9 @@ from tradingagents.audit.schemas import (
     LLM_END,
     LLM_START,
     NODE_ENTER,
-    TOOL_START,
     TraceRecord,
     hash_payload,
 )
-
 
 # -------------------------------------------------------------------- #
 # Fixture: write a minimal valid chained trace
@@ -68,7 +62,7 @@ def _mk(type_: str, *, payload=None, node=None, parent=None, session="s1") -> Tr
         record_id=str(uuid.uuid4()),
         session_id=session,
         parent_record_id=parent,
-        ts=datetime.now(timezone.utc),
+        ts=datetime.now(UTC),
         type=type_,
         node=node,
         payload=payload,
@@ -146,9 +140,9 @@ class TestReplayerBasics:
         path = tmp_path / "t.jsonl"
         # Two records with explicit timestamps 5 seconds apart
         a = _mk(LLM_START)
-        a.ts = datetime(2026, 1, 15, 14, 0, 0, tzinfo=timezone.utc)
+        a.ts = datetime(2026, 1, 15, 14, 0, 0, tzinfo=UTC)
         b = _mk(LLM_END)
-        b.ts = datetime(2026, 1, 15, 14, 0, 5, tzinfo=timezone.utc)
+        b.ts = datetime(2026, 1, 15, 14, 0, 5, tzinfo=UTC)
         _build_chained_trace(path, [a, b])
         s = Replayer(path).summary()
         assert s.wall_seconds == pytest.approx(5.0)

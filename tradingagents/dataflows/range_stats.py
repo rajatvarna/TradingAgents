@@ -11,12 +11,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from io import StringIO
-from typing import Optional
 
 import pandas as pd
 
 from tradingagents.dataflows.interface import route_to_vendor
-
 
 WINDOWS_TRADING_DAYS = {"52w": 252, "6m": 126, "3m": 63, "1m": 21}
 
@@ -53,7 +51,7 @@ def _load_ohlcv(symbol: str, trade_date: str) -> pd.DataFrame:
     return df
 
 
-def _window_low_high(df: pd.DataFrame, n: int, col: str) -> tuple[Optional[float], Optional[float]]:
+def _window_low_high(df: pd.DataFrame, n: int, col: str) -> tuple[float | None, float | None]:
     """Return (low, high) over the last n trading days inclusive of today.
 
     Returns (None, None) if fewer than n rows available.
@@ -64,7 +62,7 @@ def _window_low_high(df: pd.DataFrame, n: int, col: str) -> tuple[Optional[float
     return float(sl[col].min()), float(sl[col].max())
 
 
-def _calc_metrics(current: float, low: Optional[float], high: Optional[float]) -> dict:
+def _calc_metrics(current: float, low: float | None, high: float | None) -> dict:
     if low is None or high is None:
         return {"low": None, "high": None,
                 "pct_above_low": None, "pct_below_high": None, "position_pct": None}
@@ -145,19 +143,19 @@ def compute_range_stats(symbol: str, trade_date: str) -> dict:
     }
 
 
-def _fmt_pct(v: Optional[float]) -> str:
+def _fmt_pct(v: float | None) -> str:
     if v is None:
         return "n/a"
     return f"{v:+.1f}%"
 
 
-def _fmt_pos(v: Optional[float]) -> str:
+def _fmt_pos(v: float | None) -> str:
     if v is None:
         return "n/a"
     return f"{v:.1f}%"
 
 
-def _fmt_price(v: Optional[float]) -> str:
+def _fmt_price(v: float | None) -> str:
     if v is None:
         return "n/a"
     return f"{v:.2f}"
@@ -175,7 +173,7 @@ def _fmt_vol_short(v: int | float) -> str:
     return f"{v:.0f}"
 
 
-def _color_for_window(window: dict) -> Optional[str]:
+def _color_for_window(window: dict) -> str | None:
     """Return 'red' near recent high, 'green' near recent low, else None."""
     pos = window.get("position_pct")
     if pos is None:

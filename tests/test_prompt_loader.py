@@ -10,7 +10,6 @@ import yaml
 
 from tradingagents.prompts.loader import load_prompt
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -105,6 +104,9 @@ class TestLoadPromptDynamic:
                           sentiment_report="snt",
                           news_report="news",
                           fundamentals_report="fund",
+                          esg_report="",
+                          user_research_report="",
+                          scope_guard="",
                           history="hist",
                           current_response="resp")
         # All placeholders resolved — no leftover braces.

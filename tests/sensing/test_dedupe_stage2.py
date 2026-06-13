@@ -1,12 +1,13 @@
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timezone, timedelta
 
 from tradingagents.persistence.db import connect
 from tradingagents.persistence.store import insert_event, insert_event_embedding
 
 
 def _insert_with_vec(conn, *, event_id, vec, ingested_ts=None):
-    ts = ingested_ts or datetime.now(timezone.utc).isoformat()
+    ts = ingested_ts or datetime.now(UTC).isoformat()
     insert_event(conn, event_id=event_id, source="rss", ingested_ts=ts,
                  salience=0.5, raw_path=f"data/events/{event_id}.json",
                  status="triaged", deduped_of=None)
@@ -60,7 +61,7 @@ def test_stage2_window_excludes_old_events(conn):
     from tradingagents.sensing.dedupe import DedupeStage2
     from tradingagents.sensing.embeddings import MockEmbedder
     emb = MockEmbedder()
-    old_ts = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
+    old_ts = (datetime.now(UTC) - timedelta(hours=48)).isoformat()
     _insert_with_vec(conn, event_id="ev-old", vec=emb.embed("xyz"),
                      ingested_ts=old_ts)
     ds2 = DedupeStage2(conn=conn, embedder=emb,
@@ -73,7 +74,7 @@ def test_stage2_record_inserts_embedding_and_returns_vec_id(conn):
     from tradingagents.sensing.dedupe import DedupeStage2
     from tradingagents.sensing.embeddings import MockEmbedder
     insert_event(conn, event_id="ev-new", source="rss",
-                 ingested_ts=datetime.now(timezone.utc).isoformat(),
+                 ingested_ts=datetime.now(UTC).isoformat(),
                  salience=0.5, raw_path="p", status="triaged", deduped_of=None)
     ds2 = DedupeStage2(conn=conn, embedder=MockEmbedder(),
                        cosine_threshold=0.92, window_hours=24)

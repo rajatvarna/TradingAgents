@@ -1,8 +1,8 @@
-import asyncio
 import json
-import pytest
+from datetime import UTC, datetime
+
 import fakeredis.aioredis
-from datetime import datetime, timezone
+import pytest
 
 from tradingagents.persistence.db import connect
 from tradingagents.persistence.store import upsert_ticker
@@ -27,12 +27,12 @@ def _llm():
 
 @pytest.mark.unit
 async def test_consume_processes_one_envelope_then_acks(conn, tmp_path):
-    from tradingagents.sensing.triage import Triage
     from tradingagents.sensing.embeddings import MockEmbedder
+    from tradingagents.sensing.triage import Triage
     r = fakeredis.aioredis.FakeRedis(decode_responses=True)
     await ensure_consumer_group(r, stream="ingest:raw", group="triage")
     env = Envelope(source="rss",
-                   ingested_ts=datetime.now(timezone.utc).isoformat(),
+                   ingested_ts=datetime.now(UTC).isoformat(),
                    external_id="x:1", text="hello", source_tags={}, raw_path="")
     await r.xadd("ingest:raw", env.to_redis_fields())
 
@@ -56,8 +56,8 @@ async def test_dead_letter_after_max_failures(conn, tmp_path):
     with the periodic ``dead_letter_sweep`` (here called directly with
     ``max_deliveries=1`` so a single failure qualifies — minimum threshold).
     """
-    from tradingagents.sensing.triage import Triage, dead_letter_sweep
     from tradingagents.sensing.embeddings import MockEmbedder
+    from tradingagents.sensing.triage import Triage, dead_letter_sweep
     r = fakeredis.aioredis.FakeRedis(decode_responses=True)
     await ensure_consumer_group(r, stream="ingest:raw", group="triage")
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 
 def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
@@ -9,7 +9,7 @@ def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
 
 def compute_trade_filter(
     *,
-    trade_levels: Dict[str, Any] | None,
+    trade_levels: dict[str, Any] | None,
     rating: str,
     rm_rating: str | None,
     trader_action: str | None,
@@ -19,9 +19,9 @@ def compute_trade_filter(
     threshold: float = 0.65,
     rr_hard_min: float = 1.3,
     atr_pct_hard_max: float = 0.08,
-) -> Dict[str, Any]:
-    reasons: List[str] = []
-    hard_reject_reasons: List[str] = []
+) -> dict[str, Any]:
+    reasons: list[str] = []
+    hard_reject_reasons: list[str] = []
 
     if not trade_levels:
         hard_reject_reasons.append("Missing trade_levels output; cannot validate execution setup.")
@@ -157,14 +157,14 @@ def compute_trade_filter(
 
 def compute_trade_filter_score(
     *,
-    trade_levels: Dict[str, Any] | None,
+    trade_levels: dict[str, Any] | None,
     rating: str,
     rm_rating: str | None,
     trader_action: str | None,
     data_quality: str,
     error_count: int,
     structured_valid: bool,
-) -> Tuple[float, List[str]]:
+) -> tuple[float, list[str]]:
     result = compute_trade_filter(
         trade_levels=trade_levels,
         rating=rating,

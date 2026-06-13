@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone, timedelta
-from typing import Iterable
+from collections.abc import Iterable
+from datetime import UTC, datetime, timedelta
 
 
 def add_user(
@@ -56,7 +56,7 @@ def auto_promote(
                          tags=["user", f"event:{event_id}"])
         return 0
 
-    ttl_until = (datetime.now(timezone.utc) + timedelta(days=ttl_days)).isoformat()
+    ttl_until = (datetime.now(UTC) + timedelta(days=ttl_days)).isoformat()
     upsert_watchlist(
         conn, ticker=ticker, ttl_until=ttl_until,
         tags=["auto", f"event:{event_id}"],

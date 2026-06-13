@@ -23,17 +23,17 @@ audit completeness and would muddy this PR's scope.
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
 
+from tradingagents.audit.ledger import HashChainLedger
 from tradingagents.audit.schemas import (
     LLM_END,
     LLM_START,
@@ -42,10 +42,8 @@ from tradingagents.audit.schemas import (
     TOOL_END,
     TOOL_START,
     TraceRecord,
-    canonical_json,
     hash_payload,
 )
-from tradingagents.audit.ledger import HashChainLedger
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +53,7 @@ logger = logging.getLogger(__name__)
 # -------------------------------------------------------------------- #
 
 
-def _serialize_message(message: Any) -> Dict[str, Any]:
+def _serialize_message(message: Any) -> dict[str, Any]:
     """Best-effort dict form of a LangChain message.
 
     The shape we want on disk: ``{"type": "human"|"ai"|"system"|...,
@@ -81,14 +79,14 @@ def _serialize_message(message: Any) -> Dict[str, Any]:
     }
 
 
-def _serialize_messages(messages: Any) -> List[Dict[str, Any]]:
+def _serialize_messages(messages: Any) -> list[dict[str, Any]]:
     """Flatten the nested message lists LangChain hands to on_chat_model_start.
 
     The hook gets ``messages: List[List[BaseMessage]]`` — one inner list
     per prompt (batch invocations). We flatten with batch_index markers
     so the on-disk record preserves which batch each message came from.
     """
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     if not isinstance(messages, list):
         return [_serialize_message(messages)]
     for batch_idx, inner in enumerate(messages):
@@ -102,7 +100,7 @@ def _serialize_messages(messages: Any) -> List[Dict[str, Any]]:
     return out
 
 
-def _serialize_response(response: LLMResult) -> Dict[str, Any]:
+def _serialize_response(response: LLMResult) -> dict[str, Any]:
     """Reduce LLMResult to plain JSON-safe dicts.
 
     We capture both the generation contents (``text``, ``message``,
@@ -110,11 +108,11 @@ def _serialize_response(response: LLMResult) -> Dict[str, Any]:
     different providers populate fingerprint and stop_reason on
     different surfaces.
     """
-    generations: List[List[Dict[str, Any]]] = []
+    generations: list[list[dict[str, Any]]] = []
     for batch in getattr(response, "generations", []) or []:
-        batch_out: List[Dict[str, Any]] = []
+        batch_out: list[dict[str, Any]] = []
         for gen in batch or []:
-            entry: Dict[str, Any] = {
+            entry: dict[str, Any] = {
                 "text": getattr(gen, "text", None),
                 "generation_info": dict(getattr(gen, "generation_info", None) or {}),
             }
@@ -148,7 +146,7 @@ def _serialize_tool_output(output: Any) -> Any:
     return repr(output)
 
 
-def _extract_node(metadata: Optional[Dict[str, Any]], tags: Optional[List[str]]) -> Optional[str]:
+def _extract_node(metadata: dict[str, Any] | None, tags: list[str] | None) -> str | None:
     """Pull the LangGraph node name out of callback metadata when present.
 
     LangGraph populates ``metadata['langgraph_node']`` for callbacks
@@ -183,13 +181,13 @@ class TraceCallback(BaseCallbackHandler):
     def __init__(
         self,
         *,
-        jsonl_path: Optional[Union[str, Path]] = None,
-        session_id: Optional[str] = None,
+        jsonl_path: str | Path | None = None,
+        session_id: str | None = None,
     ) -> None:
         super().__init__()
         self._lock = threading.Lock()
         self.session_id: str = session_id or str(uuid.uuid4())
-        self.jsonl_path: Optional[Path] = (
+        self.jsonl_path: Path | None = (
             Path(jsonl_path).expanduser() if jsonl_path else None
         )
         # T1.3 — when persisting, route through the hash-chained ledger
@@ -197,23 +195,23 @@ class TraceCallback(BaseCallbackHandler):
         # in-memory ``records`` list still reflects the same prev_hash
         # the ledger wrote, since ledger.append mutates the record
         # before writing.
-        self.ledger: Optional[HashChainLedger] = (
+        self.ledger: HashChainLedger | None = (
             HashChainLedger(self.jsonl_path) if self.jsonl_path is not None else None
         )
         # Map LangChain run_id (per-call UUID) -> our TraceRecord.record_id
         # so that on_*_end events can correlate back to their on_*_start
         # parent regardless of nesting.
-        self._run_to_record: Dict[str, str] = {}
+        self._run_to_record: dict[str, str] = {}
         # In-memory copy of every record we've written, for tests and
         # programmatic inspection. The file on disk is the source of truth;
         # this list is convenience.
-        self.records: List[TraceRecord] = []
+        self.records: list[TraceRecord] = []
 
     # ------------------------------------------------------------------ #
     # Public API
     # ------------------------------------------------------------------ #
 
-    def get_records(self) -> List[TraceRecord]:
+    def get_records(self) -> list[TraceRecord]:
         """Return a snapshot of records emitted so far."""
         with self._lock:
             return list(self.records)
@@ -226,10 +224,10 @@ class TraceCallback(BaseCallbackHandler):
         self,
         *,
         type_: str,
-        payload: Dict[str, Any],
-        run_id: Optional[uuid.UUID],
-        parent_run_id: Optional[uuid.UUID],
-        node: Optional[str],
+        payload: dict[str, Any],
+        run_id: uuid.UUID | None,
+        parent_run_id: uuid.UUID | None,
+        node: str | None,
     ) -> TraceRecord:
         """Build, persist, and return one TraceRecord. Caller-agnostic."""
         record_id = str(uuid.uuid4())
@@ -246,7 +244,7 @@ class TraceCallback(BaseCallbackHandler):
             record_id=record_id,
             session_id=self.session_id,
             parent_record_id=parent_record_id,
-            ts=datetime.now(timezone.utc),
+            ts=datetime.now(UTC),
             type=type_,
             node=node,
             payload=payload,
@@ -281,13 +279,13 @@ class TraceCallback(BaseCallbackHandler):
 
     def on_chat_model_start(
         self,
-        serialized: Dict[str, Any],
+        serialized: dict[str, Any],
         messages: Any,
         *,
-        run_id: Optional[uuid.UUID] = None,
-        parent_run_id: Optional[uuid.UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        run_id: uuid.UUID | None = None,
+        parent_run_id: uuid.UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         with self._lock:
@@ -307,13 +305,13 @@ class TraceCallback(BaseCallbackHandler):
 
     def on_llm_start(
         self,
-        serialized: Dict[str, Any],
-        prompts: List[str],
+        serialized: dict[str, Any],
+        prompts: list[str],
         *,
-        run_id: Optional[uuid.UUID] = None,
-        parent_run_id: Optional[uuid.UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        run_id: uuid.UUID | None = None,
+        parent_run_id: uuid.UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         """Used by completion-style LLMs (non-chat). Most of TradingAgents
@@ -337,10 +335,10 @@ class TraceCallback(BaseCallbackHandler):
         self,
         response: LLMResult,
         *,
-        run_id: Optional[uuid.UUID] = None,
-        parent_run_id: Optional[uuid.UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        run_id: uuid.UUID | None = None,
+        parent_run_id: uuid.UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         with self._lock:
@@ -358,13 +356,13 @@ class TraceCallback(BaseCallbackHandler):
 
     def on_tool_start(
         self,
-        serialized: Dict[str, Any],
+        serialized: dict[str, Any],
         input_str: str,
         *,
-        run_id: Optional[uuid.UUID] = None,
-        parent_run_id: Optional[uuid.UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        run_id: uuid.UUID | None = None,
+        parent_run_id: uuid.UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         with self._lock:
@@ -385,10 +383,10 @@ class TraceCallback(BaseCallbackHandler):
         self,
         output: Any,
         *,
-        run_id: Optional[uuid.UUID] = None,
-        parent_run_id: Optional[uuid.UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        run_id: uuid.UUID | None = None,
+        parent_run_id: uuid.UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         with self._lock:
@@ -406,13 +404,13 @@ class TraceCallback(BaseCallbackHandler):
 
     def on_chain_start(
         self,
-        serialized: Dict[str, Any],
-        inputs: Dict[str, Any],
+        serialized: dict[str, Any],
+        inputs: dict[str, Any],
         *,
-        run_id: Optional[uuid.UUID] = None,
-        parent_run_id: Optional[uuid.UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        run_id: uuid.UUID | None = None,
+        parent_run_id: uuid.UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         """LangGraph node entries fire as chain starts; we record them as
@@ -435,12 +433,12 @@ class TraceCallback(BaseCallbackHandler):
 
     def on_chain_end(
         self,
-        outputs: Dict[str, Any],
+        outputs: dict[str, Any],
         *,
-        run_id: Optional[uuid.UUID] = None,
-        parent_run_id: Optional[uuid.UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        run_id: uuid.UUID | None = None,
+        parent_run_id: uuid.UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
         with self._lock:

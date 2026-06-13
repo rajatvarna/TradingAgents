@@ -11,12 +11,9 @@ prompts for it automatically instead of failing on first API call.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from tradingagents.llm_clients.custom_provider_config import get_custom_api_key_env
 
-
-PROVIDER_API_KEY_ENV: dict[str, Optional[str]] = {
+PROVIDER_API_KEY_ENV: dict[str, str | None] = {
     "openai":     "OPENAI_API_KEY",
     # ChatGPT OAuth: nessuna env key; l'auth passa per il token store OAuth.
     "openai-oauth": None,
@@ -46,8 +43,6 @@ PROVIDER_API_KEY_ENV: dict[str, Optional[str]] = {
     "lm-studio":  None,
     "llama-cpp":  None,
     "bedrock":    None,
-    # OAuth — no static API key; device-code flow authenticates via browser.
-    "openai-oauth":  None,
     "openai_oauth":  None,
     "opencode":   "OPENCODE_API_KEY",
     "custom":     "CUSTOM_PROVIDER_API_KEY",
@@ -63,7 +58,7 @@ PROVIDER_API_KEY_ENV: dict[str, Optional[str]] = {
 }
 
 
-def get_api_key_env(provider: str) -> Optional[str]:
+def get_api_key_env(provider: str) -> str | None:
     """Return the env var name for `provider`'s API key, or None if not applicable.
 
     Unknown providers also return None — callers should treat that as

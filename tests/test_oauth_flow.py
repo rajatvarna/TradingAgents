@@ -105,7 +105,9 @@ def test_login_rejects_missing_code(monkeypatch, tmp_path):
 
 
 def test_login_success_exchanges_and_saves(monkeypatch, tmp_path):
-    import base64, json, time
+    import base64
+    import json
+    import time
     store = _patch_login_env(monkeypatch, tmp_path, {"state": "FIXED_STATE", "code": "GOODCODE"})
 
     def _jwt(p):

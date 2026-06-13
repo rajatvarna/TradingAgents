@@ -3,15 +3,14 @@ from datetime import datetime, timedelta
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from tradingagents.llm_clients.base_client import normalize_content
+
 from tradingagents.agents.utils.agent_utils import (
-    get_instrument_context_from_state,
     get_global_news,
+    get_instrument_context_from_state,
     get_language_instruction,
     get_news,
 )
 from tradingagents.agents.utils.tool_fallback import bind_tools_or_none, safe_tool_text
-
 
 logger = logging.getLogger(__name__)
 

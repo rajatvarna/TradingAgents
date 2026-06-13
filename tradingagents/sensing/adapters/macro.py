@@ -10,7 +10,7 @@ import asyncio
 import logging
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import redis.asyncio as aioredis
 import requests
@@ -18,7 +18,6 @@ import requests
 from tradingagents.sensing.adapters.base import EnvelopeWriter
 from tradingagents.sensing.cursor import CursorStore
 from tradingagents.sensing.envelope import Envelope
-
 
 log = logging.getLogger(__name__)
 NAME = "macro"
@@ -56,7 +55,7 @@ class MacroAdapter:
                 continue
             env = Envelope(
                 source=NAME,
-                ingested_ts=datetime.now(timezone.utc).isoformat(),
+                ingested_ts=datetime.now(UTC).isoformat(),
                 external_id=f"fred:{rid}",
                 text=rel.get("name", ""),
                 source_tags={"provider": "fred", "release_id": rid,

@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
@@ -8,7 +8,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import PrivateAttr
 
 
-def load_scenario_file(path: Path) -> Dict[str, Any]:
+def load_scenario_file(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -25,20 +25,20 @@ class ScenarioLLMClient:
 
 
 class ScenarioChatModel(BaseChatModel):
-    _scenario: Dict[str, Any] = PrivateAttr()
-    _seen: List[str] = PrivateAttr(default_factory=list)
+    _scenario: dict[str, Any] = PrivateAttr()
+    _seen: list[str] = PrivateAttr(default_factory=list)
 
-    def __init__(self, scenario: Dict[str, Any]):
+    def __init__(self, scenario: dict[str, Any]):
         super().__init__()
         self._scenario = scenario
         self._seen = []
 
     @property
-    def scenario(self) -> Dict[str, Any]:
+    def scenario(self) -> dict[str, Any]:
         return self._scenario
 
     @property
-    def seen(self) -> List[str]:
+    def seen(self) -> list[str]:
         return self._seen
 
     @property
@@ -53,8 +53,8 @@ class ScenarioChatModel(BaseChatModel):
 
     def _generate(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
         run_manager: Any = None,
         **kwargs: Any,
     ) -> ChatResult:

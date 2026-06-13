@@ -1,7 +1,8 @@
 import json
-import pytest
+from datetime import UTC, datetime
+
 import fakeredis.aioredis
-from datetime import datetime, timezone
+import pytest
 
 from tradingagents.sensing.envelope import Envelope
 
@@ -9,7 +10,7 @@ from tradingagents.sensing.envelope import Envelope
 def _env(text="Apple beats", source="polygon_news"):
     return Envelope(
         source=source,
-        ingested_ts=datetime.now(timezone.utc).isoformat(),
+        ingested_ts=datetime.now(UTC).isoformat(),
         external_id="x:1", text=text, source_tags={}, raw_path="p",
     )
 

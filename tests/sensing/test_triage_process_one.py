@@ -1,10 +1,11 @@
 import json
-import pytest
+from datetime import UTC, datetime
+
 import fakeredis.aioredis
-from datetime import datetime, timezone
+import pytest
 
 from tradingagents.persistence.db import connect
-from tradingagents.persistence.store import upsert_ticker, get_active_watchlist
+from tradingagents.persistence.store import get_active_watchlist, upsert_ticker
 from tradingagents.sensing.envelope import Envelope
 
 
@@ -12,7 +13,7 @@ def _env(text="Apple reports a big beat on Q3 revenue", source="polygon_news",
          tags=None):
     return Envelope(
         source=source,
-        ingested_ts=datetime.now(timezone.utc).isoformat(),
+        ingested_ts=datetime.now(UTC).isoformat(),
         external_id=f"x:{text[:5]}",
         text=text, source_tags=tags or {}, raw_path="data/events/staging/x.json",
     )
@@ -39,8 +40,8 @@ def _make_llm(salience=0.9, conf=0.95, ticker="AAPL"):
 
 @pytest.mark.unit
 async def test_process_one_writes_event_and_promotes(conn, tmp_path):
-    from tradingagents.sensing.triage import Triage
     from tradingagents.sensing.embeddings import MockEmbedder
+    from tradingagents.sensing.triage import Triage
     r = fakeredis.aioredis.FakeRedis(decode_responses=True)
     t = Triage(conn=conn, redis=r, embedder=MockEmbedder(),
                llm_call=_make_llm(),
@@ -60,8 +61,8 @@ async def test_process_one_writes_event_and_promotes(conn, tmp_path):
 
 @pytest.mark.unit
 async def test_process_one_duplicate_does_not_promote(conn, tmp_path):
-    from tradingagents.sensing.triage import Triage
     from tradingagents.sensing.embeddings import MockEmbedder
+    from tradingagents.sensing.triage import Triage
     r = fakeredis.aioredis.FakeRedis(decode_responses=True)
     t = Triage(conn=conn, redis=r, embedder=MockEmbedder(),
                llm_call=_make_llm(),
@@ -79,8 +80,8 @@ async def test_process_one_duplicate_does_not_promote(conn, tmp_path):
 
 @pytest.mark.unit
 async def test_process_one_drops_unknown_tickers(conn, tmp_path):
-    from tradingagents.sensing.triage import Triage
     from tradingagents.sensing.embeddings import MockEmbedder
+    from tradingagents.sensing.triage import Triage
     r = fakeredis.aioredis.FakeRedis(decode_responses=True)
     t = Triage(conn=conn, redis=r, embedder=MockEmbedder(),
                llm_call=_make_llm(ticker="NOTREAL"),
@@ -94,8 +95,8 @@ async def test_process_one_drops_unknown_tickers(conn, tmp_path):
 
 @pytest.mark.unit
 async def test_process_one_below_threshold_no_promote(conn, tmp_path):
-    from tradingagents.sensing.triage import Triage
     from tradingagents.sensing.embeddings import MockEmbedder
+    from tradingagents.sensing.triage import Triage
     r = fakeredis.aioredis.FakeRedis(decode_responses=True)
     t = Triage(conn=conn, redis=r, embedder=MockEmbedder(),
                llm_call=_make_llm(salience=0.5),

@@ -1,10 +1,8 @@
 import os
-from typing import Optional
 
-from .base_client import BaseLLMClient
 from .api_key_env import get_api_key_env
+from .base_client import BaseLLMClient
 from .custom_provider_config import is_custom_openai_compatible_provider
-
 
 TENCENT_ANTHROPIC_BASE_URL = "https://api.lkeap.cloud.tencent.com/plan/anthropic"
 
@@ -22,7 +20,7 @@ _OPENAI_COMPATIBLE = (
 def create_llm_client(
     provider: str,
     model: str,
-    base_url: Optional[str] = None,
+    base_url: str | None = None,
     **kwargs,
 ) -> BaseLLMClient:
     """Create an LLM client for the specified provider.

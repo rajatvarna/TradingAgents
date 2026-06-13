@@ -1,14 +1,14 @@
 import json
-import sqlite3
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from tradingagents.persistence.db import connect
+import pytest
+
 from tradingagents.persistence import store
+from tradingagents.persistence.db import connect
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @pytest.fixture
@@ -77,8 +77,8 @@ def test_partial_failure_does_not_leave_orphan_suppression(conn, monkeypatch):
 
 @pytest.mark.unit
 def test_backpressure_disabled_does_not_block(conn):
-    from tradingagents.orchestrator.promoter import run_once
     from tradingagents.orchestrator.guards import QueueBackpressure
+    from tradingagents.orchestrator.promoter import run_once
     _seed_event(conn)
     g = QueueBackpressure(enabled=False, max_pending=0)  # would block if enabled
     assert run_once(conn, salience_threshold=0.7, ticker_conf_threshold=0.8,
@@ -88,8 +88,8 @@ def test_backpressure_disabled_does_not_block(conn):
 
 @pytest.mark.unit
 def test_backpressure_enabled_blocks(conn):
-    from tradingagents.orchestrator.promoter import run_once
     from tradingagents.orchestrator.guards import QueueBackpressure
+    from tradingagents.orchestrator.promoter import run_once
     _seed_event(conn)
     g = QueueBackpressure(enabled=True, max_pending=0)
     assert run_once(conn, salience_threshold=0.7, ticker_conf_threshold=0.8,

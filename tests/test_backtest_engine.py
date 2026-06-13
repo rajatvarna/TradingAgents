@@ -919,7 +919,7 @@ class BacktestEngineTest(unittest.TestCase):
             # Strip the take_profit/reduce_stop defaults injected by write_strategy
             # so the on-disk file mimics a real v2 document.
             for path in strategy_dir.glob("TEST_*.json"):
-                with open(path, "r", encoding="utf-8") as f:
+                with open(path, encoding="utf-8") as f:
                     payload = json.load(f)
                 payload.pop("take_profit", None)
                 payload.pop("reduce_stop", None)

@@ -10,30 +10,29 @@ degrades to None rather than crashing the scoring pipeline.
 
 from __future__ import annotations
 
-import os
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Optional
+from dataclasses import dataclass
+from datetime import datetime
+
 
 @dataclass
 class QuarterlySnapshot:
     period_end: str
-    eps: Optional[float]
-    eps_yoy_growth: Optional[float]
-    revenue: Optional[float]
-    revenue_yoy_growth: Optional[float]
-    after_tax_margin: Optional[float]
-    roe: Optional[float]
+    eps: float | None
+    eps_yoy_growth: float | None
+    revenue: float | None
+    revenue_yoy_growth: float | None
+    after_tax_margin: float | None
+    roe: float | None
 
 
 @dataclass
 class AnnualSnapshot:
     fiscal_year: int
-    eps: Optional[float]
-    eps_yoy_growth: Optional[float]
-    revenue: Optional[float]
-    revenue_yoy_growth: Optional[float]
-    roe: Optional[float]
+    eps: float | None
+    eps_yoy_growth: float | None
+    revenue: float | None
+    revenue_yoy_growth: float | None
+    roe: float | None
 
 
 @dataclass
@@ -41,7 +40,7 @@ class SponsorshipSnapshot:
     report_date: str
     total_institutions: int
     total_shares_held: float
-    qoq_fund_count_change: Optional[int]
+    qoq_fund_count_change: int | None
     has_flagship_fund: bool
     flagship_fund_names: list
 
@@ -57,9 +56,9 @@ class DeepFundamentals:
     quarterly_history: list
     annual_history: list
     sponsorship_history: list
-    next_year_eps_estimate: Optional[float]
-    next_year_eps_growth_estimate: Optional[float]
-    ipo_date: Optional[str]
+    next_year_eps_estimate: float | None
+    next_year_eps_growth_estimate: float | None
+    ipo_date: str | None
     is_recent_ipo: bool
 
 
@@ -82,7 +81,6 @@ def _build_quarterly_history(tk) -> list:  # noqa: ANN001
     """Build up to 8 quarters of EPS / revenue snapshots from yfinance."""
     try:
         qf = tk.quarterly_financials
-        qi = tk.quarterly_income_stmt
     except Exception:
         return []
 

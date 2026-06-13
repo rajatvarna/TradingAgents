@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
-from typing import Iterable, Optional
+from collections.abc import Iterable
+from datetime import UTC, datetime
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def insert_queue_job(
@@ -22,7 +22,7 @@ def insert_queue_job(
     *,
     job_type: str,
     payload: str,                      # already-serialized JSON string
-    trigger_event_id: Optional[str],
+    trigger_event_id: str | None,
 ) -> int:
     cur = conn.execute(
         "INSERT INTO queue_jobs (job_type, payload, state, enqueued_ts, "
@@ -33,7 +33,7 @@ def insert_queue_job(
     return cur.lastrowid
 
 
-def lease_one(conn: sqlite3.Connection) -> Optional[sqlite3.Row]:
+def lease_one(conn: sqlite3.Connection) -> sqlite3.Row | None:
     """Atomically claim the oldest queued job. Returns the updated row or None.
 
     Uses ``UPDATE … RETURNING`` (sqlite >= 3.35). The implicit BEGIN IMMEDIATE
@@ -64,8 +64,8 @@ def mark_done(
     *,
     job_id: int,
     run_ids: Iterable[str],
-    brief_id: Optional[str],
-    cost_usd: Optional[float],
+    brief_id: str | None,
+    cost_usd: float | None,
 ) -> None:
     conn.execute(
         "UPDATE queue_jobs SET state = 'done', finished_ts = ?, "

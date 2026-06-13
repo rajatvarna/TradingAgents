@@ -1,6 +1,7 @@
 """Verify each of bull/bear/research_manager/trader propagates user_research_report
 into the prompt that gets sent to the LLM."""
 
+import contextlib
 from unittest.mock import MagicMock
 
 
@@ -74,10 +75,8 @@ def test_trader_includes_user_research():
     from tradingagents.agents.trader.trader import create_trader
     llm, captured = _capturing_llm()
     node = create_trader(llm)
-    try:
+    with contextlib.suppress(Exception):
         node(_fake_state())
-    except Exception:
-        pass
     assert any("UNIQUE_MARKER_42" in c for c in captured), captured
 
 

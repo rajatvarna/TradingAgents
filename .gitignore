@@ -267,3 +267,7 @@ Miniconda3-latest-Linux-x86_64.sh
 
 # Git worktrees (isolated development for features like Kimi provider)
 .worktrees/
+
+# SQLite databases generated at runtime (memory logs, test artifacts)
+memory/*.db
+*.db

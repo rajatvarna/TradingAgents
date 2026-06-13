@@ -1,7 +1,8 @@
 import json
-import pytest
+from unittest.mock import MagicMock, patch
+
 import fakeredis.aioredis
-from unittest.mock import patch, MagicMock
+import pytest
 
 from tradingagents.persistence.db import connect
 
@@ -40,8 +41,8 @@ async def test_x_emits_envelope_for_each_tweet(conn, tmp_path, monkeypatch):
 @pytest.mark.unit
 def test_x_main_exits_zero_when_disabled(monkeypatch, capsys):
     """When the adapter is disabled, _main returns cleanly (exit 0)."""
-    from tradingagents.sensing.adapters import x as xmod
     from tradingagents.default_config import DEFAULT_CONFIG
+    from tradingagents.sensing.adapters import x as xmod
     monkeypatch.setitem(DEFAULT_CONFIG["sensing_adapters_enabled"], "x", False)
     # _main should return None (no SystemExit raised).
     assert xmod._main() is None

@@ -15,15 +15,13 @@ Unit-only; no live yfinance calls anywhere.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
 
 from tradingagents.dataflows import snapshots, yfinance_news
 from tradingagents.dataflows.config import set_config
-
 
 # -------------------------------------------------------------------- #
 # Fixtures
@@ -73,7 +71,7 @@ def _make_yfinance_article(title, summary, link, pub_date):
             "summary": summary,
             "provider": {"displayName": "TestWire"},
             "canonicalUrl": {"url": link},
-            "pubDate": pub_date.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
+            "pubDate": pub_date.replace(tzinfo=UTC).isoformat().replace("+00:00", "Z"),
         }
     }
 

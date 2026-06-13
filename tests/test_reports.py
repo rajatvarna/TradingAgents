@@ -4,8 +4,8 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from tradingagents_service.api.app import create_app
 import tradingagents_service.api.routes.reports as reports_routes
+from tradingagents_service.api.app import create_app
 
 
 def test_reports_endpoint_lists_generated_markdown(monkeypatch, tmp_path):

@@ -2,8 +2,7 @@
 
 import unittest
 
-from langchain_core.messages import SystemMessage
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableLambda
 
 from tradingagents.agents.analysts.market_analyst import create_market_analyst

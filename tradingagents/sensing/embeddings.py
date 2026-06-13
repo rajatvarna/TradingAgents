@@ -10,13 +10,13 @@ from __future__ import annotations
 import hashlib
 import math
 import struct
-from typing import List, Protocol
+from typing import Protocol
 
 
 class Embedder(Protocol):
     dim: int
 
-    def embed(self, text: str) -> List[float]: ...
+    def embed(self, text: str) -> list[float]: ...
 
 
 class MockEmbedder:
@@ -30,10 +30,10 @@ class MockEmbedder:
     def __init__(self, dim: int = 384) -> None:
         self.dim = dim
 
-    def embed(self, text: str) -> List[float]:
+    def embed(self, text: str) -> list[float]:
         seed = hashlib.sha256(text.encode("utf-8")).digest()
         # Expand the 32-byte seed into self.dim float chunks via repeated SHA-256.
-        out: List[float] = []
+        out: list[float] = []
         block = seed
         while len(out) < self.dim:
             block = hashlib.sha256(block).digest()
@@ -61,7 +61,7 @@ class SentenceTransformerEmbedder:
             from sentence_transformers import SentenceTransformer  # heavy import
             self._model = SentenceTransformer(self._model_name)
 
-    def embed(self, text: str) -> List[float]:
+    def embed(self, text: str) -> list[float]:
         self._ensure_loaded()
         vec = self._model.encode(text, normalize_embeddings=True)
         return vec.tolist()

@@ -1,8 +1,8 @@
 """Tests for GraphSetup — analyst validation, node wiring, and graph compilation."""
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from tradingagents.graph.setup import GraphSetup
+import pytest
+
 from tradingagents.graph.conditional_logic import ConditionalLogic
 from tradingagents.graph.constants import (
     VALID_ANALYSTS,
@@ -10,6 +10,7 @@ from tradingagents.graph.constants import (
     clear_node_name,
     tools_node_name,
 )
+from tradingagents.graph.setup import GraphSetup
 
 
 def _make_setup(analysts=None):
@@ -50,6 +51,7 @@ def _make_setup(analysts=None):
 
 
 from contextlib import contextmanager
+
 
 @contextmanager
 def _apply_patches(names):
@@ -149,7 +151,7 @@ class TestNodePresence:
 
     def test_join_analysts_present_only_in_parallel(self):
         workflow_seq = _build_graph(["market", "news"])
-        assert "Join Analysts" not in workflow_seq.nodes.keys()
+        assert "Join Analysts" not in workflow_seq.nodes
 
         quick_llm = MagicMock()
         deep_llm = MagicMock()
@@ -174,7 +176,7 @@ class TestNodePresence:
         ]
         with _apply_patches(patches):
             workflow_par = gs.setup_graph(["market", "news"])
-        assert "Join Analysts" in workflow_par.nodes.keys()
+        assert "Join Analysts" in workflow_par.nodes
 
     def test_market_plus_options_subset(self):
         workflow = _build_graph(["market", "options"])
@@ -209,4 +211,4 @@ class TestConstants:
 
     def test_valid_analysts_matches_report_keys(self):
         from tradingagents.graph.constants import ANALYST_REPORT_KEYS
-        assert VALID_ANALYSTS == frozenset(ANALYST_REPORT_KEYS.keys())
+        assert frozenset(ANALYST_REPORT_KEYS.keys()) == VALID_ANALYSTS

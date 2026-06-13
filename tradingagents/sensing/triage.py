@@ -9,26 +9,24 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import shutil
 import sqlite3
 import uuid
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Awaitable, Callable, Optional, Sequence
 
 import redis.asyncio as aioredis
 
 from tradingagents.persistence.store import (
-    insert_event, insert_event_ticker,
+    insert_event,
+    insert_event_ticker,
 )
 from tradingagents.sensing.dedupe import DedupeStage1, DedupeStage2
 from tradingagents.sensing.envelope import Envelope
-from tradingagents.sensing.salience import SalienceScorer, SalienceResult
+from tradingagents.sensing.salience import SalienceResult, SalienceScorer
 from tradingagents.sensing.ticker_validator import TickerValidator
 from tradingagents.sensing.watchlist import auto_promote
-
 
 log = logging.getLogger(__name__)
 
@@ -37,8 +35,8 @@ log = logging.getLogger(__name__)
 class TriageResult:
     event_id: str
     status: str               # "triaged" | "duplicate"
-    salience: Optional[float] = None
-    deduped_of: Optional[str] = None
+    salience: float | None = None
+    deduped_of: str | None = None
     matched_tickers: Sequence[str] = ()
 
 
@@ -55,7 +53,7 @@ class Triage:
         conn: sqlite3.Connection,
         redis: aioredis.Redis,
         embedder,                                          # Embedder
-        llm_call: Callable[[str], "str | Awaitable[str]"],
+        llm_call: Callable[[str], str | Awaitable[str]],
         data_dir: str,
         cosine_threshold: float = 0.92,
         window_hours: int = 24,
@@ -279,7 +277,7 @@ def _main() -> None:
     from tradingagents.persistence.db import connect
     from tradingagents.persistence.store import get_active_watchlist
     from tradingagents.sensing.embeddings import SentenceTransformerEmbedder
-    from tradingagents.sensing.redis_client import make_redis, ensure_consumer_group
+    from tradingagents.sensing.redis_client import ensure_consumer_group, make_redis
 
     redis = make_redis(C["sensing_redis_url"])
     conn = connect(C["iic_db_path"])

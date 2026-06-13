@@ -9,20 +9,14 @@ Cursor: JSON dict mapping channel username → max message_id seen.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
-import sqlite3
-from datetime import datetime, timezone
-from typing import List
-
-import redis.asyncio as aioredis
+from datetime import UTC, datetime
 
 from tradingagents.sensing.adapters.base import EnvelopeWriter
 from tradingagents.sensing.cursor import CursorStore
 from tradingagents.sensing.envelope import Envelope
-
 
 log = logging.getLogger(__name__)
 NAME = "telegram"
@@ -39,7 +33,7 @@ async def _on_message(event, *, redis, conn, stream: str, staging_root: str) -> 
     cursors[channel] = max(int(cursors.get(channel, 0)), int(msg.id))
     env = Envelope(
         source=NAME,
-        ingested_ts=datetime.now(timezone.utc).isoformat(),
+        ingested_ts=datetime.now(UTC).isoformat(),
         external_id=f"tg:{channel}:{msg.id}",
         text=text,
         source_tags={"channel": channel,
@@ -72,7 +66,7 @@ def _main() -> None:
 
     from telethon import TelegramClient, events  # lazy import
 
-    channels: List[str] = list(C.get("telegram_channels") or [])
+    channels: list[str] = list(C.get("telegram_channels") or [])
     if not channels:
         log.warning("telegram_channels config empty; nothing to listen to")
 

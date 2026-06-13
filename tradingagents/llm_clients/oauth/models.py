@@ -12,9 +12,9 @@ from __future__ import annotations
 import json
 import os
 import time
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Iterable, Optional
 
 import httpx
 
@@ -123,7 +123,7 @@ def discover_available_models(
 class ModelAvailabilityCache:
     """Cache per-account dei modelli disponibili (sidecar del token store)."""
 
-    def __init__(self, path: Optional[Path] = None):
+    def __init__(self, path: Path | None = None):
         self.path = Path(path) if path else default_store_path().parent / "oauth_models.json"
 
     def _read(self) -> dict:
@@ -132,7 +132,7 @@ class ModelAvailabilityCache:
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
 
-    def get(self, account_id: Optional[str]) -> Optional[list[str]]:
+    def get(self, account_id: str | None) -> list[str] | None:
         if not account_id:
             return None
         entry = self._read().get(account_id)
@@ -144,7 +144,7 @@ class ModelAvailabilityCache:
         models = entry.get("models")
         return models if isinstance(models, list) else None
 
-    def set(self, account_id: Optional[str], models: list[str]) -> None:
+    def set(self, account_id: str | None, models: list[str]) -> None:
         if not account_id:
             return
         data = self._read()
@@ -160,7 +160,7 @@ def available_models(
     candidates: Iterable[str],
     *,
     refresh: bool = False,
-    cache: Optional[ModelAvailabilityCache] = None,
+    cache: ModelAvailabilityCache | None = None,
 ) -> list[str]:
     """Modelli disponibili per l'account (cache-aware). Vuoto se non scopribili.
 

@@ -5,8 +5,8 @@ import time
 
 import pytest
 
-from tradingagents.llm_clients.openai_client import OpenAIClient
 from tradingagents.llm_clients.oauth.store import OAuthTokenStore
+from tradingagents.llm_clients.openai_client import OpenAIClient
 
 
 def _jwt(payload: dict) -> str:

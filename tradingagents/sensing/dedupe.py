@@ -15,8 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import redis.asyncio as aioredis
 
@@ -45,7 +44,7 @@ class DedupeStage1:
         self._ttl_seconds = fingerprint_ttl_hours * 3600
 
     def _today_utc(self) -> str:
-        return datetime.now(timezone.utc).strftime("%Y%m%d")
+        return datetime.now(UTC).strftime("%Y%m%d")
 
     def _sha_key(self) -> str:
         return f"fingerprints:sha:{self._today_utc()}"
@@ -53,7 +52,7 @@ class DedupeStage1:
     def _ext_key(self) -> str:
         return f"fingerprints:ext:{self._today_utc()}"
 
-    async def check(self, env: Envelope) -> Optional[str]:
+    async def check(self, env: Envelope) -> str | None:
         """Return event_id of the original if this envelope is a duplicate, else None."""
         fp = _fp(env.text)
 
@@ -139,7 +138,7 @@ class DedupeStage2:
     def _pack(self, vec) -> bytes:
         return bytes(struct.pack(f"{len(vec)}f", *vec))
 
-    def check(self, text: str) -> Optional[str]:
+    def check(self, text: str) -> str | None:
         vec = self._embedder.embed(text)
         # sqlite-vec's vec0 KNN requires `k = N` or LIMIT INSIDE the MATCH query —
         # it cannot push LIMIT down through joins. Pull k nearest neighbours first,

@@ -1,10 +1,11 @@
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
 
 from tradingagents.persistence.db import connect
 from tradingagents.persistence.store import (
-    insert_event, insert_event_ticker, upsert_watchlist,
+    insert_event,
+    upsert_watchlist,
 )
 
 
@@ -26,10 +27,10 @@ def test_evaluator_counts_events_and_dups(tmp_path):
     from scripts import f3_exit_gate
     db = tmp_path / "iic.db"
     conn = connect(str(db))
-    since = datetime.now(timezone.utc) - timedelta(hours=12)
+    since = datetime.now(UTC) - timedelta(hours=12)
     _seed_events(conn, n_active=120, n_dup=80, base_ts=since)
     upsert_watchlist(conn, ticker="AAPL",
-                     ttl_until=(datetime.now(timezone.utc)
+                     ttl_until=(datetime.now(UTC)
                                 + timedelta(days=7)).isoformat(),
                      tags=["auto", "event:a-0"])
     res = f3_exit_gate.evaluate(
@@ -48,7 +49,7 @@ def test_evaluator_fails_when_no_autos(tmp_path):
     from scripts import f3_exit_gate
     db = tmp_path / "iic.db"
     conn = connect(str(db))
-    since = datetime.now(timezone.utc) - timedelta(hours=12)
+    since = datetime.now(UTC) - timedelta(hours=12)
     _seed_events(conn, n_active=120, n_dup=0, base_ts=since)
     res = f3_exit_gate.evaluate(
         db_path=str(db), since=since, services=[], check_systemd=False,
@@ -62,7 +63,7 @@ def test_evaluator_renders_artifact(tmp_path):
     from scripts import f3_exit_gate
     db = tmp_path / "iic.db"
     conn = connect(str(db))
-    since = datetime.now(timezone.utc) - timedelta(hours=12)
+    since = datetime.now(UTC) - timedelta(hours=12)
     _seed_events(conn, n_active=2, n_dup=2, base_ts=since)
     res = f3_exit_gate.evaluate(
         db_path=str(db), since=since, services=[], check_systemd=False,

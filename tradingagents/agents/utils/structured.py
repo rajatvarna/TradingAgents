@@ -18,10 +18,10 @@ all three agents log the same warnings when fallback fires.
 
 from __future__ import annotations
 
-import logging
 import json
-from collections.abc import MutableMapping
-from typing import Any, Callable, Optional, TypeVar
+import logging
+from collections.abc import Callable, MutableMapping
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
@@ -44,7 +44,7 @@ def _cache_key(agent_name: str, mode: str, prompt: Any) -> str:
     return f"{agent_name}:{mode}:{_normalise_prompt_for_cache(prompt)}"
 
 
-def bind_structured(llm: Any, schema: type[T], agent_name: str) -> Optional[Any]:
+def bind_structured(llm: Any, schema: type[T], agent_name: str) -> Any | None:
     """Return ``llm.with_structured_output(schema)`` or ``None`` if unsupported.
 
     Logs a warning when the binding fails so the user understands the agent
@@ -62,12 +62,12 @@ def bind_structured(llm: Any, schema: type[T], agent_name: str) -> Optional[Any]
 
 
 def invoke_structured_or_freetext(
-    structured_llm: Optional[Any],
+    structured_llm: Any | None,
     plain_llm: Any,
     prompt: Any,
     render: Callable[[T], str],
     agent_name: str,
-    cache: Optional[MutableMapping[str, str]] = None,
+    cache: MutableMapping[str, str] | None = None,
 ) -> str:
     """Run the structured call and render to markdown; fall back to free-text on any failure.
 
@@ -106,13 +106,13 @@ def invoke_structured_or_freetext(
 
 
 def invoke_structured_or_freetext_with_meta(
-    structured_llm: Optional[Any],
+    structured_llm: Any | None,
     plain_llm: Any,
     prompt: Any,
     render: Callable[[T], str],
     agent_name: str,
-    cache: Optional[MutableMapping[str, str]] = None,
-    config: Optional[dict] = None,
+    cache: MutableMapping[str, str] | None = None,
+    config: dict | None = None,
 ) -> tuple[str, bool]:
     kwargs = {}
     if config is not None:

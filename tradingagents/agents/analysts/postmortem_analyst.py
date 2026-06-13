@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage
 
-
 POSTMORTEM_SYSTEM_PROMPT = """You are the Post-Mortem Analyst for the TradingAgents system.
 Your role is to evaluate past trading recommendations with the benefit of hindsight,
 identify what went right or wrong, and extract actionable lessons.

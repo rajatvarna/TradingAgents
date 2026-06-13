@@ -43,9 +43,9 @@ import logging
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Literal, Optional, Union
+from typing import Literal
 
-from tradingagents.audit.schemas import TraceRecord, canonical_json
+from tradingagents.audit.schemas import TraceRecord
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class VerifyResult:
     """
     ok: bool
     total_records: int
-    broken_lines: List[int]
+    broken_lines: list[int]
     format: Literal["chained", "unchained_pre_t1_3", "empty", "corrupt"]
 
 
@@ -90,7 +90,7 @@ class HashChainLedger:
     serialises them.
     """
 
-    def __init__(self, path: Union[str, Path]) -> None:
+    def __init__(self, path: str | Path) -> None:
         self.path = Path(path).expanduser()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
@@ -171,7 +171,7 @@ class HashChainLedger:
         return verify_ledger(self.path)
 
 
-def verify_ledger(path: Union[str, Path]) -> VerifyResult:
+def verify_ledger(path: str | Path) -> VerifyResult:
     """Walk a ledger file and check the SHA-256 chain.
 
     Returns a :class:`VerifyResult`. ``format`` reports:
@@ -193,7 +193,7 @@ def verify_ledger(path: Union[str, Path]) -> VerifyResult:
         return VerifyResult(ok=True, total_records=0, broken_lines=[], format="empty")
 
     lines = path.read_text(encoding="utf-8").splitlines()
-    nonempty: List[tuple] = []  # (1-indexed line_no, raw_line)
+    nonempty: list[tuple] = []  # (1-indexed line_no, raw_line)
     for i, line in enumerate(lines, start=1):
         if line.strip():
             nonempty.append((i, line))
@@ -228,7 +228,7 @@ def verify_ledger(path: Union[str, Path]) -> VerifyResult:
     # for lines 1..N-1 and only those". Once broken, ``chain_broken``
     # stays True for the rest of the walk so every downstream line
     # joins ``broken_lines`` regardless of its individual prev_hash.
-    broken: List[int] = []
+    broken: list[int] = []
     expected_prev = GENESIS_HASH
     chain_broken = False
     for line_no, line in nonempty:

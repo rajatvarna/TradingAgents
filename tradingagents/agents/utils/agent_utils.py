@@ -1,38 +1,40 @@
-import json
 import functools
+import json
 import logging
-from typing import Any, Dict, List, Optional, Mapping
+from collections.abc import Mapping
+from typing import Any
+
+import yfinance as yf
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate
 from tenacity import retry, stop_after_attempt, wait_exponential
-import yfinance as yf
 
 # Import tools from separate utility files
 from tradingagents.agents.utils.core_stock_tools import get_stock_data
-from tradingagents.agents.utils.technical_indicators_tools import get_indicators
 from tradingagents.agents.utils.fundamental_data_tools import (
     get_balance_sheet,
     get_cashflow,
     get_fundamentals,
     get_income_statement,
 )
+from tradingagents.agents.utils.market_data_validation_tools import (
+    get_verified_market_snapshot,
+)
 from tradingagents.agents.utils.news_data_tools import (
     get_global_news,
     get_insider_transactions,
     get_news,
 )
+from tradingagents.agents.utils.options_tools import (
+    calculate_put_call_ratio,
+    get_options_chain,
+)
 from tradingagents.agents.utils.range_stats_tool import (
     get_range_stats,
 )
+from tradingagents.agents.utils.technical_indicators_tools import get_indicators
 from tradingagents.agents.utils.trade_levels_tools import (
     suggest_trade_levels,
-)
-from tradingagents.agents.utils.options_tools import (
-    get_options_chain,
-    calculate_put_call_ratio,
-)
-from tradingagents.agents.utils.market_data_validation_tools import (
-    get_verified_market_snapshot,
 )
 
 logger = logging.getLogger(__name__)
@@ -147,7 +149,7 @@ def get_horizon_instruction() -> str:
     return f" Investment Horizon: {horizon}. Analysis Priority: {guidance} Adapt your analysis based on this investment horizon."
 
 
-def _clean_identity_value(value: Any) -> Optional[str]:
+def _clean_identity_value(value: Any) -> str | None:
     """Return a trimmed string, or None for empty / placeholder-ish values."""
     if not isinstance(value, str):
         return None
@@ -215,7 +217,7 @@ def truncate_history(history: str, max_chars: int = 3000) -> str:
 def build_instrument_context(
     ticker: str,
     asset_type: str = "stock",
-    identity: Optional[Mapping[str, str]] = None,
+    identity: Mapping[str, str] | None = None,
 ) -> str:
     """Describe the exact instrument so agents preserve identity and ticker.
 
@@ -308,18 +310,18 @@ def trim_debate_history(history: str, max_turns: int = 4) -> str:
     """
     if not history:
         return ""
-        
+
     # Split by common prefixes used in the debate
     prefixes = [
-        "Bull Analyst:", "Bear Analyst:", 
+        "Bull Analyst:", "Bear Analyst:",
         "Aggressive Analyst:", "Conservative Analyst:", "Neutral Analyst:"
     ]
-    
+
     # We can split by lines and look for these prefixes
     lines = history.split('\n')
     turns = []
     current_turn = []
-    
+
     for line in lines:
         is_new_turn = any(line.startswith(p) for p in prefixes)
         if is_new_turn:
@@ -329,13 +331,13 @@ def trim_debate_history(history: str, max_turns: int = 4) -> str:
         else:
             if current_turn:
                 current_turn.append(line)
-                
+
     if current_turn:
         turns.append("\n".join(current_turn))
-        
+
     if len(turns) <= max_turns:
         return history
-        
+
     truncated = "\n\n...[Earlier history truncated]...\n\n" + "\n".join(turns[-max_turns:])
     return truncated
 

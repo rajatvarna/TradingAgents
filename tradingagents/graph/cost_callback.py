@@ -8,7 +8,7 @@ as False.
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Dict
+from typing import Any
 
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
@@ -23,7 +23,7 @@ class RunCostCallback(BaseCallbackHandler):
     """
 
     def __init__(self) -> None:
-        self._totals: Dict[str, Dict[str, int]] = defaultdict(
+        self._totals: dict[str, dict[str, int]] = defaultdict(
             lambda: {"in_tokens": 0, "out_tokens": 0}
         )
 
@@ -38,7 +38,7 @@ class RunCostCallback(BaseCallbackHandler):
         self._totals[model]["in_tokens"] += in_t
         self._totals[model]["out_tokens"] += out_t
 
-    def totals_by_model(self) -> Dict[str, Dict[str, int]]:
+    def totals_by_model(self) -> dict[str, dict[str, int]]:
         return dict(self._totals)
 
 

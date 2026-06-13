@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -73,7 +73,7 @@ def is_configured() -> bool:
     return bool(get_api_key())
 
 
-def _post(endpoint: str, body: Dict[str, Any], label: str, timeout: float) -> Dict[str, Any]:
+def _post(endpoint: str, body: dict[str, Any], label: str, timeout: float) -> dict[str, Any]:
     """POST a JSON body to an AgentKey endpoint and return the parsed response.
 
     Raises :class:`AgentKeyError` on missing credentials, network error, non-2xx,
@@ -109,7 +109,7 @@ def _post(endpoint: str, body: Dict[str, Any], label: str, timeout: float) -> Di
     return payload
 
 
-def dispatch(path: str, params: Optional[Dict[str, Any]] = None, timeout: float = 15.0) -> Dict[str, Any]:
+def dispatch(path: str, params: dict[str, Any] | None = None, timeout: float = 15.0) -> dict[str, Any]:
     """Call one AgentKey social endpoint and return the parsed JSON body.
 
     ``path`` is the TikHub-style relative path (e.g. ``weibo/app/fetch_search_all``)
@@ -118,7 +118,7 @@ def dispatch(path: str, params: Optional[Dict[str, Any]] = None, timeout: float 
     return _post(_DISPATCH_PATH, {"path": path, "params": params or {}}, path, timeout)
 
 
-def search(query: str, type: str = "web", num: int = 10, timeout: float = 15.0) -> Dict[str, Any]:
+def search(query: str, type: str = "web", num: int = 10, timeout: float = 15.0) -> dict[str, Any]:
     """Run an AgentKey web search and return the parsed JSON body.
 
     Response shape: ``{"results": [{"title", "url", "snippet", ...}], ...}``.

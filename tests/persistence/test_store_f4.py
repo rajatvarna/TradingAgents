@@ -1,12 +1,13 @@
-import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
-from tradingagents.persistence.db import connect
+import pytest
+
 from tradingagents.persistence import store
+from tradingagents.persistence.db import connect
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @pytest.mark.unit
@@ -62,7 +63,7 @@ def test_get_event_missing_returns_none(tmp_path):
 @pytest.mark.unit
 def test_upsert_suppression_inserts_then_updates(tmp_path):
     conn = connect(str(tmp_path / "iic.db"))
-    until = (datetime.now(timezone.utc) + timedelta(minutes=60)).isoformat()
+    until = (datetime.now(UTC) + timedelta(minutes=60)).isoformat()
     store.upsert_suppression(
         conn, key="event_alert:AAPL", until_ts=until,
         reason="alert_cooldown event_id=ev1", created_by="promoter",
@@ -73,7 +74,7 @@ def test_upsert_suppression_inserts_then_updates(tmp_path):
     assert row["until_ts"] == until
 
     # second call extends the cooldown
-    new_until = (datetime.now(timezone.utc) + timedelta(minutes=120)).isoformat()
+    new_until = (datetime.now(UTC) + timedelta(minutes=120)).isoformat()
     store.upsert_suppression(
         conn, key="event_alert:AAPL", until_ts=new_until,
         reason="alert_cooldown event_id=ev2", created_by="promoter",

@@ -1,16 +1,16 @@
 import json
-import pytest
-from pathlib import Path
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
-from tradingagents.persistence.db import connect
-from tradingagents.persistence import store
+import pytest
+
 from tradingagents.orchestrator import queue_store
+from tradingagents.persistence import store
+from tradingagents.persistence.db import connect
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @pytest.fixture
@@ -80,8 +80,8 @@ def test_drain_one_marks_error_on_failure(setup):
 @pytest.mark.unit
 def test_drain_one_skipped_when_budget_blocks(setup):
     """When DailyBudgetGuard.gate() returns False, the job is not leased."""
-    from tradingagents.orchestrator.worker import drain_one
     from tradingagents.orchestrator.guards import DailyBudgetGuard
+    from tradingagents.orchestrator.worker import drain_one
     conn, data_dir = setup
     sec = MagicMock()
     # Pre-spend $1 of "today" first so it owns the lowest job_id and gets

@@ -1,6 +1,6 @@
-import pytest
 from pathlib import Path
 
+import pytest
 
 _SENSE_UNITS = [
     "iic-sense-polygon", "iic-sense-telegram", "iic-sense-x",

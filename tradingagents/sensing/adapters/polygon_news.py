@@ -13,7 +13,7 @@ import asyncio
 import logging
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import redis.asyncio as aioredis
 import requests
@@ -21,7 +21,6 @@ import requests
 from tradingagents.sensing.adapters.base import EnvelopeWriter
 from tradingagents.sensing.cursor import CursorStore
 from tradingagents.sensing.envelope import Envelope
-
 
 log = logging.getLogger(__name__)
 NAME = "polygon_news"
@@ -49,7 +48,7 @@ class PolygonNewsAdapter:
             return existing
         # Initial: backfill from "now minus 1 hour" to avoid a flood.
         from datetime import timedelta
-        return (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        return (datetime.now(UTC) - timedelta(hours=1)).isoformat()
 
     async def poll_once(self, *, redis: aioredis.Redis, conn: sqlite3.Connection) -> int:
         """One iteration of the loop. Returns # of envelopes emitted."""
@@ -83,7 +82,7 @@ class PolygonNewsAdapter:
             text = " ".join(filter(None, [item.get("title", ""), item.get("description", "")]))
             env = Envelope(
                 source=NAME,
-                ingested_ts=datetime.now(timezone.utc).isoformat(),
+                ingested_ts=datetime.now(UTC).isoformat(),
                 external_id=ext_id, text=text,
                 source_tags={"tickers": item.get("tickers", []),
                              "publisher": (item.get("publisher") or {}).get("name", "")},

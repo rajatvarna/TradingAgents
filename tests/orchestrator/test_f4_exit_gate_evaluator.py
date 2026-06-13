@@ -1,13 +1,13 @@
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from tradingagents.persistence.db import connect
+import pytest
+
 from tradingagents.persistence import store
-from tradingagents.orchestrator import queue_store
+from tradingagents.persistence.db import connect
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def db(tmp_path, monkeypatch):
 
 
 def _seed_brief_with_latency(conn, *, latency_seconds, ev_id, brief_id):
-    base = datetime.now(timezone.utc) - timedelta(minutes=30)
+    base = datetime.now(UTC) - timedelta(minutes=30)
     ev_ts = base.isoformat()
     brief_ts = (base + timedelta(seconds=latency_seconds)).isoformat()
     store.insert_event(conn, event_id=ev_id, source="rss",
@@ -38,7 +38,7 @@ def test_evaluator_computes_latency_percentiles(db):
     for i, sec in enumerate([60, 180, 600, 800, 900]):
         _seed_brief_with_latency(conn, latency_seconds=sec,
                                   ev_id=f"ev{i}", brief_id=f"b{i}")
-    since = datetime.now(timezone.utc) - timedelta(hours=1)
+    since = datetime.now(UTC) - timedelta(hours=1)
     result = evaluate(conn, since=since, window_hours=2)
     assert result["brief_count"] == 5
     # p95 of [60, 180, 600, 800, 900] ≈ 900s
@@ -53,7 +53,7 @@ def test_evaluator_passes_when_p95_under_15min(db):
     for i, sec in enumerate([60, 120, 180, 240, 300]):
         _seed_brief_with_latency(conn, latency_seconds=sec,
                                   ev_id=f"ev{i}", brief_id=f"b{i}")
-    since = datetime.now(timezone.utc) - timedelta(hours=1)
+    since = datetime.now(UTC) - timedelta(hours=1)
     result = evaluate(conn, since=since, window_hours=2)
     assert result["sla_pass"] is True
     assert result["sla_rule_applied"] == "p95"
@@ -65,7 +65,7 @@ def test_evaluator_uses_max_rule_when_one_or_two_briefs(db):
     conn = connect(db)
     _seed_brief_with_latency(conn, latency_seconds=500,
                               ev_id="ev0", brief_id="b0")
-    since = datetime.now(timezone.utc) - timedelta(hours=1)
+    since = datetime.now(UTC) - timedelta(hours=1)
     result = evaluate(conn, since=since, window_hours=2)
     assert result["brief_count"] == 1
     assert result["sla_rule_applied"] == "max"
@@ -76,7 +76,7 @@ def test_evaluator_uses_max_rule_when_one_or_two_briefs(db):
 def test_evaluator_marks_zero_briefs_as_inconclusive(db):
     from scripts.f4_exit_gate import evaluate
     conn = connect(db)
-    since = datetime.now(timezone.utc) - timedelta(hours=1)
+    since = datetime.now(UTC) - timedelta(hours=1)
     result = evaluate(conn, since=since, window_hours=2)
     assert result["brief_count"] == 0
     assert result["sla_pass"] is None   # inconclusive

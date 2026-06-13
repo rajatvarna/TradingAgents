@@ -412,6 +412,15 @@ export default function ChartPanel({ stock }: Props) {
         timezone: "exchange",
         hide_top_toolbar: false,
         studies: ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
+        compare_symbols: [
+          {
+            symbol: stock.market === "India" ? "NSE:NIFTY50" :
+                    stock.market === "UAE"   ? "NASDAQ:QQQ" :
+                    stock.market === "Saudi" ? "TADAWUL:TASI" :
+                    "SP:SPX",
+            position: "SameScale",
+          },
+        ],
       });
       window.tvWidget = w;
     };

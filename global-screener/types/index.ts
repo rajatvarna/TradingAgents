@@ -98,6 +98,7 @@ export interface FilterState {
   search: string;
   volSurge?: boolean;
   watchlistOnly?: boolean;
+  near52wHigh?: boolean;
 }
 
 export type PresetName =
@@ -107,5 +108,8 @@ export type PresetName =
   | "five-year-compounders"
   | "most-active"
   | "52w-highs"
+  | "near-52w-high"
   | "vol-surge"
   | "watchlist";
+
+export type MarketState = "open" | "pre-market" | "closed";

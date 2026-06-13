@@ -1,6 +1,7 @@
 export type Market = "US" | "India" | "UAE" | "Saudi";
 
-export interface TickerMeta {
+/** Raw ticker entry as stored in watchlist.json (no market field). */
+export interface RawTickerEntry {
   symbol: string;
   name: string;
   yahooSuffix: string;
@@ -8,9 +9,14 @@ export interface TickerMeta {
   sector: string;
 }
 
+/** Ticker with its market resolved — returned by getTickers(). */
+export interface TickerMeta extends RawTickerEntry {
+  market: Market;
+}
+
 export interface MarketUniverse {
   description: string;
-  tickers: TickerMeta[];
+  tickers: RawTickerEntry[];
 }
 
 export interface Watchlist {
@@ -69,7 +75,8 @@ export type SortField =
   | "five_y"
   | "price"
   | "marketCap"
-  | "volume";
+  | "volume"
+  | "rs";
 
 export type SortDirection = "asc" | "desc";
 
@@ -81,6 +88,7 @@ export interface FilterState {
   topN: number | null;
   minChangePct: number | null;
   search: string;
+  volSurge?: boolean;
 }
 
 export type PresetName =
@@ -89,4 +97,5 @@ export type PresetName =
   | "ytd-leaders"
   | "five-year-compounders"
   | "most-active"
-  | "52w-highs";
+  | "52w-highs"
+  | "vol-surge";

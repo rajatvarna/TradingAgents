@@ -9,6 +9,7 @@ interface Position {
   symbol: string;
   shares: number;
   costBasis: number;
+  currency: string;
 }
 
 interface Props {
@@ -66,6 +67,7 @@ export default function PortfolioTracker({ stocks }: Props) {
   const [symbol, setSymbol] = useState("");
   const [shares, setShares] = useState("");
   const [cost, setCost] = useState("");
+  const [costCurrency, setCostCurrency] = useState("USD");
   const [error, setError] = useState("");
 
   // Load from localStorage on mount
@@ -100,7 +102,7 @@ export default function PortfolioTracker({ stocks }: Props) {
     if (isNaN(cb) || cb < 0) { setError("Enter valid cost basis"); return; }
 
     setError("");
-    const next: Position[] = [...positions, { symbol: sym, shares: sh, costBasis: cb }];
+    const next: Position[] = [...positions, { symbol: sym, shares: sh, costBasis: cb, currency: costCurrency }];
     setPositions(next);
     savePortfolio(next);
     setSymbol("");
@@ -116,16 +118,17 @@ export default function PortfolioTracker({ stocks }: Props) {
 
   const rates = fxRates ?? { USD: 1, INR: 83.5, AED: 3.67, SAR: 3.75 };
 
-  // Compute rows
+  // Compute rows — all values in USD
   const rows = positions.map((pos) => {
     const { price, currency } = getStockPrice(pos.symbol);
-    const rateToUSD = getCurrencyRate(currency, rates);
-    const currentPriceUSD = price !== null ? price * rateToUSD : null;
-    const totalCost = pos.costBasis * pos.shares;
+    const currentRateToUSD = getCurrencyRate(currency, rates);
+    const currentPriceUSD = price !== null ? price * currentRateToUSD : null;
+    const costRateToUSD = getCurrencyRate(pos.currency ?? "USD", rates);
+    const totalCostUSD = pos.costBasis * pos.shares * costRateToUSD;
     const totalValue = currentPriceUSD !== null ? currentPriceUSD * pos.shares : null;
-    const pnlDollar = totalValue !== null ? totalValue - totalCost : null;
-    const pnlPct = totalCost > 0 && pnlDollar !== null ? (pnlDollar / totalCost) * 100 : null;
-    return { pos, totalCost, totalValue, pnlDollar, pnlPct, currentPriceUSD };
+    const pnlDollar = totalValue !== null ? totalValue - totalCostUSD : null;
+    const pnlPct = totalCostUSD > 0 && pnlDollar !== null ? (pnlDollar / totalCostUSD) * 100 : null;
+    return { pos, totalCost: totalCostUSD, totalValue, pnlDollar, pnlPct, currentPriceUSD };
   });
 
   const grandCost = rows.reduce((s, r) => s + r.totalCost, 0);
@@ -177,16 +180,28 @@ export default function PortfolioTracker({ stocks }: Props) {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-slate-500">Cost/Share (USD)</label>
-              <input
-                type="number"
-                value={cost}
-                onChange={(e) => setCost(e.target.value)}
-                placeholder="150.00"
-                min="0"
-                step="0.01"
-                className="bg-slate-800 border border-slate-600 text-white text-sm rounded px-3 py-1.5 w-32 focus:outline-none focus:border-blue-500"
-              />
+              <label className="text-xs text-slate-500">Cost/Share</label>
+              <div className="flex gap-1">
+                <input
+                  type="number"
+                  value={cost}
+                  onChange={(e) => setCost(e.target.value)}
+                  placeholder="150.00"
+                  min="0"
+                  step="0.01"
+                  className="bg-slate-800 border border-slate-600 text-white text-sm rounded px-3 py-1.5 w-28 focus:outline-none focus:border-blue-500"
+                />
+                <select
+                  value={costCurrency}
+                  onChange={(e) => setCostCurrency(e.target.value)}
+                  className="bg-slate-800 border border-slate-600 text-slate-300 text-xs rounded px-2 py-1.5"
+                >
+                  <option value="USD">USD</option>
+                  <option value="INR">INR</option>
+                  <option value="AED">AED</option>
+                  <option value="SAR">SAR</option>
+                </select>
+              </div>
             </div>
             <button
               onClick={addPosition}
@@ -203,7 +218,7 @@ export default function PortfolioTracker({ stocks }: Props) {
               <table className="w-full text-sm">
                 <thead className="bg-slate-800/60 border-b border-slate-700">
                   <tr>
-                    {["Symbol", "Shares", "Cost (USD)", "Current", "P&L $", "P&L %", "Weight%", ""].map((h) => (
+                    {["Symbol", "Shares", "Cost (USD equiv.)", "Current", "P&L $", "P&L %", "Weight%", ""].map((h) => (
                       <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-slate-400 whitespace-nowrap">
                         {h}
                       </th>

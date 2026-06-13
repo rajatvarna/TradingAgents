@@ -17,7 +17,7 @@ declare global {
   }
 }
 
-type Tab = "chart" | "insider" | "fundamentals";
+type Tab = "chart" | "insider" | "fundamentals" | "news";
 
 interface EarningsData {
   nextEarningsDate: string | null;
@@ -33,6 +33,14 @@ interface InsiderTransaction {
   value: number | null;
 }
 
+interface AnalystRatings {
+  strongBuy: number;
+  buy: number;
+  hold: number;
+  underperform: number;
+  sell: number;
+}
+
 interface FundamentalsData {
   shortPercentOfFloat: number | null;
   shortRatio: number | null;
@@ -41,6 +49,16 @@ interface FundamentalsData {
   priceToBook: number | null;
   returnOnEquity: number | null;
   debtToEquity: number | null;
+  analystRatings: AnalystRatings | null;
+}
+
+interface NewsItem {
+  uuid: string;
+  title: string;
+  publisher: string;
+  link: string;
+  providerPublishTime: number;
+  thumbnail: string | null;
 }
 
 function fmtNum(v: number | null, decimals = 2): string {
@@ -48,9 +66,33 @@ function fmtNum(v: number | null, decimals = 2): string {
   return v.toLocaleString(undefined, { maximumFractionDigits: decimals, minimumFractionDigits: decimals });
 }
 
-function fmtPct2(v: number | null): string {
-  if (v === null) return "—";
-  return (v * 100).toFixed(1) + "%";
+function relativeTime(ts: number): string {
+  const diff = Math.floor((Date.now() / 1000) - ts);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function Range52W({ low, high, price }: { low: number; high: number; price: number }) {
+  const range = high - low;
+  const pct = range > 0 ? Math.max(0, Math.min(1, (price - low) / range)) : 0;
+  const barColor =
+    pct >= 0.8 ? "bg-emerald-500" : pct <= 0.2 ? "bg-red-500" : "bg-amber-400";
+  return (
+    <div className="flex items-center gap-2 text-xs text-slate-400 min-w-[160px]">
+      <span className="tabular-nums w-14 text-right">{low.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+      <div className="relative flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
+        <div className={cn("absolute inset-y-0 left-0 rounded-full", barColor)} style={{ width: `${pct * 100}%` }} />
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-white rounded-full border border-slate-900"
+          style={{ left: `calc(${pct * 100}% - 4px)` }}
+        />
+      </div>
+      <span className="tabular-nums w-14">{high.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+      <span className="text-slate-500 tabular-nums">52W</span>
+    </div>
+  );
 }
 
 function EarningsBadge({ yahooSuffix }: { yahooSuffix: string }) {
@@ -163,6 +205,53 @@ function InsiderTab({ yahooSuffix }: { yahooSuffix: string }) {
   );
 }
 
+function AnalystRatingsBar({ ratings }: { ratings: AnalystRatings }) {
+  const total = ratings.strongBuy + ratings.buy + ratings.hold + ratings.underperform + ratings.sell;
+  if (total === 0) return null;
+  const bullish = ratings.strongBuy + ratings.buy;
+  const sentiment =
+    bullish / total >= 0.6 ? "Bullish" : (ratings.underperform + ratings.sell) / total >= 0.4 ? "Bearish" : "Neutral";
+  const sentimentColor =
+    sentiment === "Bullish" ? "text-emerald-400" : sentiment === "Bearish" ? "text-red-400" : "text-amber-400";
+
+  const segments = [
+    { label: "Strong Buy", count: ratings.strongBuy, color: "bg-emerald-500" },
+    { label: "Buy", count: ratings.buy, color: "bg-emerald-400/70" },
+    { label: "Hold", count: ratings.hold, color: "bg-amber-400" },
+    { label: "Underperform", count: ratings.underperform, color: "bg-red-400/70" },
+    { label: "Sell", count: ratings.sell, color: "bg-red-500" },
+  ].filter((s) => s.count > 0);
+
+  return (
+    <div className="bg-slate-800/60 rounded-lg px-3 py-3 col-span-2 sm:col-span-3 md:col-span-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-slate-500">Analyst Ratings</span>
+        <span className={cn("text-xs font-semibold", sentimentColor)}>
+          {sentiment} · {total} analysts
+        </span>
+      </div>
+      <div className="flex h-3 rounded-full overflow-hidden gap-0.5">
+        {segments.map((s) => (
+          <div
+            key={s.label}
+            title={`${s.label}: ${s.count}`}
+            className={cn("h-full transition-all", s.color)}
+            style={{ flex: s.count }}
+          />
+        ))}
+      </div>
+      <div className="flex gap-3 mt-1.5 flex-wrap">
+        {segments.map((s) => (
+          <span key={s.label} className="text-xs text-slate-400">
+            <span className={cn("inline-block w-2 h-2 rounded-sm mr-1", s.color)} />
+            {s.label} {s.count}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function FundamentalsTab({ yahooSuffix }: { yahooSuffix: string }) {
   const { data, isLoading } = useQuery<FundamentalsData>({
     queryKey: ["fundamentals", yahooSuffix],
@@ -215,6 +304,63 @@ function FundamentalsTab({ yahooSuffix }: { yahooSuffix: string }) {
             {s.value}
           </div>
         </div>
+      ))}
+      {data.analystRatings && <AnalystRatingsBar ratings={data.analystRatings} />}
+    </div>
+  );
+}
+
+function NewsTab({ yahooSuffix }: { yahooSuffix: string }) {
+  const { data, isLoading } = useQuery<NewsItem[]>({
+    queryKey: ["news", yahooSuffix],
+    queryFn: async () => {
+      const res = await fetch(`/api/news?symbol=${encodeURIComponent(yahooSuffix)}`);
+      return res.json() as Promise<NewsItem[]>;
+    },
+    staleTime: 15 * 60 * 1000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="p-4 animate-pulse space-y-3">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-14 bg-slate-800 rounded" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return <div className="p-8 text-center text-slate-500 text-sm">No news found</div>;
+  }
+
+  return (
+    <div className="divide-y divide-slate-800">
+      {data.map((item) => (
+        <a
+          key={item.uuid}
+          href={item.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex gap-3 px-4 py-3 hover:bg-slate-800/50 transition-colors group"
+        >
+          {item.thumbnail && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={item.thumbnail}
+              alt=""
+              className="w-16 h-12 object-cover rounded flex-shrink-0 opacity-80 group-hover:opacity-100"
+            />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-slate-200 group-hover:text-white line-clamp-2 leading-snug">
+              {item.title}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              {item.publisher} · {relativeTime(item.providerPublishTime)}
+            </p>
+          </div>
+        </a>
       ))}
     </div>
   );
@@ -282,9 +428,16 @@ export default function ChartPanel({ stock }: Props) {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "chart", label: "Chart" },
-    { id: "insider", label: "Insider Transactions" },
+    { id: "insider", label: "Insider" },
     { id: "fundamentals", label: "Fundamentals" },
+    { id: "news", label: "News" },
   ];
+
+  const has52W =
+    stock.fiftyTwoWeekLow !== null &&
+    stock.fiftyTwoWeekHigh !== null &&
+    stock.price !== null &&
+    stock.fiftyTwoWeekHigh > stock.fiftyTwoWeekLow;
 
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
@@ -310,6 +463,13 @@ export default function ChartPanel({ stock }: Props) {
         <span className={`font-mono text-sm ${pctColor(stock.performance.ytd)}`}>
           {fmtPct(stock.performance.ytd)} YTD
         </span>
+        {has52W && (
+          <Range52W
+            low={stock.fiftyTwoWeekLow!}
+            high={stock.fiftyTwoWeekHigh!}
+            price={stock.price!}
+          />
+        )}
         <EarningsBadge yahooSuffix={stock.yahooSuffix} />
         <span className="text-slate-500 text-sm ml-auto">
           MCap: {fmtMarketCap(stock.marketCap)}
@@ -351,6 +511,11 @@ export default function ChartPanel({ stock }: Props) {
       {activeTab === "fundamentals" && (
         <div className="min-h-[200px]">
           <FundamentalsTab yahooSuffix={stock.yahooSuffix} />
+        </div>
+      )}
+      {activeTab === "news" && (
+        <div className="min-h-[200px] max-h-[500px] overflow-y-auto">
+          <NewsTab yahooSuffix={stock.yahooSuffix} />
         </div>
       )}
     </div>

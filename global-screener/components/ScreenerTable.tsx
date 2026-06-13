@@ -18,6 +18,7 @@ type DisplayCurrency = "local" | "USD";
 
 const REFRESH_INTERVAL = Number(process.env.NEXT_PUBLIC_REFRESH_INTERVAL_MS ?? 720_000);
 const VIRTUAL_THRESHOLD = Number(process.env.NEXT_PUBLIC_VIRTUAL_ROW_THRESHOLD ?? 100);
+const FAVORITES_KEY = "screener-favorites";
 
 async function fetchBatch(markets: Market[]): Promise<StockData[]> {
   const res = await fetch("/api/batch", {
@@ -28,6 +29,60 @@ async function fetchBatch(markets: Market[]): Promise<StockData[]> {
   if (!res.ok) throw new Error(`API error ${res.status}`);
   const json = await res.json();
   return json.data;
+}
+
+function loadFavorites(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(FAVORITES_KEY);
+    if (raw) return new Set(JSON.parse(raw) as string[]);
+  } catch { /* ignore */ }
+  return new Set();
+}
+
+function saveFavorites(favs: Set<string>) {
+  try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(Array.from(favs))); } catch { /* ignore */ }
+}
+
+// ── URL deep-link helpers ─────────────────────────────────────────────────
+
+function filtersToParams(f: FilterState): string {
+  const p = new URLSearchParams();
+  p.set("markets", f.markets.join(","));
+  if (f.sectors.length) p.set("sectors", f.sectors.join(","));
+  p.set("sort", f.sortField);
+  p.set("dir", f.sortDir);
+  if (f.topN) p.set("topN", String(f.topN));
+  if (f.minChangePct !== null) p.set("min", String(f.minChangePct));
+  if (f.search) p.set("q", f.search);
+  if (f.volSurge) p.set("volSurge", "1");
+  if (f.watchlistOnly) p.set("watchlist", "1");
+  return p.toString();
+}
+
+function paramsToFilters(search: string, base: FilterState): FilterState {
+  if (!search) return base;
+  const p = new URLSearchParams(search);
+  const markets = p.get("markets")?.split(",").filter(Boolean) as Market[] | undefined;
+  const sectors = p.get("sectors")?.split(",").filter(Boolean) ?? [];
+  const sortField = (p.get("sort") ?? base.sortField) as SortField;
+  const sortDir = (p.get("dir") ?? base.sortDir) as SortDirection;
+  const topN = p.get("topN") ? Number(p.get("topN")) : null;
+  const minChangePct = p.get("min") ? Number(p.get("min")) : null;
+  const search2 = p.get("q") ?? "";
+  const volSurge = p.get("volSurge") === "1";
+  const watchlistOnly = p.get("watchlist") === "1";
+  return {
+    markets: markets?.length ? markets : base.markets,
+    sectors,
+    sortField,
+    sortDir,
+    topN,
+    minChangePct,
+    search: search2,
+    volSurge,
+    watchlistOnly,
+  };
 }
 
 const DEFAULT_FILTERS: FilterState = {
@@ -48,11 +103,13 @@ interface ColumnDef {
 }
 
 const COLUMNS: ColumnDef[] = [
+  { id: "star",      label: "★",          defaultVisible: true },
   { id: "rank",      label: "#",          defaultVisible: true },
   { id: "ticker",    label: "Ticker",     defaultVisible: true },
   { id: "company",   label: "Company",    defaultVisible: true },
   { id: "market",    label: "Market",     defaultVisible: true },
   { id: "price",     label: "Price",      defaultVisible: true },
+  { id: "52w",       label: "52W Range",  defaultVisible: true },
   { id: "daily",     label: "1D %",       defaultVisible: true },
   { id: "wtd",       label: "WTD %",      defaultVisible: true },
   { id: "mtd",       label: "MTD %",      defaultVisible: true },
@@ -77,17 +134,21 @@ function loadVisibleColumns(): Set<string> {
       const arr: string[] = JSON.parse(raw);
       return new Set(arr);
     }
-  } catch {
-    // ignore parse errors
-  }
+  } catch { /* ignore */ }
   return new Set(COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id));
 }
 
 // ─── Filters / sorting ────────────────────────────────────────────────────
 
-function applyFilters(data: StockData[], f: FilterState, rsMap: Map<string, number>): StockData[] {
+function applyFilters(
+  data: StockData[],
+  f: FilterState,
+  rsMap: Map<string, number>,
+  favorites: Set<string>
+): StockData[] {
   let rows = data.filter((d) => f.markets.includes(d.market));
 
+  if (f.watchlistOnly) rows = rows.filter((d) => favorites.has(d.symbol));
   if (f.sectors.length) rows = rows.filter((d) => f.sectors.includes(d.sector));
 
   if (f.volSurge) {
@@ -137,6 +198,7 @@ function applyPreset(preset: PresetName): FilterState {
     case "five-year-compounders": return { ...base, sortField: "five_y", sortDir: "desc", topN: 25 };
     case "most-active":    return { ...base, sortField: "volume",  sortDir: "desc", topN: 25 };
     case "vol-surge":      return { ...base, sortField: "volume",  sortDir: "desc", topN: 25, volSurge: true };
+    case "watchlist":      return { ...base, watchlistOnly: true };
     default: return base;
   }
 }
@@ -148,7 +210,6 @@ function computeRsMap(data: StockData[]): Map<string, number> {
     .map((d) => ({ symbol: d.symbol, val: d.performance.one_y }))
     .filter((x): x is { symbol: string; val: number } => x.val !== null);
 
-  // Sort ascending to get ranks
   const sorted = [...withVal].sort((a, b) => a.val - b.val);
   const n = sorted.length;
 
@@ -206,6 +267,74 @@ function SkeletonRow({ colCount }: { colCount: number }) {
   );
 }
 
+function Range52WBar({ low, high, price }: { low: number; high: number; price: number }) {
+  const range = high - low;
+  const pct = range > 0 ? Math.max(0, Math.min(1, (price - low) / range)) : 0;
+  const barColor = pct >= 0.8 ? "bg-emerald-500" : pct <= 0.2 ? "bg-red-500" : "bg-amber-400";
+  return (
+    <div className="flex flex-col gap-0.5 w-20">
+      <div className="relative h-1.5 bg-slate-700 rounded-full overflow-hidden">
+        <div className={cn("absolute inset-y-0 left-0 rounded-full", barColor)} style={{ width: `${pct * 100}%` }} />
+      </div>
+      <div className="flex justify-between text-[10px] text-slate-600 tabular-nums">
+        <span>{(Math.round(low * 100) / 100).toLocaleString()}</span>
+        <span>{(Math.round(high * 100) / 100).toLocaleString()}</span>
+      </div>
+    </div>
+  );
+}
+
+// Lazy sparkline tooltip shown on row hover after 400ms
+function SparklineTooltip({
+  yahooSuffix,
+  visible,
+}: {
+  yahooSuffix: string;
+  visible: boolean;
+}) {
+  const { data } = useQuery<{ date: string; close: number }[]>({
+    queryKey: ["hist-tooltip", yahooSuffix],
+    queryFn: async () => {
+      const res = await fetch(`/api/history?symbol=${encodeURIComponent(yahooSuffix)}`);
+      return res.json();
+    },
+    enabled: visible,
+    staleTime: 3600 * 1000,
+  });
+
+  if (!data || data.length < 2) return null;
+
+  // Show last 30 trading days
+  const pts = data.slice(-30);
+  const prices = pts.map((p) => p.close);
+  const minP = Math.min(...prices);
+  const maxP = Math.max(...prices);
+  const range = maxP - minP || 1;
+  const W = 200;
+  const H = 60;
+  const step = W / (pts.length - 1);
+
+  const pathD = pts
+    .map((p, i) => {
+      const x = i * step;
+      const y = H - ((p.close - minP) / range) * (H - 4) - 2;
+      return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(" ");
+
+  const isUp = prices[prices.length - 1] >= prices[0];
+  const lineColor = isUp ? "#10b981" : "#ef4444";
+
+  return (
+    <div className="absolute left-full top-0 ml-2 z-50 pointer-events-none bg-slate-800 border border-slate-600 rounded-lg p-2 shadow-xl">
+      <svg width={W} height={H} className="block">
+        <path d={pathD} fill="none" stroke={lineColor} strokeWidth="1.5" />
+      </svg>
+      <p className="text-[10px] text-slate-400 mt-1 text-center">30-day price history</p>
+    </div>
+  );
+}
+
 // ─── Column customizer dropdown ───────────────────────────────────────────
 
 function ColumnCustomizer({
@@ -230,7 +359,7 @@ function ColumnCustomizer({
   const toggle = (id: string) => {
     const next = new Set(visibleColumns);
     if (next.has(id)) {
-      if (next.size <= 1) return; // always keep at least 1 column
+      if (next.size <= 1) return;
       next.delete(id);
     } else {
       next.add(id);
@@ -274,14 +403,24 @@ interface Props {
 }
 
 export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
-  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
-  const [searchInput, setSearchInput] = useState("");
+  const [filters, setFilters] = useState<FilterState>(() => {
+    if (typeof window !== "undefined") {
+      return paramsToFilters(window.location.search, DEFAULT_FILTERS);
+    }
+    return DEFAULT_FILTERS;
+  });
+  const [searchInput, setSearchInput] = useState(filters.search);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [countdown, setCountdown] = useState<string>("");
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(loadVisibleColumns);
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>("local");
+  const [favorites, setFavorites] = useState<Set<string>>(loadFavorites);
+  const [hoveredSymbol, setHoveredSymbol] = useState<string | null>(null);
+  const [tooltipVisible, setTooltipVisible] = useState<string | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextRefreshRef = useRef<number>(Date.now() + REFRESH_INTERVAL);
+  const [shareMsg, setShareMsg] = useState(false);
 
   const { data: fxRates } = useQuery<FxRates>({
     queryKey: ["fx"],
@@ -297,6 +436,13 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
     const t = setTimeout(() => setFilters((f) => ({ ...f, search: searchInput })), 300);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  // Sync URL when filters change
+  useEffect(() => {
+    const qs = filtersToParams(filters);
+    const newUrl = `${window.location.pathname}${qs ? "?" + qs : ""}`;
+    window.history.replaceState(null, "", newUrl);
+  }, [filters]);
 
   const { data, isLoading, isRefetching, isError, dataUpdatedAt } = useQuery({
     queryKey: ["screener", filters.markets],
@@ -333,7 +479,7 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
     return () => clearInterval(id);
   }, []);
 
-  // RS score map (computed over full dataset, before filters)
+  // RS score map
   const rsMap = useMemo(() => {
     if (!data) return new Map<string, number>();
     return computeRsMap(data);
@@ -341,15 +487,14 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
 
   const rows = useMemo(() => {
     if (!data) return [];
-    return applyFilters(data, filters, rsMap);
-  }, [data, filters, rsMap]);
+    return applyFilters(data, filters, rsMap, favorites);
+  }, [data, filters, rsMap, favorites]);
 
   // Keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "SELECT") return;
-
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedIdx((i) => (i === null ? 0 : Math.min(i + 1, rows.length - 1)));
@@ -357,9 +502,7 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
         e.preventDefault();
         setSelectedIdx((i) => (i === null ? 0 : Math.max(i - 1, 0)));
       } else if (e.key === "Enter") {
-        if (selectedIdx !== null && rows[selectedIdx]) {
-          onSelectStock(rows[selectedIdx]);
-        }
+        if (selectedIdx !== null && rows[selectedIdx]) onSelectStock(rows[selectedIdx]);
       } else if (e.key === "Escape") {
         setSelectedIdx(null);
       }
@@ -368,10 +511,7 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
     return () => document.removeEventListener("keydown", handler);
   }, [rows, selectedIdx, onSelectStock]);
 
-  // Clear selection when rows change
-  useEffect(() => {
-    setSelectedIdx(null);
-  }, [rows]);
+  useEffect(() => { setSelectedIdx(null); }, [rows]);
 
   const handleSort = useCallback((field: SortField) => {
     setFilters((f) => ({
@@ -379,6 +519,37 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
       sortField: field,
       sortDir: f.sortField === field && f.sortDir === "desc" ? "asc" : "desc",
     }));
+  }, []);
+
+  const toggleFavorite = useCallback((symbol: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (next.has(symbol)) next.delete(symbol);
+      else next.add(symbol);
+      saveFavorites(next);
+      return next;
+    });
+  }, []);
+
+  const handleRowMouseEnter = useCallback((symbol: string) => {
+    setHoveredSymbol(symbol);
+    hoverTimerRef.current = setTimeout(() => setTooltipVisible(symbol), 400);
+  }, []);
+
+  const handleRowMouseLeave = useCallback(() => {
+    setHoveredSymbol(null);
+    setTooltipVisible(null);
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+  }, []);
+
+  const handleShare = useCallback(async () => {
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareMsg(true);
+      setTimeout(() => setShareMsg(false), 2000);
+    } catch { /* ignore */ }
   }, []);
 
   const exportCSV = useCallback(() => {
@@ -429,9 +600,7 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
         />
         <div className="flex items-center gap-3 text-xs text-slate-400 py-2 ml-auto pl-4 border-l border-slate-700">
           <span className={cn("w-2 h-2 rounded-full", statusDot)} />
-          {lastUpdated && (
-            <span>Updated {lastUpdated.toLocaleTimeString()}</span>
-          )}
+          {lastUpdated && <span>Updated {lastUpdated.toLocaleTimeString()}</span>}
           <span>Next in {countdown}</span>
           <ColumnCustomizer visibleColumns={vis} onChange={setVisibleColumns} />
           <button
@@ -448,9 +617,21 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
           </button>
           <button
             onClick={exportCSV}
-            className="px-2 py-1 rounded border border-slate-700 hover:border-slate-500 hover:text-white transition-colors ml-1"
+            className="px-2 py-1 rounded border border-slate-700 hover:border-slate-500 hover:text-white transition-colors"
           >
             ↓ CSV
+          </button>
+          <button
+            onClick={handleShare}
+            className={cn(
+              "px-2 py-1 rounded border transition-colors",
+              shareMsg
+                ? "border-emerald-500 text-emerald-400"
+                : "border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white"
+            )}
+            title="Copy shareable link to clipboard"
+          >
+            {shareMsg ? "✓ Copied!" : "🔗 Share"}
           </button>
         </div>
       </div>
@@ -468,11 +649,13 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
           <table className="w-full text-sm">
             <thead className="bg-slate-900 sticky top-0 z-10">
               <tr className="border-b border-slate-700">
+                {vis.has("star")      && <th className="px-2 py-2 text-center text-xs text-slate-500 w-8">★</th>}
                 {vis.has("rank")      && <th className="px-3 py-2 text-left text-xs text-slate-500 w-8">#</th>}
                 {vis.has("ticker")    && <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">Ticker</th>}
                 {vis.has("company")   && <th className="px-3 py-2 text-left text-xs text-slate-400">Company</th>}
                 {vis.has("market")    && <th className="px-3 py-2 text-left text-xs text-slate-400">Market</th>}
                 {vis.has("price")     && <SortHeader label="Price"    field="price"     current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
+                {vis.has("52w")       && <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">52W Range</th>}
                 {vis.has("daily")     && <SortHeader label="1D %"     field="daily"     current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
                 {vis.has("wtd")       && <SortHeader label="WTD %"    field="wtd"       current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
                 {vis.has("mtd")       && <SortHeader label="MTD %"    field="mtd"       current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
@@ -497,26 +680,55 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
                       stock.avgVolume20d !== null &&
                       stock.volume > 2 * stock.avgVolume20d;
                     const isSelected = selectedIdx === idx;
+                    const isFav = favorites.has(stock.symbol);
+                    const has52W =
+                      stock.fiftyTwoWeekLow !== null &&
+                      stock.fiftyTwoWeekHigh !== null &&
+                      stock.price !== null &&
+                      stock.fiftyTwoWeekHigh > stock.fiftyTwoWeekLow;
+                    const showTooltip = tooltipVisible === stock.symbol || hoveredSymbol === stock.symbol;
 
                     return (
                       <tr
                         key={stock.symbol}
                         onClick={() => { setSelectedIdx(idx); onSelectStock(stock); }}
+                        onMouseEnter={() => handleRowMouseEnter(stock.symbol)}
+                        onMouseLeave={handleRowMouseLeave}
                         className={cn(
-                          "border-b border-slate-800 cursor-pointer transition-colors",
+                          "border-b border-slate-800 cursor-pointer transition-colors relative",
                           "hover:bg-slate-800/60",
                           isRefetching && "opacity-70",
                           stock.isStale && "opacity-60",
                           isSelected && "bg-blue-900/30 ring-1 ring-blue-500 ring-inset"
                         )}
                       >
+                        {vis.has("star") && (
+                          <td className="px-2 py-2 text-center">
+                            <button
+                              onClick={(e) => toggleFavorite(stock.symbol, e)}
+                              className={cn(
+                                "text-base transition-colors",
+                                isFav ? "text-amber-400" : "text-slate-700 hover:text-slate-400"
+                              )}
+                              title={isFav ? "Remove from watchlist" : "Add to watchlist"}
+                            >
+                              ★
+                            </button>
+                          </td>
+                        )}
                         {vis.has("rank")    && <td className="px-3 py-2 text-slate-600 tabular-nums">{idx + 1}</td>}
                         {vis.has("ticker")  && (
-                          <td className="px-3 py-2 font-semibold text-white whitespace-nowrap">
+                          <td className="px-3 py-2 font-semibold text-white whitespace-nowrap relative">
                             {stock.symbol}
                             {isVolSurge && <span className="ml-1" title="Volume surge (>2× avg)">🔥</span>}
                             {stock.isStale && (
                               <span className="ml-1 text-xs text-amber-500 font-normal">STALE</span>
+                            )}
+                            {tooltipVisible === stock.symbol && (
+                              <SparklineTooltip
+                                yahooSuffix={stock.yahooSuffix}
+                                visible={showTooltip}
+                              />
                             )}
                           </td>
                         )}
@@ -556,6 +768,19 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
                             </td>
                           );
                         })()}
+                        {vis.has("52w") && (
+                          <td className="px-3 py-2">
+                            {has52W ? (
+                              <Range52WBar
+                                low={stock.fiftyTwoWeekLow!}
+                                high={stock.fiftyTwoWeekHigh!}
+                                price={stock.price!}
+                              />
+                            ) : (
+                              <span className="text-slate-700 text-xs">—</span>
+                            )}
+                          </td>
+                        )}
                         {vis.has("daily")     && <td className="px-3 py-2"><PctCell value={stock.performance.daily} /></td>}
                         {vis.has("wtd")       && <td className="px-3 py-2"><PctCell value={stock.performance.wtd} /></td>}
                         {vis.has("mtd")       && <td className="px-3 py-2"><PctCell value={stock.performance.mtd} /></td>}

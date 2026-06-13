@@ -12,7 +12,7 @@ function getLocalTime(tz: string): { day: number; timeMin: number } {
   const parts = Object.fromEntries(fmt.formatToParts(now).map((p) => [p.type, p.value]));
   const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   const day = dayMap[parts.weekday] ?? 0;
-  const h = parseInt(parts.hour, 10) % 24;
+  const h = parseInt(parts.hour, 10);
   const timeMin = h * 60 + parseInt(parts.minute, 10);
   return { day, timeMin };
 }
@@ -39,8 +39,8 @@ export function getMarketState(market: Market): MarketState {
     case "UAE": {
       const { day, timeMin } = getLocalTime("Asia/Dubai");
       if (day === 0 || day === 6) return "closed";
-      if (day === 5 && timeMin >= 10 * 60 && timeMin < 13 * 60 + 50) return "open";
-      if (day !== 5 && timeMin >= 10 * 60 && timeMin < 14 * 60 + 50) return "open";
+      if (timeMin >= 10 * 60 && timeMin < 14 * 60 + 50) return "open";
+      if (timeMin >= 9 * 60 + 30 && timeMin < 10 * 60) return "pre-market";
       return "closed";
     }
     case "Saudi": {

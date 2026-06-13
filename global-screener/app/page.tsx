@@ -4,10 +4,12 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import { StockData } from "@/types";
 
-const TickerTape = dynamic(() => import("@/components/TickerTape"), { ssr: false });
-const MarketIndexCards = dynamic(() => import("@/components/MarketIndexCards"), { ssr: false });
-const ScreenerTable = dynamic(() => import("@/components/ScreenerTable"), { ssr: false });
-const ChartPanel = dynamic(() => import("@/components/ChartPanel"), { ssr: false });
+const TickerTape       = dynamic(() => import("@/components/TickerTape"),        { ssr: false });
+const MarketIndexCards = dynamic(() => import("@/components/MarketIndexCards"),   { ssr: false });
+const ScreenerTable    = dynamic(() => import("@/components/ScreenerTable"),      { ssr: false });
+const ChartPanel       = dynamic(() => import("@/components/ChartPanel"),         { ssr: false });
+const FearGreed        = dynamic(() => import("@/components/FearGreed"),          { ssr: false });
+const PriceAlerts      = dynamic(() => import("@/components/PriceAlerts"),        { ssr: false });
 
 export default function Home() {
   const [selectedStock, setSelectedStock] = useState<StockData | null>(null);
@@ -26,6 +28,7 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-3 text-xs text-slate-400">
           <span className="hidden md:block">Prices delayed 15 min · Free data</span>
+          <PriceAlerts />
           <a
             href="https://www.tradingview.com"
             target="_blank"
@@ -46,6 +49,9 @@ export default function Home() {
       <main className="flex-1 px-4 md:px-6 py-4 space-y-4 max-w-[1800px] mx-auto w-full">
         {/* Market index overview cards */}
         <MarketIndexCards />
+
+        {/* VIX Fear & Greed gauge */}
+        <FearGreed />
 
         {/* Screener table */}
         <ScreenerTable onSelectStock={setSelectedStock} />

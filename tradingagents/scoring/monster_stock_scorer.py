@@ -554,8 +554,8 @@ def score_stock(
 
     # Hard blockers
     hard_blockers = []
-    from tradingagents.default_config import MONSTER_STOCK_METHODOLOGY_CONFIG as _cfg
-    _min_liq = _cfg["hard_filters"]["minimum_liquidity_dollar_volume"]
+    from tradingagents.default_config import MONSTER_STOCK_METHODOLOGY_CONFIG
+    _min_liq = MONSTER_STOCK_METHODOLOGY_CONFIG["hard_filters"]["minimum_liquidity_dollar_volume"]
     if fundamentals.avg_daily_dollar_volume < _min_liq:
         hard_blockers.append(
             f"Dollar volume ${fundamentals.avg_daily_dollar_volume/1e6:.1f}M/day "
@@ -690,7 +690,7 @@ def score_eps_growth(current_q_growth: float | None) -> float:
     Key fix vs Gemini: the below-floor zone (0-25%) maps to 0-1, not 0-4.
     Boik explicitly treats 25% as a hard floor — 20% growth is not 4/10.
     """
-    if current_q_growth is None:
+    if current_q_growth is None or not _np.isfinite(current_q_growth):
         return 0.0
     if current_q_growth < 0:
         return 0.0
@@ -707,7 +707,7 @@ def score_eps_growth(current_q_growth: float | None) -> float:
     return _clip(8.5 + min(1.5, (current_q_growth - 100.0) / 200.0 * 1.5))
 
 
-def score_acceleration(growth_history: list) -> float:
+def score_acceleration(growth_history: list[float | None]) -> float:
     """
     Score EPS or revenue growth acceleration across up to 4 quarters.
 
@@ -716,13 +716,14 @@ def score_acceleration(growth_history: list) -> float:
     Key fix vs Gemini: weights the MAGNITUDE of acceleration relative to the
     prior level, not just direction.  10% → 11% is very different from 50% → 100%.
     """
-    if len(growth_history) < 3:
+    history = [g for g in growth_history[:4] if g is not None and _np.isfinite(g)]
+    if len(history) < 3:
         return 5.0  # neutral when insufficient data
 
     score = 5.0
-    for i in range(min(3, len(growth_history) - 1)):
-        current = growth_history[i]
-        prior = growth_history[i + 1]
+    for i in range(min(3, len(history) - 1)):
+        current = history[i]
+        prior = history[i + 1]
         if prior == 0:
             continue
         normalized_change = (current - prior) / max(abs(prior), 1.0)

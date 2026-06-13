@@ -50,7 +50,6 @@ class TestRSNHBP:
     def test_signal_triggered_when_rs_at_high_stock_in_base(self):
         from tradingagents.dataflows.technicals_deep import calculate_rsnhbp
 
-        n = 260
         # Stock peaks at row 10-19 (100), then settles at 85 (15% base)
         # SPY falls throughout so RS line climbs to a new 52w high by end
         # The rolling window (lookback=252) covers rows 8-259, so the peak IS visible

@@ -64,6 +64,7 @@ class DeepFundamentals:
 
 
 def _safe(fn, default=None):
+    """Call fn() and return default on any exception."""
     try:
         return fn()
     except Exception:
@@ -71,6 +72,7 @@ def _safe(fn, default=None):
 
 
 def _pct_change(new, old):
+    """Return percentage change from old to new, or None if either is missing/zero."""
     if old is None or new is None or old == 0:
         return None
     return round((new - old) / abs(old) * 100, 2)

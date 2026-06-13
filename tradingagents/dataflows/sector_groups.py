@@ -49,6 +49,7 @@ _DEFAULT_PEERS = ["SPY", "QQQ", "IWM", "DIA", "VTI"]
 
 
 def _safe_float(val, default=0.0) -> float:
+    """Coerce val to float, returning default on NaN or any exception."""
     try:
         v = float(val)
         return v if not math.isnan(v) else default

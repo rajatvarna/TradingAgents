@@ -83,6 +83,7 @@ class DeepTechnicals:
 
 
 def _safe_float(val, default=0.0) -> float:
+    """Convert val to float, returning default on NaN or any exception."""
     try:
         v = float(val)
         return v if not math.isnan(v) else default
@@ -91,6 +92,7 @@ def _safe_float(val, default=0.0) -> float:
 
 
 def _fetch_ohlcv(ticker: str, start: str, end: str):
+    """Fetch OHLCV history for ticker between start and end (YYYY-MM-DD)."""
     import pandas as pd
     import yfinance as yf
     tk = yf.Ticker(ticker)
@@ -102,6 +104,7 @@ def _fetch_ohlcv(ticker: str, start: str, end: str):
 
 
 def _compute_ma_state(df: pd.DataFrame) -> MovingAverageState:
+    """Compute MA grades (A–E) and distance metrics from OHLCV dataframe."""
     close = df["Close"]
     price = _safe_float(close.iloc[-1])
     ma_10 = _safe_float(close.rolling(10).mean().iloc[-1])
@@ -157,6 +160,7 @@ def _compute_ma_state(df: pd.DataFrame) -> MovingAverageState:
 
 
 def _compute_volume_profile(df: pd.DataFrame) -> VolumeProfile:
+    """Compute 50-day/10-day volume averages, up/down volume ratio, and surge flag."""
     vol = df["Volume"]
     close = df["Close"]
     avg_vol_50 = _safe_float(vol.rolling(50).mean().iloc[-1])
@@ -251,6 +255,7 @@ def _compute_base_pattern(df: pd.DataFrame, avg_vol_50: float) -> BasePattern:
 
 
 def _compute_sell_signals(df: pd.DataFrame, ma_state: MovingAverageState, avg_vol_50: float) -> SellSignals:
+    """Detect sell-signal flags: climax run, distribution days, MA breaks, gap-downs."""
     close = df["Close"]
     volume = df["Volume"]
     ma_21 = close.rolling(21).mean()
@@ -319,6 +324,7 @@ def _compute_sell_signals(df: pd.DataFrame, ma_state: MovingAverageState, avg_vo
 
 
 def _compute_relative_strength(ticker: str, df, as_of_date: str) -> RelativeStrength:
+    """Compute RS vs SPY over 3m/6m/12m periods and derive RS percentile estimate."""
     end = as_of_date
     start_12m = (datetime.strptime(as_of_date, "%Y-%m-%d") - timedelta(days=380)).strftime("%Y-%m-%d")
 

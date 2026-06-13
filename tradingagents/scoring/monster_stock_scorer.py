@@ -139,6 +139,7 @@ Summary:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _score_eps_growth(fund: DeepFundamentals) -> CriterionScore:
+    """Score EPS YoY growth for the most recent quarter (0–10)."""
     w = WEIGHTS["eps_growth"]
     if not fund.quarterly_history:
         return CriterionScore("EPS Growth", 0, w, "FAIL", "No quarterly EPS data available.")
@@ -158,6 +159,7 @@ def _score_eps_growth(fund: DeepFundamentals) -> CriterionScore:
 
 
 def _score_eps_acceleration(fund: DeepFundamentals) -> CriterionScore:
+    """Score whether EPS growth rate is accelerating across the last 4 quarters (0–10)."""
     w = WEIGHTS["eps_acceleration"]
     growths = [
         q.eps_yoy_growth
@@ -176,6 +178,7 @@ def _score_eps_acceleration(fund: DeepFundamentals) -> CriterionScore:
 
 
 def _score_revenue_growth(fund: DeepFundamentals) -> CriterionScore:
+    """Score revenue YoY growth for the most recent quarter (0–10)."""
     w = WEIGHTS["revenue_growth"]
     if not fund.quarterly_history:
         return CriterionScore("Revenue Growth", 0, w, "FAIL", "No quarterly revenue data.")
@@ -192,6 +195,7 @@ def _score_revenue_growth(fund: DeepFundamentals) -> CriterionScore:
 
 
 def _score_revenue_acceleration(fund: DeepFundamentals) -> CriterionScore:
+    """Score whether revenue growth is accelerating across the last 4 quarters (0–10)."""
     w = WEIGHTS["revenue_acceleration"]
     growths = [
         q.revenue_yoy_growth
@@ -210,6 +214,7 @@ def _score_revenue_acceleration(fund: DeepFundamentals) -> CriterionScore:
 
 
 def _score_annual_eps_trend(fund: DeepFundamentals) -> CriterionScore:
+    """Score consistency of annual EPS growth over the available fiscal years (0–10)."""
     w = WEIGHTS["annual_eps_trend"]
     ann = fund.annual_history
     if len(ann) < 2:
@@ -224,6 +229,7 @@ def _score_annual_eps_trend(fund: DeepFundamentals) -> CriterionScore:
 
 
 def _score_roe(fund: DeepFundamentals) -> CriterionScore:
+    """Score return on equity against the 17% Boik minimum guideline (0–10)."""
     w = WEIGHTS["roe"]
     try:
         info = fund  # ROE not directly on DeepFundamentals; use quarterly roe field
@@ -245,6 +251,7 @@ def _score_roe(fund: DeepFundamentals) -> CriterionScore:
 
 
 def _score_margin_trend(fund: DeepFundamentals) -> CriterionScore:
+    """Score after-tax margin direction over the last 4 quarters (0–10)."""
     w = WEIGHTS["margin_trend"]
     margins = [
         q.after_tax_margin
@@ -261,6 +268,7 @@ def _score_margin_trend(fund: DeepFundamentals) -> CriterionScore:
 
 
 def _score_forward_estimate(fund: DeepFundamentals) -> CriterionScore:
+    """Score analyst forward EPS growth estimate for next fiscal year (0–10)."""
     w = WEIGHTS["forward_estimate"]
     if fund.next_year_eps_growth_estimate is None:
         return CriterionScore("Forward Estimate", 4, w, "WARN", "No forward EPS estimate available.")
@@ -275,6 +283,7 @@ def _score_forward_estimate(fund: DeepFundamentals) -> CriterionScore:
 
 
 def _score_fund_count_growth(fund: DeepFundamentals) -> CriterionScore:
+    """Score total institutional holder count as a proxy for sponsorship depth (0–10)."""
     w = WEIGHTS["fund_count_growth"]
     history = fund.sponsorship_history
     if not history:
@@ -290,6 +299,7 @@ def _score_fund_count_growth(fund: DeepFundamentals) -> CriterionScore:
 
 
 def _score_fund_count_acceleration(fund: DeepFundamentals) -> CriterionScore:
+    """Score quarter-over-quarter change in institutional fund count (0–10)."""
     w = WEIGHTS["fund_count_acceleration"]
     history = fund.sponsorship_history
     if len(history) < 2:
@@ -307,6 +317,7 @@ def _score_fund_count_acceleration(fund: DeepFundamentals) -> CriterionScore:
 
 
 def _score_flagship_fund(fund: DeepFundamentals) -> CriterionScore:
+    """Score presence of top-performing flagship funds in the holder list (0–10)."""
     w = WEIGHTS["flagship_fund"]
     history = fund.sponsorship_history
     if not history:
@@ -318,6 +329,7 @@ def _score_flagship_fund(fund: DeepFundamentals) -> CriterionScore:
 
 
 def _score_institutional_quality(fund: DeepFundamentals) -> CriterionScore:
+    """Score institutional ownership conviction via fund count and shares held (0–10)."""
     w = WEIGHTS["institutional_quality"]
     history = fund.sponsorship_history
     if not history:
@@ -333,6 +345,7 @@ def _score_institutional_quality(fund: DeepFundamentals) -> CriterionScore:
 
 
 def _score_ma_grade(tech: DeepTechnicals) -> CriterionScore:
+    """Score the A–E moving average grade from DeepTechnicals (0–10)."""
     w = WEIGHTS["ma_grade"]
     grade = tech.ma_state.grade
     grade_map = {"A": 10, "B": 7, "C": 3, "D": 1, "E": 0}
@@ -349,6 +362,7 @@ def _score_ma_grade(tech: DeepTechnicals) -> CriterionScore:
 
 
 def _score_volume_quality(tech: DeepTechnicals) -> CriterionScore:
+    """Score up/down volume ratio as a measure of institutional accumulation (0–10)."""
     w = WEIGHTS["volume_quality"]
     ratio = tech.volume_profile.up_volume_ratio
     if ratio >= 1.5:
@@ -361,6 +375,7 @@ def _score_volume_quality(tech: DeepTechnicals) -> CriterionScore:
 
 
 def _score_base_pattern(tech: DeepTechnicals) -> CriterionScore:
+    """Score the current chart base pattern quality and breakout timing (0–10)."""
     w = WEIGHTS["base_pattern"]
     bp = tech.base_pattern
     if bp.breakout_occurred and bp.weeks_since_breakout is not None and bp.weeks_since_breakout <= 2:
@@ -373,6 +388,7 @@ def _score_base_pattern(tech: DeepTechnicals) -> CriterionScore:
 
 
 def _score_breakout_quality(tech: DeepTechnicals) -> CriterionScore:
+    """Score breakout volume confirmation quality (0–10); 5 if no breakout yet."""
     w = WEIGHTS["breakout_quality"]
     bp = tech.base_pattern
     if not bp.breakout_occurred:
@@ -388,6 +404,7 @@ def _score_breakout_quality(tech: DeepTechnicals) -> CriterionScore:
 
 
 def _score_rs(tech: DeepTechnicals) -> CriterionScore:
+    """Score relative strength percentile vs the broad market (0–10)."""
     w = WEIGHTS["rs_score"]
     pct = tech.relative_strength.rs_percentile
     trend = tech.relative_strength.rs_line_trend
@@ -403,6 +420,7 @@ def _score_rs(tech: DeepTechnicals) -> CriterionScore:
 
 
 def _score_sell_signals(tech: DeepTechnicals) -> CriterionScore:
+    """Score absence of sell signals; deductions for climax run, MA breaks, distribution days (0–10)."""
     w = WEIGHTS["sell_signal"]
     ss = tech.sell_signals
     penalty = 0
@@ -436,6 +454,7 @@ def _score_sell_signals(tech: DeepTechnicals) -> CriterionScore:
 
 
 def _score_extension_risk(tech: DeepTechnicals) -> CriterionScore:
+    """Score extension above key MAs; higher extension = higher risk score deduction (0–10)."""
     w = WEIGHTS["extension_risk"]
     pct_50d = tech.ma_state.pct_above_50d
     pct_21d = tech.ma_state.pct_above_21d
@@ -451,6 +470,7 @@ def _score_extension_risk(tech: DeepTechnicals) -> CriterionScore:
 
 
 def _score_group_rank(group: GroupLeadershipData) -> CriterionScore:
+    """Score the industry group's RS rank percentile (0–10)."""
     w = WEIGHTS["group_rank"]
     pct = group.group_rs_rank_percentile
     weeks = group.group_weeks_leading
@@ -464,6 +484,7 @@ def _score_group_rank(group: GroupLeadershipData) -> CriterionScore:
 
 
 def _score_group_confirmation(group: GroupLeadershipData) -> CriterionScore:
+    """Score group confirmation via 3+ high-RS peers per Boik's 50% rule (0–10)."""
     w = WEIGHTS["group_confirmation"]
     count = group.group_leader_count
     if count >= 5:
@@ -476,6 +497,7 @@ def _score_group_confirmation(group: GroupLeadershipData) -> CriterionScore:
 
 
 def _score_market_health(market: MarketHealthSnapshot) -> CriterionScore:
+    """Score IBD market phase; correction returns 0 (hard blocker) (0–10)."""
     w = WEIGHTS["market_health"]
     phase = market.ibd_phase
     if phase == "confirmed_uptrend":
@@ -645,6 +667,7 @@ def score_stock(
 
 
 def _build_narrative(fund, tech, group, market, composite, grade, action, blockers) -> str:
+    """Build a 4-line plain-English summary of the composite score for agent prompt injection."""
     lines = [
         f"{fund.ticker} scores {composite:.1f}/100 (Grade {grade}) on the Monster Stock framework.",
         f"The stock is in the '{tech.base_pattern.pattern_type}' stage with MA grade {tech.ma_state.grade} "

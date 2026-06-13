@@ -76,6 +76,7 @@ class ScreenerResult:
 
 
 def _assign_tier(composite: float) -> str:
+    """Map composite score to watchlist tier label (A-List / Watch / Monitor / Avoid)."""
     if composite >= 85:
         return "A-List"
     if composite >= 65:
@@ -86,7 +87,7 @@ def _assign_tier(composite: float) -> str:
 
 
 def _pre_filter_ticker(ticker: str) -> bool:
-    """Quick pre-filter using yfinance info. Returns True if ticker passes."""
+    """Return True if ticker meets hard minimum price, dollar-volume, and market-cap thresholds."""
     try:
         import yfinance as yf
         info = yf.Ticker(ticker).fast_info
@@ -105,7 +106,7 @@ def _pre_filter_ticker(ticker: str) -> bool:
 
 
 async def _score_single_async(ticker: str, as_of_date: str, market_health) -> MonsterStockScore | None:
-    """Score one ticker asynchronously (runs sync calls in executor)."""
+    """Fetch fundamentals, technicals, and group data for one ticker and return its MonsterStockScore."""
     loop = asyncio.get_event_loop()
     try:
         fund = await loop.run_in_executor(None, fetch_deep_fundamentals, ticker)
@@ -173,6 +174,7 @@ async def run_screener(
 
 
 def _format_report(results: list[ScreenerResult], as_of_date: str, market_notes: str) -> str:
+    """Render ranked ScreenerResults as a human-readable watchlist report string."""
     lines = [
         f"╔{'═'*66}╗",
         f"║  MONSTER STOCK WATCHLIST — {as_of_date:<38}║",
@@ -200,6 +202,7 @@ def _format_report(results: list[ScreenerResult], as_of_date: str, market_notes:
 
 
 def _load_universe(universe_name: str) -> list[str]:
+    """Resolve universe name to a list of ticker symbols (sp500_ndx100, custom, or file:<path>)."""
     if universe_name == "sp500_ndx100":
         return SP500_NDX100_UNIVERSE
     if universe_name == "custom":
@@ -220,6 +223,7 @@ def _load_universe(universe_name: str) -> list[str]:
 
 
 def main():
+    """Parse CLI arguments, run the screener, print the report, and optionally save JSON output."""
     parser = argparse.ArgumentParser(description="Monster Stock Screener")
     parser.add_argument("--date", default=datetime.today().strftime("%Y-%m-%d"), help="As-of date (YYYY-MM-DD)")
     parser.add_argument("--top", type=int, default=25, help="Top N results to show")

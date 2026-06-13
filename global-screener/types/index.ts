@@ -69,7 +69,8 @@ export type SortField =
   | "five_y"
   | "price"
   | "marketCap"
-  | "volume";
+  | "volume"
+  | "rs";
 
 export type SortDirection = "asc" | "desc";
 
@@ -81,6 +82,7 @@ export interface FilterState {
   topN: number | null;
   minChangePct: number | null;
   search: string;
+  volSurge?: boolean;
 }
 
 export type PresetName =
@@ -89,4 +91,5 @@ export type PresetName =
   | "ytd-leaders"
   | "five-year-compounders"
   | "most-active"
-  | "52w-highs";
+  | "52w-highs"
+  | "vol-surge";

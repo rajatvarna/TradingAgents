@@ -16,6 +16,7 @@ const SORT_OPTIONS: { value: SortField; label: string }[] = [
   { value: "five_y",  label: "5Y %" },
   { value: "marketCap", label: "Mkt Cap" },
   { value: "volume",  label: "Volume" },
+  { value: "rs",      label: "RS Score" },
 ];
 
 const PRESETS: { name: PresetName; label: string }[] = [
@@ -24,6 +25,7 @@ const PRESETS: { name: PresetName; label: string }[] = [
   { name: "ytd-leaders",         label: "YTD Leaders" },
   { name: "five-year-compounders", label: "5Y Compounders" },
   { name: "most-active",         label: "Most Active" },
+  { name: "vol-surge",           label: "🔥 Vol Surge" },
 ];
 
 interface Props {

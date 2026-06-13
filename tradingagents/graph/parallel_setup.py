@@ -26,6 +26,7 @@ from tradingagents.agents import (
     create_news_analyst,
     create_portfolio_manager,
     create_research_manager,
+    create_social_media_analyst,
     create_trader,
 )
 

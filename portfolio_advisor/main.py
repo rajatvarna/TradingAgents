@@ -13,9 +13,7 @@ from .aggregator import aggregate, audit_positions, detect_condition
 from .broker import load_portfolio
 from .config import Aggressiveness, config
 from .runner import run_tickers
-from .scheduler import build_scheduler
 from .screener import get_market_regime, screen_candidates
-from .web import create_app
 
 logging.basicConfig(
     level=logging.INFO,
@@ -217,6 +215,9 @@ def run_eod() -> None:
 # ── Entry point ──────────────────────────────────────────────────────────────
 
 def main() -> None:
+    from .scheduler import build_scheduler  # noqa: PLC0415 — lazy: requires apscheduler
+    from .web import create_app  # noqa: PLC0415 — lazy: requires flask
+
     logger.info("Starting Portfolio Advisor")
 
     scheduler = build_scheduler(config, run_intraday, run_eod)

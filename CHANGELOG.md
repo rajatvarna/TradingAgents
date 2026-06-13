@@ -14,6 +14,7 @@ Breaking changes within the 0.x line are called out explicitly.
 - `__init__.py` files added to all agent sub-packages (`analysts`, `researchers`, `managers`, `risk_mgmt`, `trader`, `utils`) enabling direct module imports and correct mypy namespace handling.
 
 ### Fixed
+- `TradingMemoryLog._get_conn` now caches one connection per (instance, thread) via `threading.local()` instead of opening a new SQLite file descriptor on every query.
 - Thread safety bug in `propagate_portfolio`: each ticker analysis now runs in its own `TradingAgentsGraph` instance instead of sharing mutable state (`self.ticker`, `self.curr_state`, `self.structured_output_cache`) across threads.
 - `_log_state` now uses `.get()` for all `final_state` key accesses, producing a clear `None` instead of a `KeyError` when a graph node fails silently.
 - Duplicate `logger = logging.getLogger(__name__)` line and duplicate `import logging` removed from `memory.py`.
@@ -25,13 +26,9 @@ Breaking changes within the 0.x line are called out explicitly.
 - `scratch_test.py` (ad-hoc prototype, never part of test suite).
 - `requirements.txt` (stale single-entry file; `pypdf` is already declared in `pyproject.toml`).
 
-### Added (Sprint 3)
 - `tradingagents/dataflows/_indicator_descriptions.py` — single source of truth for all 13 technical indicator descriptions; eliminates three separate copies across `y_finance.py`, `alpha_vantage_indicator.py`, and `twelve_data_indicator.py`.
 - `SIGNAL_CONVICTION_WEIGHTS` and signal name constants (`SIGNAL_BUY`, `SIGNAL_SELL`, etc.) in `signal_processing.py` — replace raw string literals in `_conviction_score` and portfolio summary counting.
 - `portfolio_propagation_max_workers` and `outcome_holding_days` added to `DEFAULT_CONFIG` (and `_ENV_OVERRIDES`) — replaces hardcoded `4` and `5` in `propagate_portfolio` and `_fetch_returns`.
-
-### Fixed (Sprint 3)
-- `TradingMemoryLog._get_conn` now caches one connection per (instance, thread) via `threading.local()` instead of opening a new SQLite file descriptor on every query.
 
 ### Added
 

@@ -287,6 +287,15 @@ class TradingAgentsGraph:
                 return benchmark
         return benchmark_map.get("", "SPY")
 
+    @staticmethod
+    def _coerce_positive_int(value, default: int) -> int:
+        """Coerce value to a positive int, falling back to default on failure."""
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return default
+        return parsed if parsed > 0 else default
+
     def _fetch_returns(
         self, ticker: str, trade_date: str, holding_days: int = None,
         benchmark: str = "SPY",
@@ -300,7 +309,7 @@ class TradingAgentsGraph:
         """
         if holding_days is None:
             cfg = getattr(self, "config", {}) or {}
-            holding_days = cfg.get("outcome_holding_days", 5)
+            holding_days = self._coerce_positive_int(cfg.get("outcome_holding_days", 5), 5)
         try:
             start = datetime.strptime(trade_date, "%Y-%m-%d")
             end = start + timedelta(days=holding_days + 7)  # buffer for weekends/holidays
@@ -598,7 +607,9 @@ class TradingAgentsGraph:
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
         if max_workers is None:
-            max_workers = self.config.get("portfolio_propagation_max_workers", 4)
+            max_workers = self._coerce_positive_int(
+                self.config.get("portfolio_propagation_max_workers", 4), 4
+            )
         if not tickers:
             return {"results": [], "summary": {}}
 

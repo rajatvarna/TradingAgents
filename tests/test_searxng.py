@@ -5,10 +5,9 @@ from unittest.mock import patch
 import pytest
 import requests
 
+from tradingagents.dataflows import config as config_module
 from tradingagents.dataflows import searxng
 from tradingagents.dataflows.interface import route_to_vendor
-from tradingagents.dataflows import config as config_module
-
 
 pytestmark = pytest.mark.unit
 
@@ -135,9 +134,8 @@ def test_searxng_request_failure_raises_unavailable(stub_company_name):
         searxng.requests,
         "get",
         side_effect=requests.ConnectionError("connection refused"),
-    ):
-        with pytest.raises(searxng.SearxngUnavailableError):
-            searxng.get_news_searxng("NVDA", "2026-04-01", "2026-04-30")
+    ), pytest.raises(searxng.SearxngUnavailableError):
+        searxng.get_news_searxng("NVDA", "2026-04-01", "2026-04-30")
 
 
 def test_router_falls_back_when_searxng_unavailable():

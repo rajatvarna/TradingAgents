@@ -9,18 +9,17 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from typing import Any, Dict
-
+from typing import Any
 
 log = logging.getLogger(__name__)
 
 
 def dispatch_event_alert(
     conn: sqlite3.Connection,
-    job: Dict[str, Any],
+    job: dict[str, Any],
     *,
     secretary,                           # tradingagents.secretary.service.Secretary
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run an event_alert job. Returns the rollup dict the worker writes
     into queue_jobs (brief_id, run_ids JSON, cost_usd)."""
     payload = json.loads(job["payload"])
@@ -61,10 +60,10 @@ DISPATCH = {
 
 def dispatch(
     conn: sqlite3.Connection,
-    job: Dict[str, Any],
+    job: dict[str, Any],
     *,
     secretary,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     handler = DISPATCH.get(job["job_type"])
     if handler is None:
         raise ValueError(f"unknown job_type: {job['job_type']!r}")

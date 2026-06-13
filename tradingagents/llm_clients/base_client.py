@@ -1,7 +1,7 @@
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
 import logging
 import warnings
+from abc import ABC, abstractmethod
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 _REASONING_KWARGS = ("reasoning_effort", "effort", "thinking_level", "thinking_budget")
 
 
-def supports_temperature_pin(model: str, llm_kwargs: Dict[str, Any]) -> bool:
+def supports_temperature_pin(model: str, llm_kwargs: dict[str, Any]) -> bool:
     """Return False when the model+kwargs combination would reject temperature."""
-    model_lc = (model or "").lower()
+    (model or "").lower()
     # GPT-5 family with the Responses API + reasoning_effort rejects
     # temperature overrides — and reasoning_effort is the only path the
     # framework currently exposes for it (#openai_reasoning_effort in
@@ -27,18 +27,16 @@ def supports_temperature_pin(model: str, llm_kwargs: Dict[str, Any]) -> bool:
         return False
     # Claude opus/sonnet with explicit effort: extended-thinking mode does
     # not accept non-default temperature.
-    if "effort" in llm_kwargs and llm_kwargs["effort"]:
-        return False
-    return True
+    return not ("effort" in llm_kwargs and llm_kwargs["effort"])
 
 
 def apply_determinism_kwargs(
-    llm_kwargs: Dict[str, Any],
+    llm_kwargs: dict[str, Any],
     model: str,
-    temperature: Optional[float],
-    seed: Optional[int],
+    temperature: float | None,
+    seed: int | None,
     provider: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Inject deterministic generation kwargs unless they'd be rejected.
 
     Mutates and returns ``llm_kwargs``. Skips temperature when a reasoning
@@ -94,7 +92,7 @@ def normalize_content(response):
 class BaseLLMClient(ABC):
     """Abstract base class for LLM clients."""
 
-    def __init__(self, model: str, base_url: Optional[str] = None, **kwargs):
+    def __init__(self, model: str, base_url: str | None = None, **kwargs):
         self.model = model
         self.base_url = base_url
         self.kwargs = kwargs

@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 from langchain_core.messages import AIMessage
@@ -8,8 +8,8 @@ from langchain_openai import ChatOpenAI
 
 from .api_key_env import get_api_key_env
 from .base_client import BaseLLMClient, apply_determinism_kwargs, normalize_content
-from .retry import llm_retry
 from .capabilities import get_capabilities
+from .retry import llm_retry
 from .url_validation import validate_custom_provider_base_url
 from .validators import validate_model
 
@@ -276,7 +276,7 @@ _PROVIDER_BASE_URL = {
 }
 
 
-def resolve_provider_base_url(provider: str) -> Optional[str]:
+def resolve_provider_base_url(provider: str) -> str | None:
     """Default base URL for ``provider``, with env-var overrides where defined.
 
     Currently Ollama, LM Studio, and Kimi support env-var overrides (``OLLAMA_BASE_URL``,
@@ -311,7 +311,7 @@ def resolve_provider_base_url(provider: str) -> Optional[str]:
     return _PROVIDER_BASE_URL.get(provider)
 
 
-def _is_native_openai_base_url(base_url: Optional[str]) -> bool:
+def _is_native_openai_base_url(base_url: str | None) -> bool:
     """True when ``base_url`` is unset or points at api.openai.com.
 
     The Responses API (/v1/responses) only exists on native OpenAI. An
@@ -342,7 +342,7 @@ class OpenAIClient(BaseLLMClient):
     def __init__(
         self,
         model: str,
-        base_url: Optional[str] = None,
+        base_url: str | None = None,
         provider: str = "openai",
         **kwargs,
     ):
@@ -361,7 +361,6 @@ class OpenAIClient(BaseLLMClient):
         # Provider-specific base URL and auth. An explicit base_url on the
         # client (e.g. a corporate proxy) takes precedence over the
         # provider default so users can route through their own gateway.
-        from .api_key_env import get_api_key_env
 
         if self.provider == "custom":
             llm_kwargs["base_url"] = validate_custom_provider_base_url(self.base_url)

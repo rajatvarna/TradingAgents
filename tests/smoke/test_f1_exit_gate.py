@@ -12,12 +12,12 @@ Verifies the four exit-gate clauses from §7 F1 of the program design:
 """
 
 import os
-import pytest
 from datetime import date, timedelta
 from pathlib import Path
 
-from tradingagents.persistence.db import connect
+import pytest
 
+from tradingagents.persistence.db import connect
 
 pytestmark = pytest.mark.integration
 

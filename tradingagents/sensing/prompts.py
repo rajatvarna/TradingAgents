@@ -7,10 +7,9 @@ The body matches §5 of the F3 design verbatim; only the substitutions
 from __future__ import annotations
 
 import json
-from typing import Sequence
+from collections.abc import Sequence
 
 from .envelope import Envelope
-
 
 _PROMPT_TEMPLATE = """You are scoring market-relevance for an investment watchlist.
 

@@ -133,6 +133,14 @@ filterwarnings = [
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+# Restrict linting to library code we own. Root-level deployment scripts
+# (webui.py, worker.py, auth.py, etc.) have many pre-existing violations
+# and are not part of the installable library surface.
+include = [
+    "tradingagents/**/*.py",
+    "cli/**/*.py",
+    "tests/**/*.py",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "SIM"]
@@ -140,7 +148,32 @@ ignore = [
     "E501",   # line too long — enforced by formatter, not linter
     "N806",   # variable in function should be lowercase (conflicts with pandas df.Column patterns)
     "SIM108", # ternary operator — sometimes less readable
+    "E402",   # module-level import not at top — common in lazy-import patterns
+    "SIM105", # contextlib.suppress — try/except/pass is sometimes clearer
+    "SIM102", # nested if — sometimes more readable than combined form
+    "SIM117", # nested with — sometimes clearer
+    "E701",   # multiple statements on one line (colon) — pre-existing style
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Test method names that include class names are intentionally descriptive.
+# E702: inline semicolons used for compact mock setup in test files.
+"tests/**" = ["N802", "E702", "E741"]
+# y_finance.py uses YFin in function names matching upstream API naming.
+"tradingagents/dataflows/y_finance.py" = ["N802"]
+# parallel_setup.py: ruff can't resolve re-exports through __init__.py chains.
+"tradingagents/graph/parallel_setup.py" = ["F821"]
+# cli/tui.py: AnalystWallTimeTracker imported via TYPE_CHECKING block.
+"cli/tui.py" = ["F821"]
+# sensing adapters: pd used via lazy import; N8xx/E741/E702 are pre-existing style.
+"tradingagents/sensing/**" = ["F821", "N805", "N818", "E741", "E702"]
+"tradingagents/llm_clients/**" = ["N818"]
+"tradingagents/graph/cost_callback.py" = ["N818"]
+"tradingagents/dataflows/range_stats.py" = ["N818"]
+"tradingagents/dataflows/technicals_deep.py" = ["F821"]
+"tradingagents/agents/utils/structure_patterns.py" = ["F821", "E741"]
+# test_reddit_fallback uses self_inner to avoid shadowing outer self in nested class
+"tests/test_reddit_fallback.py" = ["N802", "N805"]
 
 [tool.mypy]
 python_version = "3.11"

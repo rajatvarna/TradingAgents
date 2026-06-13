@@ -21,8 +21,8 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from tradingagents.dataflows.agentkey_client import AgentKeyError, dispatch, is_configured, search
 
@@ -96,7 +96,7 @@ _CN_NAME_STOPWORDS = {
     "港股", "美股", "股票", "代码", "行情", "股吧", "基金", "指数", "新浪", "雪球",
     "东方财富", "同花顺", "腾讯财经", "公司", "集团", "控股", "有限公司", "股份",
 }
-_cn_name_cache: Dict[str, str] = {}
+_cn_name_cache: dict[str, str] = {}
 
 
 def is_cn_market_ticker(ticker: str) -> bool:
@@ -112,7 +112,7 @@ def _ticker_numeric_code(ticker: str) -> str:
     return digits
 
 
-def _extract_cn_name(text: str, code: str) -> Optional[str]:
+def _extract_cn_name(text: str, code: str) -> str | None:
     """Pull a Chinese short name appearing right before the listing code.
 
     Chinese finance content overwhelmingly writes "腾讯控股(00700)" /
@@ -146,7 +146,7 @@ def resolve_cn_name(ticker: str, fallback: str, timeout: float = 15.0) -> str:
             # match wins; falls back to the English brand if nothing matches.
             payload = search(f"{code} {fallback} 股吧 东方财富", num=10, timeout=timeout)
             results = payload.get("results")
-            counts: Dict[str, int] = {}
+            counts: dict[str, int] = {}
             if isinstance(results, list):
                 for item in results:
                     if not isinstance(item, dict):
@@ -175,7 +175,7 @@ def resolve_search_query(ticker: str, name: str) -> str:
 # ---------------------------------------------------------------------------
 # Industry-adaptive channel selection
 # ---------------------------------------------------------------------------
-def is_consumer_brand(sector: Optional[str], industry: Optional[str]) -> bool:
+def is_consumer_brand(sector: str | None, industry: str | None) -> bool:
     """Whether a ticker's sector/industry warrants consumer-platform signals."""
     if sector and sector.strip().lower() in _CONSUMER_SECTORS:
         return True
@@ -185,7 +185,7 @@ def is_consumer_brand(sector: Optional[str], industry: Optional[str]) -> bool:
     return False
 
 
-def select_channels(sector: Optional[str], industry: Optional[str]) -> List[str]:
+def select_channels(sector: str | None, industry: str | None) -> list[str]:
     """Return the AgentKey channels to query for an instrument.
 
     Weibo + Zhihu always; Xiaohongshu + Douyin only for consumer brands.
@@ -211,7 +211,7 @@ def _unix_to_date(value: Any) -> str:
         ts = int(value)
         if ts > 9999999999:  # 11+ digits → milliseconds (10-digit seconds last to 2286)
             ts //= 1000
-        return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+        return datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d")
     except (TypeError, ValueError, OSError):
         return str(value or "")
 
@@ -224,14 +224,14 @@ def _engagement(*pairs) -> str:
 # ---------------------------------------------------------------------------
 # Weibo — retail-investor chatter (StockTwits/Twitter analogue for CN market)
 # ---------------------------------------------------------------------------
-def _iter_weibo_posts(node: Any) -> List[Dict[str, Any]]:
+def _iter_weibo_posts(node: Any) -> list[dict[str, Any]]:
     """Walk the nested Weibo search payload, collecting status dicts.
 
     A status is any dict carrying both a ``text`` body and a ``user`` object.
     The search response mixes card containers (``items``) and status objects
     (``data``), so we recurse rather than assume a flat list.
     """
-    found: List[Dict[str, Any]] = []
+    found: list[dict[str, Any]] = []
     if isinstance(node, dict):
         if isinstance(node.get("text"), str) and isinstance(node.get("user"), dict):
             found.append(node)
@@ -312,7 +312,7 @@ def fetch_zhihu_discussions(query: str, limit: int = 8, timeout: float = 15.0) -
 # ---------------------------------------------------------------------------
 # Consumer layer — Xiaohongshu & Douyin (industry-gated alt-data)
 # ---------------------------------------------------------------------------
-def _first_item_list(node: Any) -> List[Dict[str, Any]]:
+def _first_item_list(node: Any) -> list[dict[str, Any]]:
     """Find the first list-of-dicts under common container keys, best-effort.
 
     Used for the consumer endpoints whose exact response shape we don't pin to a
@@ -330,7 +330,7 @@ def _first_item_list(node: Any) -> List[Dict[str, Any]]:
     return []
 
 
-def _extract_text(item: Dict[str, Any]) -> str:
+def _extract_text(item: dict[str, Any]) -> str:
     for key in ("desc", "title", "content", "text", "note_name", "share_text"):
         val = item.get(key)
         if isinstance(val, str) and val.strip():
@@ -341,7 +341,7 @@ def _extract_text(item: Dict[str, Any]) -> str:
     return ""
 
 
-def _extract_author(item: Dict[str, Any]) -> str:
+def _extract_author(item: dict[str, Any]) -> str:
     for key in ("nickname", "author", "user_name", "name"):
         val = item.get(key)
         if isinstance(val, str) and val.strip():
@@ -351,7 +351,7 @@ def _extract_author(item: Dict[str, Any]) -> str:
     return "?"
 
 
-def _extract_engagement(item: Dict[str, Any]) -> str:
+def _extract_engagement(item: dict[str, Any]) -> str:
     return _engagement(
         ("like", item.get("liked_count") or item.get("digg_count") or item.get("like_count")),
         ("comment", item.get("comment_count") or item.get("comments_count")),
@@ -414,8 +414,8 @@ _CHANNEL_TITLES = {
 def build_agentkey_social_section(
     ticker: str,
     name: str,
-    sector: Optional[str] = None,
-    industry: Optional[str] = None,
+    sector: str | None = None,
+    industry: str | None = None,
 ) -> str:
     """Assemble the AgentKey social section for prompt injection.
 

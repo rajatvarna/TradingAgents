@@ -1,5 +1,5 @@
 import pytest
-from langchain_core.outputs import LLMResult, Generation
+from langchain_core.outputs import Generation, LLMResult
 
 
 @pytest.mark.unit

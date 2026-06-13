@@ -7,9 +7,8 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.agents.utils.memory import TradingMemoryLog
-
+from tradingagents.graph.trading_graph import TradingAgentsGraph
 
 # ---------------------------------------------------------------------------
 # Helpers

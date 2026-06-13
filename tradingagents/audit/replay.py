@@ -49,11 +49,10 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import defaultdict
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from tradingagents.audit.ledger import VerifyResult, verify_ledger
 from tradingagents.audit.prompt_registry import (
@@ -61,7 +60,6 @@ from tradingagents.audit.prompt_registry import (
     PromptRegistry,
     default_registry,
 )
-
 
 # -------------------------------------------------------------------- #
 # Result types
@@ -79,33 +77,33 @@ class PromptVerification:
     still the one that produced this trace."
     """
     record_id: str
-    node: Optional[str]
+    node: str | None
     prompt_key: str
     prompt_version: str
     recorded_hash: str
-    current_hash: Optional[str]
+    current_hash: str | None
     matches: bool
     template_missing: bool
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
 @dataclass
 class ReplaySummary:
     """High-level statistics computed from one trace file."""
-    session_id: Optional[str]
+    session_id: str | None
     total_records: int
     llm_calls: int  # paired LLM_START events
     tool_calls: int  # paired TOOL_START events
-    nodes_visited: List[str]
-    fingerprints_seen: List[str]
-    models_seen: List[str]
-    first_ts: Optional[str]
-    last_ts: Optional[str]
-    wall_seconds: Optional[float]
+    nodes_visited: list[str]
+    fingerprints_seen: list[str]
+    models_seen: list[str]
+    first_ts: str | None
+    last_ts: str | None
+    wall_seconds: float | None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -126,23 +124,23 @@ class Replayer:
         self,
         path: Path,
         *,
-        prompt_registry: Optional[PromptRegistry] = None,
+        prompt_registry: PromptRegistry | None = None,
     ) -> None:
         self.path = Path(path).expanduser()
         self.registry = prompt_registry or default_registry()
-        self._records: Optional[List[Dict[str, Any]]] = None  # lazy
+        self._records: list[dict[str, Any]] | None = None  # lazy
 
     # ------------------------------------------------------------------ #
     # Lazy load
     # ------------------------------------------------------------------ #
 
-    def records(self) -> List[Dict[str, Any]]:
+    def records(self) -> list[dict[str, Any]]:
         """Read all records from disk. Parsed lazily; cached after first call."""
         if self._records is not None:
             return self._records
         if not self.path.is_file():
             raise FileNotFoundError(f"trace file not found: {self.path}")
-        out: List[Dict[str, Any]] = []
+        out: list[dict[str, Any]] = []
         for line in self.path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
@@ -164,7 +162,7 @@ class Replayer:
         """Delegate to T1.3's chain walker."""
         return verify_ledger(self.path)
 
-    def verify_prompts(self) -> List[PromptVerification]:
+    def verify_prompts(self) -> list[PromptVerification]:
         """For each LLM_START with prompt metadata, compare recorded hash
         to the current registry's hash.
 
@@ -188,7 +186,7 @@ class Replayer:
           separately. Emits one row per side so a mismatch localises
           to the offending file.
         """
-        out: List[PromptVerification] = []
+        out: list[PromptVerification] = []
         for rec in self.records():
             if rec.get("type") != "llm_start":
                 continue
@@ -227,7 +225,7 @@ class Replayer:
 
     def _check_one(
         self,
-        rec: Dict[str, Any],
+        rec: dict[str, Any],
         *,
         key: str,
         version: str,
@@ -267,14 +265,14 @@ class Replayer:
         llm_calls = sum(1 for r in recs if r.get("type") == "llm_start")
         tool_calls = sum(1 for r in recs if r.get("type") == "tool_start")
 
-        nodes_seen: List[str] = []
+        nodes_seen: list[str] = []
         for r in recs:
             node = r.get("node")
             if node and node not in nodes_seen:
                 nodes_seen.append(node)
 
-        fingerprints: List[str] = []
-        models: List[str] = []
+        fingerprints: list[str] = []
+        models: list[str] = []
         for r in recs:
             if r.get("type") != "llm_end":
                 continue
@@ -336,7 +334,7 @@ class Replayer:
     # Call tree
     # ------------------------------------------------------------------ #
 
-    def tree(self) -> List[Dict[str, Any]]:
+    def tree(self) -> list[dict[str, Any]]:
         """Reconstruct the call hierarchy from ``parent_record_id`` links.
 
         Returns a list of root nodes; each node is a dict with
@@ -344,7 +342,7 @@ class Replayer:
         list of nested dicts in the same shape).
         """
         recs = self.records()
-        by_id: Dict[str, Dict[str, Any]] = {}
+        by_id: dict[str, dict[str, Any]] = {}
         for r in recs:
             rid = r.get("record_id")
             if not rid:
@@ -357,7 +355,7 @@ class Replayer:
                 "children": [],
             }
 
-        roots: List[Dict[str, Any]] = []
+        roots: list[dict[str, Any]] = []
         for r in recs:
             rid = r.get("record_id")
             if not rid or rid not in by_id:
@@ -423,7 +421,7 @@ def _print_verify(result: VerifyResult, json_out: bool) -> None:
         print(f"Broken lines:     {result.broken_lines}")
 
 
-def _print_prompts(checks: List[PromptVerification], json_out: bool) -> None:
+def _print_prompts(checks: list[PromptVerification], json_out: bool) -> None:
     if json_out:
         print(json.dumps([c.to_dict() for c in checks], indent=2))
         return
@@ -441,12 +439,12 @@ def _print_prompts(checks: List[PromptVerification], json_out: bool) -> None:
             print(f"             current:  {c.current_hash}")
 
 
-def _print_tree(roots: List[Dict[str, Any]], json_out: bool) -> None:
+def _print_tree(roots: list[dict[str, Any]], json_out: bool) -> None:
     if json_out:
         print(json.dumps(roots, indent=2, default=str))
         return
 
-    def _walk(node: Dict[str, Any], depth: int) -> None:
+    def _walk(node: dict[str, Any], depth: int) -> None:
         indent = "  " * depth
         label = f"[{node['type']}]"
         if node.get("node"):
@@ -464,7 +462,7 @@ def _print_tree(roots: List[Dict[str, Any]], json_out: bool) -> None:
 # -------------------------------------------------------------------- #
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m tradingagents.audit.replay",
         description="Verify and inspect TradingAgents trace files.",

@@ -15,17 +15,16 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from tradingagents.persistence import store
-
 
 _DECISION_RE = re.compile(r"\b(BUY|HOLD|SELL)\b", re.IGNORECASE)
 
 
-def parse_decision(text: str) -> Optional[str]:
+def parse_decision(text: str) -> str | None:
     """Extract BUY/HOLD/SELL from a free-form decision string. Returns None
     when no clear signal is present."""
     if not text:
@@ -45,9 +44,9 @@ class RunRecorder:
         conn: sqlite3.Connection,
         data_dir: str,
         run_id: str,
-        persona_id: Optional[str],
+        persona_id: str | None,
         cost_callback: Any,        # RunCostCallback (duck-typed to ease mocking)
-        queue_job_id: Optional[int] = None,
+        queue_job_id: int | None = None,
     ) -> None:
         self._conn = conn
         self._data_dir = Path(data_dir)
@@ -68,7 +67,7 @@ class RunRecorder:
             queue_job_id=self._queue_job_id,
         )
 
-    def record(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    def record(self, state: dict[str, Any]) -> dict[str, Any]:
         """Persist artifacts; return ``state`` unchanged so the graph node
         is a pass-through."""
         ticker = state.get("company_of_interest", "UNKNOWN")
@@ -125,7 +124,7 @@ class RunRecorder:
         store.finalize_run(
             self._conn,
             run_id=self._run_id,
-            ended_ts=datetime.now(timezone.utc).isoformat(),
+            ended_ts=datetime.now(UTC).isoformat(),
             status="complete",
             decision=decision,
             confidence=None,   # F1 doesn't compute confidence; defer to F2
@@ -136,6 +135,6 @@ class RunRecorder:
 
 def make_run_recorder_node(recorder: RunRecorder):
     """LangGraph node factory: returns a callable that records the state."""
-    def _node(state: Dict[str, Any]) -> Dict[str, Any]:
+    def _node(state: dict[str, Any]) -> dict[str, Any]:
         return recorder.record(state)
     return _node

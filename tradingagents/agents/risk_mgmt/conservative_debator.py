@@ -1,7 +1,6 @@
 from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     format_risk_constraints,
-    get_instrument_context_from_state,
     get_language_instruction,
 )
 from tradingagents.audit.prompt_registry import default_registry
@@ -22,7 +21,7 @@ def create_conservative_debator(llm, prompt_registry=None):
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
-        
+
         scope_guard = build_scope_guard(state.get("company_of_interest", "the requested instrument"))
         constraints_block = format_risk_constraints(state.get("risk_constraints", {}))
 

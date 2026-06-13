@@ -1,5 +1,6 @@
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
 
 
 @pytest.fixture
@@ -53,14 +54,15 @@ def test_memory_rejects_empty_persona_id(conn):
 @pytest.mark.unit
 def test_outcome_log_is_shared_across_personas(conn):
     """Outcome_log is the cross-pollination channel — readable by any persona."""
-    from tradingagents.persistence.memory import OutcomeLog
-    from tradingagents.persistence import store
     import uuid
+
+    from tradingagents.persistence import store
+    from tradingagents.persistence.memory import OutcomeLog
     log = OutcomeLog(conn)
     # Need real run_ids that satisfy the FK.
     macro_run = uuid.uuid4().hex
     momentum_run = uuid.uuid4().hex
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     store.insert_run(conn, run_id=macro_run, ticker="AAPL", persona_id="macro",
                      started_ts=now, artifact_dir="x")
     store.insert_run(conn, run_id=momentum_run, ticker="AAPL", persona_id="momentum",

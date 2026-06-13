@@ -11,8 +11,7 @@ Required env: ``TELEGRAM_API_ID``, ``TELEGRAM_API_HASH``, optional
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
-from typing import List
+from datetime import UTC, datetime
 
 from .errors import DataVendorError
 
@@ -23,7 +22,7 @@ except Exception:  # pragma: no cover — optional dep
 
 
 def _parse_date(s: str) -> datetime:
-    return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+    return datetime.fromisoformat(s).replace(tzinfo=UTC)
 
 
 def get_telegram_signals(query: str, start_date: str, end_date: str) -> str:
@@ -38,13 +37,13 @@ def get_telegram_signals(query: str, start_date: str, end_date: str) -> str:
     session = os.environ.get("TELEGRAM_OSINT_SESSION", "iic_osint.session")
 
     from tradingagents.default_config import DEFAULT_CONFIG
-    channels: List[str] = list(DEFAULT_CONFIG.get("telegram_channels") or [])
+    channels: list[str] = list(DEFAULT_CONFIG.get("telegram_channels") or [])
     if not channels:
         return f"(no telegram_channels configured for query={query!r})"
 
     start = _parse_date(start_date)
     end = _parse_date(end_date)
-    matches: List[str] = []
+    matches: list[str] = []
     with TelegramClient(session, int(api_id), api_hash) as client:
         for ch in channels:
             try:

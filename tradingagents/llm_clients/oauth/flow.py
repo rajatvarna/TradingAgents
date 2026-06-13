@@ -9,15 +9,14 @@ from __future__ import annotations
 import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Optional
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 
 from .pkce import (
     OAUTH_CLIENT_ID,
-    OAUTH_REDIRECT_PORT,
     OAUTH_REDIRECT_FALLBACK_PORT,
+    OAUTH_REDIRECT_PORT,
     OAUTH_TOKEN_URL,
     build_authorize_url,
     generate_pkce_pair,
@@ -102,7 +101,7 @@ def _make_handler(result_slot: dict):
 
 def _bind_callback_server(handler_cls) -> tuple[HTTPServer, int]:
     """Apre il server sulla 1455, altrimenti sulla 1457; errore se entrambe occupate."""
-    last_exc: Optional[OSError] = None
+    last_exc: OSError | None = None
     for port in (OAUTH_REDIRECT_PORT, OAUTH_REDIRECT_FALLBACK_PORT):
         try:
             return HTTPServer(("localhost", port), handler_cls), port
@@ -133,7 +132,7 @@ def _collect_callback(server: HTTPServer, result: dict, timeout: int) -> None:
 def login(
     open_browser: bool = True,
     timeout: int = 180,
-    store: Optional[OAuthTokenStore] = None,
+    store: OAuthTokenStore | None = None,
 ) -> StoredTokens:
     """Esegue il login OAuth PKCE e salva i token. Ritorna gli ``StoredTokens``."""
     store = store or OAuthTokenStore()

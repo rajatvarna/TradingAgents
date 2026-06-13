@@ -1,9 +1,7 @@
 """Tests for the deterministic risk guardrails module."""
 
-import sys
-import os
-import pytest
 import importlib.util
+import os
 
 # Load risk_guardrails directly by file path to avoid the graph __init__.py
 # chain which eagerly imports langgraph (not installed in test-only environments).

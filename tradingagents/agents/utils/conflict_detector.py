@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -209,7 +209,7 @@ def detect_conflicts(
     news_report: str,
     sentiment_report: str,
     fundamentals_report: str,
-    anchors: Optional[dict],
+    anchors: dict | None,
     llm,
 ) -> ConflictReport:
     """Extract factor signals via the LLM, then mechanically score divergences."""
@@ -245,7 +245,7 @@ def detect_conflicts(
     )
 
 
-def format_conflict_report_for_prompt(report: Optional[dict | ConflictReport]) -> str:
+def format_conflict_report_for_prompt(report: dict | ConflictReport | None) -> str:
     """Render a ConflictReport (dict or model) into a prompt block. Empty string if absent."""
     if report is None:
         return ""

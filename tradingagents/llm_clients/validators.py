@@ -2,7 +2,6 @@
 
 from .model_catalog import get_known_models
 
-
 _OPEN_CATALOG_PROVIDERS = (
     "ollama", "ollama_cloud", "openrouter", "deepinfra", "mimo", "custom_openai", "lmstudio", "lm-studio", "llama-cpp", "tencent"
 )

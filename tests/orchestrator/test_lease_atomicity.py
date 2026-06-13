@@ -1,10 +1,11 @@
 import threading
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from tradingagents.persistence.db import connect
-from tradingagents.persistence import store
+import pytest
+
 from tradingagents.orchestrator.queue_store import insert_queue_job, lease_one
+from tradingagents.persistence import store
+from tradingagents.persistence.db import connect
 
 
 @pytest.mark.unit
@@ -14,7 +15,7 @@ def test_two_leasers_race_only_one_wins(tmp_path):
     # Seed one event and one job.
     boot = connect(db_path)
     store.insert_event(boot, event_id="ev1", source="rss",
-                       ingested_ts=datetime.now(timezone.utc).isoformat(),
+                       ingested_ts=datetime.now(UTC).isoformat(),
                        salience=0.9, raw_path=None,
                        status="triaged", deduped_of=None)
     insert_queue_job(boot, job_type="event_alert",

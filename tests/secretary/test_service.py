@@ -1,7 +1,8 @@
-import pytest
 import uuid
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
-from datetime import datetime, timezone
+
+import pytest
 
 
 @pytest.fixture
@@ -18,8 +19,8 @@ def db_and_dirs(tmp_path):
 @pytest.mark.unit
 def test_compose_deep_dive_writes_brief_row_and_md(db_and_dirs):
     """End-to-end with mocked LLM and pre-seeded run rows."""
-    from tradingagents.secretary.service import Secretary
     from tradingagents.persistence import store
+    from tradingagents.secretary.service import Secretary
 
     conn, data_dir = db_and_dirs
     # Seed three runs and their per-analyst markdown.
@@ -27,7 +28,7 @@ def test_compose_deep_dive_writes_brief_row_and_md(db_and_dirs):
     for pid in ("macro", "value", "momentum"):
         rid = uuid.uuid4().hex
         run_ids.append(rid)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         store.insert_run(conn, run_id=rid, ticker="AAPL", persona_id=pid,
                          started_ts=now, artifact_dir=f"runs/{rid}")
         store.finalize_run(conn, run_id=rid, ended_ts=now, status="complete",

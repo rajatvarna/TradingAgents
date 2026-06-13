@@ -26,8 +26,8 @@ def test_ingest_research_happy_path(tmp_path: Path):
 
 def test_ingest_research_truncates_large_input_before_llm(tmp_path: Path):
     from tradingagents.dataflows.user_research import (
-        ingest_research,
         MAX_SUMMARY_INPUT_CHARS,
+        ingest_research,
     )
     big_text = "x" * (MAX_SUMMARY_INPUT_CHARS * 2)
     llm = _fake_llm()

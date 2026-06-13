@@ -1,6 +1,7 @@
 import json
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timezone, timedelta
 
 from tradingagents.persistence.db import connect
 
@@ -69,7 +70,7 @@ def test_sweep_removes_only_expired_auto(conn):
                  salience_threshold=0.7, confidence_threshold=0.8,
                  ttl_days=7)
     # Manually backdate OLD's ttl_until.
-    past = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
     conn.execute("UPDATE watchlist SET ttl_until = ? WHERE ticker='OLD'", (past,))
     conn.commit()
     auto_promote(conn, ticker="FRESH", event_id="e-fresh",

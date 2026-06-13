@@ -19,12 +19,13 @@ codex ships only as a Node CLI, no Python SDK.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import shutil
 import subprocess
 import tempfile
-from typing import Any, List, Optional
+from typing import Any
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseChatModel
@@ -51,7 +52,7 @@ _KNOWN_MODELS = {
 _DEFAULT_TIMEOUT_S = 600
 
 
-def _flatten_messages(messages: List[BaseMessage]) -> str:
+def _flatten_messages(messages: list[BaseMessage]) -> str:
     """Collapse a LangChain message list into a single prompt string.
 
     ``codex exec`` reads its prompt as one stdin blob — there is no
@@ -122,9 +123,9 @@ class CodexChatModel(BaseChatModel):
 
     def _generate(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         prompt = _flatten_messages(messages)
@@ -185,10 +186,8 @@ class CodexChatModel(BaseChatModel):
                 generations=[ChatGeneration(message=AIMessage(content=text))]
             )
         finally:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(output_file)
-            except OSError:
-                pass
 
     def bind_tools(self, tools, **kwargs):
         # codex runs its own internal tool-use loop with built-in
@@ -219,7 +218,7 @@ class CodexClient(BaseLLMClient):
 
     provider = "codex"
 
-    def __init__(self, model: str, base_url: Optional[str] = None, **kwargs):
+    def __init__(self, model: str, base_url: str | None = None, **kwargs):
         if base_url is not None:
             # codex's endpoint is configured by the CLI itself via
             # ``codex login``; we don't expose a runtime override.

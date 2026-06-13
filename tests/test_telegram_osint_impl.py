@@ -1,12 +1,12 @@
-import os
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 @pytest.mark.unit
 def test_get_telegram_signals_raises_when_creds_missing(monkeypatch):
-    from tradingagents.dataflows.telegram_osint import get_telegram_signals
     from tradingagents.dataflows.errors import DataVendorError
+    from tradingagents.dataflows.telegram_osint import get_telegram_signals
     monkeypatch.delenv("TELEGRAM_API_ID", raising=False)
     monkeypatch.delenv("TELEGRAM_API_HASH", raising=False)
     with pytest.raises(DataVendorError, match="creds"):

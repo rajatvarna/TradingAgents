@@ -11,9 +11,9 @@ across same-sector peers, which is a reasonable proxy for the IBD group rank sys
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional
+
 
 @dataclass
 class GroupLeadershipData:
@@ -57,7 +57,7 @@ def _safe_float(val, default=0.0) -> float:
         return default
 
 
-def _compute_rs_score(ticker: str, spy_close, start: str, end: str) -> Optional[float]:
+def _compute_rs_score(ticker: str, spy_close, start: str, end: str) -> float | None:
     """Return 12-month RS score relative to SPY."""
     try:
         import pandas as pd

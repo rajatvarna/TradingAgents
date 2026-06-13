@@ -53,8 +53,9 @@ def generate_chart(
         str: Either a base64-encoded PNG (prefixed with "data:image/png;base64,")
              or a text fallback if mplfinance is unavailable.
     """
-    from tradingagents.dataflows.interface import route_to_vendor
     from datetime import datetime, timedelta
+
+    from tradingagents.dataflows.interface import route_to_vendor
 
     # Calculate start date
     end_dt = datetime.strptime(curr_date, "%Y-%m-%d")

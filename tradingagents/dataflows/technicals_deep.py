@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional
+
 
 @dataclass
 class MovingAverageState:
@@ -38,14 +38,14 @@ class VolumeProfile:
 @dataclass
 class BasePattern:
     pattern_type: str
-    pivot_price: Optional[float]
+    pivot_price: float | None
     base_depth_pct: float
     base_duration_weeks: int
     currently_in_base: bool
     breakout_occurred: bool
-    breakout_date: Optional[str]
-    breakout_volume_ratio: Optional[float]
-    weeks_since_breakout: Optional[int]
+    breakout_date: str | None
+    breakout_volume_ratio: float | None
+    weeks_since_breakout: int | None
 
 
 @dataclass
@@ -79,7 +79,7 @@ class DeepTechnicals:
     base_pattern: BasePattern
     sell_signals: SellSignals
     relative_strength: RelativeStrength
-    hl_gauge_context: Optional[str]
+    hl_gauge_context: str | None
 
 
 def _safe_float(val, default=0.0) -> float:
@@ -162,7 +162,7 @@ def _compute_ma_state(df: pd.DataFrame) -> MovingAverageState:
 def _compute_volume_profile(df: pd.DataFrame) -> VolumeProfile:
     """Compute 50-day/10-day volume averages, up/down volume ratio, and surge flag."""
     vol = df["Volume"]
-    close = df["Close"]
+    df["Close"]
     avg_vol_50 = _safe_float(vol.rolling(50).mean().iloc[-1])
     avg_vol_10 = _safe_float(vol.rolling(10).mean().iloc[-1])
     latest_vol = _safe_float(vol.iloc[-1])
@@ -210,7 +210,7 @@ def _compute_base_pattern(df: pd.DataFrame, avg_vol_50: float) -> BasePattern:
     # Breakout = close within 5% above the consolidation high on volume
     pivot = round(high, 2)
     near_pivot = price >= pivot * 0.97 and price <= pivot * 1.10
-    above_pivot = price > pivot * 1.02
+    price > pivot * 1.02
 
     # Detect breakout date: last time price crossed above the window high on heavy volume
     breakout_date = None
@@ -398,7 +398,7 @@ def _compute_relative_strength(ticker: str, df, as_of_date: str) -> RelativeStre
     )
 
 
-def compute_deep_technicals(ticker: str, as_of_date: str) -> "DeepTechnicals":
+def compute_deep_technicals(ticker: str, as_of_date: str) -> DeepTechnicals:
     """
     Pull OHLCV from yfinance and compute all technical fields.
     as_of_date (YYYY-MM-DD) ensures no lookahead for backtesting.

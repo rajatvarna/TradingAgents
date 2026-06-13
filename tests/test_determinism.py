@@ -12,19 +12,23 @@ effective model identifier from every LLM response so drift detection
 (T3.4) has the per-call evidence it needs.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from tradingagents.llm_clients import (
     anthropic_client as anthropic_mod,
+)
+from tradingagents.llm_clients import (
     google_client as google_mod,
+)
+from tradingagents.llm_clients import (
     openai_client as openai_mod,
 )
 from tradingagents.llm_clients.base_client import (
     apply_determinism_kwargs,
     supports_temperature_pin,
 )
-
 
 # -------------------------------------------------------------------- #
 # Helpers
@@ -343,8 +347,8 @@ def _make_llm_result(
     ``fingerprint_in`` controls which surface holds the fingerprint, exercising
     the three places _extract_fingerprint looks.
     """
-    from langchain_core.outputs import ChatGeneration, LLMResult
     from langchain_core.messages import AIMessage
+    from langchain_core.outputs import ChatGeneration, LLMResult
 
     msg = AIMessage(content="hello", response_metadata={})
     gen = ChatGeneration(message=msg, generation_info={})

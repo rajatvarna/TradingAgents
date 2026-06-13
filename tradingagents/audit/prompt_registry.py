@@ -64,7 +64,6 @@ import hashlib
 import logging
 import string
 from pathlib import Path
-from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +95,7 @@ class PromptRegistry:
     intentional, the file IS the audit artifact.
     """
 
-    def __init__(self, base_dir: Optional[Path] = None) -> None:
+    def __init__(self, base_dir: Path | None = None) -> None:
         self.base_dir: Path = Path(base_dir) if base_dir is not None else DEFAULT_PROMPTS_DIR
         # cache keyed by (key, version) -> (text, sha256_hex)
         self._cache: dict = {}
@@ -124,7 +123,7 @@ class PromptRegistry:
     # Load + render
     # ------------------------------------------------------------------ #
 
-    def load(self, key: str, version: str = "v1") -> Tuple[str, str]:
+    def load(self, key: str, version: str = "v1") -> tuple[str, str]:
         """Return ``(template_text, sha256_hex)`` for one template.
 
         Raises :class:`PromptNotFoundError` when the file is missing.
@@ -152,7 +151,7 @@ class PromptRegistry:
         *,
         version: str = "v1",
         **variables,
-    ) -> Tuple[str, str]:
+    ) -> tuple[str, str]:
         """Return ``(rendered_text, template_hash)``.
 
         The hash is of the **template**, not the rendered text — that's
@@ -206,7 +205,7 @@ class PromptRegistry:
 # default registry" so factory signatures stay simple. Tests inject a
 # custom registry by constructing one and threading it through. Lazy
 # instantiation lets tests override DEFAULT_PROMPTS_DIR at import time.
-_default_registry: Optional[PromptRegistry] = None
+_default_registry: PromptRegistry | None = None
 
 
 def default_registry() -> PromptRegistry:

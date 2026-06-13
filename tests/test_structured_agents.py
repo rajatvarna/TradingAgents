@@ -16,8 +16,8 @@ from tradingagents.agents.analysts.sentiment_analyst import create_sentiment_ana
 from tradingagents.agents.managers.portfolio_manager import create_portfolio_manager
 from tradingagents.agents.managers.research_manager import create_research_manager
 from tradingagents.agents.schemas import (
-    PortfolioRating,
     PortfolioDecision,
+    PortfolioRating,
     ResearchPlan,
     SentimentBand,
     SentimentReport,

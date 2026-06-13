@@ -1,7 +1,9 @@
 import json
-import pytest
+from datetime import UTC
+from unittest.mock import MagicMock, patch
+
 import fakeredis.aioredis
-from unittest.mock import patch, MagicMock
+import pytest
 
 from tradingagents.persistence.db import connect
 
@@ -13,12 +15,13 @@ def conn(tmp_path):
 
 @pytest.mark.unit
 async def test_polygon_news_emits_envelope(conn, tmp_path, monkeypatch):
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from tradingagents.sensing.adapters.polygon_news import PolygonNewsAdapter
     monkeypatch.setenv("POLYGON_API_KEY", "fake")
     # Use "now" so the item is clearly newer than the resume cursor (which is
     # now-1h on a fresh DB).
-    published = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    published = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     payload = {
         "results": [{
             "id": "pn-1",

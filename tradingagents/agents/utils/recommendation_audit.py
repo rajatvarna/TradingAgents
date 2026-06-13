@@ -5,7 +5,6 @@ from typing import Any
 
 from tradingagents.agents.utils.factor_model import build_factor_model
 
-
 REPORT_SPECS = (
     ("market_report", "market", "Market analyst report"),
     ("news_report", "news", "News analyst report"),

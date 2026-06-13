@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage
 
-
 GROUP_SECTOR_SYSTEM_PROMPT = """You are the Group & Sector Leadership Analyst for the TradingAgents system.
 You operate on the principle that approximately 50% of a stock's price performance is
 driven by its sector and industry group (the Boik 50% rule).
@@ -64,8 +63,8 @@ def create_group_sector_analyst(llm):
     """Create the Group & Sector Leadership Analyst node."""
 
     def group_sector_analyst_node(state):
-        from tradingagents.dataflows.sector_groups import fetch_group_leadership
         from tradingagents.dataflows.market_health import fetch_market_health
+        from tradingagents.dataflows.sector_groups import fetch_group_leadership
 
         ticker = str(state["company_of_interest"])
         current_date = state["trade_date"]

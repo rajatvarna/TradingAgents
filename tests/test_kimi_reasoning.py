@@ -17,7 +17,6 @@ from tradingagents.llm_clients.openai_client import (
     _input_to_messages,
 )
 
-
 # ---------------------------------------------------------------------------
 # _input_to_messages helper (same contract as DeepSeek)
 # ---------------------------------------------------------------------------

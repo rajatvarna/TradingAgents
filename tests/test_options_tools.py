@@ -12,7 +12,6 @@ import pytest
 
 from tradingagents.agents.utils.options_tools import _format_chain_summary, get_options_data
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

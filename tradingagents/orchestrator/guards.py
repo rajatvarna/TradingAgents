@@ -16,7 +16,6 @@ import sqlite3
 
 from tradingagents.orchestrator import queue_store
 
-
 log = logging.getLogger(__name__)
 
 

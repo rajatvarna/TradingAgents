@@ -1,5 +1,6 @@
-import pandas as pd
 import unittest
+
+import pandas as pd
 
 from back_test.optimize_policy import (
     build_walk_forward_folds,

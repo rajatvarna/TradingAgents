@@ -1,6 +1,7 @@
-import pytest
+from datetime import UTC
 from unittest.mock import patch
 
+import pytest
 
 pytestmark = pytest.mark.smoke
 
@@ -41,9 +42,9 @@ def test_run_recorder_node_fires_for_every_persona_in_deepdive(tmp_path, monkeyp
             "risk_debate_state": {"history": "stub"},
         }
         # Mark the run started + emit the recorder pass.
-        from datetime import datetime, timezone
+        from datetime import datetime
         self.run_recorder.start(ticker=company_name,
-                                started_ts=datetime.now(timezone.utc).isoformat())
+                                started_ts=datetime.now(UTC).isoformat())
         self.run_recorder.record(final_state)
         return final_state
 

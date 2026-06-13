@@ -1,9 +1,10 @@
 import json
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean, median
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -17,7 +18,7 @@ class TradeCalibrationRow:
     hard_reject: bool
 
 
-def _to_float(x: Any) -> Optional[float]:
+def _to_float(x: Any) -> float | None:
     try:
         if x is None:
             return None
@@ -35,9 +36,9 @@ def _get_nested(d: Any, *path: str, default: Any = None) -> Any:
     return cur if cur is not None else default
 
 
-def load_calibration_rows(jsonl_path: str, *, include_hard_reject: bool = False) -> List[TradeCalibrationRow]:
+def load_calibration_rows(jsonl_path: str, *, include_hard_reject: bool = False) -> list[TradeCalibrationRow]:
     p = Path(jsonl_path).expanduser()
-    rows: List[TradeCalibrationRow] = []
+    rows: list[TradeCalibrationRow] = []
     for line in p.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -83,17 +84,17 @@ def load_calibration_rows(jsonl_path: str, *, include_hard_reject: bool = False)
     return rows
 
 
-def _safe_mean(xs: Iterable[float]) -> Optional[float]:
+def _safe_mean(xs: Iterable[float]) -> float | None:
     vals = [x for x in xs if x is not None and not math.isnan(x)]
     return mean(vals) if vals else None
 
 
-def _safe_median(xs: Iterable[float]) -> Optional[float]:
+def _safe_median(xs: Iterable[float]) -> float | None:
     vals = [x for x in xs if x is not None and not math.isnan(x)]
     return median(vals) if vals else None
 
 
-def _win_rate(xs: Iterable[float]) -> Optional[float]:
+def _win_rate(xs: Iterable[float]) -> float | None:
     vals = [x for x in xs if x is not None and not math.isnan(x)]
     if not vals:
         return None
@@ -118,7 +119,7 @@ def score_from_weights(
 
 
 def evaluate_config(
-    rows: List[TradeCalibrationRow],
+    rows: list[TradeCalibrationRow],
     *,
     w_market: float,
     w_execution: float,
@@ -126,7 +127,7 @@ def evaluate_config(
     threshold: float,
     min_count: int = 30,
     objective: str = "mean_r",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     selected = []
     for r in rows:
         s = score_from_weights(
@@ -174,7 +175,7 @@ def evaluate_config(
     }
 
 
-def generate_weight_grid(step: float = 0.05) -> List[Tuple[float, float, float]]:
+def generate_weight_grid(step: float = 0.05) -> list[tuple[float, float, float]]:
     vals = []
     i = 0
     while i <= int(round(1.0 / step)):
@@ -193,7 +194,7 @@ def generate_weight_grid(step: float = 0.05) -> List[Tuple[float, float, float]]
     return vals
 
 
-def generate_thresholds(start: float = 0.5, end: float = 0.9, step: float = 0.02) -> List[float]:
+def generate_thresholds(start: float = 0.5, end: float = 0.9, step: float = 0.02) -> list[float]:
     out = []
     x = start
     while x <= end + 1e-9:
@@ -203,18 +204,18 @@ def generate_thresholds(start: float = 0.5, end: float = 0.9, step: float = 0.02
 
 
 def grid_search(
-    rows: List[TradeCalibrationRow],
+    rows: list[TradeCalibrationRow],
     *,
     weight_step: float = 0.05,
-    thresholds: Optional[List[float]] = None,
+    thresholds: list[float] | None = None,
     min_count: int = 30,
     objective: str = "mean_r",
     top_k: int = 10,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     wgrid = generate_weight_grid(weight_step)
     tgrid = thresholds or generate_thresholds()
 
-    scored: List[Dict[str, Any]] = []
+    scored: list[dict[str, Any]] = []
     for (w_m, w_e, w_s) in wgrid:
         for thr in tgrid:
             res = evaluate_config(

@@ -25,7 +25,6 @@ from tradingagents.audit import (
     TraceCallback,
 )
 
-
 # -------------------------------------------------------------------- #
 # Fixtures / helpers
 # -------------------------------------------------------------------- #
@@ -310,8 +309,9 @@ class TestTradingAgentsGraphWiring:
 
     def test_default_config_registers_trace_callback(self, tmp_path, monkeypatch):
         """No real LLM calls; just verify the wiring."""
-        from tradingagents.graph import trading_graph as tg
         from unittest.mock import MagicMock
+
+        from tradingagents.graph import trading_graph as tg
 
         # Short-circuit the LLM construction so we don't need real keys
         monkeypatch.setattr(
@@ -336,8 +336,9 @@ class TestTradingAgentsGraphWiring:
         assert str(ta.trace_callback.jsonl_path).startswith(str(tmp_path))
 
     def test_disabled_flag_skips_trace_callback(self, tmp_path, monkeypatch):
-        from tradingagents.graph import trading_graph as tg
         from unittest.mock import MagicMock
+
+        from tradingagents.graph import trading_graph as tg
 
         monkeypatch.setattr(
             tg, "create_llm_client",
@@ -357,9 +358,11 @@ class TestTradingAgentsGraphWiring:
     def test_user_callbacks_appended_after_trace(self, tmp_path, monkeypatch):
         """Caller-provided callbacks come AFTER the trace callback in the
         list — audit observes first, user callbacks can mutate state."""
-        from tradingagents.graph import trading_graph as tg
         from unittest.mock import MagicMock
+
         from langchain_core.callbacks import BaseCallbackHandler
+
+        from tradingagents.graph import trading_graph as tg
 
         monkeypatch.setattr(
             tg, "create_llm_client",

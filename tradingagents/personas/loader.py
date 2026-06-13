@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Literal
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field, model_validator
-
 
 # Keep this list in sync with tradingagents.cli.models.AnalystType / ANALYST_NODE_SPECS.
 # Note: the sentiment analyst's key in the graph is "social" (historical naming).
@@ -24,11 +23,11 @@ class LLMSettings(BaseModel):
 
 
 class AnalystSettings(BaseModel):
-    include: List[str] = Field(default_factory=list)
-    exclude: List[str] = Field(default_factory=list)
+    include: list[str] = Field(default_factory=list)
+    exclude: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def _check(self) -> "AnalystSettings":
+    def _check(self) -> AnalystSettings:
         unknown_in = set(self.include) - _VALID_ANALYSTS
         unknown_ex = set(self.exclude) - _VALID_ANALYSTS
         if unknown_in:
@@ -42,7 +41,7 @@ class AnalystSettings(BaseModel):
 
 
 class RiskDebateSettings(BaseModel):
-    weights: Dict[str, float] = Field(default_factory=lambda: {
+    weights: dict[str, float] = Field(default_factory=lambda: {
         "aggressive": 1.0, "conservative": 1.0, "neutral": 1.0
     })
 
@@ -67,8 +66,8 @@ def load_persona_from_file(path: str | Path) -> Persona:
     return load_persona_from_string(Path(path).read_text(encoding="utf-8"))
 
 
-def load_all_personas(dir_path: str | Path) -> List[Persona]:
-    out: List[Persona] = []
+def load_all_personas(dir_path: str | Path) -> list[Persona]:
+    out: list[Persona] = []
     for f in sorted(Path(dir_path).glob("*.yaml")):
         out.append(load_persona_from_file(f))
     return out

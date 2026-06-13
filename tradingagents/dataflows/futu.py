@@ -15,6 +15,8 @@ symbols are market-prefixed (e.g. "HK.00700", "US.AAPL") — callers must
 translate the framework's ticker before passing it through.
 """
 
+import contextlib
+
 from .config import get_config
 from .errors import DataVendorError
 
@@ -43,10 +45,8 @@ def get_stock_data(symbol: str, start_date: str, end_date: str) -> str:
     try:
         raise DataVendorError("futu.get_stock_data: implementation pending")
     finally:
-        try:
+        with contextlib.suppress(Exception):
             ctx.close()
-        except Exception:
-            pass
 
 
 def get_options_chain(symbol: str, expiration: str = "") -> str:
@@ -57,7 +57,5 @@ def get_options_chain(symbol: str, expiration: str = "") -> str:
     try:
         raise DataVendorError("futu.get_options_chain: implementation pending")
     finally:
-        try:
+        with contextlib.suppress(Exception):
             ctx.close()
-        except Exception:
-            pass

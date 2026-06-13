@@ -39,17 +39,16 @@ When the access token expires, the client auto-refreshes using the refresh token
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import time
-import warnings
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import httpx
-from langchain_openai import ChatOpenAI
 
-from .base_client import BaseLLMClient, normalize_content
+from .base_client import BaseLLMClient
 from .openai_client import NormalizedChatOpenAI
 
 # ── constants ────────────────────────────────────────────────────────────────
@@ -70,10 +69,8 @@ _AUTH_HTTP_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
 def _ensure_dir() -> Path:
     TOKEN_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     # Restrict permissions on macOS/Linux (no-op on Windows)
-    try:
+    with contextlib.suppress(Exception):
         TOKEN_CACHE_DIR.chmod(0o700)
-    except Exception:
-        pass
     return TOKEN_CACHE_DIR
 
 
@@ -81,7 +78,7 @@ def _token_path() -> Path:
     return _ensure_dir() / "tokens.json"
 
 
-def _load_cached_tokens() -> Optional[dict[str, Any]]:
+def _load_cached_tokens() -> dict[str, Any] | None:
     path = _token_path()
     if not path.exists():
         return None
@@ -98,10 +95,8 @@ def _load_cached_tokens() -> Optional[dict[str, Any]]:
 def _save_tokens(data: dict[str, Any]) -> None:
     path = _token_path()
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    try:
+    with contextlib.suppress(Exception):
         path.chmod(0o600)
-    except Exception:
-        pass
 
 
 def _clear_cached_tokens() -> None:
@@ -140,7 +135,7 @@ def get_access_token(client_id: str, scope: str = DEFAULT_SCOPE) -> str:
     return _device_code_flow(client_id, scope)
 
 
-def refresh_access_token(force: bool = False) -> Optional[str]:
+def refresh_access_token(force: bool = False) -> str | None:
     """Force-refresh the cached token (if refresh_token is available)."""
     cached = _load_cached_tokens()
     if not cached:
@@ -160,7 +155,6 @@ def refresh_access_token(force: bool = False) -> Optional[str]:
 
 def _device_code_flow(client_id: str, scope: str) -> str:
     """Execute OAuth Device Code flow and return access_token."""
-    import urllib.parse
 
     # Step 1: Request device code
     with httpx.Client(timeout=_AUTH_HTTP_TIMEOUT) as client:
@@ -187,7 +181,7 @@ def _device_code_flow(client_id: str, scope: str) -> str:
     print("=" * 60, flush=True)
     print(f"  1. Open:  {verification_uri}", flush=True)
     print(f"  2. Enter code:  {user_code}", flush=True)
-    print(f"  3. Approve access for TradingAgents", flush=True)
+    print("  3. Approve access for TradingAgents", flush=True)
     print(f"\n  Waiting up to {POLL_TIMEOUT // 60} minutes...", flush=True)
     print("=" * 60 + "\n", flush=True)
 
@@ -236,7 +230,7 @@ def _device_code_flow(client_id: str, scope: str) -> str:
 # ── token refresh ────────────────────────────────────────────────────────────
 
 
-def _refresh_access_token(refresh_token: str, client_id: Optional[str] = None) -> str:
+def _refresh_access_token(refresh_token: str, client_id: str | None = None) -> str:
     """Exchange a refresh token for a new access token."""
     # If client_id wasn't provided, try the cached config
     if not client_id:
@@ -324,7 +318,7 @@ class OpenAIOAuthChatOpenAI(NormalizedChatOpenAI):
     @classmethod
     def from_oauth(
         cls, model: str, client_id: str, **kwargs
-    ) -> "OpenAIOAuthChatOpenAI":
+    ) -> OpenAIOAuthChatOpenAI:
         """Create an instance with OAuth token injection."""
         http_client = _make_oauth_http_client(client_id)
         return cls(model=model, http_client=http_client, **kwargs)
@@ -345,7 +339,7 @@ class OpenAIOAuthClient(BaseLLMClient):
     def __init__(
         self,
         model: str,
-        base_url: Optional[str] = None,
+        base_url: str | None = None,
         **kwargs,
     ):
         super().__init__(model, base_url, **kwargs)

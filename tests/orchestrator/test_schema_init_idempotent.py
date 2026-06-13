@@ -1,4 +1,5 @@
 import pytest
+
 from tradingagents.persistence.db import connect
 
 

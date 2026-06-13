@@ -1,4 +1,5 @@
 """Test dell'auth httpx CodexOAuth: iniezione bearer e refresh su 401."""
+import contextlib
 import time
 
 import httpx
@@ -58,10 +59,8 @@ def test_no_retry_on_200():
     auth = CodexOAuth(store)
     flow = auth.auth_flow(httpx.Request("GET", "https://x"))
     first = next(flow)
-    try:
+    with contextlib.suppress(StopIteration):
         flow.send(httpx.Response(200, request=first))
-    except StopIteration:
-        pass
     assert store.refresh_calls == 0
 
 

@@ -7,8 +7,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import Any, Iterable, Optional
-
+from collections.abc import Iterable
 
 # --------------------------------------------------------------------
 # runs
@@ -19,11 +18,11 @@ def insert_run(
     *,
     run_id: str,
     ticker: str,
-    persona_id: Optional[str],
+    persona_id: str | None,
     started_ts: str,
     artifact_dir: str,
-    trigger_id: Optional[str] = None,
-    queue_job_id: Optional[int] = None,
+    trigger_id: str | None = None,
+    queue_job_id: int | None = None,
 ) -> None:
     conn.execute(
         "INSERT INTO runs (run_id, ticker, persona_id, started_ts, status, "
@@ -40,8 +39,8 @@ def finalize_run(
     run_id: str,
     ended_ts: str,
     status: str,
-    decision: Optional[str] = None,
-    confidence: Optional[float] = None,
+    decision: str | None = None,
+    confidence: float | None = None,
 ) -> None:
     conn.execute(
         "UPDATE runs SET ended_ts = ?, status = ?, decision = ?, confidence = ? "
@@ -63,7 +62,7 @@ def record_cost(
     model: str,
     in_tokens: int,
     out_tokens: int,
-    usd_estimate: Optional[float] = None,
+    usd_estimate: float | None = None,
 ) -> None:
     conn.execute(
         "INSERT INTO costs (run_id, provider, model, in_tokens, out_tokens, "
@@ -86,8 +85,8 @@ def insert_brief(
     generated_ts: str,
     content_path: str,
     run_ids: Iterable[str],
-    parent_brief_id: Optional[str] = None,
-    trigger_event_id: Optional[str] = None,
+    parent_brief_id: str | None = None,
+    trigger_event_id: str | None = None,
 ) -> None:
     conn.execute(
         "INSERT INTO briefs (brief_id, mode, scope, generated_ts, content_path, "
@@ -124,11 +123,12 @@ def insert_brief_action(
 # --------------------------------------------------------------------
 
 import json as _json
-from datetime import datetime as _dt, timezone as _tz
+from datetime import UTC
+from datetime import datetime as _dt
 
 
 def _now_iso() -> str:
-    return _dt.now(_tz.utc).isoformat()
+    return _dt.now(UTC).isoformat()
 
 
 def insert_event(
@@ -137,10 +137,10 @@ def insert_event(
     event_id: str,
     source: str,
     ingested_ts: str,
-    salience: Optional[float],
-    raw_path: Optional[str],
+    salience: float | None,
+    raw_path: str | None,
     status: str,
-    deduped_of: Optional[str],
+    deduped_of: str | None,
 ) -> None:
     conn.execute(
         "INSERT INTO events (event_id, source, ingested_ts, salience, "
@@ -155,7 +155,7 @@ def insert_event_ticker(
     *,
     event_id: str,
     ticker: str,
-    confidence: Optional[float],
+    confidence: float | None,
 ) -> None:
     conn.execute(
         "INSERT OR IGNORE INTO event_ticker (event_id, ticker, confidence) "
@@ -169,7 +169,7 @@ def upsert_watchlist(
     conn: sqlite3.Connection,
     *,
     ticker: str,
-    ttl_until: Optional[str],
+    ttl_until: str | None,
     tags: Iterable[str],
 ) -> None:
     """Insert or update a watchlist row.
@@ -278,7 +278,7 @@ def insert_event_embedding(
 
 def get_event(
     conn: sqlite3.Connection, *, event_id: str
-) -> Optional[sqlite3.Row]:
+) -> sqlite3.Row | None:
     return conn.execute(
         "SELECT * FROM events WHERE event_id = ?", (event_id,)
     ).fetchone()
@@ -289,7 +289,7 @@ def upsert_suppression(
     *,
     key: str,
     until_ts: str,
-    reason: Optional[str],
+    reason: str | None,
     created_by: str,
 ) -> None:
     conn.execute(
@@ -306,7 +306,7 @@ def upsert_suppression(
 
 def get_brief(
     conn: sqlite3.Connection, *, brief_id: str
-) -> Optional[sqlite3.Row]:
+) -> sqlite3.Row | None:
     return conn.execute(
         "SELECT * FROM briefs WHERE brief_id = ?", (brief_id,)
     ).fetchone()

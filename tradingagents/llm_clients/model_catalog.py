@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
-
 from tradingagents.llm_clients.custom_provider_config import (
     get_all_custom_model_options,
     get_custom_model_options,
 )
 
-ModelOption = Tuple[str, str]
-ProviderModeOptions = Dict[str, Dict[str, List[ModelOption]]]
+ModelOption = tuple[str, str]
+ProviderModeOptions = dict[str, dict[str, list[ModelOption]]]
 
 
 # Shared model list for GLM via Z.AI (international) and BigModel (China).
 # Source: docs.z.ai (GLM Coding Plan supported models + LLM guides).
 # All GLM 4.7+ entries support thinking mode via thinking={"type":"enabled"}.
-_GLM_MODELS: Dict[str, List[ModelOption]] = {
+_GLM_MODELS: dict[str, list[ModelOption]] = {
     "quick": [
         ("GLM-5-Turbo - Fast, switchable thinking modes", "glm-5-turbo"),
         ("GLM-4.7 - Previous-gen flagship", "glm-4.7"),
@@ -42,7 +40,7 @@ _GLM_MODELS: Dict[str, List[ModelOption]] = {
 # the backing model. Users who want a specific generation pick it
 # explicitly; users who really want auto-latest can enter the alias via
 # "Custom model ID".
-_QWEN_MODELS: Dict[str, List[ModelOption]] = {
+_QWEN_MODELS: dict[str, list[ModelOption]] = {
     "quick": [
         ("Qwen 3.6 Flash - Latest fast, agentic coding + vision-language", "qwen3.6-flash"),
         ("Qwen 3.5 Flash - Previous-gen fast", "qwen3.5-flash"),
@@ -61,7 +59,7 @@ _QWEN_MODELS: Dict[str, List[ModelOption]] = {
 # Full official lineup per platform.minimax.io/docs/api-reference/text-openai-api.
 # M3: 512K context, 128K max output, image input support. M2.7 retains a
 # 204K context window; both endpoints share the same model IDs.
-_MINIMAX_MODELS: Dict[str, List[ModelOption]] = {
+_MINIMAX_MODELS: dict[str, list[ModelOption]] = {
     "quick": [
         ("MiniMax-M3 - Latest flagship, 512K ctx, image input (default)", "MiniMax-M3"),
         ("MiniMax-M2.7-highspeed - Faster M2.7, 204K ctx, ~100 TPS", "MiniMax-M2.7-highspeed"),
@@ -78,7 +76,7 @@ _MINIMAX_MODELS: Dict[str, List[ModelOption]] = {
 # Kimi (Moonshot AI) — single endpoint, excellent long-context + tool use.
 # kimi-k2.6 is the current flagship (256K context). Thinking is enabled by default
 # on K2 models and emits reasoning_content (must be round-tripped).
-_KIMI_MODELS: Dict[str, List[ModelOption]] = {
+_KIMI_MODELS: dict[str, list[ModelOption]] = {
     "quick": [
         ("Kimi K2.5 - Fast, strong agentic performance", "kimi-k2.5"),
         ("Custom model ID", "custom"),
@@ -92,7 +90,7 @@ _KIMI_MODELS: Dict[str, List[ModelOption]] = {
 # Tencent Cloud LKEAP Anthropic-compatible gateway. The platform's model
 # roster changes over time, so the built-ins are starting points and the
 # Custom model option remains important.
-_TENCENT_MODELS: Dict[str, List[ModelOption]] = {
+_TENCENT_MODELS: dict[str, list[ModelOption]] = {
     "quick": [
         ("GLM-5 - Tencent LKEAP compatible model", "glm-5"),
         ("MiniMax-M2.5 - Tencent LKEAP compatible model", "minimax-m2.5"),
@@ -113,7 +111,7 @@ _TENCENT_MODELS: Dict[str, List[ModelOption]] = {
 # https://integrate.api.nvidia.com/v1. These are the suggested model IDs
 # from the provider request, while "Custom model ID" keeps the flow usable
 # for any other NIM-hosted model.
-_NVIDIA_NIM_MODELS: Dict[str, List[ModelOption]] = {
+_NVIDIA_NIM_MODELS: dict[str, list[ModelOption]] = {
     "quick": [
         ("DeepSeek V4 Flash Free", "z-ai/deepseek-v4-flash-free"),
         ("Kimi K2.6", "z-ai/kimi-k2.6"),
@@ -394,7 +392,7 @@ MODEL_OPTIONS: ProviderModeOptions = {
 }
 
 
-def get_model_options(provider: str, mode: str) -> List[ModelOption]:
+def get_model_options(provider: str, mode: str) -> list[ModelOption]:
     """Return shared model options for a provider and selection mode."""
     provider_key = provider.lower()
     mode_key = mode.lower()
@@ -409,7 +407,7 @@ def get_model_options(provider: str, mode: str) -> List[ModelOption]:
     raise KeyError(provider_key)
 
 
-def get_known_models() -> Dict[str, List[str]]:
+def get_known_models() -> dict[str, list[str]]:
     """Build known model names from the shared CLI catalog."""
     known_models = {
         provider: sorted(

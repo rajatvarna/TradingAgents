@@ -21,7 +21,6 @@ from tradingagents.llm_clients.model_catalog import get_known_models
 from tradingagents.llm_clients.openai_client import OpenAIClient
 from tradingagents.llm_clients.validators import validate_model
 
-
 # ---------------------------------------------------------------------------
 # Catalog / validator wiring
 # ---------------------------------------------------------------------------
@@ -155,9 +154,8 @@ class TestGitHubCopilotValidation:
         )
         with patch(
             "tradingagents.llm_clients.openai_client.NormalizedChatOpenAI"
-        ):
-            with pytest.warns(RuntimeWarning, match="not-a-real-copilot-model"):
-                client.get_llm()
+        ), pytest.warns(RuntimeWarning, match="not-a-real-copilot-model"):
+            client.get_llm()
 
     def test_known_model_does_not_warn(self, recwarn):
         client = create_llm_client(

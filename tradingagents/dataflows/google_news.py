@@ -6,14 +6,12 @@ Malaysian Reserve, etc.) without requiring API keys or JavaScript rendering.
 """
 
 from datetime import datetime, timedelta
-from typing import Optional
 from xml.etree import ElementTree as ET
 
 import requests
 import yfinance as yf
 
 from .config import get_config
-
 
 GOOGLE_NEWS_RSS = "https://news.google.com/rss/search"
 
@@ -39,7 +37,7 @@ def _get_company_name(ticker: str) -> str:
         return ""
 
 
-def _parse_rss_date(date_str: str) -> Optional[datetime]:
+def _parse_rss_date(date_str: str) -> datetime | None:
     """Parse an RSS pubDate string to a datetime."""
     if not date_str:
         return None
@@ -193,8 +191,8 @@ def get_news_google(
 
 def get_global_news_google(
     curr_date: str,
-    look_back_days: Optional[int] = None,
-    limit: Optional[int] = None,
+    look_back_days: int | None = None,
+    limit: int | None = None,
 ) -> str:
     """Retrieve global/macroeconomic news using Google News RSS with a focus
     on Malaysian and regional economic news.

@@ -1,7 +1,10 @@
+from typing import Annotated
+
 from langchain_core.tools import tool
-from typing import Annotated, Optional
-from tradingagents.dataflows.interface import route_to_vendor
+
 from tradingagents.agents.utils.tool_errors import tool_error_text
+from tradingagents.dataflows.interface import route_to_vendor
+
 
 @tool
 def get_news(
@@ -27,8 +30,8 @@ def get_news(
 @tool
 def get_global_news(
     curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
-    look_back_days: Annotated[Optional[int], "Days to look back; omit to use the configured default"] = None,
-    limit: Annotated[Optional[int], "Max articles to return; omit to use the configured default"] = None,
+    look_back_days: Annotated[int | None, "Days to look back; omit to use the configured default"] = None,
+    limit: Annotated[int | None, "Max articles to return; omit to use the configured default"] = None,
 ) -> str:
     """
     Retrieve global news data.
@@ -74,7 +77,7 @@ async def fetch_recent_news(query: str, time_range: str = "7d", limit: int = 5) 
     """
     Fetches recent news articles and their full extracted text based on a search query.
     Use this tool to gather real-time financial news, market sentiment, or company updates.
-    
+
     Args:
         query: The specific search query (e.g., "NVIDIA stock earnings", "Federal Reserve interest rates").
         time_range: The lookback period (e.g., "1d" for 1 day, "7d" for 7 days). Default is 7d.
@@ -84,10 +87,10 @@ async def fetch_recent_news(query: str, time_range: str = "7d", limit: int = 5) 
         from tradingagents.dataflows.google_news import get_google_news
         # Call your new async dataflow
         articles = await get_google_news(query=query, time_range=time_range, limit=limit)
-        
+
         if not articles:
             return f"No news found for query: '{query}' in the last {time_range}."
-            
+
         # Format the structured Pydantic models into a clean string for the LLM
         formatted_results = []
         for i, article in enumerate(articles, 1):
@@ -99,8 +102,8 @@ async def fetch_recent_news(query: str, time_range: str = "7d", limit: int = 5) 
                 f"**URL:** {article.url}\n"
                 f"**Content:**\n{article.full_text}\n"
             )
-            
+
         return "\n\n---\n\n".join(formatted_results)
-        
+
     except Exception as e:
         return f"Error fetching news for '{query}': {str(e)}"

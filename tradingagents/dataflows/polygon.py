@@ -17,7 +17,7 @@ for reference shapes) before flipping the default category vendor.
 """
 
 import os
-from typing import Any, Dict
+from typing import Any
 
 import requests
 
@@ -33,7 +33,7 @@ def _key() -> str:
     return k
 
 
-def _get(path: str, **params: Any) -> Dict[str, Any]:
+def _get(path: str, **params: Any) -> dict[str, Any]:
     params["apiKey"] = _key()
     try:
         r = requests.get(f"{_BASE}{path}", params=params, timeout=20)

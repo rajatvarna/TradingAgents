@@ -1,4 +1,3 @@
-from pathlib import Path
 
 from cli.main import (
     resolve_report_save_path,

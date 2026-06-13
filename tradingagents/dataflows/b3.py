@@ -4,16 +4,28 @@ Wraps yfinance with B3-specific normalization and defaults.
 
 import re
 from typing import Annotated
+
 from .y_finance import (
-    get_YFin_data_online,
-    get_stock_stats_indicators_window,
-    get_fundamentals as get_yfinance_fundamentals,
     get_balance_sheet as get_yfinance_balance_sheet,
+)
+from .y_finance import (
     get_cashflow as get_yfinance_cashflow,
+)
+from .y_finance import (
+    get_fundamentals as get_yfinance_fundamentals,
+)
+from .y_finance import (
     get_income_statement as get_yfinance_income_statement,
+)
+from .y_finance import (
     get_insider_transactions as get_yfinance_insider_transactions,
 )
-from .yfinance_news import get_news_yfinance, get_global_news_yfinance
+from .y_finance import (
+    get_stock_stats_indicators_window,
+    get_YFin_data_online,
+)
+from .yfinance_news import get_global_news_yfinance, get_news_yfinance
+
 
 def normalize_b3_ticker(ticker: str) -> str:
     """

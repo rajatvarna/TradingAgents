@@ -1,19 +1,17 @@
-import json
+from datetime import UTC, datetime
+
 import pytest
-from pathlib import Path
-from datetime import datetime, timezone
 from typer.testing import CliRunner
 
-from tradingagents.persistence.db import connect
-from tradingagents.persistence import store
 from tradingagents.orchestrator import queue_store
-
+from tradingagents.persistence import store
+from tradingagents.persistence.db import connect
 
 runner = CliRunner()
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @pytest.fixture

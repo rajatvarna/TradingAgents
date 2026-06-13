@@ -16,7 +16,6 @@ from tradingagents.agents.utils.structured import (
     bind_structured,
     invoke_structured_or_freetext_with_meta,
 )
-from tradingagents.prompts import load_prompt
 from tradingagents.audit.prompt_registry import default_registry
 
 

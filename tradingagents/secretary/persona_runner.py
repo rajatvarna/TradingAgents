@@ -11,7 +11,6 @@ dependency to run personas.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional
 
 from tradingagents.personas.loader import Persona
 
@@ -21,8 +20,8 @@ def _run_one_persona(
     ticker: str,
     trade_date: str,
     config: dict,
-    event_context: Optional[str] = None,
-    queue_job_id: Optional[int] = None,
+    event_context: str | None = None,
+    queue_job_id: int | None = None,
 ) -> str:
     """Construct a TradingAgentsGraph with the persona overlay, propagate,
     return the run_id.
@@ -58,14 +57,14 @@ def _run_one_persona(
 
 def run_personas_parallel(
     *,
-    personas: List[Persona],
+    personas: list[Persona],
     ticker: str,
     trade_date: str,
     config: dict,
     parallel: bool = True,
-    event_context: Optional[str] = None,
-    queue_job_id: Optional[int] = None,
-) -> List[str]:
+    event_context: str | None = None,
+    queue_job_id: int | None = None,
+) -> list[str]:
     """Run each persona, return run_ids in completion order.
 
     With ``parallel=True`` (default), uses a ThreadPoolExecutor sized to the

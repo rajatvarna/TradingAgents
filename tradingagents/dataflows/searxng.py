@@ -10,9 +10,9 @@ Set SEARXNG_BASE_URL to point at the JSON-API endpoint
 """
 
 import os
+from collections.abc import Iterable
 from datetime import datetime, timedelta
 from functools import lru_cache
-from typing import Iterable, List, Optional
 
 import requests
 import yfinance as yf
@@ -33,7 +33,7 @@ def _base_url() -> str:
 
 
 @lru_cache(maxsize=128)
-def _company_name(ticker: str) -> Optional[str]:
+def _company_name(ticker: str) -> str | None:
     """Resolve a ticker to its company name via yfinance ``.info``.
 
     Cached because company names are static for a ticker and the underlying
@@ -52,7 +52,7 @@ def _company_name(ticker: str) -> Optional[str]:
     return None
 
 
-def _ticker_queries(ticker: str) -> List[str]:
+def _ticker_queries(ticker: str) -> list[str]:
     """Build a small set of queries covering different facets of a ticker.
 
     The fourth query is the one that gives the Social Media Analyst real
@@ -67,7 +67,7 @@ def _ticker_queries(ticker: str) -> List[str]:
     ]
 
 
-def _search(query: str, time_range: Optional[str] = None) -> List[dict]:
+def _search(query: str, time_range: str | None = None) -> list[dict]:
     """Call the SearXNG JSON API once.
 
     Raises:
@@ -90,7 +90,7 @@ def _search(query: str, time_range: Optional[str] = None) -> List[dict]:
         raise SearxngUnavailableError(f"SearXNG request failed: {exc}") from exc
 
 
-def _parse_published(value) -> Optional[datetime]:
+def _parse_published(value) -> datetime | None:
     if not value:
         return None
     if isinstance(value, datetime):
@@ -103,9 +103,9 @@ def _parse_published(value) -> Optional[datetime]:
 
 def _dedupe_and_filter(
     results: Iterable[dict],
-    start: Optional[datetime],
-    end: Optional[datetime],
-) -> List[dict]:
+    start: datetime | None,
+    end: datetime | None,
+) -> list[dict]:
     """Drop duplicates and results published outside the date window.
 
     Results without a parseable publish date are kept — SearXNG engines vary
@@ -113,7 +113,7 @@ def _dedupe_and_filter(
     most of the social-media corpus.
     """
     seen: set = set()
-    kept: List[dict] = []
+    kept: list[dict] = []
     for result in results:
         url = (result.get("url") or "").strip()
         title = (result.get("title") or "").strip()
@@ -130,7 +130,7 @@ def _dedupe_and_filter(
 
 
 def _format_results(results: Iterable[dict]) -> str:
-    lines: List[str] = []
+    lines: list[str] = []
     for result in results:
         title = result.get("title") or "Untitled"
         publisher = result.get("engine") or "SearXNG"
@@ -161,7 +161,7 @@ def get_news_searxng(
     start_dt = datetime.strptime(start_date, "%Y-%m-%d")
     end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
-    aggregated: List[dict] = []
+    aggregated: list[dict] = []
     for query in _ticker_queries(ticker):
         aggregated.extend(_search(query, time_range="month"))
 
@@ -187,7 +187,7 @@ def get_global_news_searxng(
         "global markets trading",
     ]
 
-    aggregated: List[dict] = []
+    aggregated: list[dict] = []
     for query in queries:
         aggregated.extend(_search(query, time_range="week"))
         if len(aggregated) >= limit * 4:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-
 LOOKAHEAD_CAVEAT_TEMPLATE = (
     "NOTE: OVERVIEW/company-info metrics reflect the LATEST snapshot, "
     "not point-in-time as of {date}. Treat valuation ratios with caution "

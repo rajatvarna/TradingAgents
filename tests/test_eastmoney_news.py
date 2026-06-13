@@ -15,7 +15,7 @@ from tradingagents.dataflows.eastmoney_news import get_news_eastmoney, is_ashare
 
 def _jsonp(articles: list[dict]) -> bytes:
     body = json.dumps({"code": 0, "result": {"cmsArticleWebOld": articles}}, ensure_ascii=False)
-    return f"cb({body});".encode("utf-8")
+    return f"cb({body});".encode()
 
 
 @contextmanager

@@ -6,13 +6,12 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Optional
 
 import requests
 
 logger = logging.getLogger(__name__)
 
-_CACHE: Optional[tuple[float, str]] = None
+_CACHE: tuple[float, str] | None = None
 _CACHE_TTL = 3600  # 1 hour (index updates daily)
 
 

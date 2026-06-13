@@ -5,15 +5,16 @@ import pandas as pd
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 from langgraph.prebuilt import ToolNode
+
 from cli.main import ANALYST_AGENT_NAMES, ANALYST_ORDER, ANALYST_REPORT_MAP
 from cli.models import AnalystType
 from cli.utils import ANALYST_ORDER as CLI_ANALYST_ORDER
 from tradingagents.agents.analysts.esg_analyst import create_esg_analyst
 from tradingagents.agents.utils.esg_data_tools import get_esg_news, get_esg_scores
+from tradingagents.graph.analyst_execution import ANALYST_NODE_SPECS
 from tradingagents.graph.conditional_logic import ConditionalLogic
 from tradingagents.graph.propagation import Propagator
 from tradingagents.graph.setup import GraphSetup
-from tradingagents.graph.analyst_execution import ANALYST_NODE_SPECS
 
 
 def test_esg_is_selectable_in_cli():

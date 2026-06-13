@@ -8,7 +8,7 @@ import time
 import pytest
 
 from tradingagents.llm_clients.oauth import store as store_mod
-from tradingagents.llm_clients.oauth.store import OAuthTokenStore, OAuthNotLoggedIn
+from tradingagents.llm_clients.oauth.store import OAuthNotLoggedIn, OAuthTokenStore
 
 
 def _jwt(payload: dict) -> str:

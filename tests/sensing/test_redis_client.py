@@ -1,5 +1,5 @@
-import pytest
 import fakeredis.aioredis
+import pytest
 
 
 @pytest.mark.unit

@@ -26,7 +26,7 @@ def test_forge_sense_reseed_calls_seed_all(runner, db_path, monkeypatch):
     assert r.exit_code == 0, r.output
     assert calls["n"] == 0  # --no-polygon → seed_crypto only
     monkeypatch.setattr(fmod, "seed_all", fake)
-    r2 = runner.invoke(fmod.app, ["sense", "reseed-tickers"])
+    runner.invoke(fmod.app, ["sense", "reseed-tickers"])
     assert calls["n"] >= 1
 
 

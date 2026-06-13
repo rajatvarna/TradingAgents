@@ -1,6 +1,7 @@
 import json
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timezone, timedelta
 
 from tradingagents.persistence.db import connect
 
@@ -15,7 +16,7 @@ def test_insert_event(conn):
     from tradingagents.persistence.store import insert_event
     insert_event(
         conn, event_id="e1", source="polygon_news",
-        ingested_ts=datetime.now(timezone.utc).isoformat(),
+        ingested_ts=datetime.now(UTC).isoformat(),
         salience=0.9, raw_path="data/events/e1.json",
         status="triaged", deduped_of=None,
     )
@@ -28,7 +29,7 @@ def test_insert_event(conn):
 def test_insert_event_ticker(conn):
     from tradingagents.persistence.store import insert_event, insert_event_ticker
     insert_event(conn, event_id="e1", source="rss",
-                 ingested_ts=datetime.now(timezone.utc).isoformat(),
+                 ingested_ts=datetime.now(UTC).isoformat(),
                  salience=0.6, raw_path="data/events/e1.json",
                  status="triaged", deduped_of=None)
     insert_event_ticker(conn, event_id="e1", ticker="AAPL", confidence=0.92)
@@ -49,7 +50,7 @@ def test_upsert_watchlist_user(conn):
 @pytest.mark.unit
 def test_upsert_watchlist_auto(conn):
     from tradingagents.persistence.store import upsert_watchlist
-    ttl = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    ttl = (datetime.now(UTC) + timedelta(days=7)).isoformat()
     upsert_watchlist(conn, ticker="TSLA", ttl_until=ttl,
                      tags=["auto", "event:e-42"])
     row = conn.execute("SELECT * FROM watchlist WHERE ticker='TSLA'").fetchone()
@@ -70,8 +71,8 @@ def test_upsert_watchlist_preserves_added_ts(conn):
 
 @pytest.mark.unit
 def test_get_active_watchlist(conn):
-    from tradingagents.persistence.store import upsert_watchlist, get_active_watchlist
-    now = datetime.now(timezone.utc)
+    from tradingagents.persistence.store import get_active_watchlist, upsert_watchlist
+    now = datetime.now(UTC)
     upsert_watchlist(conn, ticker="AAPL", ttl_until=None, tags=["user"])
     upsert_watchlist(conn, ticker="OLD",
                      ttl_until=(now - timedelta(days=1)).isoformat(),
@@ -85,7 +86,7 @@ def test_get_active_watchlist(conn):
 
 @pytest.mark.unit
 def test_upsert_ticker_and_get_set(conn):
-    from tradingagents.persistence.store import upsert_ticker, get_tickers_set
+    from tradingagents.persistence.store import get_tickers_set, upsert_ticker
     upsert_ticker(conn, ticker="AAPL", exchange="NASDAQ",
                   name="Apple Inc.", aliases=["Apple"], active=True)
     upsert_ticker(conn, ticker="DEAD", exchange="NYSE",
@@ -99,7 +100,7 @@ def test_upsert_ticker_and_get_set(conn):
 def test_insert_event_fingerprint(conn):
     from tradingagents.persistence.store import insert_event, insert_event_fingerprint
     insert_event(conn, event_id="e1", source="rss",
-                 ingested_ts=datetime.now(timezone.utc).isoformat(),
+                 ingested_ts=datetime.now(UTC).isoformat(),
                  salience=0.5, raw_path="data/events/e1.json",
                  status="triaged", deduped_of=None)
     insert_event_fingerprint(conn, fingerprint="abc123",
@@ -114,7 +115,7 @@ def test_insert_event_fingerprint(conn):
 def test_insert_event_embedding(conn):
     from tradingagents.persistence.store import insert_event, insert_event_embedding
     insert_event(conn, event_id="e1", source="rss",
-                 ingested_ts=datetime.now(timezone.utc).isoformat(),
+                 ingested_ts=datetime.now(UTC).isoformat(),
                  salience=0.5, raw_path="data/events/e1.json",
                  status="triaged", deduped_of=None)
     insert_event_embedding(conn, event_id="e1", vec_id=42)

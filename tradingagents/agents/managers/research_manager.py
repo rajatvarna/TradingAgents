@@ -12,7 +12,6 @@ from tradingagents.agents.utils.structured import (
     bind_structured,
     invoke_structured_or_freetext_with_meta,
 )
-from tradingagents.prompts import load_prompt
 from tradingagents.audit.prompt_registry import default_registry
 
 
@@ -22,7 +21,7 @@ def create_research_manager(llm, cache=None, prompt_registry=None):
 
     def research_manager_node(state) -> dict:
         instrument_context = build_instrument_context(state["company_of_interest"])
-        scope_guard = build_scope_guard(state["company_of_interest"])
+        build_scope_guard(state["company_of_interest"])
         history = state["investment_debate_state"].get("history", "")
         user_research_report = state.get("user_research_report", "")
 

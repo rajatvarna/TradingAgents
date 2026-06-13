@@ -3,10 +3,13 @@ import pytest
 
 @pytest.mark.unit
 def test_run_personas_parallel_returns_one_run_id_per_persona(monkeypatch):
-    from tradingagents.secretary.persona_runner import run_personas_parallel
     from tradingagents.personas.loader import (
-        Persona, LLMSettings, AnalystSettings, RiskDebateSettings,
+        AnalystSettings,
+        LLMSettings,
+        Persona,
+        RiskDebateSettings,
     )
+    from tradingagents.secretary.persona_runner import run_personas_parallel
 
     def make_p(pid):
         return Persona(
@@ -37,10 +40,13 @@ def test_run_personas_parallel_returns_one_run_id_per_persona(monkeypatch):
 
 @pytest.mark.unit
 def test_run_personas_parallel_threads_event_context_and_job_id(monkeypatch):
-    from tradingagents.secretary.persona_runner import run_personas_parallel
     from tradingagents.personas.loader import (
-        Persona, LLMSettings, AnalystSettings, RiskDebateSettings,
+        AnalystSettings,
+        LLMSettings,
+        Persona,
+        RiskDebateSettings,
     )
+    from tradingagents.secretary.persona_runner import run_personas_parallel
 
     captured = []
 

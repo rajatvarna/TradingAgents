@@ -9,14 +9,12 @@ latency computation, and the disabled-by-default behavior.
 from __future__ import annotations
 
 import json
-import uuid
 import time
-from pathlib import Path
+import uuid
 
 import pytest
 
 from cli.stats_handler import StatsCallbackHandler
-
 
 # -------------------------------------------------------------------- #
 # Helpers
@@ -31,8 +29,8 @@ def _make_llm_result(
     tokens_out: int = 0,
 ):
     """Minimal LLMResult-like object with the fields the handler reads."""
-    from langchain_core.outputs import ChatGeneration, LLMResult
     from langchain_core.messages import AIMessage
+    from langchain_core.outputs import ChatGeneration, LLMResult
 
     msg = AIMessage(
         content="hello",

@@ -4,7 +4,6 @@ import re
 from copy import deepcopy
 from typing import Any
 
-
 REPORT_SOURCE_SPECS = (
     ("market_report", "market", "Market analyst report"),
     ("news_report", "news", "News analyst report"),

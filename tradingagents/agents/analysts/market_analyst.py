@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from tradingagents.llm_clients.base_client import normalize_content
+
 from tradingagents.agents.utils.agent_utils import (
-    get_instrument_context_from_state,
     get_indicators,
+    get_instrument_context_from_state,
     get_language_instruction,
     get_stock_data,
     get_verified_market_snapshot,

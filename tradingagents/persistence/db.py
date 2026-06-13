@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Set
 
 import sqlite_vec
 
@@ -30,7 +29,7 @@ def _split_sql_statements(script: str) -> list[str]:
     return out
 
 # Tables we expect schema.sql to create (used by tests; keep in sync with the .sql).
-_EXPECTED_TABLES: Set[str] = {
+_EXPECTED_TABLES: set[str] = {
     "runs", "costs", "briefs", "brief_actions", "suppression",
     "memories", "outcome_log",
     "backtests", "backtest_runs",
@@ -41,7 +40,7 @@ _EXPECTED_TABLES: Set[str] = {
 }
 
 
-def schema_tables() -> Set[str]:
+def schema_tables() -> set[str]:
     """Tables expected after a fresh ``connect()``."""
     return _EXPECTED_TABLES
 
@@ -63,7 +62,7 @@ def connect(db_path: str) -> sqlite3.Connection:
     # Schema. CREATE TABLE/INDEX IF NOT EXISTS are idempotent; ALTER TABLE
     # ADD COLUMN is NOT — sqlite raises "duplicate column name" on a re-run.
     # We split on `;` and apply each statement, suppressing only that error.
-    with open(_SCHEMA_PATH, "r", encoding="utf-8") as f:
+    with open(_SCHEMA_PATH, encoding="utf-8") as f:
         script = f.read()
     for stmt in _split_sql_statements(script):
         stmt = stmt.strip()

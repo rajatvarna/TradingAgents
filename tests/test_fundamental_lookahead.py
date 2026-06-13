@@ -16,6 +16,7 @@ def test_historical_snapshot_caveat_for_past_date():
 @pytest.mark.unit
 def test_alpha_vantage_fundamentals_prefixes_caveat_for_past_date(monkeypatch):
     import json
+
     import tradingagents.dataflows.alpha_vantage_fundamentals as avf
 
     # Mock cache_text if it is present (PR-10)
@@ -35,6 +36,7 @@ def test_alpha_vantage_fundamentals_prefixes_caveat_for_past_date(monkeypatch):
 def test_alpha_vantage_fundamentals_today_has_no_caveat(monkeypatch):
     import json
     from datetime import date
+
     import tradingagents.dataflows.alpha_vantage_fundamentals as avf
 
     # Mock cache_text if it is present (PR-10)

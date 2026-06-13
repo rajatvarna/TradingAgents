@@ -8,7 +8,6 @@ from urllib.request import urlopen
 
 import pytest
 
-
 BASE_URL = "http://localhost:9000"
 
 

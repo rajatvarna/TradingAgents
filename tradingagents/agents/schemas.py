@@ -18,18 +18,17 @@ and the Sentiment Analyst so that:
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Literal, Optional
+from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field
-
 
 # ---------------------------------------------------------------------------
 # Shared rating types
 # ---------------------------------------------------------------------------
 
 
-class PortfolioRating(str, Enum):
+class PortfolioRating(StrEnum):
     """5-tier rating used by the Research Manager and Portfolio Manager."""
 
     BUY = "Buy"
@@ -39,7 +38,7 @@ class PortfolioRating(str, Enum):
     SELL = "Sell"
 
 
-class TraderAction(str, Enum):
+class TraderAction(StrEnum):
     """3-tier transaction direction used by the Trader.
 
     The Trader's job is to translate the Research Manager's investment plan
@@ -133,23 +132,23 @@ class TraderProposal(BaseModel):
             "the research plan. Two to four sentences."
         ),
     )
-    entry_price: Optional[float] = Field(
+    entry_price: float | None = Field(
         default=None,
         description="Optional entry price target in the instrument's quote currency.",
     )
-    stop_loss: Optional[float] = Field(
+    stop_loss: float | None = Field(
         default=None,
         description="Optional stop-loss price in the instrument's quote currency.",
     )
-    take_profit: Optional[float] = Field(
+    take_profit: float | None = Field(
         default=None,
         description="Optional take-profit price in the instrument's quote currency.",
     )
-    position_sizing: Optional[str] = Field(
+    position_sizing: str | None = Field(
         default=None,
         description="Optional sizing guidance, e.g. '5% of portfolio'.",
     )
-    levels_rationale: Optional[str] = Field(
+    levels_rationale: str | None = Field(
         default=None,
         description=(
             "Optional explanation for why entry/stop-loss/take-profit levels were chosen. "
@@ -232,11 +231,11 @@ class PortfolioDecision(BaseModel):
             "incorporate them; otherwise rely solely on the current analysis."
         ),
     )
-    price_target: Optional[float] = Field(
+    price_target: float | None = Field(
         default=None,
         description="Optional target price in the instrument's quote currency.",
     )
-    time_horizon: Optional[str] = Field(
+    time_horizon: str | None = Field(
         default=None,
         description="Optional recommended holding period, e.g. '3-6 months'.",
     )
@@ -271,7 +270,7 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
 # ---------------------------------------------------------------------------
 
 
-class SentimentBand(str, Enum):
+class SentimentBand(StrEnum):
     """Discrete sentiment direction produced by the Sentiment Analyst.
 
     Six tiers keep the signal granular enough to be actionable while remaining

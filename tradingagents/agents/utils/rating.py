@@ -12,11 +12,9 @@ Centralising it here avoids drift between those call sites.
 from __future__ import annotations
 
 import re
-from typing import Optional, Tuple
-
 
 # Canonical, ordered 5-tier scale (most bullish to most bearish).
-RATINGS_5_TIER: Tuple[str, ...] = (
+RATINGS_5_TIER: tuple[str, ...] = (
     "Buy", "Overweight", "Hold", "Underweight", "Sell",
 )
 
@@ -27,7 +25,7 @@ _RATING_SET = {r.lower() for r in RATINGS_5_TIER}
 _RATING_LABEL_RE = re.compile(r"rating.*?[:\-][\s*]*(\w+)", re.IGNORECASE)
 
 
-def extract_rating(text: str) -> Optional[str]:
+def extract_rating(text: str) -> str | None:
     for line in text.splitlines():
         m = _RATING_LABEL_RE.search(line)
         if m and m.group(1).lower() in _RATING_SET:

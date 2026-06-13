@@ -1,4 +1,5 @@
 import pytest
+
 from tradingagents.persistence.db import connect
 from tradingagents.persistence.store import upsert_ticker
 

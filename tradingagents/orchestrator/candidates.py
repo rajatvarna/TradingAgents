@@ -10,8 +10,6 @@ Ordered oldest-first so the oldest qualifying event fires first.
 from __future__ import annotations
 
 import sqlite3
-from typing import List
-
 
 _QUERY = """
 SELECT e.event_id, et.ticker, e.salience, et.confidence, e.ingested_ts
@@ -37,7 +35,7 @@ def fetch_candidates(
     salience_threshold: float,
     ticker_conf_threshold: float,
     limit: int,
-) -> List[sqlite3.Row]:
+) -> list[sqlite3.Row]:
     return list(
         conn.execute(
             _QUERY,

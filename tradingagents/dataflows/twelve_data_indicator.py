@@ -1,9 +1,9 @@
-import json
 from datetime import datetime
+
 from dateutil.relativedelta import relativedelta
 
-from .twelve_data_common import _make_api_request, _calc_start_date
 from ._indicator_descriptions import INDICATOR_DESCRIPTIONS
+from .twelve_data_common import _calc_start_date, _make_api_request
 
 # Cache for multi-value indicators (MACD, BBands) to avoid redundant API calls
 _indicator_cache = {}
@@ -81,7 +81,7 @@ def get_indicator(
             # Single-value indicator: the response has a single value per timestamp
             # Find the value key (not 'datetime')
             if values:
-                keys = [k for k in values[0].keys() if k != "datetime"]
+                keys = [k for k in values[0] if k != "datetime"]
                 value_key = keys[0] if keys else None
 
         result_data = []

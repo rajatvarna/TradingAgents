@@ -13,9 +13,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
-from typing import List, Optional
-
+from datetime import UTC, datetime
 
 _RESERVED_PERSONA_IDS = {"", "*", "all", "any"}
 
@@ -42,10 +40,10 @@ class PersonaMemoryStore:
         self,
         *,
         situation_md: str,
-        outcome: Optional[str] = None,
-        vec_id: Optional[int] = None,
+        outcome: str | None = None,
+        vec_id: int | None = None,
     ) -> int:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         cur = self._conn.execute(
             "INSERT INTO memories (persona_id, component, situation_md, outcome, "
             "vec_id, created_ts) VALUES (?, ?, ?, ?, ?, ?)",
@@ -54,7 +52,7 @@ class PersonaMemoryStore:
         self._conn.commit()
         return cur.lastrowid
 
-    def recent(self, limit: int = 5) -> List[sqlite3.Row]:
+    def recent(self, limit: int = 5) -> list[sqlite3.Row]:
         return list(self._conn.execute(
             "SELECT * FROM memories WHERE persona_id = ? AND component = ? "
             "ORDER BY created_ts DESC LIMIT ?",
@@ -75,12 +73,12 @@ class OutcomeLog:
         ticker: str,
         decision: str,
         outcome_md: str,
-        pnl_proxy: Optional[float] = None,
-        vec_id: Optional[int] = None,
-        tags: Optional[dict] = None,
+        pnl_proxy: float | None = None,
+        vec_id: int | None = None,
+        tags: dict | None = None,
     ) -> int:
         import json
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         cur = self._conn.execute(
             "INSERT INTO outcome_log (run_id, ticker, decision, outcome_md, "
             "pnl_proxy, vec_id, tags, created_ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -90,7 +88,7 @@ class OutcomeLog:
         self._conn.commit()
         return cur.lastrowid
 
-    def recent_for_ticker(self, ticker: str, limit: int = 10) -> List[sqlite3.Row]:
+    def recent_for_ticker(self, ticker: str, limit: int = 10) -> list[sqlite3.Row]:
         return list(self._conn.execute(
             "SELECT * FROM outcome_log WHERE ticker = ? ORDER BY created_ts DESC LIMIT ?",
             (ticker, limit),

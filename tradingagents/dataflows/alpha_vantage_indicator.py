@@ -1,5 +1,10 @@
-from .alpha_vantage_common import _make_api_request, AlphaVantageRateLimitError, AlphaVantageUnsupportedIndicatorError
 from ._indicator_descriptions import INDICATOR_DESCRIPTIONS
+from .alpha_vantage_common import (
+    AlphaVantageRateLimitError,
+    AlphaVantageUnsupportedIndicatorError,
+    _make_api_request,
+)
+
 
 def get_indicator(
     symbol: str,
@@ -26,6 +31,7 @@ def get_indicator(
         String containing indicator values and description
     """
     from datetime import datetime
+
     from dateutil.relativedelta import relativedelta
 
     supported_indicators = {
@@ -90,21 +96,7 @@ def get_indicator(
                 "series_type": series_type,
                 "datatype": "csv"
             })
-        elif indicator == "macd":
-            data = _make_api_request("MACD", {
-                "symbol": symbol,
-                "interval": interval,
-                "series_type": series_type,
-                "datatype": "csv"
-            })
-        elif indicator == "macds":
-            data = _make_api_request("MACD", {
-                "symbol": symbol,
-                "interval": interval,
-                "series_type": series_type,
-                "datatype": "csv"
-            })
-        elif indicator == "macdh":
+        elif indicator == "macd" or indicator == "macds" or indicator == "macdh":
             data = _make_api_request("MACD", {
                 "symbol": symbol,
                 "interval": interval,

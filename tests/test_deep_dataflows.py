@@ -5,7 +5,6 @@ All tests are offline — no network calls.
 They test the data structures, field validation, and helper logic.
 """
 
-import math
 import pytest
 
 from tradingagents.dataflows.fundamentals_deep import (
@@ -22,13 +21,10 @@ from tradingagents.dataflows.market_health import (
 from tradingagents.dataflows.sector_groups import GroupLeadershipData
 from tradingagents.dataflows.technicals_deep import (
     BasePattern,
-    DeepTechnicals,
     MovingAverageState,
     RelativeStrength,
     SellSignals,
-    VolumeProfile,
 )
-
 
 # ── fundamentals_deep helpers ─────────────────────────────────────────────────
 

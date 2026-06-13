@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import List, Sequence
 
 import redis.asyncio as aioredis
 
@@ -30,8 +30,8 @@ class MentionedTicker:
 @dataclass
 class SalienceResult:
     salience: float
-    matched_tickers: List[str] = field(default_factory=list)
-    mentioned_tickers: List[MentionedTicker] = field(default_factory=list)
+    matched_tickers: list[str] = field(default_factory=list)
+    mentioned_tickers: list[MentionedTicker] = field(default_factory=list)
     reason: str = ""
     source: str = "llm"  # "llm" | "cache" | "fallback"
 

@@ -8,17 +8,15 @@ fields are or aren't included in the hashed payload.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from tradingagents.audit.schemas import (
-    LLM_END,
     LLM_START,
-    NODE_ENTER,
+    TraceRecord,
     canonical_json,
     hash_payload,
-    TraceRecord,
 )
 
 
@@ -49,7 +47,7 @@ class TestCanonicalJson:
         """Datetimes are not natively JSON-serializable; canonical_json
         must fall back to str() so hashing never crashes on real
         TraceRecord payloads that include timestamps."""
-        ts = datetime(2026, 1, 15, 14, 23, 45, tzinfo=timezone.utc)
+        ts = datetime(2026, 1, 15, 14, 23, 45, tzinfo=UTC)
         s = canonical_json({"ts": ts})
         # Parseable and contains a string-encoded date
         data = json.loads(s)
@@ -82,7 +80,7 @@ def _make_record(**overrides):
     base = {
         "record_id": "rec-1",
         "session_id": "sess-1",
-        "ts": datetime(2026, 1, 15, 14, 23, 45, tzinfo=timezone.utc),
+        "ts": datetime(2026, 1, 15, 14, 23, 45, tzinfo=UTC),
         "type": LLM_START,
         "payload": {"foo": "bar"},
         "payload_hash": hash_payload({"foo": "bar"}),

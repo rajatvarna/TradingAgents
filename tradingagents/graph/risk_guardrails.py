@@ -12,7 +12,6 @@
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +165,7 @@ class RiskGuardrails:
     # ── Parsing helpers ──
 
     @staticmethod
-    def _extract_field(text: str, field_name: str) -> Optional[str]:
+    def _extract_field(text: str, field_name: str) -> str | None:
         """Extract the value after **Field Name**: from markdown."""
         pattern = rf"\*\*{re.escape(field_name)}\*\*:\s*(.+?)(?:\n|$)"
         match = re.search(pattern, text, re.IGNORECASE)
@@ -184,13 +183,13 @@ class RiskGuardrails:
         )
 
     @staticmethod
-    def _extract_percentage(text: str) -> Optional[float]:
+    def _extract_percentage(text: str) -> float | None:
         """Extract the first percentage number from a string."""
         match = re.search(r"(\d+(?:\.\d+)?)\s*%", text)
         return float(match.group(1)) if match else None
 
     @staticmethod
-    def _extract_number(text: str) -> Optional[float]:
+    def _extract_number(text: str) -> float | None:
         """Extract the first number from a string."""
         match = re.search(r"(\d+(?:\.\d+)?)", text)
         return float(match.group(1)) if match else None

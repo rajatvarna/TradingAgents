@@ -1,6 +1,7 @@
-import pytest
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
+import pytest
 
 
 @pytest.fixture
@@ -13,7 +14,7 @@ def conn(tmp_path):
 def test_insert_run_round_trips(conn):
     from tradingagents.persistence import store
     run_id = uuid.uuid4().hex
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     store.insert_run(conn, run_id=run_id, ticker="AAPL", persona_id="macro",
                      started_ts=now, artifact_dir=f"runs/{run_id}")
     row = conn.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
@@ -27,7 +28,7 @@ def test_insert_run_round_trips(conn):
 def test_finalize_run_sets_status_and_decision(conn):
     from tradingagents.persistence import store
     run_id = uuid.uuid4().hex
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     store.insert_run(conn, run_id=run_id, ticker="AAPL", persona_id="macro",
                      started_ts=now, artifact_dir=f"runs/{run_id}")
     store.finalize_run(conn, run_id=run_id, ended_ts=now, status="complete",
@@ -42,7 +43,7 @@ def test_finalize_run_sets_status_and_decision(conn):
 def test_record_cost_appends_row(conn):
     from tradingagents.persistence import store
     run_id = uuid.uuid4().hex
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     store.insert_run(conn, run_id=run_id, ticker="AAPL", persona_id=None,
                      started_ts=now, artifact_dir=f"runs/{run_id}")
     store.record_cost(conn, run_id=run_id, provider="deepseek",
@@ -55,11 +56,12 @@ def test_record_cost_appends_row(conn):
 
 @pytest.mark.unit
 def test_insert_brief_round_trips(conn):
-    from tradingagents.persistence import store
     import uuid
+
+    from tradingagents.persistence import store
     run_id = uuid.uuid4().hex
     brief_id = uuid.uuid4().hex
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     store.insert_run(conn, run_id=run_id, ticker="AAPL", persona_id="macro",
                      started_ts=now, artifact_dir=f"runs/{run_id}")
     store.insert_brief(conn, brief_id=brief_id, mode="deep_dive",
@@ -75,11 +77,12 @@ def test_insert_brief_round_trips(conn):
 
 @pytest.mark.unit
 def test_insert_brief_action_round_trips(conn):
-    from tradingagents.persistence import store
     import uuid
+
+    from tradingagents.persistence import store
     run_id = uuid.uuid4().hex
     brief_id = uuid.uuid4().hex
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     store.insert_run(conn, run_id=run_id, ticker="AAPL", persona_id=None,
                      started_ts=now, artifact_dir=f"runs/{run_id}")
     store.insert_brief(conn, brief_id=brief_id, mode="deep_dive", scope="AAPL",

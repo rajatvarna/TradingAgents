@@ -1,6 +1,6 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 from time import monotonic
-from typing import Dict, Iterable, List, Optional
 
 
 @dataclass(frozen=True)
@@ -14,10 +14,10 @@ class AnalystNodeSpec:
 
 @dataclass(frozen=True)
 class AnalystExecutionPlan:
-    specs: List[AnalystNodeSpec]
+    specs: list[AnalystNodeSpec]
 
 
-ANALYST_NODE_SPECS: Dict[str, AnalystNodeSpec] = {
+ANALYST_NODE_SPECS: dict[str, AnalystNodeSpec] = {
     "market": AnalystNodeSpec(
         key="market",
         agent_node="Market Analyst",
@@ -81,7 +81,7 @@ ANALYST_NODE_SPECS: Dict[str, AnalystNodeSpec] = {
 def build_analyst_execution_plan(
     selected_analysts: Iterable[str],
 ) -> AnalystExecutionPlan:
-    specs: List[AnalystNodeSpec] = []
+    specs: list[AnalystNodeSpec] = []
     for analyst_key in selected_analysts:
         spec = ANALYST_NODE_SPECS.get(analyst_key)
         if spec is None:
@@ -101,10 +101,10 @@ def get_initial_analyst_node(plan: AnalystExecutionPlan) -> str:
 class AnalystWallTimeTracker:
     def __init__(self, plan: AnalystExecutionPlan):
         self.plan = plan
-        self._started_at: Dict[str, float] = {}
-        self._wall_times: Dict[str, float] = {}
+        self._started_at: dict[str, float] = {}
+        self._wall_times: dict[str, float] = {}
 
-    def mark_started(self, analyst_key: str, started_at: Optional[float] = None) -> None:
+    def mark_started(self, analyst_key: str, started_at: float | None = None) -> None:
         # Accept both social and sentiment keys for robust tracking
         key = "sentiment" if analyst_key == "social" else analyst_key
         if key not in ANALYST_NODE_SPECS:
@@ -114,7 +114,7 @@ class AnalystWallTimeTracker:
     def mark_completed(
         self,
         analyst_key: str,
-        completed_at: Optional[float] = None,
+        completed_at: float | None = None,
     ) -> None:
         key = "sentiment" if analyst_key == "social" else analyst_key
         if key not in ANALYST_NODE_SPECS:
@@ -127,7 +127,7 @@ class AnalystWallTimeTracker:
         finished_at = monotonic() if completed_at is None else completed_at
         self._wall_times[key] = max(0.0, finished_at - started_at)
 
-    def get_wall_times(self) -> Dict[str, float]:
+    def get_wall_times(self) -> dict[str, float]:
         return dict(self._wall_times)
 
     def format_summary(self) -> str:
@@ -144,8 +144,8 @@ class AnalystWallTimeTracker:
 
 def sync_analyst_tracker_from_chunk(
     tracker: AnalystWallTimeTracker,
-    chunk: Dict[str, str],
-    now: Optional[float] = None,
+    chunk: dict[str, str],
+    now: float | None = None,
 ) -> None:
     current_time = monotonic() if now is None else now
     active_found = False

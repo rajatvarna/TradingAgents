@@ -1,16 +1,17 @@
 import json
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from tradingagents.persistence.db import connect
+import pytest
+
 from tradingagents.persistence import store
+from tradingagents.persistence.db import connect
 
 
 @pytest.fixture
 def conn(tmp_path):
     c = connect(str(tmp_path / "iic.db"))
     store.insert_event(c, event_id="ev1", source="rss",
-                       ingested_ts=datetime.now(timezone.utc).isoformat(),
+                       ingested_ts=datetime.now(UTC).isoformat(),
                        salience=0.9, raw_path=None,
                        status="triaged", deduped_of=None)
     return c
@@ -51,7 +52,9 @@ def test_lease_one_flips_state(conn):
 @pytest.mark.unit
 def test_mark_done_records_outputs(conn):
     from tradingagents.orchestrator.queue_store import (
-        insert_queue_job, lease_one, mark_done,
+        insert_queue_job,
+        lease_one,
+        mark_done,
     )
     insert_queue_job(conn, job_type="event_alert",
                      payload="{}", trigger_event_id="ev1")
@@ -69,7 +72,9 @@ def test_mark_done_records_outputs(conn):
 @pytest.mark.unit
 def test_mark_error_records_exception_message(conn):
     from tradingagents.orchestrator.queue_store import (
-        insert_queue_job, lease_one, mark_error,
+        insert_queue_job,
+        lease_one,
+        mark_error,
     )
     insert_queue_job(conn, job_type="event_alert",
                      payload="{}", trigger_event_id="ev1")
@@ -83,7 +88,9 @@ def test_mark_error_records_exception_message(conn):
 @pytest.mark.unit
 def test_pending_count(conn):
     from tradingagents.orchestrator.queue_store import (
-        insert_queue_job, lease_one, pending_count,
+        insert_queue_job,
+        lease_one,
+        pending_count,
     )
     insert_queue_job(conn, job_type="event_alert", payload="{}", trigger_event_id="ev1")
     insert_queue_job(conn, job_type="event_alert", payload="{}", trigger_event_id="ev1")
@@ -94,7 +101,7 @@ def test_pending_count(conn):
 
 @pytest.mark.unit
 def test_daily_enqueue_count(conn):
-    from tradingagents.orchestrator.queue_store import insert_queue_job, daily_enqueue_count
+    from tradingagents.orchestrator.queue_store import daily_enqueue_count, insert_queue_job
     insert_queue_job(conn, job_type="event_alert", payload="{}", trigger_event_id="ev1")
     insert_queue_job(conn, job_type="event_alert", payload="{}", trigger_event_id="ev1")
     assert daily_enqueue_count(conn) == 2
@@ -103,7 +110,10 @@ def test_daily_enqueue_count(conn):
 @pytest.mark.unit
 def test_daily_cost_total_sums_done_jobs(conn):
     from tradingagents.orchestrator.queue_store import (
-        insert_queue_job, lease_one, mark_done, daily_cost_total,
+        daily_cost_total,
+        insert_queue_job,
+        lease_one,
+        mark_done,
     )
     for _ in range(3):
         insert_queue_job(conn, job_type="event_alert", payload="{}", trigger_event_id="ev1")
@@ -115,7 +125,9 @@ def test_daily_cost_total_sums_done_jobs(conn):
 @pytest.mark.unit
 def test_sweep_stale_leases_marks_old_running_as_error(conn):
     from tradingagents.orchestrator.queue_store import (
-        insert_queue_job, lease_one, sweep_stale_leases,
+        insert_queue_job,
+        lease_one,
+        sweep_stale_leases,
     )
     insert_queue_job(conn, job_type="event_alert", payload="{}", trigger_event_id="ev1")
     job = lease_one(conn)

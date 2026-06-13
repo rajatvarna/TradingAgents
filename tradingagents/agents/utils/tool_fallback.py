@@ -24,12 +24,13 @@ to free text on tool-less providers.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def bind_tools_or_none(llm: Any, tools: List[Any], agent_name: str) -> Optional[Any]:
+def bind_tools_or_none(llm: Any, tools: list[Any], agent_name: str) -> Any | None:
     """Return ``llm.bind_tools(tools)`` or ``None`` if the provider can't bind tools.
 
     Codex (and any other chat-only provider) raises ``NotImplementedError``

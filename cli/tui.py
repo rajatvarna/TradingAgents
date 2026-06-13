@@ -15,18 +15,17 @@ the `refresh_per_second=4` of the classic renderer.
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from rich import box
 from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
-
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Footer, Header, Markdown, Static
-
 
 # --- Rich renderable builders -------------------------------------------------
 # Pure functions of buffer state. No Textual coupling, easy to unit-test, and
@@ -179,7 +178,7 @@ class TradingApp(App):
         ticker: str,
         analysis_date: str,
         on_complete: Callable[[list[Any]], None] | None = None,
-        wall_time_tracker: Optional[AnalystWallTimeTracker] = None,
+        wall_time_tracker: AnalystWallTimeTracker | None = None,
     ):
         super().__init__()
         self.buffer = buffer

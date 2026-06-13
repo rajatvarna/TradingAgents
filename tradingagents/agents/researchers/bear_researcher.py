@@ -1,10 +1,11 @@
+from tradingagents.agents.researchers.bull_researcher import _format_monster_block_for_researcher
 from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     get_language_instruction,
     trim_debate_history,
 )
 from tradingagents.audit.prompt_registry import default_registry
-from tradingagents.agents.researchers.bull_researcher import _format_monster_block_for_researcher
+
 
 def create_bear_researcher(llm, prompt_registry=None):
     """Create the Bear researcher node.

@@ -1,4 +1,5 @@
 import pytest
+
 from tradingagents.persistence.db import connect
 
 
@@ -34,6 +35,7 @@ def test_cursor_set_overwrites(conn):
 @pytest.mark.unit
 def test_cursor_updated_ts_advances(conn):
     import time
+
     from tradingagents.sensing.cursor import CursorStore
     cs = CursorStore(conn)
     cs.set("x", "1")

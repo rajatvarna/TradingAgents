@@ -9,13 +9,12 @@ from __future__ import annotations
 
 from datetime import date as _date
 from pathlib import Path
-from typing import List
 
 import typer
 
 from tradingagents.default_config import DEFAULT_CONFIG
-from tradingagents.personas.loader import Persona, load_all_personas
 from tradingagents.persistence.db import connect as iic_connect
+from tradingagents.personas.loader import Persona, load_all_personas
 from tradingagents.secretary.persona_runner import run_personas_parallel
 from tradingagents.secretary.service import Secretary
 
@@ -52,7 +51,7 @@ def run_deepdive(
     config = dict(DEFAULT_CONFIG)
     if config_overrides:
         config.update(config_overrides)
-    personas: List[Persona] = load_all_personas(_personas_dir())
+    personas: list[Persona] = load_all_personas(_personas_dir())
     if not personas:
         raise RuntimeError(f"No personas found in {_personas_dir()}")
 

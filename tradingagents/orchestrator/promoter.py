@@ -10,20 +10,18 @@ import json
 import logging
 import sqlite3
 import time
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
-from tradingagents.persistence import store
-from tradingagents.persistence.db import connect
 from tradingagents.orchestrator.candidates import fetch_candidates
 from tradingagents.orchestrator.guards import QueueBackpressure, QueueRateGuard
-
+from tradingagents.persistence import store
+from tradingagents.persistence.db import connect
 
 log = logging.getLogger(__name__)
 
 
 def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def run_once(
@@ -33,8 +31,8 @@ def run_once(
     ticker_conf_threshold: float,
     batch_size: int,
     cooldown_min: int,
-    backpressure: Optional[QueueBackpressure] = None,
-    rate_guard: Optional[QueueRateGuard] = None,
+    backpressure: QueueBackpressure | None = None,
+    rate_guard: QueueRateGuard | None = None,
 ) -> int:
     """Perform one poll cycle. Returns the count of jobs enqueued."""
     if backpressure is not None and not backpressure.gate(conn):
@@ -84,7 +82,7 @@ def run_once(
     return enqueued
 
 
-def main(config: Optional[dict] = None) -> None:
+def main(config: dict | None = None) -> None:
     """systemd entry point. Defensive: never exits except on KeyboardInterrupt."""
     from tradingagents.default_config import DEFAULT_CONFIG
     cfg = dict(DEFAULT_CONFIG)

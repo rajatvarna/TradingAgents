@@ -1,9 +1,10 @@
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from tradingagents.persistence.db import connect
-from tradingagents.persistence import store
+import pytest
+
 from tradingagents.orchestrator import queue_store
+from tradingagents.persistence import store
+from tradingagents.persistence.db import connect
 
 
 @pytest.mark.unit
@@ -14,7 +15,7 @@ def test_worker_sweeps_stale_leases_on_boot(tmp_path):
     db = str(tmp_path / "iic.db")
     conn = connect(db)
     store.insert_event(conn, event_id="ev1", source="rss",
-                       ingested_ts=datetime.now(timezone.utc).isoformat(),
+                       ingested_ts=datetime.now(UTC).isoformat(),
                        salience=0.9, raw_path=None,
                        status="triaged", deduped_of=None)
     queue_store.insert_queue_job(conn, job_type="event_alert",

@@ -7,8 +7,7 @@ disagreement, not average it away. Disagreement is signal.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional
-
+from typing import Any
 
 _SYNTHESIS_TEMPLATE = """You are the IIC Secretary. Three persona investment teams have each produced
 an analysis of {ticker}. Your job is to synthesize their reports for a human
@@ -37,7 +36,7 @@ Here are the persona reports:
 """
 
 
-def build_synthesis_prompt(*, ticker: str, persona_runs: List[Dict[str, Any]]) -> str:
+def build_synthesis_prompt(*, ticker: str, persona_runs: list[dict[str, Any]]) -> str:
     blocks = []
     for r in persona_runs:
         pid = r.get("persona_id", "?")
@@ -60,9 +59,9 @@ def synthesize_brief(
     *,
     llm: Any,
     ticker: str,
-    persona_runs: List[Dict[str, Any]],
-    event_context: Optional[str] = None,
-) -> Dict[str, str]:
+    persona_runs: list[dict[str, Any]],
+    event_context: str | None = None,
+) -> dict[str, str]:
     """Call the LLM with the synthesis prompt; parse into 3 sections.
 
     When ``event_context`` is non-empty (event_alert mode), it is prepended

@@ -12,14 +12,13 @@ import logging
 import signal
 import sqlite3
 import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
-from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 
-from tradingagents.persistence.db import connect
 from tradingagents.orchestrator import queue_store
 from tradingagents.orchestrator.dispatch import dispatch
 from tradingagents.orchestrator.guards import DailyBudgetGuard
-
+from tradingagents.persistence.db import connect
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +45,7 @@ def drain_one(
     conn: sqlite3.Connection,
     *,
     secretary,
-    budget_guard: Optional[DailyBudgetGuard] = None,
+    budget_guard: DailyBudgetGuard | None = None,
 ) -> bool:
     """Lease + dispatch + mark exactly one job. Returns True if a job ran.
 
@@ -92,7 +91,7 @@ def _install_signal_handlers():
     signal.signal(signal.SIGINT, _handler)
 
 
-def main(config: Optional[dict] = None) -> None:
+def main(config: dict | None = None) -> None:
     from tradingagents.default_config import DEFAULT_CONFIG
     cfg = dict(DEFAULT_CONFIG)
     if config:

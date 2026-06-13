@@ -1,7 +1,7 @@
-from typing import Annotated, Any, List
-from typing_extensions import TypedDict
+from typing import Annotated, Any
+
 from langgraph.graph import MessagesState
-from typing import Dict
+from typing_extensions import TypedDict
 
 
 # Researcher team state
@@ -67,7 +67,7 @@ class AgentState(MessagesState):
 
     # Cross-factor conflict report computed after analysts, before the debate (P0.1)
     conflict_report: Annotated[
-        Dict[str, Any], "Cross-factor divergence signals/conflicts/notes for downstream agents"
+        dict[str, Any], "Cross-factor divergence signals/conflicts/notes for downstream agents"
     ]
 
     # researcher team discussion step
@@ -112,28 +112,28 @@ class AgentState(MessagesState):
     trade_filter_reasons: Annotated[list, "Human-readable reasons supporting the trade_filter_score"]
     trade_filtered_out: Annotated[bool, "Whether the trade was filtered out (hard filters or score below threshold)"]
     trade_filter_details: Annotated[object, "Full trade filter output including sub-scores and hard reject reasons"]
-    market_state: Annotated[Dict[str, Any], "Structured latent market state for backtest persistence"]
-    structure_analysis: Annotated[Dict[str, Any], "Deterministic OHLCV structure analysis for backtest persistence"]
-    feature_snapshot: Annotated[Dict[str, Any], "Machine-readable historical feature snapshot for offline policy search"]
-    structured_strategy: Annotated[Dict[str, Any], "Structured strategy for backtest persistence"]
+    market_state: Annotated[dict[str, Any], "Structured latent market state for backtest persistence"]
+    structure_analysis: Annotated[dict[str, Any], "Deterministic OHLCV structure analysis for backtest persistence"]
+    feature_snapshot: Annotated[dict[str, Any], "Machine-readable historical feature snapshot for offline policy search"]
+    structured_strategy: Annotated[dict[str, Any], "Structured strategy for backtest persistence"]
 
     # Optional current position context for the analyzed ticker
-    holdings_info: Annotated[Dict[str, float], "Current holdings context: quantity and avg_buy_price"]
+    holdings_info: Annotated[dict[str, float], "Current holdings context: quantity and avg_buy_price"]
 
     # Backtest-only: rolling-window realized PnL summary from prior strategies
     trading_history_summary: Annotated[
-        Dict[str, Any], "Rolling-window PnL summary of prior backtest trades"
+        dict[str, Any], "Rolling-window PnL summary of prior backtest trades"
     ]
     # Backtest-only: orders from the previous strategy that never filled
     prior_pending_orders: Annotated[
-        List[Dict[str, Any]], "Unfilled orders carried over from the previous strategy"
+        list[dict[str, Any]], "Unfilled orders carried over from the previous strategy"
     ]
 
     # Trading mode: 'live' for real-time analysis or 'backtest' for historical replay
     trading_mode: Annotated[str, "Trading mode: 'live' or 'backtest'"]
 
     # Monster Stock / TraderLion framework outputs
-    monster_stock_score: Annotated[Dict[str, Any], "Serialized MonsterStockScore from the scoring engine"]
+    monster_stock_score: Annotated[dict[str, Any], "Serialized MonsterStockScore from the scoring engine"]
     group_sector_report: Annotated[str, "Report from the Group & Sector Leadership Analyst"]
     market_phase_report: Annotated[str, "Report from the Market Phase Analyst"]
     postmortem_report: Annotated[str, "Post-mortem analysis from the Post-Mortem Analyst"]

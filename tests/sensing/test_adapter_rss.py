@@ -1,7 +1,8 @@
 import json
-import pytest
-import fakeredis.aioredis
 from unittest.mock import MagicMock
+
+import fakeredis.aioredis
+import pytest
 
 from tradingagents.persistence.db import connect
 

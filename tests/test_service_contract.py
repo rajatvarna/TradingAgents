@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 import pytest
@@ -35,8 +35,8 @@ class _StubRepo:
                 "ticker": kwargs["ticker"],
                 "trade_date": kwargs["trade_date"],
                 "selected_analysts": kwargs["selected_analysts"],
-                "created_at": datetime.now(timezone.utc),
-                "updated_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC),
                 "provider": None,
                 "model": None,
                 "error_message": None,
@@ -59,8 +59,8 @@ class _StubRepo:
                 "ticker": "NVDA",
                 "trade_date": date(2026, 1, 15),
                 "selected_analysts": ["market", "news"],
-                "created_at": datetime.now(timezone.utc),
-                "updated_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC),
                 "provider": None,
                 "model": None,
                 "error_message": None,
@@ -76,7 +76,7 @@ class _StubRepo:
             (),
             {
                 "id": uuid4(),
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
                 "event_type": "queued",
                 "payload": {"ok": True},
                 "sequence": 1,
@@ -151,8 +151,8 @@ class _StubRepo:
                     "ticker": "NVDA",
                     "trade_date": date(2026, 1, 15),
                     "selected_analysts": ["market", "news"],
-                    "created_at": datetime(2026, 1, 15, 0, 0, tzinfo=timezone.utc),
-                    "updated_at": datetime(2026, 1, 15, 0, 0, tzinfo=timezone.utc),
+                    "created_at": datetime(2026, 1, 15, 0, 0, tzinfo=UTC),
+                    "updated_at": datetime(2026, 1, 15, 0, 0, tzinfo=UTC),
                     "provider": "openai",
                     "model": "gpt-5-mini",
                     "error_message": None,
@@ -177,7 +177,7 @@ class _StubRepo:
                 "content_text": "prior NVDA precedent",
                 "embedding_model": "hashed-bow-v1",
                 "metadata_json": {"final_rating": "Hold"},
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
             },
         )()
         return [precedent]
@@ -196,7 +196,7 @@ class _StubRepo:
                 "content_text": "collection search precedent",
                 "embedding_model": "hashed-bow-v1",
                 "metadata_json": {"final_rating": "Buy"},
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
             },
         )()
         return [precedent]
@@ -302,8 +302,8 @@ def test_create_run_marks_matching_existing_run_as_retrieval(client):
             "ticker": "NVDA",
             "trade_date": date(2026, 1, 15),
             "selected_analysts": ["market", "news"],
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
+            "updated_at": datetime.now(UTC),
             "provider": None,
             "model": None,
             "error_message": None,
@@ -513,7 +513,7 @@ def test_report_markdown_saved_after_completion(client):
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/markdown")
     assert resp.headers["x-report-path"].endswith(f"{stub.run_id}.md")
-    assert f"# TradingAgents Shadow Run Report: NVDA 2026-01-15" in resp.text
+    assert "# TradingAgents Shadow Run Report: NVDA 2026-01-15" in resp.text
     assert "## Quality Gate" in resp.text
     assert "## Runtime Timeline" in resp.text
 

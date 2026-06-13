@@ -1,6 +1,6 @@
 import types
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -31,21 +31,20 @@ class TestBedrockClient(unittest.TestCase):
 
         fake_module = types.SimpleNamespace(ChatBedrockConverse=FakeChatBedrockConverse)
 
-        with patch.dict("sys.modules", {"langchain_aws": fake_module}):
-            with patch.dict(
-                "os.environ",
-                {
-                    "AWS_REGION": "ap-southeast-1",
-                    "AWS_DEFAULT_REGION": "us-east-1",
-                    "AWS_PROFILE": "tradingagents",
-                },
-                clear=False,
-            ):
-                llm = BedrockClient(
-                    "anthropic.claude-3-5-haiku-20241022-v1:0",
-                    temperature=0,
-                    max_tokens=2048,
-                ).get_llm()
+        with patch.dict("sys.modules", {"langchain_aws": fake_module}), patch.dict(
+            "os.environ",
+            {
+                "AWS_REGION": "ap-southeast-1",
+                "AWS_DEFAULT_REGION": "us-east-1",
+                "AWS_PROFILE": "tradingagents",
+            },
+            clear=False,
+        ):
+            llm = BedrockClient(
+                "anthropic.claude-3-5-haiku-20241022-v1:0",
+                temperature=0,
+                max_tokens=2048,
+            ).get_llm()
 
         mock_session_cls.assert_called_once_with(profile_name="tradingagents", region_name="ap-southeast-1")
         mock_session.client.assert_called_once()
@@ -63,19 +62,18 @@ class TestBedrockClient(unittest.TestCase):
 
         fake_module = types.SimpleNamespace(ChatBedrockConverse=FakeChatBedrockConverse)
 
-        with patch.dict("sys.modules", {"langchain_aws": fake_module}):
-            with patch.dict(
-                "os.environ",
-                {
-                    "TRADINGAGENTS_BEDROCK_CONNECT_TIMEOUT": "",
-                    "TRADINGAGENTS_BEDROCK_READ_TIMEOUT": "",
-                    "TRADINGAGENTS_BEDROCK_MAX_ATTEMPTS": "",
-                },
-                clear=False,
-            ):
-                llm = BedrockClient(
-                    "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-                ).get_llm()
+        with patch.dict("sys.modules", {"langchain_aws": fake_module}), patch.dict(
+            "os.environ",
+            {
+                "TRADINGAGENTS_BEDROCK_CONNECT_TIMEOUT": "",
+                "TRADINGAGENTS_BEDROCK_READ_TIMEOUT": "",
+                "TRADINGAGENTS_BEDROCK_MAX_ATTEMPTS": "",
+            },
+            clear=False,
+        ):
+            BedrockClient(
+                "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+            ).get_llm()
 
         call_args = mock_session.client.call_args
         config = call_args.kwargs["config"]
@@ -92,19 +90,18 @@ class TestBedrockClient(unittest.TestCase):
 
         fake_module = types.SimpleNamespace(ChatBedrockConverse=FakeChatBedrockConverse)
 
-        with patch.dict("sys.modules", {"langchain_aws": fake_module}):
-            with patch.dict(
-                "os.environ",
-                {
-                    "TRADINGAGENTS_BEDROCK_CONNECT_TIMEOUT": "20",
-                    "TRADINGAGENTS_BEDROCK_READ_TIMEOUT": "600",
-                    "TRADINGAGENTS_BEDROCK_MAX_ATTEMPTS": "7",
-                },
-                clear=False,
-            ):
-                llm = BedrockClient(
-                    "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-                ).get_llm()
+        with patch.dict("sys.modules", {"langchain_aws": fake_module}), patch.dict(
+            "os.environ",
+            {
+                "TRADINGAGENTS_BEDROCK_CONNECT_TIMEOUT": "20",
+                "TRADINGAGENTS_BEDROCK_READ_TIMEOUT": "600",
+                "TRADINGAGENTS_BEDROCK_MAX_ATTEMPTS": "7",
+            },
+            clear=False,
+        ):
+            BedrockClient(
+                "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+            ).get_llm()
 
         call_args = mock_session.client.call_args
         config = call_args.kwargs["config"]

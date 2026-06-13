@@ -15,7 +15,6 @@ import pytest
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 
-
 # ---------------------------------------------------------------------------
 # _extract_confidence
 # ---------------------------------------------------------------------------

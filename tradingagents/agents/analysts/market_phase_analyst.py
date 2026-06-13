@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage
 
-
 MARKET_PHASE_SYSTEM_PROMPT = """You are the Market Phase Analyst for the TradingAgents system.
 Your role is to assess the overall market environment and prescribe specific strategy
 adjustments based on the Boik market phase framework.

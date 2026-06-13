@@ -9,14 +9,14 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from tradingagents.personas.loader import load_all_personas
 from tradingagents.persistence import store
+from tradingagents.personas.loader import load_all_personas
 from tradingagents.secretary.persona_runner import run_personas_parallel
 from tradingagents.secretary.synthesis import synthesize_brief
 
@@ -32,8 +32,8 @@ def render_deep_dive(
     *,
     ticker: str,
     trade_date: str,
-    synthesis: Dict[str, str],
-    persona_runs: List[Dict[str, Any]],
+    synthesis: dict[str, str],
+    persona_runs: list[dict[str, Any]],
 ) -> str:
     return _env.get_template("deep_dive.j2").render(
         ticker=ticker,
@@ -46,9 +46,9 @@ def render_deep_dive(
 def render_event_alert(
     *,
     ticker: str,
-    event: Dict[str, Any],
-    synthesis: Dict[str, str],
-    persona_runs: List[Dict[str, Any]],
+    event: dict[str, Any],
+    synthesis: dict[str, str],
+    persona_runs: list[dict[str, Any]],
 ) -> str:
     return _env.get_template("event_alert.j2").render(
         ticker=ticker,
@@ -75,12 +75,12 @@ class Secretary:
         self,
         *,
         ticker: str,
-        run_ids: List[str],
+        run_ids: list[str],
         trade_date: str,
     ) -> str:
         # Load each run's pm_synthesis.md (or fall back to meta.json) as the
         # final_trade_decision text for that persona.
-        persona_runs: List[Dict[str, Any]] = []
+        persona_runs: list[dict[str, Any]] = []
         for rid in run_ids:
             row = self._conn.execute(
                 "SELECT * FROM runs WHERE run_id = ?", (rid,)
@@ -119,7 +119,7 @@ class Secretary:
             brief_id=brief_id,
             mode="deep_dive",
             scope=ticker,
-            generated_ts=datetime.now(timezone.utc).isoformat(),
+            generated_ts=datetime.now(UTC).isoformat(),
             content_path=rel_path,
             run_ids=run_ids,
             parent_brief_id=None,
@@ -181,7 +181,7 @@ class Secretary:
         )
 
         # Build persona_runs view for synthesis + rendering.
-        persona_runs: List[Dict[str, Any]] = []
+        persona_runs: list[dict[str, Any]] = []
         for rid in run_ids:
             row = self._conn.execute(
                 "SELECT * FROM runs WHERE run_id = ?", (rid,)
@@ -225,7 +225,7 @@ class Secretary:
         store.insert_brief(
             self._conn,
             brief_id=brief_id, mode="event_alert", scope=ticker,
-            generated_ts=datetime.now(timezone.utc).isoformat(),
+            generated_ts=datetime.now(UTC).isoformat(),
             content_path=rel_path,
             run_ids=[r["run_id"] for r in persona_runs],
             parent_brief_id=None,
@@ -234,5 +234,5 @@ class Secretary:
         return brief_id
 
     # ----- Stubs for later phases -----
-    def compose_morning_digest(self, *, watchlist: List[str], ts: str) -> str:
+    def compose_morning_digest(self, *, watchlist: list[str], ts: str) -> str:
         raise NotImplementedError("compose_morning_digest lands in F5")

@@ -11,19 +11,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 import pytest
+
 pytest.importorskip("claude_agent_sdk")
+import claude_agent_sdk as sdk
+from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel
 
-import claude_agent_sdk as sdk
-from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
-
 from tradingagents.llm_clients import claude_code_client as mod
 from tradingagents.llm_clients.factory import create_llm_client
-
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -73,9 +73,9 @@ def _fake_tool(
     name: str,
     *,
     description: str = "test tool",
-    side_effect: Optional[Callable[[dict], Any]] = None,
-    tool_call_schema: Optional[type] = None,
-    args_schema: Optional[type] = None,
+    side_effect: Callable[[dict], Any] | None = None,
+    tool_call_schema: type | None = None,
+    args_schema: type | None = None,
 ) -> Any:
     """Minimal LangChain-style tool stub: name, description, schemas, ainvoke."""
 

@@ -34,7 +34,9 @@ def test_dedupes_by_content_hash(tmp_path: Path):
 
 def test_delete_research(tmp_path: Path):
     from tradingagents.dataflows.user_research import (
-        _save, list_research, delete_research,
+        _save,
+        delete_research,
+        list_research,
     )
     user_root = tmp_path / "user42"
     saved = _save(b"hello", "summary", "AAPL", user_root, "n.md", None)

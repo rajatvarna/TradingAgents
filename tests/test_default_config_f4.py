@@ -28,6 +28,7 @@ def test_env_override_orchestrator_enabled(monkeypatch):
     monkeypatch.setenv("TRADINGAGENTS_ORCHESTRATOR_ENABLED", "1")
     # Re-import to re-evaluate env overrides (DEFAULT_CONFIG is built at import).
     import importlib
+
     import tradingagents.default_config as m
     importlib.reload(m)
     assert m.DEFAULT_CONFIG["orchestrator_enabled"] is True

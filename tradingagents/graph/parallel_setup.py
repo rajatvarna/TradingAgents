@@ -8,36 +8,25 @@
 # Performance: N analysts complete in O(max(analyst_time)) instead of
 # O(sum(analyst_times)), typically 3-4x faster for 4 analysts.
 
-from typing import Any, Dict
+from typing import Any
+
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
 from tradingagents.agents import (
     AgentState,
-    create_force_finalize,
-    create_msg_delete,
-    create_conflict_detector,
+    create_aggressive_debator,
     create_bear_researcher,
     create_bull_researcher,
-    create_derivative_analyst,
-    create_research_manager,
+    create_conservative_debator,
     create_fundamentals_analyst,
     create_market_analyst,
+    create_msg_delete,
     create_neutral_debator,
     create_news_analyst,
-    create_options_analyst,
-    create_aggressive_debator,
     create_portfolio_manager,
-    create_market_aware_portfolio_state_manager,
-    create_portfolio_state_manager,
-    MarketState,
-    create_conservative_debator,
-    create_sentiment_analyst,
+    create_research_manager,
     create_trader,
-    create_esg_analyst,
-    create_group_sector_analyst,
-    create_market_phase_analyst,
-    create_postmortem_analyst,
 )
 
 from .conditional_logic import ConditionalLogic
@@ -56,7 +45,7 @@ class ParallelGraphSetup:
         self,
         quick_thinking_llm: Any,
         deep_thinking_llm: Any,
-        tool_nodes: Dict[str, ToolNode],
+        tool_nodes: dict[str, ToolNode],
         conditional_logic: ConditionalLogic,
     ):
         self.quick_thinking_llm = quick_thinking_llm

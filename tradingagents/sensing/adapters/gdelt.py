@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import redis.asyncio as aioredis
 import requests
@@ -13,7 +13,6 @@ import requests
 from tradingagents.sensing.adapters.base import EnvelopeWriter
 from tradingagents.sensing.cursor import CursorStore
 from tradingagents.sensing.envelope import Envelope
-
 
 log = logging.getLogger(__name__)
 NAME = "gdelt"
@@ -60,7 +59,7 @@ class GdeltAdapter:
             ext_id = f"gdelt:{url}"
             env = Envelope(
                 source=NAME,
-                ingested_ts=datetime.now(timezone.utc).isoformat(),
+                ingested_ts=datetime.now(UTC).isoformat(),
                 external_id=ext_id,
                 text=art.get("title", ""),
                 source_tags={"domain": art.get("domain", ""), "url": url,

@@ -8,9 +8,10 @@ from __future__ import annotations
 import hashlib
 import importlib
 import sqlite3
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Generator, Optional
+from typing import Any
 
 from tradingagents.dataflows.utils import safe_ticker_component
 
@@ -109,8 +110,8 @@ def archive_checkpoint(
     data_dir: str | Path,
     ticker: str,
     date: str,
-    archive_dir: Optional[str | Path] = None,
-) -> Optional[Path]:
+    archive_dir: str | Path | None = None,
+) -> Path | None:
     """Copy the rows for one ``(ticker, date)`` thread to a standalone DB (T0.4).
 
     The active checkpoint store is per-ticker and holds rows for every

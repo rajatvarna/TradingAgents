@@ -5,15 +5,15 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
-ModelOption = Tuple[str, str]
+ModelOption = tuple[str, str]
 
 CUSTOM_MODELS_FILE = Path.home() / ".tradingagents" / "custom_models.json"
 _PROVIDER_KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 
 
-def _as_model_option(item: Any) -> Optional[ModelOption]:
+def _as_model_option(item: Any) -> ModelOption | None:
     if isinstance(item, (list, tuple)) and len(item) == 2:
         return str(item[0]), str(item[1])
 
@@ -26,15 +26,15 @@ def _as_model_option(item: Any) -> Optional[ModelOption]:
     return None
 
 
-def _normalize_models(models: Any) -> Optional[Dict[str, List[ModelOption]]]:
+def _normalize_models(models: Any) -> dict[str, list[ModelOption]] | None:
     if not isinstance(models, dict):
         return None
 
-    normalized: Dict[str, List[ModelOption]] = {}
+    normalized: dict[str, list[ModelOption]] = {}
 
     for mode in ("quick", "deep"):
         raw_options = models.get(mode, [])
-        options: List[ModelOption] = []
+        options: list[ModelOption] = []
 
         if isinstance(raw_options, list):
             for item in raw_options:
@@ -52,7 +52,7 @@ def _normalize_models(models: Any) -> Optional[Dict[str, List[ModelOption]]]:
     return normalized
 
 
-def _normalize_provider(raw: Any) -> Optional[Dict[str, Any]]:
+def _normalize_provider(raw: Any) -> dict[str, Any] | None:
     if not isinstance(raw, dict):
         return None
 
@@ -86,7 +86,7 @@ def _normalize_provider(raw: Any) -> Optional[Dict[str, Any]]:
     }
 
 
-def load_custom_providers() -> List[Dict[str, Any]]:
+def load_custom_providers() -> list[dict[str, Any]]:
     if not CUSTOM_MODELS_FILE.exists():
         return []
 
@@ -99,7 +99,7 @@ def load_custom_providers() -> List[Dict[str, Any]]:
     if not isinstance(raw_providers, list):
         return []
 
-    providers: List[Dict[str, Any]] = []
+    providers: list[dict[str, Any]] = []
     seen: set[str] = set()
 
     for raw in raw_providers:
@@ -117,7 +117,7 @@ def load_custom_providers() -> List[Dict[str, Any]]:
     return providers
 
 
-def get_custom_provider_choices() -> List[Tuple[str, str, str]]:
+def get_custom_provider_choices() -> list[tuple[str, str, str]]:
     return [
         (
             provider["display_name"],
@@ -128,7 +128,7 @@ def get_custom_provider_choices() -> List[Tuple[str, str, str]]:
     ]
 
 
-def get_custom_api_key_env(provider: str) -> Optional[str]:
+def get_custom_api_key_env(provider: str) -> str | None:
     provider = provider.lower()
 
     for item in load_custom_providers():
@@ -138,7 +138,7 @@ def get_custom_api_key_env(provider: str) -> Optional[str]:
     return None
 
 
-def get_custom_model_options(provider: str, mode: str) -> Optional[List[ModelOption]]:
+def get_custom_model_options(provider: str, mode: str) -> list[ModelOption] | None:
     provider = provider.lower()
     mode = mode.lower()
 
@@ -149,7 +149,7 @@ def get_custom_model_options(provider: str, mode: str) -> Optional[List[ModelOpt
     return None
 
 
-def get_all_custom_model_options() -> Dict[str, Dict[str, List[ModelOption]]]:
+def get_all_custom_model_options() -> dict[str, dict[str, list[ModelOption]]]:
     return {
         item["provider_key"]: item["models"]
         for item in load_custom_providers()

@@ -5,7 +5,7 @@ import pytest
 
 def test_extract_text_from_markdown():
     from tradingagents.dataflows.user_research import _extract_text
-    raw = "# Hello\n\nThis is *markdown*.".encode("utf-8")
+    raw = b"# Hello\n\nThis is *markdown*."
     assert _extract_text(raw, "note.md").strip() == "# Hello\n\nThis is *markdown*.".strip()
 
 
@@ -34,8 +34,8 @@ def test_extract_text_from_pdf_with_text(tmp_path):
 
 def test_extract_text_unsupported_extension():
     from tradingagents.dataflows.user_research import (
-        _extract_text,
         ResearchExtractionError,
+        _extract_text,
     )
     with pytest.raises(ResearchExtractionError):
         _extract_text(b"bytes", "weird.docx")
@@ -43,8 +43,8 @@ def test_extract_text_unsupported_extension():
 
 def test_extract_text_corrupt_pdf_raises():
     from tradingagents.dataflows.user_research import (
-        _extract_text,
         ResearchExtractionError,
+        _extract_text,
     )
     with pytest.raises(ResearchExtractionError):
         _extract_text(b"not a real pdf", "broken.pdf")

@@ -28,7 +28,10 @@ async function resolveStock(
   volume?: number,
   avgVolume?: number,
   fiftyTwoWeekLow?: number,
-  fiftyTwoWeekHigh?: number
+  fiftyTwoWeekHigh?: number,
+  dividendYield?: number,
+  exDividendDate?: number,
+  beta?: number
 ): Promise<StockData> {
   const cacheKey = `hist:${yahooSuffix}`;
   let closes = await cacheGet<Array<{ date: string; close: number }>>(cacheKey);
@@ -58,6 +61,9 @@ async function resolveStock(
     avgVolume20d: avgVolume ?? null,
     fiftyTwoWeekLow: fiftyTwoWeekLow ?? null,
     fiftyTwoWeekHigh: fiftyTwoWeekHigh ?? null,
+    dividendYield: dividendYield ?? null,
+    exDividendDate: exDividendDate ?? null,
+    beta: beta ?? null,
     performance: price ? computePerformance(closes ?? [], price) : {
       daily: null, wtd: null, mtd: null, ytd: null, one_y: null, three_y: null, five_y: null,
     },
@@ -73,7 +79,7 @@ export async function POST(req: NextRequest) {
     const allTickers = getTickers(marketFilter);
 
     // Batch fetch live quotes (10 per request)
-    const quoteMap = new Map<string, { price: number; currency: string; marketCap: number; volume: number; avgVolume: number; fiftyTwoWeekLow: number; fiftyTwoWeekHigh: number }>();
+    const quoteMap = new Map<string, { price: number; currency: string; marketCap: number; volume: number; avgVolume: number; fiftyTwoWeekLow: number; fiftyTwoWeekHigh: number; dividendYield: number; exDividendDate: number; beta: number }>();
     const suffixes = allTickers.map((t) => t.yahooSuffix);
 
     for (const batch of chunk(suffixes, 10)) {
@@ -88,6 +94,9 @@ export async function POST(req: NextRequest) {
             avgVolume: q.averageDailyVolume3Month,
             fiftyTwoWeekLow: q.fiftyTwoWeekLow,
             fiftyTwoWeekHigh: q.fiftyTwoWeekHigh,
+            dividendYield: q.trailingAnnualDividendYield,
+            exDividendDate: q.exDividendDate,
+            beta: q.beta,
           });
         }
       } catch {
@@ -104,7 +113,8 @@ export async function POST(req: NextRequest) {
           return resolveStock(
             t.yahooSuffix, t.symbol, t.name, t.market, t.sector, t.tvSymbol,
             q?.price, q?.currency, q?.marketCap, q?.volume, q?.avgVolume,
-            q?.fiftyTwoWeekLow, q?.fiftyTwoWeekHigh
+            q?.fiftyTwoWeekLow, q?.fiftyTwoWeekHigh,
+            q?.dividendYield, q?.exDividendDate, q?.beta
           );
         })
       );

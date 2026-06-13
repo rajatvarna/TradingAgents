@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { StockData } from "@/types";
 import { fmtPct, fmtMarketCap, pctColor, MARKET_FLAG, cn } from "@/lib/utils";
+import ComparisonChart from "./ComparisonChart";
 
 interface Props {
   stock: StockData | null;
@@ -17,7 +18,7 @@ declare global {
   }
 }
 
-type Tab = "chart" | "insider" | "fundamentals" | "news";
+type Tab = "chart" | "insider" | "fundamentals" | "news" | "compare";
 
 interface EarningsData {
   nextEarningsDate: string | null;
@@ -50,6 +51,10 @@ interface FundamentalsData {
   returnOnEquity: number | null;
   debtToEquity: number | null;
   analystRatings: AnalystRatings | null;
+  beta: number | null;
+  dividendYield: number | null;
+  dividendRate: number | null;
+  exDividendDate: number | null;
 }
 
 interface NewsItem {
@@ -293,6 +298,18 @@ function FundamentalsTab({ yahooSuffix }: { yahooSuffix: string }) {
     { label: "P/B", value: fmtNum(data.priceToBook, 2) },
     { label: "ROE %", value: roePct !== null ? roePct.toFixed(1) + "%" : "—" },
     { label: "Debt/Equity", value: fmtNum(data.debtToEquity, 2) },
+    { label: "Beta", value: fmtNum(data.beta, 2) },
+    {
+      label: "Div Yield",
+      value: data.dividendYield !== null ? (data.dividendYield * 100).toFixed(2) + "%" : "—",
+    },
+    { label: "Div Rate", value: data.dividendRate !== null ? "$" + fmtNum(data.dividendRate, 2) : "—" },
+    {
+      label: "Ex-Div Date",
+      value: data.exDividendDate !== null
+        ? new Date(data.exDividendDate * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+        : "—",
+    },
   ];
 
   return (
@@ -431,6 +448,7 @@ export default function ChartPanel({ stock }: Props) {
     { id: "insider", label: "Insider" },
     { id: "fundamentals", label: "Fundamentals" },
     { id: "news", label: "News" },
+    { id: "compare", label: "Compare" },
   ];
 
   const has52W =
@@ -471,6 +489,16 @@ export default function ChartPanel({ stock }: Props) {
           />
         )}
         <EarningsBadge yahooSuffix={stock.yahooSuffix} />
+        {stock.dividendYield && stock.dividendYield > 0 && (
+          <span className="text-xs bg-emerald-900/60 text-emerald-300 px-2 py-0.5 rounded-full">
+            Div {(stock.dividendYield * 100).toFixed(1)}%
+            {stock.exDividendDate && (
+              <span className="ml-1 text-emerald-400/70">
+                ex {new Date(stock.exDividendDate * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              </span>
+            )}
+          </span>
+        )}
         <span className="text-slate-500 text-sm ml-auto">
           MCap: {fmtMarketCap(stock.marketCap)}
         </span>
@@ -516,6 +544,14 @@ export default function ChartPanel({ stock }: Props) {
       {activeTab === "news" && (
         <div className="min-h-[200px] max-h-[500px] overflow-y-auto">
           <NewsTab yahooSuffix={stock.yahooSuffix} />
+        </div>
+      )}
+      {activeTab === "compare" && (
+        <div className="p-4">
+          <ComparisonChart
+            primarySymbol={stock.symbol}
+            primaryYahooSuffix={stock.yahooSuffix}
+          />
         </div>
       )}
     </div>

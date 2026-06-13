@@ -7,6 +7,9 @@ export interface QuoteResult {
   averageDailyVolume3Month: number;
   fiftyTwoWeekLow: number;
   fiftyTwoWeekHigh: number;
+  trailingAnnualDividendYield: number;
+  exDividendDate: number;
+  beta: number;
 }
 
 const USER_AGENT = "Mozilla/5.0 (compatible; GlobalScreener/1.0)";
@@ -16,7 +19,7 @@ export async function fetchBatchQuotes(symbols: string[]): Promise<QuoteResult[]
 
   const params = new URLSearchParams({
     symbols: symbols.join(","),
-    fields: "regularMarketPrice,currency,marketCap,regularMarketVolume,averageDailyVolume3Month,fiftyTwoWeekLow,fiftyTwoWeekHigh",
+    fields: "regularMarketPrice,currency,marketCap,regularMarketVolume,averageDailyVolume3Month,fiftyTwoWeekLow,fiftyTwoWeekHigh,trailingAnnualDividendYield,exDividendDate,beta",
     crumb: "",
   });
 
@@ -46,6 +49,9 @@ export async function fetchBatchQuotes(symbols: string[]): Promise<QuoteResult[]
     averageDailyVolume3Month: (q.averageDailyVolume3Month as number) ?? 0,
     fiftyTwoWeekLow: (q.fiftyTwoWeekLow as number) ?? 0,
     fiftyTwoWeekHigh: (q.fiftyTwoWeekHigh as number) ?? 0,
+    trailingAnnualDividendYield: (q.trailingAnnualDividendYield as number) ?? 0,
+    exDividendDate: (q.exDividendDate as number) ?? 0,
+    beta: (q.beta as number) ?? 0,
   }));
 }
 

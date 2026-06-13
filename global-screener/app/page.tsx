@@ -13,8 +13,10 @@ const PriceAlerts       = dynamic(() => import("@/components/PriceAlerts"),     
 const PortfolioTracker  = dynamic(() => import("@/components/PortfolioTracker"),   { ssr: false });
 const EconomicCalendar  = dynamic(() => import("@/components/EconomicCalendar"),   { ssr: false });
 const SectorHeatmap     = dynamic(() => import("@/components/SectorHeatmap"),      { ssr: false });
+const TopMovers         = dynamic(() => import("@/components/TopMovers"),          { ssr: false });
+const ThemeToggle       = dynamic(() => import("@/components/ThemeToggle"),        { ssr: false });
 
-type ViewMode = "table" | "heatmap";
+type ViewMode = "table" | "heatmap" | "split";
 
 export default function Home() {
   const [selectedStock, setSelectedStock] = useState<StockData | null>(null);
@@ -36,6 +38,7 @@ export default function Home() {
         <div className="flex items-center gap-3 text-xs text-slate-400">
           <span className="hidden md:block">Prices delayed 15 min · Free data</span>
           <PriceAlerts />
+          <ThemeToggle />
           <a
             href="https://www.tradingview.com"
             target="_blank"
@@ -60,6 +63,9 @@ export default function Home() {
         {/* VIX Fear & Greed gauge */}
         <FearGreed />
 
+        {/* Top movers strip */}
+        <TopMovers stocks={screenerStocks} onSelectStock={setSelectedStock} />
+
         {/* View mode toggle */}
         <div className="flex items-center gap-2">
           <button
@@ -82,7 +88,29 @@ export default function Home() {
           >
             🗺 Heatmap
           </button>
+          <button
+            onClick={() => setViewMode("split")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+              viewMode === "split"
+                ? "bg-blue-600 border-blue-500 text-white"
+                : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white"
+            }`}
+          >
+            ⬜ Split
+          </button>
         </div>
+
+        {/* Split view */}
+        {viewMode === "split" && (
+          <div className="flex gap-4 items-start">
+            <div className="flex-[2] min-w-0">
+              <ScreenerTable onSelectStock={setSelectedStock} onDataLoaded={setScreenerStocks} />
+            </div>
+            <div className="flex-[3] min-w-0 sticky top-[64px]">
+              <ChartPanel stock={selectedStock} />
+            </div>
+          </div>
+        )}
 
         {/* Screener table (always mounted to keep data loaded) */}
         <div className={viewMode === "table" ? "" : "hidden"}>
@@ -94,8 +122,8 @@ export default function Home() {
           <SectorHeatmap stocks={screenerStocks} onSelectStock={setSelectedStock} />
         )}
 
-        {/* Chart panel */}
-        <ChartPanel stock={selectedStock} />
+        {/* Chart panel (non-split views) */}
+        {viewMode !== "split" && <ChartPanel stock={selectedStock} />}
 
         {/* Portfolio tracker */}
         <PortfolioTracker stocks={screenerStocks} />

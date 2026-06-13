@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=defaultKeyStatistics,financialData,recommendationTrend`;
+    const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=defaultKeyStatistics,financialData,recommendationTrend,summaryDetail`;
     const res = await fetch(url, {
       headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
       next: { revalidate: 3600 },
@@ -26,6 +26,10 @@ export async function GET(req: NextRequest) {
           returnOnEquity: null,
           debtToEquity: null,
           analystRatings: null,
+          beta: null,
+          dividendYield: null,
+          dividendRate: null,
+          exDividendDate: null,
         },
         { headers: { "Cache-Control": "public, s-maxage=3600" } }
       );
@@ -35,6 +39,7 @@ export async function GET(req: NextRequest) {
     const ks = json?.quoteSummary?.result?.[0]?.defaultKeyStatistics ?? {};
     const fd = json?.quoteSummary?.result?.[0]?.financialData ?? {};
     const rt = json?.quoteSummary?.result?.[0]?.recommendationTrend?.trend ?? [];
+    const sd = json?.quoteSummary?.result?.[0]?.summaryDetail ?? {};
 
     function raw(obj: Record<string, unknown>, key: string): number | null {
       const v = (obj[key] as Record<string, unknown> | undefined)?.raw;
@@ -62,6 +67,10 @@ export async function GET(req: NextRequest) {
         returnOnEquity: raw(fd, "returnOnEquity"),
         debtToEquity: raw(fd, "debtToEquity"),
         analystRatings,
+        beta: raw(ks, "beta"),
+        dividendYield: raw(sd, "trailingAnnualDividendYield"),
+        dividendRate: raw(sd, "dividendRate"),
+        exDividendDate: raw(sd, "exDividendDate"),
       },
       { headers: { "Cache-Control": "public, s-maxage=3600" } }
     );
@@ -74,6 +83,10 @@ export async function GET(req: NextRequest) {
       priceToBook: null,
       returnOnEquity: null,
       debtToEquity: null,
+      beta: null,
+      dividendYield: null,
+      dividendRate: null,
+      exDividendDate: null,
     });
   }
 }

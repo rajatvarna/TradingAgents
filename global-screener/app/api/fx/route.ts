@@ -24,12 +24,17 @@ export async function GET() {
 
     const rateMap = new Map(results.map((r) => [r.symbol, r.regularMarketPrice]));
 
+    const safeRate = (symbol: string, fallback: number) => {
+      const v = rateMap.get(symbol);
+      return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : fallback;
+    };
+
     return NextResponse.json(
       {
         USD: 1,
-        INR: rateMap.get("USDINR=X") ?? defaults.INR,
-        AED: rateMap.get("USDAED=X") ?? defaults.AED,
-        SAR: rateMap.get("USDSAR=X") ?? defaults.SAR,
+        INR: safeRate("USDINR=X", defaults.INR),
+        AED: safeRate("USDAED=X", defaults.AED),
+        SAR: safeRate("USDSAR=X", defaults.SAR),
       },
       { headers: { "Cache-Control": "public, s-maxage=3600" } }
     );

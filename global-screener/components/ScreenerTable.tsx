@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { StockData, FilterState, SortField, SortDirection, Market, PresetName } from "@/types";
+import { StockData, FilterState, SortField, SortDirection, Market, PresetName, CapSize } from "@/types";
 import { fmtPct, fmtMarketCap, pctColor, MARKET_FLAG, cn } from "@/lib/utils";
+import { getMarketState } from "@/lib/marketHours";
 import FilterBar from "./FilterBar";
 import MiniSparkline from "./MiniSparkline";
 
@@ -58,6 +59,7 @@ function filtersToParams(f: FilterState): string {
   if (f.volSurge) p.set("volSurge", "1");
   if (f.watchlistOnly) p.set("watchlist", "1");
   if (f.near52wHigh) p.set("near52w", "1");
+  if (f.capSize) p.set("capSize", f.capSize);
   return p.toString();
 }
 
@@ -74,6 +76,7 @@ function paramsToFilters(search: string, base: FilterState): FilterState {
   const volSurge = p.get("volSurge") === "1";
   const watchlistOnly = p.get("watchlist") === "1";
   const near52wHigh = p.get("near52w") === "1";
+  const capSize = (p.get("capSize") ?? null) as CapSize | null;
   return {
     markets: markets?.length ? markets : base.markets,
     sectors,
@@ -85,6 +88,7 @@ function paramsToFilters(search: string, base: FilterState): FilterState {
     volSurge,
     watchlistOnly,
     near52wHigh,
+    capSize,
   };
 }
 
@@ -96,6 +100,19 @@ const DEFAULT_FILTERS: FilterState = {
   topN: null,
   minChangePct: null,
   search: "",
+  volSurge: false,
+  watchlistOnly: false,
+  near52wHigh: false,
+  capSize: null,
+};
+
+const PERF_FIELDS = new Set<SortField>(["daily", "wtd", "mtd", "ytd", "one_y", "three_y", "five_y"]);
+
+const CAP_RANGES: Record<CapSize, [number, number]> = {
+  mega:  [200e9, Infinity],
+  large: [10e9,  200e9],
+  mid:   [2e9,   10e9],
+  small: [0,     2e9],
 };
 
 // ─── Column definitions ────────────────────────────────────────────────────
@@ -170,11 +187,16 @@ function applyFilters(
     });
   }
 
-  if (f.minChangePct !== null) {
+  if (f.minChangePct !== null && PERF_FIELDS.has(f.sortField)) {
     rows = rows.filter((d) => {
       const v = d.performance[f.sortField as keyof typeof d.performance] as number | null;
       return v !== null && v >= (f.minChangePct as number);
     });
+  }
+
+  if (f.capSize) {
+    const [lo, hi] = CAP_RANGES[f.capSize];
+    rows = rows.filter((d) => d.marketCap !== null && d.marketCap >= lo && d.marketCap < hi);
   }
 
   if (f.search.trim()) {
@@ -187,6 +209,7 @@ function applyFilters(
 
   rows.sort((a, b) => {
     const getVal = (d: StockData): number => {
+      if (f.sortField === "price")        return d.price ?? -Infinity;
       if (f.sortField === "marketCap")    return d.marketCap ?? -Infinity;
       if (f.sortField === "volume")       return d.volume ?? -Infinity;
       if (f.sortField === "rs")           return rsMap.get(d.symbol) ?? -Infinity;
@@ -459,10 +482,13 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
     window.history.replaceState(null, "", newUrl);
   }, [filters]);
 
+  // Pause high-frequency refresh when all selected markets are closed
+  const anyMarketActive = filters.markets.some((m) => getMarketState(m) !== "closed");
+
   const { data, isLoading, isRefetching, isError, dataUpdatedAt } = useQuery({
     queryKey: ["screener", filters.markets],
     queryFn: () => fetchBatch(filters.markets),
-    refetchInterval: REFRESH_INTERVAL,
+    refetchInterval: anyMarketActive ? REFRESH_INTERVAL : 5 * 60_000,
     refetchIntervalInBackground: true,
     staleTime: REFRESH_INTERVAL,
     placeholderData: keepPreviousData,

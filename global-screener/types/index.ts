@@ -71,6 +71,8 @@ export interface MarketSchedule {
   tradingDays: number[];
 }
 
+export type CapSize = "mega" | "large" | "mid" | "small";
+
 export type SortField =
   | "daily"
   | "wtd"
@@ -99,6 +101,7 @@ export interface FilterState {
   volSurge?: boolean;
   watchlistOnly?: boolean;
   near52wHigh?: boolean;
+  capSize?: CapSize | null;
 }
 
 export type PresetName =

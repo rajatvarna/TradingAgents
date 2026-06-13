@@ -1,4 +1,4 @@
-import { PerformanceMetrics } from "@/types";
+import { Market, PerformanceMetrics } from "@/types";
 
 /**
  * Finds the closest close price at or before a target date string (YYYY-MM-DD).
@@ -37,7 +37,8 @@ function toDateStr(d: Date): string {
 
 export function computePerformance(
   closes: Array<{ date: string; close: number }>,
-  currentPrice: number
+  currentPrice: number,
+  market?: Market
 ): PerformanceMetrics {
   if (!closes.length) {
     return {
@@ -57,14 +58,28 @@ export function computePerformance(
   const lastClose = closes[closes.length - 1]?.close ?? null;
   const daily = pctChange(lastClose, currentPrice);
 
-  // WTD: Monday of current week
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // Monday
-  monday.setHours(0, 0, 0, 0);
-  // Use close from Friday before this Monday
-  const prevFriday = new Date(monday);
-  prevFriday.setDate(monday.getDate() - 1);
-  const wtdRef = findCloseAtOrBefore(closes, toDateStr(prevFriday));
+  // WTD: UAE/Saudi trade Sun–Thu so their week starts Sunday;
+  // all other markets use the Mon–Fri convention (week starts Monday).
+  let wtdRef: number | null;
+  if (market === "UAE" || market === "Saudi") {
+    // Anchor to Sunday of the current week (day 0)
+    const sunday = new Date(now);
+    sunday.setDate(now.getDate() - now.getDay()); // rewind to Sun
+    sunday.setHours(0, 0, 0, 0);
+    // Last close before the Sun–Thu week = Thursday of previous week → search at Sat
+    const prevSat = new Date(sunday);
+    prevSat.setDate(sunday.getDate() - 1);
+    wtdRef = findCloseAtOrBefore(closes, toDateStr(prevSat));
+  } else {
+    // Anchor to Monday of current week
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    monday.setHours(0, 0, 0, 0);
+    // Last close before the Mon–Fri week = Friday of previous week → search at Sun
+    const prevSunday = new Date(monday);
+    prevSunday.setDate(monday.getDate() - 1);
+    wtdRef = findCloseAtOrBefore(closes, toDateStr(prevSunday));
+  }
   const wtd = pctChange(wtdRef, currentPrice);
 
   // MTD: last trading day of previous month
@@ -79,7 +94,7 @@ export function computePerformance(
   const ytdRef = findCloseAtOrBefore(closes, toDateStr(lastDayPrevYear));
   const ytd = pctChange(ytdRef, currentPrice);
 
-  // 1Y: ~252 trading days ago (approx 1 year calendar)
+  // 1Y
   const oneYAgo = new Date(now);
   oneYAgo.setFullYear(now.getFullYear() - 1);
   const oneYRef = findCloseAtOrBefore(closes, toDateStr(oneYAgo));

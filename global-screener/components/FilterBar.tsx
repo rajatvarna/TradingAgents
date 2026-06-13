@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FilterState, Market, MarketState, PresetName, SortField } from "@/types";
+import { CapSize, FilterState, Market, MarketState, PresetName, SortField } from "@/types";
 import { getAllSectors } from "@/lib/watchlist";
 import { MARKET_FLAG } from "@/lib/utils";
 import { getMarketState } from "@/lib/marketHours";
@@ -181,6 +181,19 @@ export default function FilterBar({ filters, onChange, onPreset }: Props) {
           ))}
         </select>
       </div>
+
+      {/* Cap size */}
+      <select
+        value={filters.capSize ?? ""}
+        onChange={(e) => onChange({ ...filters, capSize: (e.target.value as CapSize) || null })}
+        className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1"
+      >
+        <option value="">Cap Size ▼</option>
+        <option value="mega">Mega (&gt;$200B)</option>
+        <option value="large">Large ($10B–$200B)</option>
+        <option value="mid">Mid ($2B–$10B)</option>
+        <option value="small">Small (&lt;$2B)</option>
+      </select>
 
       {/* Min % change */}
       <div className="flex items-center gap-1">

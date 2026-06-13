@@ -383,10 +383,20 @@ function NewsTab({ yahooSuffix }: { yahooSuffix: string }) {
   );
 }
 
+function getBenchmark(market: string): string {
+  if (market === "India")  return "NSE:NIFTY50";
+  if (market === "UAE")    return "NASDAQ:QQQ";
+  if (market === "Saudi")  return "TADAWUL:TASI";
+  return "SP:SPX";
+}
+
 /** Full-width TradingView advanced chart panel, updated when a row is selected. */
 export default function ChartPanel({ stock }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scriptRef = useRef<HTMLScriptElement | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const widgetRef = useRef<any>(null);
+  const prevMarketRef = useRef<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("chart");
 
   useEffect(() => {
@@ -394,6 +404,18 @@ export default function ChartPanel({ stock }: Props) {
 
     const initWidget = () => {
       if (!containerRef.current) return;
+
+      // Same market and widget alive: switch symbol without full reload
+      if (widgetRef.current && prevMarketRef.current === stock.market) {
+        try {
+          widgetRef.current.chart().setSymbol(stock.tvSymbol, () => {});
+          return;
+        } catch {
+          // widget may have been destroyed; fall through to full init
+        }
+      }
+
+      // Full init: different market (benchmark changes) or first load
       containerRef.current.innerHTML = "";
       const w = new window.TradingView.widget({
         symbol: stock.tvSymbol,
@@ -413,15 +435,11 @@ export default function ChartPanel({ stock }: Props) {
         hide_top_toolbar: false,
         studies: ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
         compare_symbols: [
-          {
-            symbol: stock.market === "India" ? "NSE:NIFTY50" :
-                    stock.market === "UAE"   ? "NASDAQ:QQQ" :
-                    stock.market === "Saudi" ? "TADAWUL:TASI" :
-                    "SP:SPX",
-            position: "SameScale",
-          },
+          { symbol: getBenchmark(stock.market), position: "SameScale" },
         ],
       });
+      widgetRef.current = w;
+      prevMarketRef.current = stock.market;
       window.tvWidget = w;
     };
 

@@ -64,7 +64,7 @@ async function resolveStock(
     dividendYield: dividendYield ?? null,
     exDividendDate: exDividendDate ?? null,
     beta: beta ?? null,
-    performance: price ? computePerformance(closes ?? [], price) : {
+    performance: price ? computePerformance(closes ?? [], price, market) : {
       daily: null, wtd: null, mtd: null, ytd: null, one_y: null, three_y: null, five_y: null,
     },
     isStale: !livePrice,

@@ -21,8 +21,8 @@ if TYPE_CHECKING:
 
 
 def is_buyable(
-    score: "MonsterStockScore",
-    base_audit: "BaseAuditResult",
+    score: MonsterStockScore,
+    base_audit: BaseAuditResult,
     config: dict,
 ) -> tuple[bool, str]:
     """
@@ -32,7 +32,6 @@ def is_buyable(
     ``hard_filters`` and ``sell_triggers``.
     """
     filters = config["hard_filters"]
-    sell_cfg = config["sell_triggers"]
 
     max_chase = filters["maximum_pct_past_pivot_for_buy"]
     pct_past_pivot = base_audit.pct_from_pivot
@@ -45,10 +44,8 @@ def is_buyable(
         )
 
     # ── Gate 2: MA direction ──────────────────────────────────────────────
-    ma_grade = score.ma_grade_score.name  # "MA Grade"
-    # retrieve the actual letter grade from the technicals (stored on score)
-    # The grade is embedded in the rationale; we check via hard_blockers instead
-    # because MonsterStockScore already adds a hard blocker for D/E grades.
+    # MonsterStockScore already adds a hard blocker for D/E MA grades;
+    # check the blockers list rather than re-deriving the grade here.
     excluded_grades = filters.get("exclude_ma_grades", ["D", "E"])
     for blocker in score.hard_blockers:
         for g in excluded_grades:
@@ -56,19 +53,13 @@ def is_buyable(
                 return False, f"MA direction gate: {blocker}"
 
     # ── Gate 3: Sell-zone guard (re-entry without fresh base) ────────────
-    ext_pct = score.extension_risk_score.score  # higher score = less extended (inverted)
-    # We need the actual pct_above_50d; reconstruct from the rationale text
-    # or use the sell_triggers thresholds against the extension_risk score
-    offensive_sell_threshold = sell_cfg["offensive_trim_50d_extension_pct"]
-    warning_threshold = filters.get("reentry_max_50d_extension_warning_pct", 15.0)
-
+    # extension_risk_score is inverted: 0-2 = dangerously extended, 8-10 = safe.
     is_fresh_breakout = (
         base_audit.base_is_constructive
         and base_audit.pct_from_pivot is not None
         and base_audit.pct_from_pivot <= max_chase
     )
 
-    # extension_risk_score of 0 or 2 means dangerously extended
     if score.extension_risk_score.score <= 2 and not is_fresh_breakout:
         return False, (
             "Stock is in the offensive sell zone with no fresh base — "
@@ -77,8 +68,8 @@ def is_buyable(
 
     if score.extension_risk_score.score <= 5 and not is_fresh_breakout:
         return True, (
-            f"WARNING: moderately extended above 50d MA without a fresh base — "
-            f"reduce position size, re-entry risk elevated"
+            "WARNING: moderately extended above 50d MA without a fresh base — "
+            "reduce position size, re-entry risk elevated"
         )
 
     return True, "Buyable"

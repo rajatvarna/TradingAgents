@@ -422,8 +422,8 @@ class RSNHBPSignal:
 
 
 def calculate_rsnhbp(
-    stock_df: "pd.DataFrame",
-    spy_df: "pd.DataFrame",
+    stock_df: pd.DataFrame,
+    spy_df: pd.DataFrame,
     lookback: int = 252,
 ) -> RSNHBPSignal:
     """
@@ -433,8 +433,6 @@ def calculate_rsnhbp(
     CANSLIM base depths in a normal market (cup-and-handle can correct 20-30%
     and remain constructive).
     """
-    import pandas as pd
-
     combined = (
         stock_df[["Close"]]
         .rename(columns={"Close": "Stock_Close"})

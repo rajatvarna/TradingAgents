@@ -10,10 +10,9 @@ This module has no LLM dependency — it is pure computation.
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-# Type annotations only — actual classes imported lazily to avoid circular deps
-# and keep the scorer importable in test environments without network dependencies.
 from typing import TYPE_CHECKING
+
+import numpy as _np
 
 from tradingagents.scoring.criteria_weights import WEIGHTS
 
@@ -675,15 +674,11 @@ def score_stock(
 #   - RSNHBP and ADR have dedicated scorers included in the composite weights
 # ──────────────────────────────────────────────────────────────────────────────
 
-import numpy as _np
-from typing import Optional as _Optional
-
-
 def _clip(val: float, lo: float = 0.0, hi: float = 10.0) -> float:
     return float(_np.clip(val, lo, hi))
 
 
-def score_eps_growth(current_q_growth: _Optional[float]) -> float:
+def score_eps_growth(current_q_growth: float | None) -> float:
     """
     Score current-quarter EPS YoY growth on a 0-10 scale.
 

@@ -11,7 +11,10 @@ No LLM dependency — all calculations are deterministic.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 @dataclass
@@ -19,7 +22,7 @@ class BaseAuditResult:
     # Measurements
     base_depth_pct: float
     base_duration_weeks: int
-    pct_from_pivot: Optional[float]
+    pct_from_pivot: float | None
 
     # Quality flags
     is_wide_and_loose: bool         # depth > 33% — outside normal base range
@@ -41,9 +44,9 @@ class BaseAuditResult:
 
 
 def audit_base_health(
-    hist_df: "pd.DataFrame",
+    hist_df: pd.DataFrame,
     pivot_price: float,
-    base_start_idx: Optional[int] = None,
+    base_start_idx: int | None = None,
 ) -> BaseAuditResult:
     """
     Full base quality audit.
@@ -54,8 +57,6 @@ def audit_base_health(
     pivot_price: the resistance level the stock is building toward (e.g. prior high).
     base_start_idx: row offset where the base started; if None the full df is used.
     """
-    import numpy as np
-
     if base_start_idx is not None:
         hist_df = hist_df.iloc[base_start_idx:]
 

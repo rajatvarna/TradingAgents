@@ -5,7 +5,7 @@ Scans a universe of stocks and ranks them by MonsterStockScore.
 Output: a prioritized watchlist of candidates for deeper agent analysis.
 
 Usage:
-    python global-screener/monster_stock_screener.py --date 2026-06-13 --top 25
+    python global-screener/monster_stock_screener.py --date 2026-06-13 --top 30
 
 Universe options (--universe flag):
     sp500_ndx100  — S&P 500 + Nasdaq 100 components (default)
@@ -129,6 +129,9 @@ async def run_screener(
     Async screener. Fetches data concurrently (bounded by semaphore),
     scores all stocks, returns ranked ScreenerResult list.
     """
+    if concurrency < 1:
+        raise ValueError("concurrency must be at least 1")
+
     print(f"Fetching market health for {as_of_date}...")
     market_health = fetch_market_health(as_of_date)
     print(f"Market phase: {market_health.ibd_phase} | {market_health.notes}")
@@ -226,7 +229,7 @@ def main():
     """Parse CLI arguments, run the screener, print the report, and optionally save JSON output."""
     parser = argparse.ArgumentParser(description="Monster Stock Screener")
     parser.add_argument("--date", default=datetime.today().strftime("%Y-%m-%d"), help="As-of date (YYYY-MM-DD)")
-    parser.add_argument("--top", type=int, default=25, help="Top N results to show")
+    parser.add_argument("--top", type=int, default=30, help="Top N results to show")
     parser.add_argument("--min-score", type=float, default=45.0, help="Minimum composite score")
     parser.add_argument("--universe", default="sp500_ndx100", help="Universe: sp500_ndx100 | custom | file:<path>")
     parser.add_argument("--output", default=None, help="Output JSON file path")

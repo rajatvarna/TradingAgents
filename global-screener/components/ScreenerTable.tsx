@@ -685,7 +685,7 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
                 {vis.has("marketCap") && <SortHeader label="Mkt Cap"  field="marketCap" current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
                 {vis.has("chart")     && <th className="px-3 py-2 text-left text-xs text-slate-400">Chart (1M)</th>}
                 {vis.has("divYield")  && <SortHeader label="Div Yield" field="dividendYield" current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
-                {vis.has("beta")       && <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">Beta</th>}
+                {vis.has("beta")       && <SortHeader label="Beta" field="beta" current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
                 {vis.has("dist52wHigh") && <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">vs 52W High</th>}
               </tr>
             </thead>

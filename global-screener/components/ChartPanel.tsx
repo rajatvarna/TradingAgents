@@ -437,7 +437,7 @@ export default function ChartPanel({ stock }: Props) {
     } else {
       scriptRef.current.addEventListener("load", initWidget);
     }
-  }, [stock?.tvSymbol, activeTab]);
+  }, [stock?.tvSymbol, stock?.market, activeTab]);
 
   // Reset tab when stock changes
   useEffect(() => {

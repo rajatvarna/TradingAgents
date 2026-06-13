@@ -94,6 +94,8 @@ export default function FilterBar({ filters, onChange, onPreset }: Props) {
               key={m}
               onClick={() => toggleMarket(m)}
               title={`${m}: ${STATE_LABEL[state]}`}
+              aria-pressed={active}
+              aria-label={`${m}, ${STATE_LABEL[state]}, ${active ? "selected" : "not selected"}`}
               className={`relative px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                 active
                   ? "bg-blue-600 border-blue-500 text-white"
@@ -103,7 +105,7 @@ export default function FilterBar({ filters, onChange, onPreset }: Props) {
               {MARKET_FLAG[m]} {m}
               <span
                 className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-slate-900 ${STATE_DOT[state]}`}
-                aria-label={STATE_LABEL[state]}
+                aria-hidden="true"
               />
             </button>
           );

@@ -131,3 +131,11 @@ class AgentState(MessagesState):
 
     # Trading mode: 'live' for real-time analysis or 'backtest' for historical replay
     trading_mode: Annotated[str, "Trading mode: 'live' or 'backtest'"]
+
+    # Monster Stock / TraderLion framework outputs
+    monster_stock_score: Annotated[Dict[str, Any], "Serialized MonsterStockScore from the scoring engine"]
+    group_sector_report: Annotated[str, "Report from the Group & Sector Leadership Analyst"]
+    market_phase_report: Annotated[str, "Report from the Market Phase Analyst"]
+    postmortem_report: Annotated[str, "Post-mortem analysis from the Post-Mortem Analyst"]
+    postmortem_past_recommendation: Annotated[str, "Past recommendation text for post-mortem input"]
+    postmortem_outcome_data: Annotated[str, "Outcome data for post-mortem input"]

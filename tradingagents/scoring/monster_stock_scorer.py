@@ -1,0 +1,660 @@
+"""
+Deterministic scorer implementing the TraderLion / Boik Monster Stock criteria.
+
+Each criterion returns a CriterionScore (0-10) and a one-sentence rationale.
+The composite MonsterStockScore drives agent prompts and the screener ranking.
+
+This module has no LLM dependency — it is pure computation.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Optional
+
+from tradingagents.scoring.criteria_weights import WEIGHTS
+
+# Type annotations only — actual classes imported lazily to avoid circular deps
+# and keep the scorer importable in test environments without network dependencies.
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from tradingagents.dataflows.fundamentals_deep import DeepFundamentals
+    from tradingagents.dataflows.market_health import MarketHealthSnapshot
+    from tradingagents.dataflows.sector_groups import GroupLeadershipData
+    from tradingagents.dataflows.technicals_deep import DeepTechnicals
+
+
+@dataclass
+class CriterionScore:
+    name: str
+    score: float           # 0.0 – 10.0
+    weight: float
+    pass_fail: str         # "PASS" | "WARN" | "FAIL"
+    rationale: str
+
+
+@dataclass
+class MonsterStockScore:
+    ticker: str
+    as_of_date: str
+
+    # Fundamental scores
+    eps_growth_score: CriterionScore
+    eps_acceleration_score: CriterionScore
+    revenue_growth_score: CriterionScore
+    revenue_acceleration_score: CriterionScore
+    annual_eps_trend_score: CriterionScore
+    roe_score: CriterionScore
+    margin_trend_score: CriterionScore
+    forward_estimate_score: CriterionScore
+
+    # Sponsorship scores
+    fund_count_growth_score: CriterionScore
+    fund_count_acceleration_score: CriterionScore
+    flagship_fund_score: CriterionScore
+    institutional_quality_score: CriterionScore
+
+    # Technical / MVP scores
+    ma_grade_score: CriterionScore
+    volume_quality_score: CriterionScore
+    base_pattern_score: CriterionScore
+    breakout_quality_score: CriterionScore
+    rs_score: CriterionScore
+
+    # Sell signal scores (risk side, inverted)
+    sell_signal_score: CriterionScore
+    extension_risk_score: CriterionScore
+
+    # Sector / group scores
+    group_rank_score: CriterionScore
+    group_confirmation_score: CriterionScore
+
+    # Market health
+    market_health_score: CriterionScore
+
+    # Composite
+    composite_score: float
+    composite_grade: str
+    stage: str
+    action_signal: str
+    hard_blockers: list
+    key_strengths: list
+    key_risks: list
+    narrative_summary: str
+
+    def to_prompt_context(self) -> str:
+        """Render a structured block for injection into agent system prompts."""
+        blockers_str = "\n".join(f"  ⛔ {b}" for b in self.hard_blockers) if self.hard_blockers else "  None"
+        strengths_str = ", ".join(self.key_strengths)
+        risks_str = ", ".join(self.key_risks)
+        return f"""
+=== MONSTER STOCK SCORE: {self.ticker} ({self.as_of_date}) ===
+Composite: {self.composite_score:.1f}/100  Grade: {self.composite_grade}
+Stage: {self.stage}  →  Action Signal: {self.action_signal.upper()}
+
+Hard Blockers:
+{blockers_str}
+
+Key Strengths: {strengths_str}
+Key Risks: {risks_str}
+
+Fundamental Scores (0-10):
+  EPS Growth (latest Q):        {self.eps_growth_score.score:.0f}/10  [{self.eps_growth_score.pass_fail}]  {self.eps_growth_score.rationale}
+  EPS Acceleration (8Q trend):  {self.eps_acceleration_score.score:.0f}/10  [{self.eps_acceleration_score.pass_fail}]  {self.eps_acceleration_score.rationale}
+  Revenue Growth:               {self.revenue_growth_score.score:.0f}/10  [{self.revenue_growth_score.pass_fail}]  {self.revenue_growth_score.rationale}
+  Revenue Acceleration:         {self.revenue_acceleration_score.score:.0f}/10  [{self.revenue_acceleration_score.pass_fail}]  {self.revenue_acceleration_score.rationale}
+  Annual EPS Trend (5Y):        {self.annual_eps_trend_score.score:.0f}/10  [{self.annual_eps_trend_score.pass_fail}]  {self.annual_eps_trend_score.rationale}
+  ROE:                          {self.roe_score.score:.0f}/10  [{self.roe_score.pass_fail}]  {self.roe_score.rationale}
+  Margin Trend:                 {self.margin_trend_score.score:.0f}/10  [{self.margin_trend_score.pass_fail}]  {self.margin_trend_score.rationale}
+  Forward Estimate:             {self.forward_estimate_score.score:.0f}/10  [{self.forward_estimate_score.pass_fail}]  {self.forward_estimate_score.rationale}
+
+Sponsorship Scores (0-10):
+  Fund Count Growth:            {self.fund_count_growth_score.score:.0f}/10  [{self.fund_count_growth_score.pass_fail}]  {self.fund_count_growth_score.rationale}
+  Flagship Fund Presence:       {self.flagship_fund_score.score:.0f}/10  [{self.flagship_fund_score.pass_fail}]  {self.flagship_fund_score.rationale}
+
+Technical Scores (0-10):
+  MA Grade:                     {self.ma_grade_score.score:.0f}/10  [{self.ma_grade_score.pass_fail}]  {self.ma_grade_score.rationale}
+  Volume Quality (up/dn ratio): {self.volume_quality_score.score:.0f}/10  [{self.volume_quality_score.pass_fail}]  {self.volume_quality_score.rationale}
+  Base Pattern:                 {self.base_pattern_score.score:.0f}/10  [{self.base_pattern_score.pass_fail}]  {self.base_pattern_score.rationale}
+  Breakout Quality:             {self.breakout_quality_score.score:.0f}/10  [{self.breakout_quality_score.pass_fail}]  {self.breakout_quality_score.rationale}
+  Relative Strength Percentile: {self.rs_score.score:.0f}/10  [{self.rs_score.pass_fail}]  {self.rs_score.rationale}
+  Sell Signal Check:            {self.sell_signal_score.score:.0f}/10  [{self.sell_signal_score.pass_fail}]  {self.sell_signal_score.rationale}
+  Extension Risk:               {self.extension_risk_score.score:.0f}/10  [{self.extension_risk_score.pass_fail}]  {self.extension_risk_score.rationale}
+
+Group / Sector Scores (0-10):
+  Group RS Rank:                {self.group_rank_score.score:.0f}/10  [{self.group_rank_score.pass_fail}]  {self.group_rank_score.rationale}
+  Group Confirmation (3+ ldrs): {self.group_confirmation_score.score:.0f}/10  [{self.group_confirmation_score.pass_fail}]  {self.group_confirmation_score.rationale}
+
+Market Environment:
+  Market Health:                {self.market_health_score.score:.0f}/10  [{self.market_health_score.pass_fail}]  {self.market_health_score.rationale}
+
+Summary:
+{self.narrative_summary}
+=== END MONSTER STOCK SCORE ===
+"""
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Individual criterion scorers
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _score_eps_growth(fund: DeepFundamentals) -> CriterionScore:
+    w = WEIGHTS["eps_growth"]
+    if not fund.quarterly_history:
+        return CriterionScore("EPS Growth", 0, w, "FAIL", "No quarterly EPS data available.")
+    latest = fund.quarterly_history[0].eps_yoy_growth
+    if latest is None:
+        # If no EPS (pre-revenue company), score neutral to allow revenue story
+        return CriterionScore("EPS Growth", 4, w, "WARN", "EPS YoY growth unavailable — possible pre-profit company.")
+    if latest >= 100:
+        return CriterionScore("EPS Growth", 10, w, "PASS", f"Triple-digit EPS growth of {latest:.0f}% — excellent.")
+    if latest >= 50:
+        return CriterionScore("EPS Growth", 8, w, "PASS", f"Strong EPS growth of {latest:.0f}%.")
+    if latest >= 25:
+        return CriterionScore("EPS Growth", 5, w, "WARN", f"Borderline EPS growth of {latest:.0f}% — at minimum threshold.")
+    if latest >= 0:
+        return CriterionScore("EPS Growth", 2, w, "FAIL", f"Weak EPS growth of {latest:.0f}% — below 25% minimum.")
+    return CriterionScore("EPS Growth", 0, w, "FAIL", f"EPS declined {latest:.0f}% YoY — hard disqualifier.")
+
+
+def _score_eps_acceleration(fund: DeepFundamentals) -> CriterionScore:
+    w = WEIGHTS["eps_acceleration"]
+    growths = [
+        q.eps_yoy_growth
+        for q in fund.quarterly_history[:4]
+        if q.eps_yoy_growth is not None
+    ]
+    if len(growths) < 2:
+        return CriterionScore("EPS Acceleration", 3, w, "WARN", "Insufficient EPS history for trend analysis.")
+    accelerating = all(growths[i] >= growths[i + 1] for i in range(len(growths) - 1))
+    decelerating = all(growths[i] <= growths[i + 1] for i in range(len(growths) - 1))
+    if accelerating:
+        return CriterionScore("EPS Acceleration", 10, w, "PASS", f"EPS growth accelerating over {len(growths)} quarters: {[round(g) for g in growths]}.")
+    if decelerating:
+        return CriterionScore("EPS Acceleration", 2, w, "FAIL", f"EPS growth decelerating over {len(growths)} quarters: {[round(g) for g in growths]} — major red flag.")
+    return CriterionScore("EPS Acceleration", 6, w, "WARN", f"EPS growth mixed but not consistently decelerating: {[round(g) for g in growths]}.")
+
+
+def _score_revenue_growth(fund: DeepFundamentals) -> CriterionScore:
+    w = WEIGHTS["revenue_growth"]
+    if not fund.quarterly_history:
+        return CriterionScore("Revenue Growth", 0, w, "FAIL", "No quarterly revenue data.")
+    latest = fund.quarterly_history[0].revenue_yoy_growth
+    if latest is None:
+        return CriterionScore("Revenue Growth", 3, w, "WARN", "Revenue YoY growth unavailable.")
+    if latest >= 50:
+        return CriterionScore("Revenue Growth", 10, w, "PASS", f"Exceptional revenue growth of {latest:.0f}%.")
+    if latest >= 25:
+        return CriterionScore("Revenue Growth", 7, w, "PASS", f"Strong revenue growth of {latest:.0f}%.")
+    if latest >= 15:
+        return CriterionScore("Revenue Growth", 4, w, "WARN", f"Moderate revenue growth of {latest:.0f}% — acceptable only with accelerating trend.")
+    return CriterionScore("Revenue Growth", 1, w, "FAIL", f"Weak revenue growth of {latest:.0f}%.")
+
+
+def _score_revenue_acceleration(fund: DeepFundamentals) -> CriterionScore:
+    w = WEIGHTS["revenue_acceleration"]
+    growths = [
+        q.revenue_yoy_growth
+        for q in fund.quarterly_history[:4]
+        if q.revenue_yoy_growth is not None
+    ]
+    if len(growths) < 2:
+        return CriterionScore("Revenue Acceleration", 3, w, "WARN", "Insufficient revenue history.")
+    accelerating = all(growths[i] >= growths[i + 1] for i in range(len(growths) - 1))
+    decelerating = all(growths[i] <= growths[i + 1] for i in range(len(growths) - 1))
+    if accelerating:
+        return CriterionScore("Revenue Acceleration", 10, w, "PASS", f"Revenue growth accelerating: {[round(g) for g in growths]}.")
+    if decelerating:
+        return CriterionScore("Revenue Acceleration", 2, w, "FAIL", f"Revenue growth decelerating: {[round(g) for g in growths]}.")
+    return CriterionScore("Revenue Acceleration", 6, w, "WARN", "Revenue growth mixed across recent quarters.")
+
+
+def _score_annual_eps_trend(fund: DeepFundamentals) -> CriterionScore:
+    w = WEIGHTS["annual_eps_trend"]
+    ann = fund.annual_history
+    if len(ann) < 2:
+        return CriterionScore("Annual EPS Trend", 3, w, "WARN", "Fewer than 2 years of annual EPS data.")
+    growing = sum(1 for a in ann if a.eps_yoy_growth is not None and a.eps_yoy_growth > 0)
+    ratio = growing / len(ann)
+    if ratio >= 0.8:
+        return CriterionScore("Annual EPS Trend", 9, w, "PASS", f"EPS grew in {growing}/{len(ann)} of the last {len(ann)} fiscal years.")
+    if ratio >= 0.6:
+        return CriterionScore("Annual EPS Trend", 6, w, "WARN", f"EPS grew in {growing}/{len(ann)} fiscal years — acceptable but not ideal.")
+    return CriterionScore("Annual EPS Trend", 2, w, "FAIL", f"Annual EPS trend weak: only {growing}/{len(ann)} years of growth.")
+
+
+def _score_roe(fund: DeepFundamentals) -> CriterionScore:
+    w = WEIGHTS["roe"]
+    try:
+        info = fund  # ROE not directly on DeepFundamentals; use quarterly roe field
+        roe = None
+        for q in fund.quarterly_history:
+            if q.roe is not None:
+                roe = q.roe
+                break
+    except Exception:
+        roe = None
+
+    if roe is None:
+        return CriterionScore("ROE", 4, w, "WARN", "ROE data unavailable — skipping.")
+    if roe >= 30:
+        return CriterionScore("ROE", 10, w, "PASS", f"Excellent ROE of {roe:.1f}% — well above 17% guideline.")
+    if roe >= 17:
+        return CriterionScore("ROE", 7, w, "PASS", f"ROE of {roe:.1f}% meets the 17% guideline.")
+    return CriterionScore("ROE", 3, w, "FAIL", f"ROE of {roe:.1f}% is below the 17% minimum guideline.")
+
+
+def _score_margin_trend(fund: DeepFundamentals) -> CriterionScore:
+    w = WEIGHTS["margin_trend"]
+    margins = [
+        q.after_tax_margin
+        for q in fund.quarterly_history[:4]
+        if q.after_tax_margin is not None
+    ]
+    if len(margins) < 2:
+        return CriterionScore("Margin Trend", 4, w, "WARN", "Insufficient margin data.")
+    if margins[0] > margins[-1]:
+        return CriterionScore("Margin Trend", 9, w, "PASS", f"After-tax margins expanding: {margins[-1]:.1f}% → {margins[0]:.1f}%.")
+    if margins[0] >= margins[-1] * 0.95:
+        return CriterionScore("Margin Trend", 5, w, "WARN", f"Margins roughly stable at {margins[0]:.1f}%.")
+    return CriterionScore("Margin Trend", 2, w, "FAIL", f"Margins contracting: {margins[-1]:.1f}% → {margins[0]:.1f}% — concerning.")
+
+
+def _score_forward_estimate(fund: DeepFundamentals) -> CriterionScore:
+    w = WEIGHTS["forward_estimate"]
+    if fund.next_year_eps_growth_estimate is None:
+        return CriterionScore("Forward Estimate", 4, w, "WARN", "No forward EPS estimate available.")
+    g = fund.next_year_eps_growth_estimate
+    if g >= 25:
+        return CriterionScore("Forward Estimate", 9, w, "PASS", f"Analysts project {g:.0f}% EPS growth next year — strong outlook.")
+    if g >= 10:
+        return CriterionScore("Forward Estimate", 6, w, "WARN", f"Moderate forward EPS growth estimate of {g:.0f}%.")
+    if g >= 0:
+        return CriterionScore("Forward Estimate", 3, w, "WARN", f"Low forward EPS growth estimate of {g:.0f}%.")
+    return CriterionScore("Forward Estimate", 1, w, "FAIL", f"Analysts project EPS decline of {g:.0f}% — bearish outlook.")
+
+
+def _score_fund_count_growth(fund: DeepFundamentals) -> CriterionScore:
+    w = WEIGHTS["fund_count_growth"]
+    history = fund.sponsorship_history
+    if not history:
+        return CriterionScore("Fund Count Growth", 3, w, "WARN", "No sponsorship history available.")
+    count = history[0].total_institutions
+    if count >= 500:
+        return CriterionScore("Fund Count Growth", 9, w, "PASS", f"{count} institutional holders — strong sponsorship.")
+    if count >= 200:
+        return CriterionScore("Fund Count Growth", 7, w, "PASS", f"{count} institutional holders — solid sponsorship.")
+    if count >= 50:
+        return CriterionScore("Fund Count Growth", 5, w, "WARN", f"{count} institutional holders — limited but growing sponsorship possible.")
+    return CriterionScore("Fund Count Growth", 2, w, "FAIL", f"Only {count} institutional holders — very low sponsorship.")
+
+
+def _score_fund_count_acceleration(fund: DeepFundamentals) -> CriterionScore:
+    w = WEIGHTS["fund_count_acceleration"]
+    history = fund.sponsorship_history
+    if len(history) < 2:
+        return CriterionScore("Fund Count Acceleration", 3, w, "WARN", "Need 2+ sponsorship snapshots for trend analysis.")
+    change = history[0].qoq_fund_count_change
+    if change is None:
+        return CriterionScore("Fund Count Acceleration", 4, w, "WARN", "QoQ fund count change unavailable.")
+    if change >= 50:
+        return CriterionScore("Fund Count Acceleration", 10, w, "PASS", f"Fund count up {change} QoQ — rapid institutional accumulation.")
+    if change >= 20:
+        return CriterionScore("Fund Count Acceleration", 7, w, "PASS", f"Fund count up {change} QoQ — healthy accumulation.")
+    if change >= 0:
+        return CriterionScore("Fund Count Acceleration", 4, w, "WARN", f"Fund count up {change} QoQ — slow accumulation.")
+    return CriterionScore("Fund Count Acceleration", 1, w, "FAIL", f"Fund count declined {change} QoQ — distribution by institutions.")
+
+
+def _score_flagship_fund(fund: DeepFundamentals) -> CriterionScore:
+    w = WEIGHTS["flagship_fund"]
+    history = fund.sponsorship_history
+    if not history:
+        return CriterionScore("Flagship Fund", 3, w, "WARN", "No sponsorship data to check flagship fund presence.")
+    if history[0].has_flagship_fund:
+        names = ", ".join(history[0].flagship_fund_names[:3])
+        return CriterionScore("Flagship Fund", 10, w, "PASS", f"Top-performing funds holding: {names}.")
+    return CriterionScore("Flagship Fund", 4, w, "WARN", "No confirmed flagship/top-performing fund holding detected.")
+
+
+def _score_institutional_quality(fund: DeepFundamentals) -> CriterionScore:
+    w = WEIGHTS["institutional_quality"]
+    history = fund.sponsorship_history
+    if not history:
+        return CriterionScore("Institutional Quality", 3, w, "WARN", "No institutional quality data.")
+    count = history[0].total_institutions
+    shares = history[0].total_shares_held
+    # Proxy: high count + high shares held = quality conviction
+    if count >= 300 and shares > 1e8:
+        return CriterionScore("Institutional Quality", 9, w, "PASS", f"High-conviction institutional ownership: {count} funds, {shares/1e6:.0f}M shares.")
+    if count >= 100:
+        return CriterionScore("Institutional Quality", 6, w, "WARN", f"Moderate institutional coverage: {count} funds.")
+    return CriterionScore("Institutional Quality", 3, w, "FAIL", f"Low institutional conviction: {count} funds.")
+
+
+def _score_ma_grade(tech: DeepTechnicals) -> CriterionScore:
+    w = WEIGHTS["ma_grade"]
+    grade = tech.ma_state.grade
+    grade_map = {"A": 10, "B": 7, "C": 3, "D": 1, "E": 0}
+    score = grade_map.get(grade, 0)
+    pf = "PASS" if grade in ("A", "B") else "FAIL"
+    desc = {
+        "A": "Grade A — price above all 4 key MAs (10/21/50/200). Ideal.",
+        "B": "Grade B — above 21/50/200 but below 10-day. Acceptable.",
+        "C": "Grade C — below 10 and 21-day MAs. Weakening.",
+        "D": "Grade D — below 10/21/50-day MAs. High risk.",
+        "E": "Grade E — below all MAs. Avoid.",
+    }.get(grade, f"Grade {grade}.")
+    return CriterionScore("MA Grade", score, w, pf, desc)
+
+
+def _score_volume_quality(tech: DeepTechnicals) -> CriterionScore:
+    w = WEIGHTS["volume_quality"]
+    ratio = tech.volume_profile.up_volume_ratio
+    if ratio >= 1.5:
+        return CriterionScore("Volume Quality", 10, w, "PASS", f"Up/down volume ratio {ratio:.2f}x — strong accumulation signature.")
+    if ratio >= 1.25:
+        return CriterionScore("Volume Quality", 7, w, "PASS", f"Up/down volume ratio {ratio:.2f}x — healthy accumulation.")
+    if ratio >= 1.0:
+        return CriterionScore("Volume Quality", 4, w, "WARN", f"Up/down volume ratio {ratio:.2f}x — neutral volume pattern.")
+    return CriterionScore("Volume Quality", 1, w, "FAIL", f"Up/down volume ratio {ratio:.2f}x — distribution pattern.")
+
+
+def _score_base_pattern(tech: DeepTechnicals) -> CriterionScore:
+    w = WEIGHTS["base_pattern"]
+    bp = tech.base_pattern
+    if bp.breakout_occurred and bp.weeks_since_breakout is not None and bp.weeks_since_breakout <= 2:
+        return CriterionScore("Base Pattern", 10, w, "PASS", f"Fresh breakout from {bp.pattern_type} base (week {bp.weeks_since_breakout}).")
+    if bp.currently_in_base:
+        return CriterionScore("Base Pattern", 8, w, "PASS", f"Building {bp.pattern_type} base ({bp.base_duration_weeks}w, {bp.base_depth_pct:.0f}% depth). Setup stage.")
+    if bp.breakout_occurred and bp.weeks_since_breakout is not None and bp.weeks_since_breakout <= 6:
+        return CriterionScore("Base Pattern", 6, w, "WARN", f"Post-breakout run-up ({bp.weeks_since_breakout} weeks since breakout).")
+    return CriterionScore("Base Pattern", 3, w, "WARN", f"No clear base pattern detected (pattern: {bp.pattern_type}).")
+
+
+def _score_breakout_quality(tech: DeepTechnicals) -> CriterionScore:
+    w = WEIGHTS["breakout_quality"]
+    bp = tech.base_pattern
+    if not bp.breakout_occurred:
+        return CriterionScore("Breakout Quality", 5, w, "WARN", "No breakout yet — monitoring for entry.")
+    vol_ratio = bp.breakout_volume_ratio or 0.0
+    if vol_ratio >= 2.0:
+        return CriterionScore("Breakout Quality", 10, w, "PASS", f"Breakout on {vol_ratio:.1f}× average volume — exceptional confirmation.")
+    if vol_ratio >= 1.5:
+        return CriterionScore("Breakout Quality", 8, w, "PASS", f"Breakout on {vol_ratio:.1f}× average volume — strong confirmation.")
+    if vol_ratio >= 1.2:
+        return CriterionScore("Breakout Quality", 5, w, "WARN", f"Breakout on {vol_ratio:.1f}× average volume — marginal confirmation.")
+    return CriterionScore("Breakout Quality", 2, w, "FAIL", f"Breakout on only {vol_ratio:.1f}× volume — low conviction, high failure risk.")
+
+
+def _score_rs(tech: DeepTechnicals) -> CriterionScore:
+    w = WEIGHTS["rs_score"]
+    pct = tech.relative_strength.rs_percentile
+    trend = tech.relative_strength.rs_line_trend
+    if pct >= 90:
+        return CriterionScore("Relative Strength", 10, w, "PASS", f"RS at {pct:.0f}th percentile, trend {trend} — top-tier leader.")
+    if pct >= 75:
+        return CriterionScore("Relative Strength", 8, w, "PASS", f"RS at {pct:.0f}th percentile, trend {trend} — strong leader.")
+    if pct >= 60:
+        return CriterionScore("Relative Strength", 5, w, "WARN", f"RS at {pct:.0f}th percentile — above average but not leading.")
+    if pct >= 40:
+        return CriterionScore("Relative Strength", 3, w, "FAIL", f"RS at {pct:.0f}th percentile — average performer.")
+    return CriterionScore("Relative Strength", 1, w, "FAIL", f"RS at {pct:.0f}th percentile — laggard. Avoid.")
+
+
+def _score_sell_signals(tech: DeepTechnicals) -> CriterionScore:
+    w = WEIGHTS["sell_signal"]
+    ss = tech.sell_signals
+    penalty = 0
+    flags = []
+    if ss.climax_run_detected:
+        penalty += 8
+        flags.append("climax run")
+    if ss.broke_50d_on_volume:
+        penalty += 5
+        flags.append("broke 50d on vol")
+    if ss.broke_21d_on_volume:
+        penalty += 3
+        flags.append("broke 21d on vol")
+    if ss.gap_down_on_volume:
+        penalty += 3
+        flags.append("gap-down on vol")
+    if ss.distribution_days_count >= 5:
+        penalty += 3
+        flags.append(f"{ss.distribution_days_count} dist days")
+    if ss.lower_highs_pattern:
+        penalty += 2
+        flags.append("lower highs")
+
+    score = max(0.0, 10.0 - penalty)
+    pf = "PASS" if score >= 7 else "WARN" if score >= 4 else "FAIL"
+    rationale = (
+        f"Sell signals active: {', '.join(flags)}." if flags
+        else "No active sell signals — clean technical picture."
+    )
+    return CriterionScore("Sell Signal Check", score, w, pf, rationale)
+
+
+def _score_extension_risk(tech: DeepTechnicals) -> CriterionScore:
+    w = WEIGHTS["extension_risk"]
+    pct_50d = tech.ma_state.pct_above_50d
+    pct_21d = tech.ma_state.pct_above_21d
+    if pct_50d > 40:
+        return CriterionScore("Extension Risk", 0, w, "FAIL", f"Dangerously extended {pct_50d:.0f}% above 50d MA — climax zone.")
+    if pct_50d > 25:
+        return CriterionScore("Extension Risk", 2, w, "FAIL", f"Extended {pct_50d:.0f}% above 50d MA — offensive sell territory.")
+    if pct_50d > 15:
+        return CriterionScore("Extension Risk", 5, w, "WARN", f"Moderately extended {pct_50d:.0f}% above 50d MA — caution.")
+    if pct_50d > 0:
+        return CriterionScore("Extension Risk", 8, w, "PASS", f"Only {pct_50d:.0f}% above 50d MA — acceptable extension.")
+    return CriterionScore("Extension Risk", 7, w, "PASS", f"Below 50d MA by {abs(pct_50d):.0f}% — in consolidation.")
+
+
+def _score_group_rank(group: GroupLeadershipData) -> CriterionScore:
+    w = WEIGHTS["group_rank"]
+    pct = group.group_rs_rank_percentile
+    weeks = group.group_weeks_leading
+    if pct >= 80:
+        return CriterionScore("Group Rank", 10, w, "PASS", f"{group.industry_group} group at {pct:.0f}th percentile — top-tier leadership.")
+    if pct >= 66:
+        return CriterionScore("Group Rank", 7, w, "PASS", f"{group.industry_group} group at {pct:.0f}th percentile — top third.")
+    if pct >= 50:
+        return CriterionScore("Group Rank", 4, w, "WARN", f"{group.industry_group} group at {pct:.0f}th percentile — middling.")
+    return CriterionScore("Group Rank", 1, w, "FAIL", f"{group.industry_group} group at {pct:.0f}th percentile — lagging sector.")
+
+
+def _score_group_confirmation(group: GroupLeadershipData) -> CriterionScore:
+    w = WEIGHTS["group_confirmation"]
+    count = group.group_leader_count
+    if count >= 5:
+        return CriterionScore("Group Confirmation", 10, w, "PASS", f"{count} high-RS stocks in same group — strong group confirmation.")
+    if count >= 3:
+        return CriterionScore("Group Confirmation", 8, w, "PASS", f"{count} group leaders confirming — sufficient group confirmation.")
+    if count >= 1:
+        return CriterionScore("Group Confirmation", 4, w, "WARN", f"Only {count} group leader(s) acting well — partial confirmation.")
+    return CriterionScore("Group Confirmation", 1, w, "FAIL", "No group leaders confirming — isolated move, high failure risk.")
+
+
+def _score_market_health(market: MarketHealthSnapshot) -> CriterionScore:
+    w = WEIGHTS["market_health"]
+    phase = market.ibd_phase
+    if phase == "confirmed_uptrend":
+        return CriterionScore("Market Health", 9, w, "PASS", f"IBD Confirmed Uptrend — optimal environment for longs.")
+    if phase == "uptrend_resumes":
+        return CriterionScore("Market Health", 7, w, "PASS", f"Uptrend resuming after correction — cautious buying warranted.")
+    if phase == "under_pressure":
+        return CriterionScore("Market Health", 4, w, "WARN", f"Market under pressure ({market.distribution_days_nasdaq} distribution days) — reduce exposure.")
+    if phase == "correction":
+        return CriterionScore("Market Health", 0, w, "FAIL", "Market in correction — no new long positions per Boik rule #1.")
+    return CriterionScore("Market Health", 4, w, "WARN", "Market phase unknown — proceed with caution.")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Composite scorer
+# ──────────────────────────────────────────────────────────────────────────────
+
+def score_stock(
+    fundamentals: DeepFundamentals,
+    technicals: DeepTechnicals,
+    market_health: MarketHealthSnapshot,
+    group_data: GroupLeadershipData,
+) -> MonsterStockScore:
+    """Run all scoring criteria and return a MonsterStockScore. Fully deterministic."""
+
+    # Compute individual criterion scores
+    eps_growth = _score_eps_growth(fundamentals)
+    eps_accel = _score_eps_acceleration(fundamentals)
+    rev_growth = _score_revenue_growth(fundamentals)
+    rev_accel = _score_revenue_acceleration(fundamentals)
+    annual_eps = _score_annual_eps_trend(fundamentals)
+    roe = _score_roe(fundamentals)
+    margin = _score_margin_trend(fundamentals)
+    forward = _score_forward_estimate(fundamentals)
+    fund_count = _score_fund_count_growth(fundamentals)
+    fund_accel = _score_fund_count_acceleration(fundamentals)
+    flagship = _score_flagship_fund(fundamentals)
+    inst_quality = _score_institutional_quality(fundamentals)
+    ma_grade = _score_ma_grade(technicals)
+    vol_quality = _score_volume_quality(technicals)
+    base = _score_base_pattern(technicals)
+    breakout = _score_breakout_quality(technicals)
+    rs = _score_rs(technicals)
+    sell = _score_sell_signals(technicals)
+    extension = _score_extension_risk(technicals)
+    group_rank = _score_group_rank(group_data)
+    group_conf = _score_group_confirmation(group_data)
+    mkt_health = _score_market_health(market_health)
+
+    all_scores = [
+        eps_growth, eps_accel, rev_growth, rev_accel, annual_eps,
+        roe, margin, forward,
+        fund_count, fund_accel, flagship, inst_quality,
+        ma_grade, vol_quality, base, breakout, rs, sell, extension,
+        group_rank, group_conf,
+        mkt_health,
+    ]
+
+    # Hard blockers
+    hard_blockers = []
+    if fundamentals.avg_daily_dollar_volume < 10_000_000:
+        hard_blockers.append(f"Dollar volume ${fundamentals.avg_daily_dollar_volume/1e6:.1f}M/day < $10M minimum.")
+    if technicals.ma_state.grade in ("D", "E"):
+        hard_blockers.append(f"Grade {technicals.ma_state.grade} — price below key MAs. Do not buy.")
+    if market_health.ibd_phase == "correction":
+        hard_blockers.append("Market in IBD Correction — no new long positions.")
+    if technicals.sell_signals.climax_run_detected:
+        hard_blockers.append("Climax run detected — this is a sell signal, not a buy.")
+    if technicals.sell_signals.broke_50d_on_volume and not technicals.base_pattern.currently_in_base:
+        hard_blockers.append("Broke 50-day MA on heavy volume outside a base — defensive sell.")
+    if eps_accel.pass_fail == "FAIL" and rev_accel.pass_fail == "FAIL":
+        hard_blockers.append("Both EPS and revenue growth are decelerating — fundamental deterioration.")
+
+    # Weighted composite
+    total_weighted = sum(s.score * s.weight for s in all_scores)
+    total_weight = sum(s.weight for s in all_scores)
+    composite = (total_weighted / total_weight * 10) if total_weight > 0 else 0.0
+
+    if hard_blockers:
+        composite = min(composite, 20.0)
+
+    # Grade
+    if composite >= 85:
+        grade = "A+"
+    elif composite >= 75:
+        grade = "A"
+    elif composite >= 65:
+        grade = "B+"
+    elif composite >= 55:
+        grade = "B"
+    elif composite >= 40:
+        grade = "C"
+    elif composite >= 25:
+        grade = "D"
+    else:
+        grade = "F"
+
+    # Stage
+    bp = technicals.base_pattern
+    ss = technicals.sell_signals
+    if ss.climax_run_detected:
+        stage = "topping"
+    elif technicals.ma_state.grade in ("D", "E") and not bp.currently_in_base:
+        stage = "decline"
+    elif bp.breakout_occurred and bp.weeks_since_breakout is not None and bp.weeks_since_breakout <= 3:
+        stage = "breakout"
+    elif bp.currently_in_base:
+        stage = "setup"
+    else:
+        stage = "run_up"
+
+    # Action signal
+    if hard_blockers or composite < 25:
+        action = "avoid"
+    elif stage == "topping":
+        action = "sell"
+    elif composite >= 75 and stage in ("breakout", "setup"):
+        action = "strong_buy"
+    elif composite >= 55 and stage in ("breakout", "setup", "run_up"):
+        action = "buy"
+    elif composite >= 40:
+        action = "watch"
+    else:
+        action = "hold"
+
+    # Key strengths / risks
+    sorted_by_score = sorted(all_scores, key=lambda x: x.score, reverse=True)
+    key_strengths = [s.name for s in sorted_by_score[:3]]
+    key_risks = [s.name for s in sorted_by_score[-3:]]
+
+    narrative = _build_narrative(fundamentals, technicals, group_data, market_health, composite, grade, action, hard_blockers)
+
+    return MonsterStockScore(
+        ticker=fundamentals.ticker,
+        as_of_date=technicals.as_of_date,
+        eps_growth_score=eps_growth,
+        eps_acceleration_score=eps_accel,
+        revenue_growth_score=rev_growth,
+        revenue_acceleration_score=rev_accel,
+        annual_eps_trend_score=annual_eps,
+        roe_score=roe,
+        margin_trend_score=margin,
+        forward_estimate_score=forward,
+        fund_count_growth_score=fund_count,
+        fund_count_acceleration_score=fund_accel,
+        flagship_fund_score=flagship,
+        institutional_quality_score=inst_quality,
+        ma_grade_score=ma_grade,
+        volume_quality_score=vol_quality,
+        base_pattern_score=base,
+        breakout_quality_score=breakout,
+        rs_score=rs,
+        sell_signal_score=sell,
+        extension_risk_score=extension,
+        group_rank_score=group_rank,
+        group_confirmation_score=group_conf,
+        market_health_score=mkt_health,
+        composite_score=round(composite, 1),
+        composite_grade=grade,
+        stage=stage,
+        action_signal=action,
+        hard_blockers=hard_blockers,
+        key_strengths=key_strengths,
+        key_risks=key_risks,
+        narrative_summary=narrative,
+    )
+
+
+def _build_narrative(fund, tech, group, market, composite, grade, action, blockers) -> str:
+    lines = [
+        f"{fund.ticker} scores {composite:.1f}/100 (Grade {grade}) on the Monster Stock framework.",
+        f"The stock is in the '{tech.base_pattern.pattern_type}' stage with MA grade {tech.ma_state.grade} "
+        f"({tech.ma_state.pct_above_50d:+.1f}% vs 50-day MA).",
+        f"RS percentile: {tech.relative_strength.rs_percentile:.0f}th ({tech.relative_strength.rs_line_trend} trend). "
+        f"Group ({group.industry_group}): {group.group_rs_rank_percentile:.0f}th percentile, "
+        f"{group.group_leader_count} group leader(s) confirming.",
+        f"Market environment: {market.ibd_phase} ({market.distribution_days_nasdaq} distribution days). "
+        f"Action signal: {action.upper()}.",
+    ]
+    if blockers:
+        lines.append(f"BLOCKERS active ({len(blockers)}): {'; '.join(blockers[:2])}.")
+    return " ".join(lines)

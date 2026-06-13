@@ -10,11 +10,8 @@ Covers:
 - MONSTER_STOCK_METHODOLOGY_CONFIG structure
 """
 
-import pytest
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-
+import pytest
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -309,8 +306,8 @@ class TestScoringFunctions:
         assert score_rsnhbp(None) == 3.0
 
     def test_rsnhbp_strong_signal_returns_10(self):
-        from tradingagents.scoring.monster_stock_scorer import score_rsnhbp
         from tradingagents.dataflows.technicals_deep import RSNHBPSignal
+        from tradingagents.scoring.monster_stock_scorer import score_rsnhbp
 
         sig = RSNHBPSignal(
             rs_line_value=1.5,

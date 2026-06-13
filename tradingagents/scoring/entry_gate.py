@@ -60,13 +60,16 @@ def is_buyable(
         and base_audit.pct_from_pivot <= max_chase
     )
 
-    if score.extension_risk_score.score <= 2 and not is_fresh_breakout:
+    hard_block_threshold = filters.get("extension_risk_score_hard_block", 2)
+    warning_threshold = filters.get("extension_risk_score_warning", 5)
+
+    if score.extension_risk_score.score <= hard_block_threshold and not is_fresh_breakout:
         return False, (
             "Stock is in the offensive sell zone with no fresh base — "
             "not a valid buy entry; wait for pullback or new base"
         )
 
-    if score.extension_risk_score.score <= 5 and not is_fresh_breakout:
+    if score.extension_risk_score.score <= warning_threshold and not is_fresh_breakout:
         return True, (
             "WARNING: moderately extended above 50d MA without a fresh base — "
             "reduce position size, re-entry risk elevated"

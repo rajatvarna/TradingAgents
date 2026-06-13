@@ -51,15 +51,18 @@ class TestRSNHBP:
         from tradingagents.dataflows.technicals_deep import calculate_rsnhbp
 
         n = 260
-        # SPY gently rising; stock underperforms then surges on RS line
-        spy_prices = [100 + i * 0.05 for i in range(n)]
-        # Stock corrected ~20% from peak then held flat — RS line at high
-        stock_prices = [150.0] * 50 + [120.0] * 200 + [125.0] * 10
+        # Stock peaks at row 10-19 (100), then settles at 85 (15% base)
+        # SPY falls throughout so RS line climbs to a new 52w high by end
+        # The rolling window (lookback=252) covers rows 8-259, so the peak IS visible
+        stock_prices = [85.0] * 10 + [100.0] * 10 + [85.0] * 240
+        spy_prices = [100.0] * 10 + [100.0 - i * 0.1 for i in range(250)]
         stock_df, spy_df = self._make_rsnhbp_frames(stock_prices, spy_prices)
 
         sig = calculate_rsnhbp(stock_df, spy_df, lookback=252)
-        # stock is ~17% below 52w high → in valid base range
-        assert sig.in_valid_base_range or sig.signal_triggered is not None  # structural check
+        # RS line at 52w high, stock 15% below its 52w high → signal fires
+        assert sig.in_valid_base_range
+        assert sig.rs_at_52w_high
+        assert sig.signal_triggered
 
     def test_no_signal_when_price_at_52w_high(self):
         from tradingagents.dataflows.technicals_deep import calculate_rsnhbp

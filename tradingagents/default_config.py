@@ -381,6 +381,11 @@ MONSTER_STOCK_METHODOLOGY_CONFIG: dict = {
         # Re-entry warning threshold: flag extended re-entries without a fresh base.
         # This is a warning only; the hard block is the offensive sell zone check.
         "reentry_max_50d_extension_warning_pct": 15.0,
+        # Gate 3 extension_risk_score thresholds (score is inverted: 0=most extended, 10=safe).
+        # Block re-entry without a fresh base when score is at or below this level.
+        "extension_risk_score_hard_block": 2,
+        # Warn (allow with reduced size) when score is at or below this level.
+        "extension_risk_score_warning": 5,
     },
 
     # ── SELL / TRIM TRIGGERS (checked while holding an existing position) ─────
@@ -464,17 +469,17 @@ MONSTER_STOCK_METHODOLOGY_CONFIG: dict = {
 
     # ── CHART LIBRARY ─────────────────────────────────────────────────────────
     "chart_library": {
-        "image_dir":             "chart_library/images/",
-        "db_path":               "chart_library/charts.db",
-        "faiss_index_path":      "chart_library/faiss.index",
+        "image_dir":             os.path.join(_TRADINGAGENTS_HOME, "chart_library", "images"),
+        "db_path":               os.path.join(_TRADINGAGENTS_HOME, "chart_library", "charts.db"),
+        "faiss_index_path":      os.path.join(_TRADINGAGENTS_HOME, "chart_library", "faiss.index"),
         "top_k_analogs":         5,
         "min_similarity_score":  0.70,
     },
 
     # ── KK STREAM KNOWLEDGE BASE ──────────────────────────────────────────────
     "kk_stream_kb": {
-        "db_path":              "kk_stream_kb/knowledge_base.db",
-        "ep_examples_path":     "kk_stream_kb/ep_examples.json",
+        "db_path":          os.path.join(_TRADINGAGENTS_HOME, "kk_stream_kb", "knowledge_base.db"),
+        "ep_examples_path": os.path.join(_TRADINGAGENTS_HOME, "kk_stream_kb", "ep_examples.json"),
         "minimum_setup_rating": 3.5,
     },
 }

@@ -124,7 +124,7 @@ def audit_base_health(
     vol_contracting = recent_std < prior_std * 0.75 if prior_std > 0 else False
 
     # ── WEEKLY TIGHTNESS ─────────────────────────────────────────────────────
-    weekly_tight = True
+    weekly_tight = False
     try:
         import pandas as pd
         if hasattr(hist_df.index, "freq") or isinstance(hist_df.index, pd.DatetimeIndex):

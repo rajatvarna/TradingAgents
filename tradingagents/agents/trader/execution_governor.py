@@ -40,25 +40,31 @@ def determine_execution_parameters(market_health_snapshot: dict) -> dict:
     thresholds = MONSTER_STOCK_METHODOLOGY_CONFIG["market_regime_thresholds"]
     regimes = MONSTER_STOCK_METHODOLOGY_CONFIG["market_regime_execution"]
 
-    dist_days = int(market_health_snapshot.get("distribution_days_count", 0))
-    phase = str(market_health_snapshot.get("ibd_phase", "confirmed_uptrend"))
-    hlg_trend = str(market_health_snapshot.get("hlg_trend", "positive"))
-    hlg_neg_streak = int(market_health_snapshot.get("hlg_consecutive_negative", 0))
+    try:
+        dist_days = int(market_health_snapshot.get("distribution_days_count", 0) or 0)
+    except (TypeError, ValueError):
+        dist_days = 0
+    phase = str(market_health_snapshot.get("ibd_phase") or "confirmed_uptrend")
+    hlg_trend = str(market_health_snapshot.get("hlg_trend") or "positive")
+    try:
+        hlg_neg_streak = int(market_health_snapshot.get("hlg_consecutive_negative", 0) or 0)
+    except (TypeError, ValueError):
+        hlg_neg_streak = 0
+
+    auto_mmss = MONSTER_STOCK_METHODOLOGY_CONFIG.get("automatic_mmss_activation", True)
 
     # Determine regime — most restrictive condition wins
-    if (
-        phase == "correction"
-        or dist_days >= thresholds["distribution_day_cash"]
-        or hlg_neg_streak >= thresholds["hlg_negative_streak_cash"]
-    ):
+    dist_day_cash = auto_mmss and dist_days >= thresholds["distribution_day_cash"]
+    hlg_cash = auto_mmss and hlg_neg_streak >= thresholds["hlg_negative_streak_cash"]
+    dist_day_mmss = auto_mmss and dist_days >= thresholds["distribution_day_mmss"]
+    hlg_mmss = auto_mmss and (
+        hlg_neg_streak >= thresholds["hlg_negative_streak_mmss"] or hlg_trend == "mixed"
+    )
+
+    if phase == "correction" or dist_day_cash or hlg_cash:
         regime_key = "correction"
 
-    elif (
-        phase == "under_pressure"
-        or dist_days >= thresholds["distribution_day_mmss"]
-        or hlg_neg_streak >= thresholds["hlg_negative_streak_mmss"]
-        or hlg_trend == "mixed"
-    ):
+    elif phase == "under_pressure" or dist_day_mmss or hlg_mmss:
         regime_key = "under_pressure_mmss"
 
     elif phase == "uptrend_resumes":

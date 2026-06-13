@@ -554,8 +554,13 @@ def score_stock(
 
     # Hard blockers
     hard_blockers = []
-    if fundamentals.avg_daily_dollar_volume < 10_000_000:
-        hard_blockers.append(f"Dollar volume ${fundamentals.avg_daily_dollar_volume/1e6:.1f}M/day < $10M minimum.")
+    from tradingagents.default_config import MONSTER_STOCK_METHODOLOGY_CONFIG as _cfg
+    _min_liq = _cfg["hard_filters"]["minimum_liquidity_dollar_volume"]
+    if fundamentals.avg_daily_dollar_volume < _min_liq:
+        hard_blockers.append(
+            f"Dollar volume ${fundamentals.avg_daily_dollar_volume/1e6:.1f}M/day "
+            f"< ${_min_liq/1e6:.0f}M minimum."
+        )
     if technicals.ma_state.grade in ("D", "E"):
         hard_blockers.append(f"Grade {technicals.ma_state.grade} — price below key MAs. Do not buy.")
     if market_health.ibd_phase == "correction":

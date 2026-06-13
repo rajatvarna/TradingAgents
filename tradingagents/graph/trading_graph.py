@@ -102,7 +102,7 @@ from .conditional_logic import ConditionalLogic
 from .setup import GraphSetup
 from .propagation import Propagator
 from .reflection import Reflector
-from .signal_processing import SignalProcessor
+from .signal_processing import SignalProcessor, SIGNAL_CONVICTION_WEIGHTS
 
 
 class TradingAgentsGraph:
@@ -321,7 +321,7 @@ class TradingAgentsGraph:
         return benchmark_map.get("", "SPY")
 
     def _fetch_returns(
-        self, ticker: str, trade_date: str, holding_days: int = 5,
+        self, ticker: str, trade_date: str, holding_days: int = None,
         benchmark: str = "SPY",
     ) -> Tuple[Optional[float], Optional[float], Optional[int]]:
         """Fetch raw and alpha return for ticker over holding_days from trade_date.
@@ -331,6 +331,9 @@ class TradingAgentsGraph:
         actual_holding_days)`` or ``(None, None, None)`` if price data is
         unavailable (too recent, delisted, or network error).
         """
+        if holding_days is None:
+            cfg = getattr(self, "config", {}) or {}
+            holding_days = cfg.get("outcome_holding_days", 5)
         try:
             start = datetime.strptime(trade_date, "%Y-%m-%d")
             end = start + timedelta(days=holding_days + 7)  # buffer for weekends/holidays
@@ -604,7 +607,7 @@ class TradingAgentsGraph:
         self,
         tickers: List[str],
         trade_date: str,
-        max_workers: int = 4,
+        max_workers: int = None,
     ) -> Dict[str, Any]:
         """Analyze a basket of tickers in parallel and return a ranked summary.
 
@@ -627,6 +630,8 @@ class TradingAgentsGraph:
                 ``summary`` — high-level counts (buy/hold/sell) and top pick.
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
+        if max_workers is None:
+            max_workers = self.config.get("portfolio_propagation_max_workers", 4)
         if not tickers:
             return {"results": [], "summary": {}}
 
@@ -677,9 +682,9 @@ class TradingAgentsGraph:
         for i, r in enumerate(results, start=1):
             r["rank"] = i
 
-        buy_count = sum(1 for r in results if r["signal"] in ("BUY", "OVERWEIGHT"))
-        sell_count = sum(1 for r in results if r["signal"] in ("SELL", "UNDERWEIGHT"))
-        hold_count = sum(1 for r in results if r["signal"] == "HOLD")
+        buy_count = sum(1 for r in results if r["signal"].title() in ("Buy", "Overweight"))
+        sell_count = sum(1 for r in results if r["signal"].title() in ("Sell", "Underweight"))
+        hold_count = sum(1 for r in results if r["signal"].title() == "Hold")
         top_pick = results[0]["ticker"] if results else None
 
         return {
@@ -719,11 +724,6 @@ class TradingAgentsGraph:
 
         Positive score -> bullish, negative -> bearish, magnitude = conviction.
         """
-        direction = {
-            "BUY": 2.0,
-            "OVERWEIGHT": 1.0,
-            "HOLD": 0.0,
-            "UNDERWEIGHT": -1.0,
-            "SELL": -2.0,
-        }.get(signal.upper(), 0.0)
+        # Normalise to title-case to match SIGNAL_CONVICTION_WEIGHTS keys.
+        direction = SIGNAL_CONVICTION_WEIGHTS.get(signal.title(), 0.0)
         return direction * confidence

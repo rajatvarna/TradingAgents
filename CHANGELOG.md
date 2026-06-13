@@ -25,6 +25,14 @@ Breaking changes within the 0.x line are called out explicitly.
 - `scratch_test.py` (ad-hoc prototype, never part of test suite).
 - `requirements.txt` (stale single-entry file; `pypdf` is already declared in `pyproject.toml`).
 
+### Added (Sprint 3)
+- `tradingagents/dataflows/_indicator_descriptions.py` — single source of truth for all 13 technical indicator descriptions; eliminates three separate copies across `y_finance.py`, `alpha_vantage_indicator.py`, and `twelve_data_indicator.py`.
+- `SIGNAL_CONVICTION_WEIGHTS` and signal name constants (`SIGNAL_BUY`, `SIGNAL_SELL`, etc.) in `signal_processing.py` — replace raw string literals in `_conviction_score` and portfolio summary counting.
+- `portfolio_propagation_max_workers` and `outcome_holding_days` added to `DEFAULT_CONFIG` (and `_ENV_OVERRIDES`) — replaces hardcoded `4` and `5` in `propagate_portfolio` and `_fetch_returns`.
+
+### Fixed (Sprint 3)
+- `TradingMemoryLog._get_conn` now caches one connection per (instance, thread) via `threading.local()` instead of opening a new SQLite file descriptor on every query.
+
 ### Added
 
 - **Monster Stock / TraderLion framework integration** — deterministic scoring engine implementing the Boik/TraderLion methodology across 22 criteria (EPS acceleration, institutional sponsorship, MVP technical grades, group confirmation, market phase). Adds `tradingagents/scoring/monster_stock_scorer.py` with `MonsterStockScore` (0-100 composite) and `score_stock()`.

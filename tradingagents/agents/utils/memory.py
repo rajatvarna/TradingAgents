@@ -7,6 +7,7 @@ concurrent, and scalable memory lookups. Automatically migrates old .md logs.
 import sqlite3
 import json
 import logging
+import threading
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 import re
@@ -24,6 +25,9 @@ class TradingMemoryLog:
     def __init__(self, config: dict = None):
         cfg = config or {}
         self._db_path = None
+        # Per-instance thread-local storage so each instance caches its own
+        # connection without cross-instance interference.
+        self._thread_local = threading.local()
         
         path = cfg.get("memory_log_path")
         if path:
@@ -40,11 +44,18 @@ class TradingMemoryLog:
         # Optional cap on resolved entries. None disables rotation.
         self._max_entries = cfg.get("memory_log_max_entries")
 
-    def _get_conn(self):
-        """Returns a new SQLite connection."""
-        # Check_same_thread=False allows sharing between threads safely in LangGraph
-        conn = sqlite3.connect(self._db_path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
+    def _get_conn(self) -> sqlite3.Connection:
+        """Return a per-thread cached SQLite connection.
+
+        Each (instance, thread) pair gets its own connection, avoiding the
+        overhead of opening a new file descriptor on every query while
+        remaining safe under LangGraph's multi-threaded executor.
+        """
+        conn = getattr(self._thread_local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(self._db_path, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            self._thread_local.conn = conn
         return conn
 
     def _init_db(self):

@@ -51,6 +51,9 @@ export interface StockData {
   fiftyTwoWeekLow: number | null;
   fiftyTwoWeekHigh: number | null;
   performance: PerformanceMetrics;
+  dividendYield: number | null;
+  exDividendDate: number | null;
+  beta: number | null;
   isStale?: boolean;
   error?: string;
 }
@@ -79,7 +82,9 @@ export type SortField =
   | "price"
   | "marketCap"
   | "volume"
-  | "rs";
+  | "rs"
+  | "dividendYield"
+  | "beta";
 
 export type SortDirection = "asc" | "desc";
 

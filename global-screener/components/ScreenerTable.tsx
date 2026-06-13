@@ -120,6 +120,8 @@ const COLUMNS: ColumnDef[] = [
   { id: "rs",        label: "RS",         defaultVisible: true },
   { id: "marketCap", label: "Mkt Cap",    defaultVisible: true },
   { id: "chart",     label: "Chart (1M)", defaultVisible: true },
+  { id: "divYield",  label: "Div Yield",  defaultVisible: false },
+  { id: "beta",      label: "Beta",       defaultVisible: false },
 ];
 
 const STORAGE_KEY = "screener-columns";
@@ -175,9 +177,11 @@ function applyFilters(
 
   rows.sort((a, b) => {
     const getVal = (d: StockData): number => {
-      if (f.sortField === "marketCap") return d.marketCap ?? -Infinity;
-      if (f.sortField === "volume")    return d.volume ?? -Infinity;
-      if (f.sortField === "rs")        return rsMap.get(d.symbol) ?? -Infinity;
+      if (f.sortField === "marketCap")    return d.marketCap ?? -Infinity;
+      if (f.sortField === "volume")       return d.volume ?? -Infinity;
+      if (f.sortField === "rs")           return rsMap.get(d.symbol) ?? -Infinity;
+      if (f.sortField === "dividendYield") return d.dividendYield ?? -Infinity;
+      if (f.sortField === "beta")         return d.beta ?? -Infinity;
       const p = d.performance[f.sortField as keyof typeof d.performance] as number | null;
       return p ?? -Infinity;
     };
@@ -554,7 +558,7 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
 
   const exportCSV = useCallback(() => {
     if (!rows.length) return;
-    const headers = ["#","Ticker","Company","Market","Price","Currency","Daily%","WTD%","MTD%","YTD%","1Y%","3Y%","5Y%","RS","MarketCap","Volume","Timestamp"];
+    const headers = ["#","Ticker","Company","Market","Price","Currency","Daily%","WTD%","MTD%","YTD%","1Y%","3Y%","5Y%","RS","MarketCap","Volume","DividendYield","Beta","Timestamp"];
     const lines = rows.map((r, i) => [
       i + 1, r.symbol, `"${r.name}"`, r.market,
       r.price ?? "", r.currency,
@@ -568,6 +572,8 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
       rsMap.get(r.symbol) ?? "N/A",
       r.marketCap ?? "N/A",
       r.volume ?? "N/A",
+      r.dividendYield !== null ? (r.dividendYield * 100).toFixed(2) + "%" : "N/A",
+      r.beta ?? "N/A",
       new Date().toISOString(),
     ].join(","));
     const csv = [headers.join(","), ...lines].join("\n");
@@ -666,6 +672,8 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
                 {vis.has("rs")        && <SortHeader label="RS"       field="rs"        current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
                 {vis.has("marketCap") && <SortHeader label="Mkt Cap"  field="marketCap" current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
                 {vis.has("chart")     && <th className="px-3 py-2 text-left text-xs text-slate-400">Chart (1M)</th>}
+                {vis.has("divYield")  && <SortHeader label="Div Yield" field="dividendYield" current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
+                {vis.has("beta")      && <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">Beta</th>}
               </tr>
             </thead>
             <tbody>
@@ -803,6 +811,28 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
                         {vis.has("chart")     && (
                           <td className="px-2 py-1">
                             {!isVirtual && <MiniSparkline tvSymbol={stock.tvSymbol} />}
+                          </td>
+                        )}
+                        {vis.has("divYield") && (
+                          <td className="px-3 py-2 tabular-nums text-sm font-mono">
+                            {stock.dividendYield !== null && stock.dividendYield > 0 ? (
+                              <span className={stock.dividendYield > 0.05 ? "text-emerald-400" : stock.dividendYield > 0.03 ? "text-amber-400" : "text-slate-300"}>
+                                {(stock.dividendYield * 100).toFixed(1)}%
+                              </span>
+                            ) : (
+                              <span className="text-slate-600">—</span>
+                            )}
+                          </td>
+                        )}
+                        {vis.has("beta") && (
+                          <td className="px-3 py-2 tabular-nums text-sm font-mono">
+                            {stock.beta !== null ? (
+                              <span className={stock.beta < 0.8 ? "text-emerald-400" : stock.beta > 1.5 ? "text-red-400" : "text-slate-300"}>
+                                {stock.beta.toFixed(2)}
+                              </span>
+                            ) : (
+                              <span className="text-slate-600">—</span>
+                            )}
                           </td>
                         )}
                       </tr>

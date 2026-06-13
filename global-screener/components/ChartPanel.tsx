@@ -17,7 +17,7 @@ declare global {
   }
 }
 
-type Tab = "chart" | "insider" | "fundamentals" | "news";
+type Tab = "chart" | "insider" | "fundamentals" | "news" | "compare";
 
 interface EarningsData {
   nextEarningsDate: string | null;

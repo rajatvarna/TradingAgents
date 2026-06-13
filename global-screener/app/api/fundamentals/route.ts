@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=defaultKeyStatistics,financialData`;
+    const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=defaultKeyStatistics,financialData,recommendationTrend`;
     const res = await fetch(url, {
       headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
       next: { revalidate: 3600 },
@@ -33,6 +33,8 @@ export async function GET(req: NextRequest) {
     const json = await res.json();
     const ks = json?.quoteSummary?.result?.[0]?.defaultKeyStatistics ?? {};
     const fd = json?.quoteSummary?.result?.[0]?.financialData ?? {};
+    const rt = json?.quoteSummary?.result?.[0]?.recommendationTrend ?? {};
+    const trend = (rt.trend as Array<Record<string, number>> | undefined)?.[0] ?? {};
 
     function raw(obj: Record<string, unknown>, key: string): number | null {
       const v = (obj[key] as Record<string, unknown> | undefined)?.raw;
@@ -48,6 +50,11 @@ export async function GET(req: NextRequest) {
         priceToBook: raw(ks, "priceToBook"),
         returnOnEquity: raw(fd, "returnOnEquity"),
         debtToEquity: raw(fd, "debtToEquity"),
+        strongBuy: typeof trend.strongBuy === "number" ? trend.strongBuy : null,
+        buy: typeof trend.buy === "number" ? trend.buy : null,
+        hold: typeof trend.hold === "number" ? trend.hold : null,
+        sell: typeof trend.sell === "number" ? trend.sell : null,
+        strongSell: typeof trend.strongSell === "number" ? trend.strongSell : null,
       },
       { headers: { "Cache-Control": "public, s-maxage=3600" } }
     );

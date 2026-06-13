@@ -5,6 +5,8 @@ export interface QuoteResult {
   marketCap: number;
   regularMarketVolume: number;
   averageDailyVolume3Month: number;
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
 }
 
 const USER_AGENT = "Mozilla/5.0 (compatible; GlobalScreener/1.0)";
@@ -14,7 +16,7 @@ export async function fetchBatchQuotes(symbols: string[]): Promise<QuoteResult[]
 
   const params = new URLSearchParams({
     symbols: symbols.join(","),
-    fields: "regularMarketPrice,currency,marketCap,regularMarketVolume,averageDailyVolume3Month",
+    fields: "regularMarketPrice,currency,marketCap,regularMarketVolume,averageDailyVolume3Month,fiftyTwoWeekHigh,fiftyTwoWeekLow",
     crumb: "",
   });
 
@@ -42,6 +44,8 @@ export async function fetchBatchQuotes(symbols: string[]): Promise<QuoteResult[]
     marketCap: (q.marketCap as number) ?? 0,
     regularMarketVolume: (q.regularMarketVolume as number) ?? 0,
     averageDailyVolume3Month: (q.averageDailyVolume3Month as number) ?? 0,
+    fiftyTwoWeekHigh: typeof q.fiftyTwoWeekHigh === "number" ? q.fiftyTwoWeekHigh : null,
+    fiftyTwoWeekLow: typeof q.fiftyTwoWeekLow === "number" ? q.fiftyTwoWeekLow : null,
   }));
 }
 

@@ -17,7 +17,7 @@ declare global {
   }
 }
 
-type Tab = "chart" | "insider" | "fundamentals";
+type Tab = "chart" | "insider" | "fundamentals" | "news";
 
 interface EarningsData {
   nextEarningsDate: string | null;
@@ -41,6 +41,18 @@ interface FundamentalsData {
   priceToBook: number | null;
   returnOnEquity: number | null;
   debtToEquity: number | null;
+  strongBuy: number | null;
+  buy: number | null;
+  hold: number | null;
+  sell: number | null;
+  strongSell: number | null;
+}
+
+interface NewsArticle {
+  title: string;
+  link: string;
+  publisher: string;
+  publishedAt: string | null;
 }
 
 function fmtNum(v: number | null, decimals = 2): string {
@@ -206,15 +218,105 @@ function FundamentalsTab({ yahooSuffix }: { yahooSuffix: string }) {
     { label: "Debt/Equity", value: fmtNum(data.debtToEquity, 2) },
   ];
 
+  const sb = data.strongBuy ?? 0;
+  const b  = data.buy ?? 0;
+  const h  = data.hold ?? 0;
+  const s  = data.sell ?? 0;
+  const ss = data.strongSell ?? 0;
+  const total = sb + b + h + s + ss;
+  const bullish = sb + b;
+  const bearish = s + ss;
+  const consensus = total === 0 ? null : bullish > bearish * 2 ? "Bullish" : bearish > bullish * 2 ? "Bearish" : "Neutral";
+
   return (
-    <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-      {stats.map((s) => (
-        <div key={s.label} className="bg-slate-800/60 rounded-lg px-3 py-2">
-          <div className="text-xs text-slate-500 mb-1">{s.label}</div>
-          <div className={cn("text-sm font-semibold font-mono", s.highlight ?? "text-slate-200")}>
-            {s.value}
+    <div className="p-4 space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        {stats.map((stat) => (
+          <div key={stat.label} className="bg-slate-800/60 rounded-lg px-3 py-2">
+            <div className="text-xs text-slate-500 mb-1">{stat.label}</div>
+            <div className={cn("text-sm font-semibold font-mono", stat.highlight ?? "text-slate-200")}>
+              {stat.value}
+            </div>
+          </div>
+        ))}
+      </div>
+      {total > 0 && (
+        <div className="bg-slate-800/40 rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-slate-400 font-semibold">Analyst Consensus</span>
+            {consensus && (
+              <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full",
+                consensus === "Bullish" ? "bg-emerald-900/60 text-emerald-300" :
+                consensus === "Bearish" ? "bg-red-900/60 text-red-300" :
+                "bg-slate-700 text-slate-300"
+              )}>{consensus}</span>
+            )}
+          </div>
+          <div className="flex rounded-full overflow-hidden h-4 text-xs">
+            {sb > 0 && <div style={{ width: `${(sb/total)*100}%` }} className="bg-emerald-600 flex items-center justify-center text-white font-bold" title={`Strong Buy: ${sb}`}>{sb}</div>}
+            {b  > 0 && <div style={{ width: `${(b/total)*100}%`  }} className="bg-emerald-400 flex items-center justify-center text-white" title={`Buy: ${b}`}>{b}</div>}
+            {h  > 0 && <div style={{ width: `${(h/total)*100}%`  }} className="bg-yellow-400 flex items-center justify-center text-slate-900" title={`Hold: ${h}`}>{h}</div>}
+            {s  > 0 && <div style={{ width: `${(s/total)*100}%`  }} className="bg-red-400 flex items-center justify-center text-white" title={`Sell: ${s}`}>{s}</div>}
+            {ss > 0 && <div style={{ width: `${(ss/total)*100}%` }} className="bg-red-600 flex items-center justify-center text-white font-bold" title={`Strong Sell: ${ss}`}>{ss}</div>}
+          </div>
+          <div className="flex justify-between text-xs text-slate-500 mt-1">
+            <span>Strong Buy</span><span>{total} analysts</span><span>Strong Sell</span>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function NewsTab({ yahooSuffix }: { yahooSuffix: string }) {
+  const { data, isLoading } = useQuery<NewsArticle[]>({
+    queryKey: ["news", yahooSuffix],
+    queryFn: async () => {
+      const res = await fetch(`/api/news?symbol=${encodeURIComponent(yahooSuffix)}`);
+      return res.json() as Promise<NewsArticle[]>;
+    },
+    staleTime: 15 * 60 * 1000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="p-4 animate-pulse space-y-3">
+        {[1,2,3,4,5].map((i) => <div key={i} className="h-10 bg-slate-800 rounded" />)}
+      </div>
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return <div className="p-8 text-center text-slate-500 text-sm">No news found</div>;
+  }
+
+  function relativeTime(ts: string | null): string {
+    if (!ts) return "";
+    const date = new Date(ts);
+    const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 172800) return "Yesterday";
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+
+  return (
+    <div className="divide-y divide-slate-800">
+      {data.map((article, i) => (
+        <a
+          key={i}
+          href={article.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex flex-col gap-1 px-4 py-3 hover:bg-slate-800/50 transition-colors"
+        >
+          <span className="text-sm text-white leading-snug hover:text-blue-300 transition-colors">
+            {article.title}
+          </span>
+          <span className="text-xs text-slate-500">
+            {article.publisher}{article.publishedAt ? ` · ${relativeTime(article.publishedAt)}` : ""}
+          </span>
+        </a>
       ))}
     </div>
   );
@@ -282,6 +384,7 @@ export default function ChartPanel({ stock }: Props) {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "chart", label: "Chart" },
+    { id: "news", label: "News" },
     { id: "insider", label: "Insider Transactions" },
     { id: "fundamentals", label: "Fundamentals" },
   ];
@@ -311,6 +414,22 @@ export default function ChartPanel({ stock }: Props) {
           {fmtPct(stock.performance.ytd)} YTD
         </span>
         <EarningsBadge yahooSuffix={stock.yahooSuffix} />
+        {stock.fiftyTwoWeekLow !== null && stock.fiftyTwoWeekHigh !== null && stock.price !== null && (() => {
+          const range = stock.fiftyTwoWeekHigh - stock.fiftyTwoWeekLow;
+          const pos = range > 0 ? Math.min(100, Math.max(0, ((stock.price - stock.fiftyTwoWeekLow) / range) * 100)) : 50;
+          const pctFromHigh = ((stock.price - stock.fiftyTwoWeekHigh) / stock.fiftyTwoWeekHigh) * 100;
+          const barColor = pos >= 80 ? "bg-emerald-500" : pos >= 40 ? "bg-amber-500" : "bg-red-500";
+          return (
+            <div className="flex items-center gap-1.5 text-xs text-slate-500" title={`${pctFromHigh.toFixed(1)}% from 52W High`}>
+              <span className="hidden sm:inline">{stock.fiftyTwoWeekLow.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              <div className="w-20 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                <div className={cn("h-full rounded-full", barColor)} style={{ width: `${pos}%` }} />
+              </div>
+              <span className="hidden sm:inline">{stock.fiftyTwoWeekHigh.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              <span className="text-slate-600">52W</span>
+            </div>
+          );
+        })()}
         <span className="text-slate-500 text-sm ml-auto">
           MCap: {fmtMarketCap(stock.marketCap)}
         </span>
@@ -342,6 +461,11 @@ export default function ChartPanel({ stock }: Props) {
             Prices delayed 15 minutes · Powered by TradingView
           </p>
         </>
+      )}
+      {activeTab === "news" && (
+        <div className="min-h-[200px] max-h-[520px] overflow-y-auto">
+          <NewsTab yahooSuffix={stock.yahooSuffix} />
+        </div>
       )}
       {activeTab === "insider" && (
         <div className="min-h-[200px]">

@@ -12,11 +12,13 @@ const FearGreed         = dynamic(() => import("@/components/FearGreed"),       
 const PriceAlerts       = dynamic(() => import("@/components/PriceAlerts"),        { ssr: false });
 const PortfolioTracker  = dynamic(() => import("@/components/PortfolioTracker"),   { ssr: false });
 const EconomicCalendar  = dynamic(() => import("@/components/EconomicCalendar"),   { ssr: false });
+const SectorHeatmap     = dynamic(() => import("@/components/SectorHeatmap").then(m => ({ default: m.SectorHeatmap })), { ssr: false });
 
 export default function Home() {
   const [selectedStock, setSelectedStock] = useState<StockData | null>(null);
   // Lift screener data up so PortfolioTracker can use current prices
   const [screenerStocks, setScreenerStocks] = useState<StockData[]>([]);
+  const [viewMode, setViewMode] = useState<"table" | "heatmap">("table");
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
@@ -57,8 +59,28 @@ export default function Home() {
         {/* VIX Fear & Greed gauge */}
         <FearGreed />
 
-        {/* Screener table */}
-        <ScreenerTable onSelectStock={setSelectedStock} onDataLoaded={setScreenerStocks} />
+        {/* View mode toggle */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setViewMode("table")}
+            className={`px-3 py-1.5 text-xs rounded border transition-colors ${viewMode === "table" ? "bg-blue-600 border-blue-500 text-white" : "border-slate-700 text-slate-400 hover:border-slate-500"}`}
+          >
+            📋 Table
+          </button>
+          <button
+            onClick={() => setViewMode("heatmap")}
+            className={`px-3 py-1.5 text-xs rounded border transition-colors ${viewMode === "heatmap" ? "bg-blue-600 border-blue-500 text-white" : "border-slate-700 text-slate-400 hover:border-slate-500"}`}
+          >
+            🔥 Heatmap
+          </button>
+        </div>
+
+        {/* Screener table / heatmap */}
+        {viewMode === "table" ? (
+          <ScreenerTable onSelectStock={setSelectedStock} onDataLoaded={setScreenerStocks} />
+        ) : (
+          <SectorHeatmap stocks={screenerStocks} onSelectStock={setSelectedStock} />
+        )}
 
         {/* Chart panel */}
         <ChartPanel stock={selectedStock} />

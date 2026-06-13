@@ -26,6 +26,7 @@ const PRESETS: { name: PresetName; label: string }[] = [
   { name: "five-year-compounders", label: "5Y Compounders" },
   { name: "most-active",         label: "Most Active" },
   { name: "vol-surge",           label: "🔥 Vol Surge" },
+  { name: "watchlist",           label: "⭐ Watchlist" },
 ];
 
 interface Props {

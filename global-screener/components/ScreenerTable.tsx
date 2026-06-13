@@ -6,6 +6,7 @@ import { StockData, FilterState, SortField, SortDirection, Market, PresetName } 
 import { fmtPct, fmtMarketCap, pctColor, MARKET_FLAG, cn } from "@/lib/utils";
 import FilterBar from "./FilterBar";
 import MiniSparkline from "./MiniSparkline";
+import * as Tooltip from "@radix-ui/react-tooltip";
 
 interface FxRates {
   USD: number;
@@ -48,6 +49,7 @@ interface ColumnDef {
 }
 
 const COLUMNS: ColumnDef[] = [
+  { id: "star",      label: "★",          defaultVisible: true },
   { id: "rank",      label: "#",          defaultVisible: true },
   { id: "ticker",    label: "Ticker",     defaultVisible: true },
   { id: "company",   label: "Company",    defaultVisible: true },
@@ -62,6 +64,7 @@ const COLUMNS: ColumnDef[] = [
   { id: "five_y",    label: "5Y %",       defaultVisible: true },
   { id: "rs",        label: "RS",         defaultVisible: true },
   { id: "marketCap", label: "Mkt Cap",    defaultVisible: true },
+  { id: "52w-range", label: "52W Range",  defaultVisible: false },
   { id: "chart",     label: "Chart (1M)", defaultVisible: true },
 ];
 
@@ -85,10 +88,12 @@ function loadVisibleColumns(): Set<string> {
 
 // ─── Filters / sorting ────────────────────────────────────────────────────
 
-function applyFilters(data: StockData[], f: FilterState, rsMap: Map<string, number>): StockData[] {
+function applyFilters(data: StockData[], f: FilterState, rsMap: Map<string, number>, favorites: Set<string>): StockData[] {
   let rows = data.filter((d) => f.markets.includes(d.market));
 
   if (f.sectors.length) rows = rows.filter((d) => f.sectors.includes(d.sector));
+
+  if (f.watchlistOnly) rows = rows.filter((d) => favorites.has(d.symbol));
 
   if (f.volSurge) {
     rows = rows.filter(
@@ -137,6 +142,7 @@ function applyPreset(preset: PresetName): FilterState {
     case "five-year-compounders": return { ...base, sortField: "five_y", sortDir: "desc", topN: 25 };
     case "most-active":    return { ...base, sortField: "volume",  sortDir: "desc", topN: 25 };
     case "vol-surge":      return { ...base, sortField: "volume",  sortDir: "desc", topN: 25, volSurge: true };
+    case "watchlist":      return { ...base, watchlistOnly: true, topN: null };
     default: return base;
   }
 }
@@ -266,6 +272,56 @@ function ColumnCustomizer({
   );
 }
 
+// ─── Sparkline tooltip ───────────────────────────────────────────────────
+
+function SparklineSvg({ closes }: { closes: Array<{ date: string; close: number }> }) {
+  const last90 = closes.slice(-90);
+  if (last90.length < 2) return <span className="text-slate-500 text-xs">No data</span>;
+  const values = last90.map((c) => c.close);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const W = 200; const H = 60;
+  const pts = values.map((v, i) => `${(i / (values.length - 1)) * W},${H - ((v - min) / range) * H}`).join(" ");
+  const rising = values[values.length - 1] >= values[0];
+  const color = rising ? "#34d399" : "#f87171";
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function RowTooltip({ stock, children }: { stock: StockData; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const { data: history } = useQuery<Array<{ date: string; close: number }>>({
+    queryKey: ["hist-tooltip", stock.yahooSuffix],
+    queryFn: async () => {
+      const res = await fetch(`/api/history?symbol=${encodeURIComponent(stock.yahooSuffix)}`);
+      return res.json();
+    },
+    enabled: open,
+    staleTime: 3600_000,
+  });
+
+  return (
+    <Tooltip.Root open={open} onOpenChange={setOpen}>
+      <Tooltip.Trigger asChild>{children as React.ReactElement}</Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Content
+          side="right"
+          sideOffset={8}
+          className="z-50 bg-slate-800 border border-slate-600 rounded-xl p-3 shadow-2xl"
+        >
+          <div className="text-xs text-slate-400 mb-1 font-semibold">{stock.symbol} · 90-day</div>
+          {history ? <SparklineSvg closes={history} /> : <div className="w-[200px] h-[60px] bg-slate-700 animate-pulse rounded" />}
+          <Tooltip.Arrow className="fill-slate-800" />
+        </Tooltip.Content>
+      </Tooltip.Portal>
+    </Tooltip.Root>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────
 
 interface Props {
@@ -281,7 +337,25 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(loadVisibleColumns);
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>("local");
+  const [shareCopied, setShareCopied] = useState(false);
+  const [favorites, setFavorites] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = localStorage.getItem("favorites");
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+    } catch { return new Set(); }
+  });
   const nextRefreshRef = useRef<number>(Date.now() + REFRESH_INTERVAL);
+
+  const toggleFavorite = useCallback((symbol: string) => {
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (next.has(symbol)) next.delete(symbol);
+      else next.add(symbol);
+      try { localStorage.setItem("favorites", JSON.stringify(Array.from(next))); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
 
   const { data: fxRates } = useQuery<FxRates>({
     queryKey: ["fx"],
@@ -297,6 +371,50 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
     const t = setTimeout(() => setFilters((f) => ({ ...f, search: searchInput })), 300);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  // Initialize filters from URL on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const market = params.get("market");
+    const sector = params.get("sector");
+    const sort = params.get("sort") as SortField | null;
+    const dir = params.get("dir") as SortDirection | null;
+    const topN = params.get("topN");
+    const search = params.get("search");
+    const preset = params.get("preset") as PresetName | null;
+
+    if (!market && !sort && !search && !preset) return;
+
+    if (preset) {
+      setFilters(applyPreset(preset));
+      return;
+    }
+
+    setFilters((f) => ({
+      ...f,
+      markets: market ? (market.split(",") as Market[]) : f.markets,
+      sectors: sector ? sector.split(",") : f.sectors,
+      sortField: sort ?? f.sortField,
+      sortDir: dir ?? f.sortDir,
+      topN: topN ? Number(topN) : f.topN,
+      search: search ?? f.search,
+    }));
+  }, []); // run once on mount
+
+  // Sync filters to URL
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams();
+    if (filters.markets.length < 4) params.set("market", filters.markets.join(","));
+    if (filters.sectors.length) params.set("sector", filters.sectors.join(","));
+    if (filters.sortField !== "daily") params.set("sort", filters.sortField);
+    if (filters.sortDir !== "desc") params.set("dir", filters.sortDir);
+    if (filters.topN) params.set("topN", String(filters.topN));
+    if (filters.search) params.set("search", filters.search);
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  }, [filters]);
 
   const { data, isLoading, isRefetching, isError, dataUpdatedAt } = useQuery({
     queryKey: ["screener", filters.markets],
@@ -341,8 +459,8 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
 
   const rows = useMemo(() => {
     if (!data) return [];
-    return applyFilters(data, filters, rsMap);
-  }, [data, filters, rsMap]);
+    return applyFilters(data, filters, rsMap, favorites);
+  }, [data, filters, rsMap, favorites]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -447,6 +565,17 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
             {displayCurrency === "USD" ? "USD" : "Local"}
           </button>
           <button
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href).catch(() => {});
+              setShareCopied(true);
+              setTimeout(() => setShareCopied(false), 2000);
+            }}
+            className="px-2 py-1 rounded border border-slate-700 hover:border-slate-500 hover:text-white transition-colors text-xs"
+            title="Copy shareable link"
+          >
+            {shareCopied ? "✓ Copied" : "🔗 Share"}
+          </button>
+          <button
             onClick={exportCSV}
             className="px-2 py-1 rounded border border-slate-700 hover:border-slate-500 hover:text-white transition-colors ml-1"
           >
@@ -468,6 +597,7 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
           <table className="w-full text-sm">
             <thead className="bg-slate-900 sticky top-0 z-10">
               <tr className="border-b border-slate-700">
+                {vis.has("star")      && <th className="px-2 py-2 w-8"></th>}
                 {vis.has("rank")      && <th className="px-3 py-2 text-left text-xs text-slate-500 w-8">#</th>}
                 {vis.has("ticker")    && <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">Ticker</th>}
                 {vis.has("company")   && <th className="px-3 py-2 text-left text-xs text-slate-400">Company</th>}
@@ -482,6 +612,7 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
                 {vis.has("five_y")    && <SortHeader label="5Y %*"    field="five_y"    current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
                 {vis.has("rs")        && <SortHeader label="RS"       field="rs"        current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
                 {vis.has("marketCap") && <SortHeader label="Mkt Cap"  field="marketCap" current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
+                {vis.has("52w-range") && <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">52W Range</th>}
                 {vis.has("chart")     && <th className="px-3 py-2 text-left text-xs text-slate-400">Chart (1M)</th>}
               </tr>
             </thead>
@@ -499,8 +630,8 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
                     const isSelected = selectedIdx === idx;
 
                     return (
+                      <RowTooltip key={stock.symbol} stock={stock}>
                       <tr
-                        key={stock.symbol}
                         onClick={() => { setSelectedIdx(idx); onSelectStock(stock); }}
                         className={cn(
                           "border-b border-slate-800 cursor-pointer transition-colors",
@@ -510,6 +641,17 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
                           isSelected && "bg-blue-900/30 ring-1 ring-blue-500 ring-inset"
                         )}
                       >
+                        {vis.has("star") && (
+                          <td className="px-2 py-2 w-8">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleFavorite(stock.symbol); }}
+                              className="text-base leading-none hover:scale-125 transition-transform"
+                              title={favorites.has(stock.symbol) ? "Remove from watchlist" : "Add to watchlist"}
+                            >
+                              {favorites.has(stock.symbol) ? "★" : "☆"}
+                            </button>
+                          </td>
+                        )}
                         {vis.has("rank")    && <td className="px-3 py-2 text-slate-600 tabular-nums">{idx + 1}</td>}
                         {vis.has("ticker")  && (
                           <td className="px-3 py-2 font-semibold text-white whitespace-nowrap">
@@ -575,12 +717,32 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
                             {fmtMarketCap(stock.marketCap)}
                           </td>
                         )}
+                        {vis.has("52w-range") && (() => {
+                          const lo = stock.fiftyTwoWeekLow;
+                          const hi = stock.fiftyTwoWeekHigh;
+                          const p  = stock.price;
+                          if (lo === null || hi === null || p === null) {
+                            return <td className="px-3 py-2 text-slate-600 text-xs">—</td>;
+                          }
+                          const range = hi - lo;
+                          const pos = range > 0 ? Math.min(100, Math.max(0, ((p - lo) / range) * 100)) : 50;
+                          const barColor = pos >= 80 ? "bg-emerald-500" : pos >= 40 ? "bg-amber-500" : "bg-red-500";
+                          const pctFromHigh = ((p - hi) / hi * 100).toFixed(1);
+                          return (
+                            <td className="px-3 py-2">
+                              <div className="w-16 h-1.5 bg-slate-700 rounded-full overflow-hidden" title={`${pctFromHigh}% from 52W High`}>
+                                <div className={cn("h-full rounded-full", barColor)} style={{ width: `${pos}%` }} />
+                              </div>
+                            </td>
+                          );
+                        })()}
                         {vis.has("chart")     && (
                           <td className="px-2 py-1">
                             {!isVirtual && <MiniSparkline tvSymbol={stock.tvSymbol} />}
                           </td>
                         )}
                       </tr>
+                      </RowTooltip>
                     );
                   })}
             </tbody>

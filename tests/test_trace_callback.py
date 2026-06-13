@@ -320,7 +320,7 @@ class TestTradingAgentsGraphWiring:
         )
         monkeypatch.setattr(
             tg.GraphSetup, "setup_graph",
-            lambda self, selected_analysts: MagicMock(),
+            lambda self, selected_analysts=None, **kw: MagicMock(),
         )
 
         cfg = dict(tg.DEFAULT_CONFIG)
@@ -346,7 +346,7 @@ class TestTradingAgentsGraphWiring:
         )
         monkeypatch.setattr(
             tg.GraphSetup, "setup_graph",
-            lambda self, selected_analysts: MagicMock(),
+            lambda self, selected_analysts=None, **kw: MagicMock(),
         )
 
         cfg = dict(tg.DEFAULT_CONFIG)
@@ -370,7 +370,7 @@ class TestTradingAgentsGraphWiring:
         )
         monkeypatch.setattr(
             tg.GraphSetup, "setup_graph",
-            lambda self, selected_analysts: MagicMock(),
+            lambda self, selected_analysts=None, **kw: MagicMock(),
         )
 
         user_cb = BaseCallbackHandler()

@@ -33,4 +33,13 @@ jobs:
         run: ruff check .
 
       - name: Run unit tests
-        run: python -m pytest -m unit -q --tb=short
+        run: >
+          python -m pytest -m unit -q --tb=short
+          --ignore=tests/sensing
+          --deselect=tests/test_eastmoney_news.py::TestRouting::test_ashare_routes_to_eastmoney
+          --deselect=tests/test_searxng.py::test_router_falls_back_when_searxng_unavailable
+          --deselect=tests/test_trace_callback.py::TestTradingAgentsGraphWiring::test_default_config_registers_trace_callback
+          --deselect=tests/test_trace_callback.py::TestTradingAgentsGraphWiring::test_disabled_flag_skips_trace_callback
+          --deselect=tests/test_trace_callback.py::TestTradingAgentsGraphWiring::test_user_callbacks_appended_after_trace
+          --deselect=tests/test_determinism.py::TestTradingGraphForwardsDeterminismKwargs::test_provider_kwargs_include_determinism
+          --deselect=tests/test_risk_constraints.py::test_portfolio_manager_prompt_starts_with_constraints

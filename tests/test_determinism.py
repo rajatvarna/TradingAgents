@@ -318,7 +318,7 @@ class TestTradingGraphForwardsDeterminismKwargs:
         # The rest of __init__ touches LangGraph internals we don't need to
         # exercise here — short-circuit by patching setup_graph.
         monkeypatch.setattr(
-            tg.GraphSetup, "setup_graph", lambda self, selected_analysts: MagicMock()
+            tg.GraphSetup, "setup_graph", lambda self, selected_analysts=None, **kw: MagicMock()
         )
 
         tg.TradingAgentsGraph(debug=False)

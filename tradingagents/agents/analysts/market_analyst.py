@@ -191,9 +191,7 @@ Write a very detailed and nuanced report of the trends you observe. Provide spec
 
             result = chain.invoke(state["messages"])
 
-            report = ""
-            if len(result.tool_calls) == 0:
-                report = result.content
+            report = result.content if isinstance(result.content, str) else ""
 
             return {
                 "messages": [result],

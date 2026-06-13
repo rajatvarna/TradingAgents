@@ -186,6 +186,7 @@ def test_portfolio_manager_prompt_starts_with_constraints():
     captured = {}
     decision = PortfolioDecision(
         rating=PortfolioRating.HOLD,
+        confidence=0.8,
         executive_summary="Stay within risk budget.",
         investment_thesis="Constraints cap the position.",
     )

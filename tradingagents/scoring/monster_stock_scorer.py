@@ -663,6 +663,148 @@ def score_stock(
     )
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Corrected standalone scoring functions (public API)
+#
+# These replace / complement the private _score_* functions above with
+# mathematically correct implementations addressing the issues documented
+# in the plan critique:
+#   - EPS below-floor scores are 0-1, not 0-4 (Gemini gave 4.0 to 20% growth)
+#   - Acceleration uses normalized magnitude, not bare arithmetic difference
+#   - Sponsorship weights recent quarters more than distant ones
+#   - RSNHBP and ADR have dedicated scorers included in the composite weights
+# ──────────────────────────────────────────────────────────────────────────────
+
+import numpy as _np
+from typing import Optional as _Optional
+
+
+def _clip(val: float, lo: float = 0.0, hi: float = 10.0) -> float:
+    return float(_np.clip(val, lo, hi))
+
+
+def score_eps_growth(current_q_growth: _Optional[float]) -> float:
+    """
+    Score current-quarter EPS YoY growth on a 0-10 scale.
+
+    Key fix vs Gemini: the below-floor zone (0-25%) maps to 0-1, not 0-4.
+    Boik explicitly treats 25% as a hard floor — 20% growth is not 4/10.
+    """
+    if current_q_growth is None:
+        return 0.0
+    if current_q_growth < 0:
+        return 0.0
+    if current_q_growth < 25:
+        # Severe penalty zone: 0% → 0.0, 24% → 1.0
+        return _clip(current_q_growth / 24.0)
+    if current_q_growth < 50:
+        # Meets floor: 25% → 5.0, 49% → 6.5
+        return _clip(5.0 + (current_q_growth - 25.0) / 25.0 * 1.5)
+    if current_q_growth < 100:
+        # Strong: 50% → 6.5, 99% → 8.5
+        return _clip(6.5 + (current_q_growth - 50.0) / 50.0 * 2.0)
+    # Triple-digit: 100%+ → 8.5 to 10.0
+    return _clip(8.5 + min(1.5, (current_q_growth - 100.0) / 200.0 * 1.5))
+
+
+def score_acceleration(growth_history: list) -> float:
+    """
+    Score EPS or revenue growth acceleration across up to 4 quarters.
+
+    growth_history: [most_recent, one_quarter_ago, two_quarters_ago, ...]
+
+    Key fix vs Gemini: weights the MAGNITUDE of acceleration relative to the
+    prior level, not just direction.  10% → 11% is very different from 50% → 100%.
+    """
+    if len(growth_history) < 3:
+        return 5.0  # neutral when insufficient data
+
+    score = 5.0
+    for i in range(min(3, len(growth_history) - 1)):
+        current = growth_history[i]
+        prior = growth_history[i + 1]
+        if prior == 0:
+            continue
+        normalized_change = (current - prior) / max(abs(prior), 1.0)
+        weight = 1.0 / (i + 1)  # more recent quarters weighted more
+
+        if normalized_change > 0.10:
+            score += 1.5 * weight
+        elif normalized_change > 0.0:
+            score += 0.5 * weight
+        elif normalized_change > -0.10:
+            score -= 0.75 * weight
+        else:
+            score -= 2.0 * weight
+
+    return _clip(score)
+
+
+def score_sponsorship(fund_history: list) -> float:
+    """
+    Score institutional sponsorship trend across up to 8 quarters.
+
+    fund_history: [most_recent_count, one_q_ago, two_q_ago, ...]
+
+    Key fix vs Gemini: uses weighted average growth (recent quarters count more)
+    and caps the growth contribution properly so the function doesn't over-score
+    high-growth-rate but small-base companies.
+    """
+    if len(fund_history) < 4:
+        return 4.0
+
+    history = fund_history[:8]
+    positive_quarters = 0
+    weighted_growth = 0.0
+    total_weight = 0.0
+
+    for i in range(len(history) - 1):
+        current = history[i]
+        prev = history[i + 1]
+        if prev > 0:
+            growth_rate = (current - prev) / prev
+            weight = 1.0 / (i + 1)
+            if growth_rate > 0:
+                positive_quarters += 1
+            weighted_growth += growth_rate * weight
+            total_weight += weight
+
+    consistency = positive_quarters / (len(history) - 1)
+    avg_weighted = weighted_growth / total_weight if total_weight > 0 else 0.0
+
+    consistency_score = consistency * 6.0
+    growth_score = _clip(avg_weighted * 15.0, 0.0, 4.0)
+    return _clip(consistency_score + growth_score)
+
+
+def score_rsnhbp(signal) -> float:
+    """
+    Score the RSNHBP signal from ``calculate_rsnhbp()``.
+
+    One of the highest-conviction institutional accumulation signals — RS line
+    makes a 52-week high while the stock price has NOT yet done so.
+    """
+    if signal is None or not signal.signal_triggered:
+        return 3.0  # neutral — not present, not penalized
+    return {"strong": 10.0, "moderate": 8.0, "weak": 6.0, "none": 3.0}.get(
+        signal.signal_strength, 3.0
+    )
+
+
+def score_adr(adr_grade: str, small_account_edge: bool = False) -> float:
+    """
+    Score Average Daily Range grade.
+
+    KK's non-negotiable criterion: low ADR = no setup.
+    adr_grade: "A" | "B" | "C" | "D" | "F"
+    small_account_edge: True when the float is thin AND ADR is high (KK's edge).
+    """
+    base = {"A": 10.0, "B": 8.0, "C": 5.5, "D": 2.5, "F": 0.0}.get(adr_grade, 5.0)
+    if small_account_edge:
+        base = min(10.0, base + 1.0)
+    return base
+
+
 def _build_narrative(fund, tech, group, market, composite, grade, action, blockers) -> str:
     """Build a 4-line plain-English summary of the composite score for agent prompt injection."""
     lines = [

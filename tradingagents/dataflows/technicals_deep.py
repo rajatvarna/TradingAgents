@@ -10,6 +10,10 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 @dataclass
@@ -395,6 +399,131 @@ def _compute_relative_strength(ticker: str, df, as_of_date: str) -> RelativeStre
         rs_percentile=round(rs_percentile, 1),
         rs_line_trend=rs_line_trend,
         held_up_during_market_decline=held_up,
+    )
+
+
+@dataclass
+class RSNHBPSignal:
+    """
+    Relative Strength New Highs Before Price.
+
+    True when the RS line (stock/SPY ratio) makes a 52-week high while the
+    stock price has NOT yet made a new 52-week high. Indicates institutions
+    are accumulating quietly — outpacing the market without pushing the stock
+    through visible resistance.
+    """
+    rs_line_value: float
+    rs_at_52w_high: bool
+    price_at_52w_high: bool
+    pct_below_52w_high: float
+    in_valid_base_range: bool
+    signal_triggered: bool
+    signal_strength: str  # "strong" | "moderate" | "weak" | "none"
+
+
+def calculate_rsnhbp(
+    stock_df: "pd.DataFrame",
+    spy_df: "pd.DataFrame",
+    lookback: int = 252,
+) -> RSNHBPSignal:
+    """
+    RSNHBP: RS line at 52-week high while stock price is NOT at a 52-week high.
+
+    Consolidation range is 5-33% below the 52-week high — covers all valid
+    CANSLIM base depths in a normal market (cup-and-handle can correct 20-30%
+    and remain constructive).
+    """
+    import pandas as pd
+
+    combined = (
+        stock_df[["Close"]]
+        .rename(columns={"Close": "Stock_Close"})
+        .join(spy_df[["Close"]].rename(columns={"Close": "SPY_Close"}), how="inner")
+    )
+    combined["RS_Line"] = combined["Stock_Close"] / combined["SPY_Close"]
+    combined["Price_52W_High"] = combined["Stock_Close"].rolling(window=lookback).max()
+    combined["RS_52W_High"] = combined["RS_Line"].rolling(window=lookback).max()
+
+    if combined.empty or combined.iloc[-1].isnull().any():
+        return RSNHBPSignal(0.0, False, False, 0.0, False, False, "none")
+
+    current = combined.iloc[-1]
+    rs_at_high = bool(current["RS_Line"] >= current["RS_52W_High"] * 0.999)
+    price_at_high = bool(current["Stock_Close"] >= current["Price_52W_High"] * 0.99)
+    pct_below = float((1 - current["Stock_Close"] / current["Price_52W_High"]) * 100)
+
+    # Valid base: 5-33% below 52-week high
+    # < 5%  = essentially at the high (about to break out)
+    # > 33% = too deep for a standard base in normal market conditions
+    in_valid_base = 5.0 <= pct_below <= 33.0
+    near_pivot = pct_below < 5.0
+
+    triggered = bool(rs_at_high and (in_valid_base or near_pivot) and not price_at_high)
+
+    if triggered and pct_below < 8.0:
+        strength = "strong"
+    elif triggered and pct_below < 20.0:
+        strength = "moderate"
+    elif triggered:
+        strength = "weak"
+    else:
+        strength = "none"
+
+    return RSNHBPSignal(
+        rs_line_value=round(float(current["RS_Line"]), 4),
+        rs_at_52w_high=rs_at_high,
+        price_at_52w_high=price_at_high,
+        pct_below_52w_high=round(pct_below, 1),
+        in_valid_base_range=in_valid_base,
+        signal_triggered=triggered,
+        signal_strength=strength,
+    )
+
+
+@dataclass
+class FloatVelocityProfile:
+    float_shares_m: float
+    daily_float_turnover_pct: float
+    velocity_grade: str  # "extreme" | "high" | "elevated" | "normal" | "low" | "unknown"
+    is_thin_float: bool
+    small_account_edge: bool       # thin float + high velocity = explosive potential
+    liquidity_exhaustion_risk: bool  # > 30% daily turnover = buying power may exhaust
+
+
+def calculate_float_velocity(ticker_info: dict, daily_volume: float) -> FloatVelocityProfile:
+    """
+    Free-float velocity using the actual floatShares field from yfinance.
+
+    Avoids the Gemini pitfall of computing float from total shares with an
+    arbitrary 40% institutional discount — uses the reported float directly.
+    """
+    float_shares = ticker_info.get("floatShares")
+    if not float_shares or float_shares == 0:
+        # rough fallback when float not reported
+        float_shares = ticker_info.get("sharesOutstanding", 0) * 0.7
+    if not float_shares or float_shares == 0:
+        return FloatVelocityProfile(0.0, 0.0, "unknown", False, False, False)
+
+    turnover_pct = (daily_volume / float_shares) * 100
+    float_m = float_shares / 1e6
+
+    grade = (
+        "extreme"  if turnover_pct >= 20 else
+        "high"     if turnover_pct >= 8  else
+        "elevated" if turnover_pct >= 3  else
+        "normal"   if turnover_pct >= 1  else "low"
+    )
+    is_thin = float_m < 30.0
+    small_edge = is_thin and grade in ("high", "extreme")
+    exhaustion_risk = turnover_pct > 30.0
+
+    return FloatVelocityProfile(
+        float_shares_m=round(float_m, 1),
+        daily_float_turnover_pct=round(turnover_pct, 2),
+        velocity_grade=grade,
+        is_thin_float=is_thin,
+        small_account_edge=small_edge,
+        liquidity_exhaustion_risk=exhaustion_risk,
     )
 
 

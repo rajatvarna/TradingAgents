@@ -15,7 +15,35 @@ from langgraph.prebuilt import ToolNode
 
 from tradingagents.llm_clients import create_llm_client
 
-from tradingagents.agents import *
+from tradingagents.agents import (
+    AgentState,
+    InvestDebateState,
+    RiskDebateState,
+    create_force_finalize,
+    create_msg_delete,
+    create_conflict_detector,
+    create_bear_researcher,
+    create_bull_researcher,
+    create_derivative_analyst,
+    create_research_manager,
+    create_fundamentals_analyst,
+    create_market_analyst,
+    create_neutral_debator,
+    create_news_analyst,
+    create_options_analyst,
+    create_aggressive_debator,
+    create_portfolio_manager,
+    create_market_aware_portfolio_state_manager,
+    create_portfolio_state_manager,
+    MarketState,
+    create_conservative_debator,
+    create_sentiment_analyst,
+    create_trader,
+    create_esg_analyst,
+    create_group_sector_analyst,
+    create_market_phase_analyst,
+    create_postmortem_analyst,
+)
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.dataflows.utils import safe_ticker_component
@@ -98,6 +126,7 @@ class TradingAgentsGraph:
         self.debug = debug
         self.config = config or DEFAULT_CONFIG
         self.callbacks = callbacks or []
+        self.selected_analysts = selected_analysts
 
         # IIC-FORGE F1: token accumulator — must be in self.callbacks BEFORE
         # the LLM clients are constructed, so the LLM clients pick it up.
@@ -528,35 +557,33 @@ class TradingAgentsGraph:
 
     def _log_state(self, trade_date, final_state):
         """Log the final state to a JSON file."""
+        ids = final_state.get("investment_debate_state") or {}
+        rds = final_state.get("risk_debate_state") or {}
         self.log_states_dict[str(trade_date)] = {
-            "company_of_interest": final_state["company_of_interest"],
-            "trade_date": final_state["trade_date"],
-            "market_report": final_state["market_report"],
-            "sentiment_report": final_state["sentiment_report"],
-            "news_report": final_state["news_report"],
-            "fundamentals_report": final_state["fundamentals_report"],
+            "company_of_interest": final_state.get("company_of_interest"),
+            "trade_date": final_state.get("trade_date"),
+            "market_report": final_state.get("market_report"),
+            "sentiment_report": final_state.get("sentiment_report"),
+            "news_report": final_state.get("news_report"),
+            "fundamentals_report": final_state.get("fundamentals_report"),
             "risk_constraints": final_state.get("risk_constraints", {}),
             "investment_debate_state": {
-                "bull_history": final_state["investment_debate_state"]["bull_history"],
-                "bear_history": final_state["investment_debate_state"]["bear_history"],
-                "history": final_state["investment_debate_state"]["history"],
-                "current_response": final_state["investment_debate_state"][
-                    "current_response"
-                ],
-                "judge_decision": final_state["investment_debate_state"][
-                    "judge_decision"
-                ],
+                "bull_history": ids.get("bull_history"),
+                "bear_history": ids.get("bear_history"),
+                "history": ids.get("history"),
+                "current_response": ids.get("current_response"),
+                "judge_decision": ids.get("judge_decision"),
             },
-            "trader_investment_decision": final_state["trader_investment_plan"],
+            "trader_investment_decision": final_state.get("trader_investment_plan"),
             "risk_debate_state": {
-                "aggressive_history": final_state["risk_debate_state"]["aggressive_history"],
-                "conservative_history": final_state["risk_debate_state"]["conservative_history"],
-                "neutral_history": final_state["risk_debate_state"]["neutral_history"],
-                "history": final_state["risk_debate_state"]["history"],
-                "judge_decision": final_state["risk_debate_state"]["judge_decision"],
+                "aggressive_history": rds.get("aggressive_history"),
+                "conservative_history": rds.get("conservative_history"),
+                "neutral_history": rds.get("neutral_history"),
+                "history": rds.get("history"),
+                "judge_decision": rds.get("judge_decision"),
             },
-            "investment_plan": final_state["investment_plan"],
-            "final_trade_decision": final_state["final_trade_decision"],
+            "investment_plan": final_state.get("investment_plan"),
+            "final_trade_decision": final_state.get("final_trade_decision"),
         }
 
         # Save to file. Reject ticker values that would escape the
@@ -590,7 +617,9 @@ class TradingAgentsGraph:
             tickers: List of ticker symbols to analyse.
             trade_date: Analysis date in YYYY-MM-DD format.
             max_workers: Maximum parallel threads (default 4; keep below API
-                rate-limit thresholds for your provider).
+                rate-limit thresholds for your provider).  Set to 1 to run
+                sequentially if your ``propagate`` implementation is not
+                thread-safe (e.g. when using a shared SQLite checkpointer).
 
         Returns:
             A dict with keys:
@@ -601,9 +630,16 @@ class TradingAgentsGraph:
         if not tickers:
             return {"results": [], "summary": {}}
 
+        # Capture the propagate method reference before entering threads so that
+        # test patches on self.propagate are honoured, and so that subclasses
+        # overriding propagate are respected.  Under true concurrency, callers
+        # must ensure their propagate implementation is thread-safe or pass
+        # max_workers=1.
+        _propagate = self.propagate
+
         def _analyse_one(ticker: str) -> Dict[str, Any]:
             try:
-                final_state, signal = self.propagate(ticker, trade_date)
+                final_state, signal = _propagate(ticker, trade_date)
                 decision_text = final_state.get("final_trade_decision", "")
                 confidence = self._extract_confidence(decision_text)
                 rating = self._extract_rating(decision_text)

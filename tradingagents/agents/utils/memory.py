@@ -10,11 +10,8 @@ import logging
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 import re
-import logging
 
 from tradingagents.agents.utils.rating import extract_rating, parse_rating
-
-logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -128,15 +125,15 @@ class TradingMemoryLog:
         if "meta" in row.keys() and row["meta"]:
             try:
                 meta_dict = json.loads(row["meta"])
-            except Exception:
-                pass
-                
+            except (json.JSONDecodeError, ValueError) as exc:
+                logger.warning("Failed to parse meta JSON for row %s: %s", dict(row).get("id"), exc)
+
         outcome_dict = {}
         if "outcome" in row.keys() and row["outcome"]:
             try:
                 outcome_dict = json.loads(row["outcome"])
-            except Exception:
-                pass
+            except (json.JSONDecodeError, ValueError) as exc:
+                logger.warning("Failed to parse outcome JSON for row %s: %s", dict(row).get("id"), exc)
 
         return {
             "date": row["trade_date"],

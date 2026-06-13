@@ -45,19 +45,11 @@ dependencies = [
     "uvicorn>=0.35.0",
     "yfinance>=1.4.1",
     "mcp>=1.9.0",
-    # portfolio-advisor dependencies
-    "apscheduler>=3.10.0",
-    "flask>=3.0.0",
-    "pandas-market-calendars>=4.4.0",
-    "robin-stocks>=3.0.0",
-    "pypdf>=4.0,<6",
-    # Dashboard dependencies (optional — only needed when running the dashboard process)
-    "dash>=2.18.0",
-    "plotly>=5.24.0",
-    "scipy>=1.14.0",
     # tabulate is required by pandas.DataFrame.to_markdown — used by the
     # yfinance options vendor in tradingagents/dataflows/yfinance_options.py.
     "tabulate>=0.9",
+    # pypdf is used by the user-research PDF ingestion path (lazy import).
+    "pypdf>=4.0,<6",
 ]
 
 [project.optional-dependencies]
@@ -87,6 +79,17 @@ dev = [
     "pytest-asyncio>=0.23",            # async test support (declared with asyncio_mode=auto below)
     "freezegun>=1.4",                  # F4: deterministic time control for cooldown tests
 ]
+portfolio = [
+    "apscheduler>=3.10.0",
+    "flask>=3.0.0",
+    "pandas-market-calendars>=4.4.0",
+    "robin-stocks>=3.0.0",
+]
+dashboard = [
+    "dash>=2.18.0",
+    "plotly>=5.24.0",
+    "scipy>=1.14.0",
+]
 docs = [
     "mkdocs>=1.6",
     "mkdocs-material>=9.5",
@@ -95,7 +98,7 @@ docs = [
 
 [project.scripts]
 tradingagents = "cli.main:app"
-portfolio-advisor = "portfolio_advisor.main:main"
+portfolio-advisor = "portfolio_advisor.main:main"  # requires: pip install -e ".[portfolio]"
 tradingagents-api = "tradingagents_service.api.app:main"
 tradingagents-worker = "tradingagents_service.worker.main:main"
 tradingagents-mcp = "mcp_server.tradingagents_mcp_server:main"
@@ -124,3 +127,20 @@ markers = [
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "SIM"]
+ignore = [
+    "E501",   # line too long — enforced by formatter, not linter
+    "N806",   # variable in function should be lowercase (conflicts with pandas df.Column patterns)
+    "SIM108", # ternary operator — sometimes less readable
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true

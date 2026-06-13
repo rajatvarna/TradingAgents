@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { StockData } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -9,7 +9,19 @@ interface Props {
   onSelectStock: (s: StockData) => void;
 }
 
-function dailyColor(pct: number | null): string {
+type Timeframe = "daily" | "wtd" | "mtd" | "ytd" | "one_y" | "three_y" | "five_y";
+
+const TIMEFRAMES: { value: Timeframe; label: string }[] = [
+  { value: "daily",   label: "1D" },
+  { value: "wtd",     label: "WTD" },
+  { value: "mtd",     label: "MTD" },
+  { value: "ytd",     label: "YTD" },
+  { value: "one_y",   label: "1Y" },
+  { value: "three_y", label: "3Y" },
+  { value: "five_y",  label: "5Y" },
+];
+
+function heatColor(pct: number | null): string {
   if (pct === null) return "bg-slate-800 text-slate-400";
   if (pct >= 5)   return "bg-emerald-600 text-white";
   if (pct >= 3)   return "bg-emerald-700 text-white";
@@ -21,7 +33,16 @@ function dailyColor(pct: number | null): string {
   return "bg-red-600 text-white";
 }
 
+function avgColor(avg: number | null): string {
+  if (avg === null) return "text-slate-500";
+  if (avg > 0) return "text-emerald-400";
+  if (avg < 0) return "text-red-400";
+  return "text-slate-400";
+}
+
 export default function SectorHeatmap({ stocks, onSelectStock }: Props) {
+  const [timeframe, setTimeframe] = useState<Timeframe>("daily");
+
   const sectors = useMemo(() => {
     const map = new Map<string, StockData[]>();
     for (const s of stocks) {
@@ -30,19 +51,25 @@ export default function SectorHeatmap({ stocks, onSelectStock }: Props) {
       arr.push(s);
       map.set(s.sector, arr);
     }
-    // Sort sectors by total market cap descending
     return Array.from(map.entries())
       .sort((a, b) => {
         const capA = a[1].reduce((s, x) => s + (x.marketCap ?? 0), 0);
         const capB = b[1].reduce((s, x) => s + (x.marketCap ?? 0), 0);
         return capB - capA;
       })
-      .map(([sector, sectorStocks]) => ({
-        sector,
-        stocks: sectorStocks.sort((a, b) => (b.marketCap ?? 0) - (a.marketCap ?? 0)),
-        totalCap: sectorStocks.reduce((s, x) => s + (x.marketCap ?? 0), 0),
-      }));
-  }, [stocks]);
+      .map(([sector, sectorStocks]) => {
+        const vals = sectorStocks
+          .map((s) => s.performance[timeframe] as number | null)
+          .filter((v): v is number => v !== null);
+        const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+        return {
+          sector,
+          stocks: sectorStocks.sort((a, b) => (b.marketCap ?? 0) - (a.marketCap ?? 0)),
+          totalCap: sectorStocks.reduce((s, x) => s + (x.marketCap ?? 0), 0),
+          avg,
+        };
+      });
+  }, [stocks, timeframe]);
 
   if (stocks.length === 0) {
     return (
@@ -54,10 +81,21 @@ export default function SectorHeatmap({ stocks, onSelectStock }: Props) {
 
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900 overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between gap-3 flex-wrap">
         <h2 className="text-sm font-semibold text-white">Sector Heatmap</h2>
-        <div className="flex gap-3 text-xs text-slate-500">
-          <span>Cell size = market cap · Color = 1D %</span>
+        <div className="flex items-center gap-3 flex-wrap">
+          <select
+            value={timeframe}
+            onChange={(e) => setTimeframe(e.target.value as Timeframe)}
+            className="bg-slate-800 border border-slate-600 text-slate-300 text-xs rounded px-2 py-1 cursor-pointer hover:border-slate-400 transition-colors"
+          >
+            {TIMEFRAMES.map((tf) => (
+              <option key={tf.value} value={tf.value}>{tf.label}</option>
+            ))}
+          </select>
+          <div className="flex gap-1 items-center text-xs text-slate-500">
+            <span>Cell size = mkt cap · Color = {TIMEFRAMES.find((t) => t.value === timeframe)?.label} %</span>
+          </div>
           <div className="flex gap-1 items-center">
             {[["bg-emerald-600", "+5%+"], ["bg-emerald-800", "+1%"], ["bg-slate-800", "0%"], ["bg-red-800", "-1%"], ["bg-red-600", "-5%-"]].map(([cls, label]) => (
               <span key={label} className={cn("px-1.5 py-0.5 rounded text-white text-[10px]", cls)}>{label}</span>
@@ -66,14 +104,20 @@ export default function SectorHeatmap({ stocks, onSelectStock }: Props) {
         </div>
       </div>
       <div className="p-3 space-y-3">
-        {sectors.map(({ sector, stocks: sectorStocks }) => (
+        {sectors.map(({ sector, stocks: sectorStocks, avg }) => (
           <div key={sector}>
-            <div className="text-xs text-slate-500 font-semibold mb-1 px-1">{sector}</div>
+            <div className="text-xs font-semibold mb-1 px-1 flex items-center gap-2">
+              <span className="text-slate-400">{sector}</span>
+              {avg !== null && (
+                <span className={cn("font-mono", avgColor(avg))}>
+                  {avg >= 0 ? "+" : ""}{avg.toFixed(2)}%
+                </span>
+              )}
+            </div>
             <div className="flex flex-wrap gap-1">
               {sectorStocks.map((stock) => {
-                const pct = stock.performance.daily;
+                const pct = stock.performance[timeframe] as number | null;
                 const cap = stock.marketCap ?? 0;
-                // Normalize cell size within sector (min 48px, max 120px proportional to cap)
                 const sectorMax = sectorStocks[0]?.marketCap ?? 1;
                 const relSize = sectorMax > 0 ? Math.max(0.1, cap / sectorMax) : 0.1;
                 const w = Math.round(48 + relSize * 72);
@@ -85,7 +129,7 @@ export default function SectorHeatmap({ stocks, onSelectStock }: Props) {
                     title={`${stock.symbol} · ${stock.name} · ${pct !== null ? (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%" : "N/A"}`}
                     className={cn(
                       "rounded flex flex-col items-center justify-center text-center transition-opacity hover:opacity-80 cursor-pointer",
-                      dailyColor(pct)
+                      heatColor(pct)
                     )}
                     style={{ width: w, height: h }}
                   >

@@ -9,6 +9,16 @@ Breaking changes within the 0.x line are called out explicitly.
 ## [Unreleased]
 ### Added
 
+- **Monster Stock / TraderLion framework integration** — deterministic scoring engine implementing the Boik/TraderLion methodology across 22 criteria (EPS acceleration, institutional sponsorship, MVP technical grades, group confirmation, market phase). Adds `tradingagents/scoring/monster_stock_scorer.py` with `MonsterStockScore` (0-100 composite) and `score_stock()`.
+- **Deep data layer** — four new dataflow modules: `fundamentals_deep.py` (8-quarter EPS/revenue snapshots, institutional holder history), `technicals_deep.py` (MA grading A-E, base pattern detection, sell signal detection, relative strength), `market_health.py` (IBD-phase classification, H/L/G proxy, distribution day counting), `sector_groups.py` (group RS rank, 3-leader confirmation check, Boik 50% rule).
+- **Group & Sector Leadership Analyst** (`group_sector_analyst.py`) — evaluates whether a stock's industry group is in the top third and whether 3+ high-RS stocks confirm the group move.
+- **Market Phase Analyst** (`market_phase_analyst.py`) — classifies market as Confirmed Uptrend / Under Pressure / Correction and recommends MMSS mode and position-sizing aggression level.
+- **Post-Mortem Analyst** (`postmortem_analyst.py`) — reviews past recommendations 4-12 weeks later, identifies missed sell signals, and extracts one actionable lesson per trade.
+- **Monster Stock Screener** (`global-screener/monster_stock_screener.py`) — async multi-ticker scanner that pre-filters, scores, and ranks a universe (S&P 500 + Nasdaq 100 default) against the Monster Stock criteria. Outputs A-List / Watch / Monitor tiers.
+- New config keys: `monster_stock_mode`, `min_composite_score_for_buy`, `sell_discipline`, `screener_universe`, `screener_top_n`, `market_phase_gate`, `group_confirmation_required`, `postmortem_lookback_weeks`.
+- New `AgentState` fields: `monster_stock_score`, `group_sector_report`, `market_phase_report`, `postmortem_report`.
+- 34 new unit tests (`test_monster_stock_scorer.py`, `test_deep_dataflows.py`) covering all scoring criteria and composite logic.
+
 - Native Kimi (Moonshot AI) provider support (`kimi`) with correct reasoning_content round-tripping for K2 models.
 
 ### Fixed

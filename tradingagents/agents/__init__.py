@@ -12,6 +12,9 @@ from .analysts.sentiment_analyst import (
     create_social_media_analyst,  # deprecated alias kept for back-compat
 )
 from .analysts.esg_analyst import create_esg_analyst
+from .analysts.group_sector_analyst import create_group_sector_analyst
+from .analysts.market_phase_analyst import create_market_phase_analyst
+from .analysts.postmortem_analyst import create_postmortem_analyst
 
 from .researchers.bear_researcher import create_bear_researcher
 from .researchers.bull_researcher import create_bull_researcher
@@ -56,4 +59,7 @@ __all__ = [
     "create_social_media_analyst",  # deprecated; will be removed in a future version
     "create_trader",
     "create_esg_analyst",
+    "create_group_sector_analyst",
+    "create_market_phase_analyst",
+    "create_postmortem_analyst",
 ]

@@ -33,6 +33,18 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_COST_GUARD_ENABLED":   "cost_guard_enabled",
     "TRADINGAGENTS_ORCHESTRATOR_ENABLED": "orchestrator_enabled",
     "TRADINGAGENTS_TEMPERATURE":          "temperature",
+    # Monster Stock / TraderLion framework
+    "TRADINGAGENTS_MONSTER_STOCK_MODE":          "monster_stock_mode",
+    "TRADINGAGENTS_MIN_COMPOSITE_SCORE_FOR_BUY": "min_composite_score_for_buy",
+    "TRADINGAGENTS_SELL_DISCIPLINE":             "sell_discipline",
+    "TRADINGAGENTS_SCREENER_UNIVERSE":           "screener_universe",
+    "TRADINGAGENTS_SCREENER_MIN_SCORE":          "screener_min_score",
+    "TRADINGAGENTS_SCREENER_TOP_N":              "screener_top_n",
+    "TRADINGAGENTS_SCREENER_RUN_DAILY":          "screener_run_daily",
+    "TRADINGAGENTS_GROUP_CONFIRMATION_REQUIRED": "group_confirmation_required",
+    "TRADINGAGENTS_MARKET_PHASE_GATE":           "market_phase_gate",
+    "TRADINGAGENTS_POSTMORTEM_LOOKBACK_WEEKS":   "postmortem_lookback_weeks",
+    "TRADINGAGENTS_SPONSORSHIP_REFRESH_WEEKLY":  "sponsorship_refresh_weekly",
 }
 
 _DATA_VENDOR_ENV_OVERRIDES = {
@@ -309,4 +321,25 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "futu_opend_host": "127.0.0.1",
     "futu_opend_port": 11111,
     "telegram_channels": [],
+    # ── Monster Stock / TraderLion framework ──────────────────────────────────
+    # Enable the scoring engine and inject MonsterStockScore into agent prompts.
+    "monster_stock_mode": False,
+    # Minimum composite score (0-100) to recommend a buy action.
+    "min_composite_score_for_buy": 65.0,
+    # Sell discipline: "standard" uses 21d MA trigger; "mmss" uses 10d MA trigger.
+    # "auto" detects from market phase (choppy bull → mmss, trending bull → standard).
+    "sell_discipline": "auto",
+    # Screener universe: "sp500_ndx100" | "custom" | "broad"
+    "screener_universe": "sp500_ndx100",
+    "screener_min_score": 45.0,
+    "screener_top_n": 30,
+    "screener_run_daily": False,
+    # Require 3+ group leaders for a buy signal (Boik 50% rule).
+    "group_confirmation_required": False,
+    # Block new long positions in IBD correction phase.
+    "market_phase_gate": True,
+    # Post-mortem lookback window (weeks).
+    "postmortem_lookback_weeks": 12,
+    # Refresh institutional sponsorship data weekly (slower, more accurate).
+    "sponsorship_refresh_weekly": False,
 })

@@ -23,6 +23,9 @@ from tradingagents.agents import (
     create_trader,
     create_esg_analyst,
     create_derivative_analyst,
+    create_group_sector_analyst,
+    create_market_phase_analyst,
+    create_postmortem_analyst,
 )
 from tradingagents.agents.utils.agent_states import AgentState
 from tradingagents.agents.utils.tool_provenance import create_tool_provenance_capture_node
@@ -31,6 +34,7 @@ from .conditional_logic import ConditionalLogic
 from .analyst_execution import build_analyst_execution_plan
 from .constants import (
     ANALYST_REPORT_KEYS,
+    TOOL_FREE_ANALYSTS,
     TOOL_NODE_KEY,
     VALID_ANALYSTS,
     analyst_node_name,
@@ -47,6 +51,9 @@ _ANALYST_FACTORIES = {
     "options": create_options_analyst,
     "esg": create_esg_analyst,
     "derivatives": create_derivative_analyst,
+    "group_sector": create_group_sector_analyst,
+    "market_phase": create_market_phase_analyst,
+    "postmortem": create_postmortem_analyst,
 }
 
 _DEFAULT_ANALYSTS = ("market", "sentiment", "news", "fundamentals")

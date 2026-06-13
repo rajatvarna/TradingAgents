@@ -57,6 +57,7 @@ function filtersToParams(f: FilterState): string {
   if (f.search) p.set("q", f.search);
   if (f.volSurge) p.set("volSurge", "1");
   if (f.watchlistOnly) p.set("watchlist", "1");
+  if (f.near52wHigh) p.set("near52w", "1");
   return p.toString();
 }
 
@@ -72,6 +73,7 @@ function paramsToFilters(search: string, base: FilterState): FilterState {
   const search2 = p.get("q") ?? "";
   const volSurge = p.get("volSurge") === "1";
   const watchlistOnly = p.get("watchlist") === "1";
+  const near52wHigh = p.get("near52w") === "1";
   return {
     markets: markets?.length ? markets : base.markets,
     sectors,
@@ -82,6 +84,7 @@ function paramsToFilters(search: string, base: FilterState): FilterState {
     search: search2,
     volSurge,
     watchlistOnly,
+    near52wHigh,
   };
 }
 
@@ -120,8 +123,9 @@ const COLUMNS: ColumnDef[] = [
   { id: "rs",        label: "RS",         defaultVisible: true },
   { id: "marketCap", label: "Mkt Cap",    defaultVisible: true },
   { id: "chart",     label: "Chart (1M)", defaultVisible: true },
-  { id: "divYield",  label: "Div Yield",  defaultVisible: false },
-  { id: "beta",      label: "Beta",       defaultVisible: false },
+  { id: "divYield",   label: "Div Yield",    defaultVisible: false },
+  { id: "beta",       label: "Beta",         defaultVisible: false },
+  { id: "dist52wHigh", label: "vs 52W High", defaultVisible: false },
 ];
 
 const STORAGE_KEY = "screener-columns";
@@ -157,6 +161,13 @@ function applyFilters(
     rows = rows.filter(
       (d) => d.volume !== null && d.avgVolume20d !== null && d.volume > 2 * d.avgVolume20d
     );
+  }
+
+  if (f.near52wHigh) {
+    rows = rows.filter((d) => {
+      if (d.price === null || d.fiftyTwoWeekHigh === null || d.fiftyTwoWeekHigh === 0) return false;
+      return d.price / d.fiftyTwoWeekHigh >= 0.95;
+    });
   }
 
   if (f.minChangePct !== null) {
@@ -202,6 +213,7 @@ function applyPreset(preset: PresetName): FilterState {
     case "five-year-compounders": return { ...base, sortField: "five_y", sortDir: "desc", topN: 25 };
     case "most-active":    return { ...base, sortField: "volume",  sortDir: "desc", topN: 25 };
     case "vol-surge":      return { ...base, sortField: "volume",  sortDir: "desc", topN: 25, volSurge: true };
+    case "near-52w-high":  return { ...base, sortField: "daily",   sortDir: "desc", near52wHigh: true, topN: 25 };
     case "watchlist":      return { ...base, watchlistOnly: true };
     default: return base;
   }
@@ -673,7 +685,8 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
                 {vis.has("marketCap") && <SortHeader label="Mkt Cap"  field="marketCap" current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
                 {vis.has("chart")     && <th className="px-3 py-2 text-left text-xs text-slate-400">Chart (1M)</th>}
                 {vis.has("divYield")  && <SortHeader label="Div Yield" field="dividendYield" current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
-                {vis.has("beta")      && <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">Beta</th>}
+                {vis.has("beta")       && <SortHeader label="Beta" field="beta" current={filters.sortField} dir={filters.sortDir} onSort={handleSort} />}
+                {vis.has("dist52wHigh") && <th className="px-3 py-2 text-left text-xs text-slate-400 whitespace-nowrap">vs 52W High</th>}
               </tr>
             </thead>
             <tbody>
@@ -835,6 +848,22 @@ export default function ScreenerTable({ onSelectStock, onDataLoaded }: Props) {
                             )}
                           </td>
                         )}
+                        {vis.has("dist52wHigh") && (() => {
+                          const dist = stock.price !== null && stock.fiftyTwoWeekHigh !== null && stock.fiftyTwoWeekHigh > 0
+                            ? ((stock.price - stock.fiftyTwoWeekHigh) / stock.fiftyTwoWeekHigh) * 100
+                            : null;
+                          return (
+                            <td className="px-3 py-2 tabular-nums text-xs font-mono">
+                              {dist !== null ? (
+                                <span className={dist >= -5 ? "text-emerald-400 font-semibold" : dist >= -15 ? "text-amber-400" : "text-slate-400"}>
+                                  {dist >= 0 ? "+" : ""}{dist.toFixed(1)}%
+                                </span>
+                              ) : (
+                                <span className="text-slate-600">—</span>
+                              )}
+                            </td>
+                          );
+                        })()}
                       </tr>
                     );
                   })}

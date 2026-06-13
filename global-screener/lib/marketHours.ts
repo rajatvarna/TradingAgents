@@ -1,40 +1,62 @@
-/**
- * Returns true if the given market is currently open (approximate, UTC-based).
- * Times are in UTC. This is a best-effort check — does not account for public holidays.
- */
-export function isMarketOpen(market: string): boolean {
+import type { Market, MarketState } from "@/types";
+
+function getLocalTime(tz: string): { day: number; timeMin: number } {
   const now = new Date();
-  const day = now.getUTCDay(); // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
-  const h = now.getUTCHours();
-  const m = now.getUTCMinutes();
-  const timeMin = h * 60 + m;
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "short",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(now).map((p) => [p.type, p.value]));
+  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const day = dayMap[parts.weekday] ?? 0;
+  const h = parseInt(parts.hour, 10);
+  const timeMin = h * 60 + parseInt(parts.minute, 10);
+  return { day, timeMin };
+}
 
-  // Weekends: no market open
-  if (day === 0 || day === 6) return false;
-
+/**
+ * Returns the current trading state for a market. Does not account for public holidays.
+ */
+export function getMarketState(market: Market): MarketState {
   switch (market) {
-    case "US":
-      // NYSE/NASDAQ: 9:30–16:00 ET = 14:30–21:00 UTC (EST, Nov-Mar) / 13:30–20:00 UTC (EDT, Mar-Nov)
-      // Use a simplified range: 13:30–21:00 UTC to cover both DST states
-      return timeMin >= 13 * 60 + 30 && timeMin < 21 * 60;
-
-    case "India":
-      // NSE/BSE: 9:15–15:30 IST = 3:45–10:00 UTC
-      return timeMin >= 3 * 60 + 45 && timeMin < 10 * 60;
-
-    case "UAE":
-      // DFM/ADX: 10:00–14:50 GST = 6:00–10:50 UTC; also Mon–Fri (Fri close 13:50)
-      // Friday the DFM closes at 13:50 GST = 9:50 UTC
-      if (day === 5) return timeMin >= 6 * 60 && timeMin < 9 * 60 + 50;
-      return timeMin >= 6 * 60 && timeMin < 10 * 60 + 50;
-
-    case "Saudi":
-      // Tadawul: 10:00–15:00 AST (UTC+3) = 7:00–12:00 UTC; Sun–Thu
-      if (day === 5 || day === 0) return false; // Fri/Sat are weekend for Saudi
-      // Remap: Saudi working week is Sun–Thu
-      return timeMin >= 7 * 60 && timeMin < 12 * 60;
-
+    case "US": {
+      const { day, timeMin } = getLocalTime("America/New_York");
+      if (day === 0 || day === 6) return "closed";
+      if (timeMin >= 9 * 60 + 30 && timeMin < 16 * 60) return "open";
+      if (timeMin >= 8 * 60 && timeMin < 9 * 60 + 30) return "pre-market";
+      return "closed";
+    }
+    case "India": {
+      const { day, timeMin } = getLocalTime("Asia/Kolkata");
+      if (day === 0 || day === 6) return "closed";
+      if (timeMin >= 9 * 60 + 15 && timeMin < 15 * 60 + 30) return "open";
+      if (timeMin >= 9 * 60 && timeMin < 9 * 60 + 15) return "pre-market";
+      return "closed";
+    }
+    case "UAE": {
+      const { day, timeMin } = getLocalTime("Asia/Dubai");
+      if (day === 0 || day === 6) return "closed";
+      if (timeMin >= 10 * 60 && timeMin < 14 * 60 + 50) return "open";
+      if (timeMin >= 9 * 60 + 30 && timeMin < 10 * 60) return "pre-market";
+      return "closed";
+    }
+    case "Saudi": {
+      const { day, timeMin } = getLocalTime("Asia/Riyadh");
+      // Sun–Thu workweek; Fri(5) and Sat(6) are weekend
+      if (day === 5 || day === 6) return "closed";
+      if (timeMin >= 10 * 60 && timeMin < 15 * 60) return "open";
+      if (timeMin >= 9 * 60 + 30 && timeMin < 10 * 60) return "pre-market";
+      return "closed";
+    }
     default:
-      return false;
+      return "closed";
   }
+}
+
+export function isMarketOpen(market: string): boolean {
+  if (!["US", "India", "UAE", "Saudi"].includes(market)) return false;
+  return getMarketState(market as Market) === "open";
 }

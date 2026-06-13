@@ -96,6 +96,23 @@ class Propagator:
             "raw_tool_outputs": [],
             "raw_tool_seen_ids": [],
             "target_profile": target_profile or {},
+            # Monster Stock / TraderLion framework — pre-computed before graph runs
+            "monster_stock_score": {},
+            "group_sector_report": "",
+            "market_phase_report": "",
+            "postmortem_report": "",
+            "postmortem_past_recommendation": "",
+            "postmortem_outcome_data": "",
+            # Optional fields initialised to safe defaults
+            "conflict_report": {},
+            "holdings_info": {},
+            "trading_history_summary": {},
+            "prior_pending_orders": [],
+            "trading_mode": "live",
+            "market_state": {},
+            "structure_analysis": {},
+            "feature_snapshot": {},
+            "structured_strategy": {},
         }
 
     def get_graph_args(self, callbacks: Optional[List] = None) -> Dict[str, Any]:

@@ -12,6 +12,50 @@ from tradingagents.agents.utils.agent_utils import (
 from tradingagents.agents.utils.tool_fallback import bind_tools_or_none, safe_tool_text
 
 
+def _format_technical_monster_context(mss: dict) -> str:
+    """Format Monster Stock technical/MVP scores for the Market Analyst prompt."""
+    if not mss or mss.get("composite_score") is None:
+        return ""
+
+    def _cs(key: str) -> str:
+        cs = mss.get(key) or {}
+        score = cs.get("score")
+        score_str = f"{score:.0f}/10" if score is not None else "N/A"
+        return f"{score_str} [{cs.get('pass_fail', '?')}] — {cs.get('rationale', '')}"
+
+    lines = [
+        "=== MONSTER STOCK SCORE — TECHNICAL / MVP VIEW ===",
+        f"COMPOSITE: {mss.get('composite_score', 0):.0f}/100  "
+        f"Grade: {mss.get('composite_grade', '?')}  "
+        f"Action: {mss.get('action_signal', '?').upper()}  "
+        f"Stage: {mss.get('stage', '?')}",
+    ]
+    blockers = mss.get("hard_blockers") or []
+    if blockers:
+        lines.append(f"HARD BLOCKERS: {'; '.join(blockers)}")
+    lines += [
+        "",
+        "TECHNICAL SCORES (MVP Framework):",
+        f"  MA Grade (A/B/C/D/E):        {_cs('ma_grade_score')}",
+        f"  Volume Quality (up/dn ratio): {_cs('volume_quality_score')}",
+        f"  Base Pattern:                 {_cs('base_pattern_score')}",
+        f"  Breakout Quality:             {_cs('breakout_quality_score')}",
+        f"  Relative Strength (pctile):   {_cs('rs_score')}",
+        f"  Sell Signal Check (inverse):  {_cs('sell_signal_score')}",
+        f"  Extension Risk (above 50d):   {_cs('extension_risk_score')}",
+        "",
+        "MVP ANALYST RULES:",
+        "  - Only recommend buying Grade A (above all 4 MAs) or Grade B (below 10-day only) stocks.",
+        "  - NEVER recommend buying a stock showing climax run signals or multiple sell signals fired.",
+        "  - Confirm the stage: Setup / Breakout / Run-Up / Topping / Decline.",
+        "  - Provide specific entry zone (price range) and stop-loss level.",
+        "  - Rate current technical risk/reward on a 1–10 scale.",
+        "=== END MONSTER STOCK SCORE ===",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 # Default indicator set for the tool-free path. With tools the model picks
 # up to 8 indicators dynamically; without tools we pre-fetch a fixed,
 # complementary set (one per category, no redundant pairs) so a tool-less
@@ -73,6 +117,7 @@ def create_market_analyst(llm):
         current_date = state["trade_date"]
         ticker = str(state["company_of_interest"])
         instrument_context = get_instrument_context_from_state(state)
+        monster_context = _format_technical_monster_context(state.get("monster_stock_score") or {})
 
         tools = [
             get_stock_data,
@@ -81,7 +126,10 @@ def create_market_analyst(llm):
         ]
 
         system_message = (
-            """You are a trading assistant tasked with analyzing financial markets. Your role is to select the **most relevant indicators** for a given market condition or trading strategy from the following list. The goal is to choose up to **8 indicators** that provide complementary insights without redundancy. Categories and each category's indicators are:
+            monster_context
+            + """You are a Market Analyst trained on the MVP (Moving Average, Volume, Price) framework from the TraderLion/Boik Monster Stock methodology. Review the pre-computed technical scores above, then use the market data tools to confirm and enrich them with your own analysis.
+
+Your role is also to select the **most relevant indicators** for a given market condition or trading strategy from the following list. The goal is to choose up to **8 indicators** that provide complementary insights without redundancy. Categories and each category's indicators are:
 
 Moving Averages:
 - close_50_sma: 50 SMA: A medium-term trend indicator. Usage: Identify trend direction and serve as dynamic support/resistance. Tips: It lags price; combine with faster indicators for timely signals.

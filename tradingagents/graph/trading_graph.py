@@ -44,6 +44,32 @@ from tradingagents.agents.utils.agent_utils import (
 )
 
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
+
+def _precompute_monster_score(ticker: str, trade_date: str, config: dict) -> dict:
+    """Pre-compute MonsterStockScore before the graph runs.
+
+    Returns a serialised dict (via dataclasses.asdict) or {} on any failure so
+    the graph is never blocked by a scoring error.
+    """
+    if not config.get("monster_stock_mode", True):
+        return {}
+    try:
+        import dataclasses
+        from tradingagents.dataflows.fundamentals_deep import fetch_deep_fundamentals
+        from tradingagents.dataflows.technicals_deep import compute_deep_technicals
+        from tradingagents.dataflows.market_health import fetch_market_health
+        from tradingagents.dataflows.sector_groups import fetch_group_leadership
+        from tradingagents.scoring.monster_stock_scorer import score_stock
+
+        fund = fetch_deep_fundamentals(ticker)
+        tech = compute_deep_technicals(ticker, trade_date)
+        mkt = fetch_market_health(trade_date)
+        grp = fetch_group_leadership(ticker, trade_date)
+        score = score_stock(fund, tech, mkt, grp)
+        return dataclasses.asdict(score)
+    except Exception as exc:
+        logger.warning("Monster Stock pre-score failed for %s on %s: %s", ticker, trade_date, exc)
+        return {}
 from .conditional_logic import ConditionalLogic
 from .setup import GraphSetup
 from .propagation import Propagator
@@ -431,6 +457,9 @@ class TradingAgentsGraph:
         past_context = self.memory_log.get_past_context(company_name)
         instrument_context = self.resolve_instrument_context(company_name, asset_type)
         risk_constraints = self._risk_constraints_from_config()
+
+        monster_score = _precompute_monster_score(company_name, str(trade_date), self.config)
+
         init_agent_state = self.propagator.create_initial_state(
             company_name,
             trade_date,
@@ -440,6 +469,9 @@ class TradingAgentsGraph:
             risk_constraints=risk_constraints,
             target_profile=target_profile,
         )
+        if monster_score:
+            init_agent_state["monster_stock_score"] = monster_score
+
         # IIC-FORGE F4: event-context injection — seed event text into state.
         # Empty string when not in event_alert mode (deep-dive path unchanged).
         init_agent_state["event_context_text"] = self.config.get("event_context", "") or ""

@@ -11,6 +11,64 @@ from tradingagents.agents.utils.agent_utils import (
 from tradingagents.agents.utils.tool_fallback import bind_tools_or_none, safe_tool_text
 
 
+def _format_fundamental_monster_context(mss: dict) -> str:
+    """Format Monster Stock fundamental + sponsorship scores for prompt injection."""
+    if not mss or mss.get("composite_score") is None:
+        return ""
+
+    def _cs(key: str) -> str:
+        cs = mss.get(key) or {}
+        score = cs.get("score")
+        score_str = f"{score:.0f}/10" if score is not None else "N/A"
+        return f"{score_str} [{cs.get('pass_fail', '?')}] — {cs.get('rationale', '')}"
+
+    blockers = mss.get("hard_blockers") or []
+    strengths = mss.get("key_strengths") or []
+    risks = mss.get("key_risks") or []
+
+    lines = [
+        "=== MONSTER STOCK SCORE — FUNDAMENTAL & SPONSORSHIP VIEW ===",
+        f"COMPOSITE: {mss.get('composite_score', 0):.0f}/100  "
+        f"Grade: {mss.get('composite_grade', '?')}  "
+        f"Action: {mss.get('action_signal', '?').upper()}  "
+        f"Stage: {mss.get('stage', '?')}",
+    ]
+    if blockers:
+        lines.append(f"HARD BLOCKERS: {'; '.join(blockers)}")
+    lines += [
+        "",
+        "FUNDAMENTAL SCORES (TraderLion/Boik criteria):",
+        f"  EPS Growth (latest Q):       {_cs('eps_growth_score')}",
+        f"  EPS Acceleration (8-Q trend):{_cs('eps_acceleration_score')}",
+        f"  Revenue Growth:              {_cs('revenue_growth_score')}",
+        f"  Revenue Acceleration:        {_cs('revenue_acceleration_score')}",
+        f"  Annual EPS Trend (5-yr):     {_cs('annual_eps_trend_score')}",
+        f"  ROE (≥17% guideline):        {_cs('roe_score')}",
+        f"  After-Tax Margin Trend:      {_cs('margin_trend_score')}",
+        f"  Forward Estimate:            {_cs('forward_estimate_score')}",
+        "",
+        "SPONSORSHIP SCORES:",
+        f"  Fund Count Growth (8-Q):     {_cs('fund_count_growth_score')}",
+        f"  Fund Count Acceleration:     {_cs('fund_count_acceleration_score')}",
+        f"  Flagship Fund Presence:      {_cs('flagship_fund_score')}",
+        f"  Institutional Quality:       {_cs('institutional_quality_score')}",
+    ]
+    if strengths:
+        lines.append(f"\nKEY STRENGTHS: {', '.join(strengths)}")
+    if risks:
+        lines.append(f"KEY RISKS:     {', '.join(risks)}")
+    lines += [
+        "",
+        "METHODOLOGY NOTES:",
+        "  - EPS deceleration across 3+ consecutive quarters is a major red flag even if growth is still positive.",
+        "  - A revenue-only story (no EPS) is acceptable only when fund count growth is strong and the sector theme is powerful.",
+        "  - Use the pre-computed scores above as a structured starting point; your job is to confirm, challenge, or add context.",
+        "=== END MONSTER STOCK SCORE ===",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def _prefetch_fundamentals_data(ticker: str, current_date: str) -> str:
     """Gather the fundamentals the tools would return, for tool-less providers."""
     fundamentals = safe_tool_text(
@@ -49,6 +107,7 @@ def create_fundamentals_analyst(llm):
         subject_label = "company" if asset_type == "stock" else "asset or protocol"
         ticker = str(state["company_of_interest"])
         instrument_context = get_instrument_context_from_state(state)
+        monster_context = _format_fundamental_monster_context(state.get("monster_stock_score") or {})
 
         tools = [
             get_fundamentals,
@@ -58,7 +117,15 @@ def create_fundamentals_analyst(llm):
         ]
 
         system_message = (
-            f"You are a researcher tasked with analyzing fundamental information over the past week about a {subject_label}. Please write a comprehensive report of the {subject_label}'s fundamental information such as financial documents, profile, basic financials or network metrics, and history to gain a full view of the {subject_label}'s fundamentals to inform traders. Make sure to include as much detail as possible. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."
+            monster_context
+            + f"You are a Fundamentals Analyst trained on the TraderLion / Boik Monster Stock methodology. "
+            f"Analyze fundamental information about this {subject_label} against the scored criteria shown above. "
+            f"Your report must: (1) confirm or challenge each scored criterion with additional context, "
+            f"(2) identify the PRIMARY fundamental story (EPS story, revenue story, or theme story), "
+            f"(3) flag any deceleration in the most recent quarter — this is a critical red flag, "
+            f"(4) assess whether analysts expect growth to continue or slow in the next two fiscal years, "
+            f"(5) conclude with a PASS / WARN / FAIL verdict on the fundamental case. "
+            f"Include as much detail as possible. Provide specific, actionable insights with supporting evidence."
             + " Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."
             + " Use the available tools: `get_fundamentals` for comprehensive company analysis, `get_balance_sheet`, `get_cashflow`, and `get_income_statement` for specific financial statements."
             + get_language_instruction()

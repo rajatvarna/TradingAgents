@@ -18,6 +18,14 @@ Breaking changes within the 0.x line are called out explicitly.
 - New config keys: `monster_stock_mode`, `min_composite_score_for_buy`, `sell_discipline`, `screener_universe`, `screener_top_n`, `market_phase_gate`, `group_confirmation_required`, `postmortem_lookback_weeks`.
 - New `AgentState` fields: `monster_stock_score`, `group_sector_report`, `market_phase_report`, `postmortem_report`.
 - 34 new unit tests (`test_monster_stock_scorer.py`, `test_deep_dataflows.py`) covering all scoring criteria and composite logic.
+- **Monster Stock pre-compute pipeline** — `TradingAgentsGraph._run_graph()` now calls `score_stock()` deterministically before the LangGraph workflow starts, serialises `MonsterStockScore` to a dict, and injects it into `AgentState["monster_stock_score"]` so every downstream agent has access to the full scored context without redundant data fetching.
+- **Fundamentals Analyst upgraded** — system prompt now includes a structured TraderLion/Boik context block (EPS acceleration trend, revenue acceleration, ROE, margin trend, fund count growth, flagship fund presence) drawn from the pre-computed `MonsterStockScore`. The analyst is now instructed to confirm or challenge each criterion and conclude with a PASS / WARN / FAIL verdict.
+- **Market Analyst upgraded** — system prompt now includes an MVP (Moving Average, Volume, Price) context block (MA grade A-E, volume quality, base pattern, breakout quality, RS percentile, sell signal check, extension risk) and explicit Monster Stock trading rules (buy only Grade A/B; never buy into climax run; confirm stage; provide entry zone and stop-loss).
+- **Bull Researcher v2 prompt** — includes Monster Stock composite score, action signal, stage, hard blockers, key strengths, and narrative summary. Also receives group & sector report and market phase report from the new analysts.
+- **Bear Researcher v2 prompt** — includes Monster Stock score plus mandatory checklist of classic topping signals (EPS deceleration, sell signal events, extension above 50-day, market phase, group rotation risk).
+- **Trader system v2 prompt** — explicit TraderLion buy discipline (never buy below Grade B, never buy in correction, pilot buys) and sell discipline (offensive: climax run / 25% extension rule; defensive: 21-day / 50-day MA breaks with volume, 7-8% hard stop).
+- `propagation.py` initial state now includes all new AgentState fields (`monster_stock_score`, `group_sector_report`, `market_phase_report`, `postmortem_report`, `conflict_report`, `holdings_info`, `trading_history_summary`, `prior_pending_orders`, `trading_mode`).
+- Prompt version registry bumped: `researchers/bull_researcher` → v2, `researchers/bear_researcher` → v2, `trader/trader_system` → v2.
 
 - Native Kimi (Moonshot AI) provider support (`kimi`) with correct reasoning_content round-tripping for K2 models.
 

@@ -5,6 +5,34 @@ from tradingagents.agents.utils.agent_utils import (
 )
 from tradingagents.audit.prompt_registry import default_registry
 
+
+def _format_monster_block_for_researcher(mss: dict) -> str:
+    """Summarise the MonsterStockScore for researcher prompt injection."""
+    if not mss or mss.get("composite_score") is None:
+        return ""
+    blockers = mss.get("hard_blockers") or []
+    strengths = mss.get("key_strengths") or []
+    risks = mss.get("key_risks") or []
+    lines = [
+        "=== MONSTER STOCK SCORE (TraderLion/Boik Framework) ===",
+        f"COMPOSITE: {mss.get('composite_score', 0):.0f}/100  "
+        f"Grade: {mss.get('composite_grade', '?')}  "
+        f"Action: {mss.get('action_signal', '?').upper()}  "
+        f"Stage: {mss.get('stage', '?')}",
+    ]
+    if blockers:
+        lines.append(f"HARD BLOCKERS: {'; '.join(blockers)}")
+    if strengths:
+        lines.append(f"KEY STRENGTHS: {', '.join(strengths)}")
+    if risks:
+        lines.append(f"KEY RISKS:     {', '.join(risks)}")
+    narrative = mss.get("narrative_summary", "")
+    if narrative:
+        lines += ["", narrative]
+    lines.append("=== END MONSTER STOCK SCORE ===")
+    return "\n".join(lines)
+
+
 def create_bull_researcher(llm, prompt_registry=None):
     """Create the Bull researcher node.
 
@@ -27,6 +55,8 @@ def create_bull_researcher(llm, prompt_registry=None):
         esg_report = state.get("esg_report", "")
         derivatives_report = state.get("derivatives_report", "")
         user_research_report = state.get("user_research_report", "")
+        group_sector_report = state.get("group_sector_report", "")
+        market_phase_report = state.get("market_phase_report", "")
 
         user_research_block = ""
         if user_research_report.strip():
@@ -35,6 +65,10 @@ def create_bull_researcher(llm, prompt_registry=None):
                 "opinion among many, NOT ground truth):\n"
                 f"{user_research_report}\n"
             )
+
+        monster_stock_block = _format_monster_block_for_researcher(
+            state.get("monster_stock_score") or {}
+        )
 
         scope_guard = build_scope_guard(state["company_of_interest"])
         asset_type = state.get("asset_type", "stock")
@@ -59,6 +93,9 @@ def create_bull_researcher(llm, prompt_registry=None):
             esg_report=esg_report,
             derivatives_report=derivatives_report,
             user_research_block=user_research_block,
+            group_sector_report=group_sector_report,
+            market_phase_report=market_phase_report,
+            monster_stock_block=monster_stock_block,
             history=history,
             current_response=current_response,
             language_instruction=get_language_instruction(),

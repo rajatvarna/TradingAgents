@@ -220,11 +220,11 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # (market/sentiment/news/fundamentals) use ChatPromptTemplate and
     # are not yet on the registry — they will be added in T1.4b.
     "prompt_versions": {
-        "researchers/bull_researcher": "v1",
-        "researchers/bear_researcher": "v1",
+        "researchers/bull_researcher": "v2",
+        "researchers/bear_researcher": "v2",
         "managers/research_manager": "v1",
         "managers/portfolio_manager": "v1",
-        "trader/trader_system": "v1",
+        "trader/trader_system": "v2",
         "trader/trader_user": "v1",
         "risk/aggressive": "v1",
         "risk/conservative": "v1",

@@ -352,3 +352,134 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # Refresh institutional sponsorship data weekly (slower, more accurate).
     "sponsorship_refresh_weekly": False,
 })
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Monster Stock Methodology Config
+#
+# Single source of truth for all thresholds, weights, and regime parameters
+# used by the CANSLIM / TraderLion scoring pipeline.  Import this dict
+# anywhere in the codebase rather than hardcoding individual numbers.
+# ──────────────────────────────────────────────────────────────────────────────
+MONSTER_STOCK_METHODOLOGY_CONFIG: dict = {
+    "execution_mode": "CANSLIM_TRADERLION",
+
+    # ── ENTRY GATES (checked before initiating any position) ─────────────────
+    "hard_filters": {
+        "minimum_share_price": 10.00,
+        "minimum_liquidity_dollar_volume": 15_000_000,   # $15M/day
+        "minimum_institutional_fund_count": 30,
+        "hard_stop_loss_pct": 7.5,
+        "minimum_adr_pct": 1.0,
+        # Pivot extension gate: how far past the base breakout pivot is still buyable.
+        # IBD/O'Neil: within 5% = ideal; up to 8% = acceptable; beyond = chasing.
+        "maximum_pct_past_pivot_for_buy": 8.0,
+        # MA direction: grade D or E means price is below the 50d MA — not buyable.
+        # This is a binary direction check, NOT a distance filter.
+        # A fresh breakout can be 15-20%+ above the 50d MA on day 1 (MA hasn't
+        # caught up yet) and is still a valid buy — the distance alone is not the gate.
+        "exclude_ma_grades": ["D", "E"],
+        # Re-entry warning threshold: flag extended re-entries without a fresh base.
+        # This is a warning only; the hard block is the offensive sell zone check.
+        "reentry_max_50d_extension_warning_pct": 15.0,
+        # Gate 3 extension_risk_score thresholds (score is inverted: 0=most extended, 10=safe).
+        # Block re-entry without a fresh base when score is at or below this level.
+        "extension_risk_score_hard_block": 2,
+        # Warn (allow with reduced size) when score is at or below this level.
+        "extension_risk_score_warning": 5,
+    },
+
+    # ── SELL / TRIM TRIGGERS (checked while holding an existing position) ─────
+    # 50d MA extension belongs here — it is a sell signal, NOT a buy filter.
+    "sell_triggers": {
+        # Offensive sells: taking profits into strength
+        "offensive_trim_50d_extension_pct": 20.0,   # begin scaling out
+        "offensive_exit_50d_extension_pct": 25.0,   # aggressive exit
+        # MMSS mode tightens these (choppy market)
+        "mmss_offensive_trim_50d_extension_pct": 10.0,
+        "mmss_offensive_exit_50d_extension_pct": 15.0,
+        # Defensive sells
+        "break_21d_on_volume_action": "reduce_half",
+        "break_50d_on_volume_action": "exit",
+        "gap_down_on_volume_action": "exit_immediately",
+        # Climax run: price up > 25% in 1-3 weeks, far extended → sell into it
+        "climax_run_weekly_gain_threshold_pct": 25.0,
+    },
+
+    # ── VALID RE-ENTRY TYPES ──────────────────────────────────────────────────
+    "re_entry_rules": {
+        "valid_types": [
+            "bounce_off_21d_ma_on_volume",
+            "bounce_off_50d_ma_on_volume",
+            "new_base_after_first_run",
+            "tight_flag_within_uptrend",
+        ],
+    },
+
+    # ── SCORING WEIGHTS (sum = 1.00) ──────────────────────────────────────────
+    "scoring_weights": {
+        "quarterly_eps_growth":         0.13,
+        "eps_acceleration_trend":       0.14,
+        "revenue_acceleration_trend":   0.13,
+        "relative_strength_percentile": 0.12,
+        "rsnhbp_signal":                0.10,  # RS new high before price — leading indicator
+        "moving_average_health_grade":  0.10,
+        "industry_group_leadership":    0.09,
+        "institutional_fund_growth":    0.09,
+        "adr_score":                    0.06,  # KK: non-negotiable criterion
+        "after_tax_margin_expansion":   0.04,
+        # Total: 1.00
+    },
+
+    # ── MARKET REGIME THRESHOLDS ──────────────────────────────────────────────
+    "market_regime_thresholds": {
+        "hlg_negative_streak_mmss": 5,
+        "hlg_negative_streak_cash": 9,
+        "distribution_day_mmss":    4,   # Boik: 4+ → MMSS mode
+        "distribution_day_cash":    6,   # Boik: 6+ → move to cash
+        "automatic_mmss_activation": True,
+    },
+
+    # ── PER-REGIME EXECUTION PARAMETERS ──────────────────────────────────────
+    "market_regime_execution": {
+        "confirmed_uptrend": {
+            "allocation_pct":   100.0,
+            "stop_reference":   "21_EMA",
+            "chase_buffer_pct": 5.0,
+            "posture":          "POSITION_HOLD",
+        },
+        "under_pressure_mmss": {
+            "allocation_pct":   50.0,
+            "stop_reference":   "10_DMA",
+            "chase_buffer_pct": 2.0,
+            "posture":          "MMSS_SWING_TACTICAL",
+        },
+        "correction": {
+            "allocation_pct":   0.0,
+            "stop_reference":   "IMMEDIATE_EXIT",
+            "chase_buffer_pct": 0.0,
+            "posture":          "PROTECT_CAPITAL_CASH",
+        },
+        "uptrend_resumes": {
+            "allocation_pct":   25.0,   # pilot buys only — test the new uptrend
+            "stop_reference":   "21_EMA",
+            "chase_buffer_pct": 5.0,
+            "posture":          "PILOT_BUYS",
+        },
+    },
+
+    # ── CHART LIBRARY ─────────────────────────────────────────────────────────
+    "chart_library": {
+        "image_dir":             os.path.join(_TRADINGAGENTS_HOME, "chart_library", "images"),
+        "db_path":               os.path.join(_TRADINGAGENTS_HOME, "chart_library", "charts.db"),
+        "faiss_index_path":      os.path.join(_TRADINGAGENTS_HOME, "chart_library", "faiss.index"),
+        "top_k_analogs":         5,
+        "min_similarity_score":  0.70,
+    },
+
+    # ── KK STREAM KNOWLEDGE BASE ──────────────────────────────────────────────
+    "kk_stream_kb": {
+        "db_path":          os.path.join(_TRADINGAGENTS_HOME, "kk_stream_kb", "knowledge_base.db"),
+        "ep_examples_path": os.path.join(_TRADINGAGENTS_HOME, "kk_stream_kb", "ep_examples.json"),
+        "minimum_setup_rating": 3.5,
+    },
+}

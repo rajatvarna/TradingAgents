@@ -109,10 +109,15 @@ def _compute_ma_state(df: pd.DataFrame) -> MovingAverageState:
     ma_50 = _safe_float(close.rolling(50).mean().iloc[-1])
     ma_200 = _safe_float(close.rolling(200).mean().iloc[-1])
 
-    above_10 = price > ma_10
-    above_21 = price > ma_21
-    above_50 = price > ma_50
-    above_200 = price > ma_200
+    has_10 = len(close) >= 10 and ma_10 > 0
+    has_21 = len(close) >= 21 and ma_21 > 0
+    has_50 = len(close) >= 50 and ma_50 > 0
+    has_200 = len(close) >= 200 and ma_200 > 0
+
+    above_10 = has_10 and price > ma_10
+    above_21 = has_21 and price > ma_21
+    above_50 = has_50 and price > ma_50
+    above_200 = has_200 and price > ma_200
 
     if above_10 and above_21 and above_50 and above_200:
         grade = "A"

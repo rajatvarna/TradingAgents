@@ -87,7 +87,7 @@ def fetch_market_health(as_of_date: str) -> MarketHealthSnapshot:
     except Exception:
         return _fallback_snapshot(as_of_date)
 
-    if ixic.empty or len(ixic) < 20:
+    if ixic.empty or len(ixic) < 200:
         return _fallback_snapshot(as_of_date)
 
     close = ixic["Close"]

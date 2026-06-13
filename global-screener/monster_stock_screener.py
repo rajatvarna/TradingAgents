@@ -22,6 +22,7 @@ import os
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime
+import re
 from pathlib import Path
 
 # Allow running from project root
@@ -119,10 +120,10 @@ async def _score_single_async(ticker: str, as_of_date: str, market_health) -> Mo
 async def run_screener(
     universe: list[str],
     as_of_date: str,
-    top_n: int = 25,
+    top_n: int = 30,
     min_composite_score: float = 45.0,
     concurrency: int = 4,
-) -> list[ScreenerResult]:
+) -> tuple[list[ScreenerResult], object]:
     """
     Async screener. Fetches data concurrently (bounded by semaphore),
     scores all stocks, returns ranked ScreenerResult list.
@@ -164,11 +165,11 @@ async def run_screener(
             hard_blockers=sc.hard_blockers,
             sector=sc.group_rank_score.rationale.split()[0] if sc.group_rank_score.rationale else "—",
             industry_group="—",
-            rs_percentile=float(sc.rs_score.rationale.split()[2]) if "percentile" in sc.rs_score.rationale else 0.0,
+            rs_percentile=float(m.group(1)) if (m := re.search(r"RS at\s+(\d+(?:\.\d+)?)", sc.rs_score.rationale)) else 0.0,
             ma_grade=sc.ma_grade_score.rationale[6] if len(sc.ma_grade_score.rationale) > 6 else "?",
         ))
 
-    return results
+    return results, market_health
 
 
 def _format_report(results: list[ScreenerResult], as_of_date: str, market_notes: str) -> str:
@@ -228,10 +229,13 @@ def main():
     parser.add_argument("--concurrency", type=int, default=4, help="Max concurrent ticker fetches")
     args = parser.parse_args()
 
+    if args.concurrency < 1:
+        parser.error("--concurrency must be at least 1")
+
     universe = _load_universe(args.universe)
     print(f"Universe: {len(universe)} tickers | Date: {args.date} | Min score: {args.min_score}")
 
-    results = asyncio.run(run_screener(
+    results, market_health = asyncio.run(run_screener(
         universe=universe,
         as_of_date=args.date,
         top_n=args.top,
@@ -239,7 +243,6 @@ def main():
         concurrency=args.concurrency,
     ))
 
-    market_health = fetch_market_health(args.date)
     report = _format_report(results, args.date, market_health.notes)
     print(report)
 

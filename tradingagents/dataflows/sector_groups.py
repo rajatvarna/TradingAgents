@@ -59,6 +59,7 @@ def _safe_float(val, default=0.0) -> float:
 def _compute_rs_score(ticker: str, spy_close, start: str, end: str) -> Optional[float]:
     """Return 12-month RS score relative to SPY."""
     try:
+        import pandas as pd
         import yfinance as yf
         tk = yf.Ticker(ticker)
         hist = tk.history(start=start, end=end, auto_adjust=True)["Close"]
@@ -86,9 +87,7 @@ def fetch_group_leadership(ticker: str, as_of_date: str) -> GroupLeadershipData:
         sector = "Unknown"
         industry = "Unknown"
 
-    peers = _SECTOR_PEERS.get(sector, _DEFAULT_PEERS)
-    if ticker.upper() not in peers:
-        peers = peers[:]
+    peers = list(dict.fromkeys([*_SECTOR_PEERS.get(sector, _DEFAULT_PEERS), ticker.upper()]))
 
     try:
         import pandas as pd

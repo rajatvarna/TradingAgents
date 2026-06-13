@@ -392,14 +392,14 @@ def _score_rs(tech: DeepTechnicals) -> CriterionScore:
     pct = tech.relative_strength.rs_percentile
     trend = tech.relative_strength.rs_line_trend
     if pct >= 90:
-        return CriterionScore("Relative Strength", 10, w, "PASS", f"RS at {pct:.0f}th percentile, trend {trend} — top-tier leader.")
+        return CriterionScore("Relative Strength", 10, w, "PASS", f"RS at {pct:.0f} percentile, trend {trend} — top-tier leader.")
     if pct >= 75:
-        return CriterionScore("Relative Strength", 8, w, "PASS", f"RS at {pct:.0f}th percentile, trend {trend} — strong leader.")
+        return CriterionScore("Relative Strength", 8, w, "PASS", f"RS at {pct:.0f} percentile, trend {trend} — strong leader.")
     if pct >= 60:
-        return CriterionScore("Relative Strength", 5, w, "WARN", f"RS at {pct:.0f}th percentile — above average but not leading.")
+        return CriterionScore("Relative Strength", 5, w, "WARN", f"RS at {pct:.0f} percentile — above average but not leading.")
     if pct >= 40:
-        return CriterionScore("Relative Strength", 3, w, "FAIL", f"RS at {pct:.0f}th percentile — average performer.")
-    return CriterionScore("Relative Strength", 1, w, "FAIL", f"RS at {pct:.0f}th percentile — laggard. Avoid.")
+        return CriterionScore("Relative Strength", 3, w, "FAIL", f"RS at {pct:.0f} percentile — average performer.")
+    return CriterionScore("Relative Strength", 1, w, "FAIL", f"RS at {pct:.0f} percentile — laggard. Avoid.")
 
 
 def _score_sell_signals(tech: DeepTechnicals) -> CriterionScore:

@@ -33,6 +33,18 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_COST_GUARD_ENABLED":   "cost_guard_enabled",
     "TRADINGAGENTS_ORCHESTRATOR_ENABLED": "orchestrator_enabled",
     "TRADINGAGENTS_TEMPERATURE":          "temperature",
+    # Monster Stock / TraderLion framework
+    "TRADINGAGENTS_MONSTER_STOCK_MODE":          "monster_stock_mode",
+    "TRADINGAGENTS_MIN_COMPOSITE_SCORE_FOR_BUY": "min_composite_score_for_buy",
+    "TRADINGAGENTS_SELL_DISCIPLINE":             "sell_discipline",
+    "TRADINGAGENTS_SCREENER_UNIVERSE":           "screener_universe",
+    "TRADINGAGENTS_SCREENER_MIN_SCORE":          "screener_min_score",
+    "TRADINGAGENTS_SCREENER_TOP_N":              "screener_top_n",
+    "TRADINGAGENTS_SCREENER_RUN_DAILY":          "screener_run_daily",
+    "TRADINGAGENTS_GROUP_CONFIRMATION_REQUIRED": "group_confirmation_required",
+    "TRADINGAGENTS_MARKET_PHASE_GATE":           "market_phase_gate",
+    "TRADINGAGENTS_POSTMORTEM_LOOKBACK_WEEKS":   "postmortem_lookback_weeks",
+    "TRADINGAGENTS_SPONSORSHIP_REFRESH_WEEKLY":  "sponsorship_refresh_weekly",
 }
 
 _DATA_VENDOR_ENV_OVERRIDES = {

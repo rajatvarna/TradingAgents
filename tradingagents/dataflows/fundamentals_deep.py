@@ -108,7 +108,7 @@ def _build_quarterly_history(tk) -> list:  # noqa: ANN001
         revenue = _row(qf, "Total Revenue", "Revenue")
         net_income = _row(qf, "Net Income")
         after_tax_margin = None
-        if revenue and net_income and revenue != 0:
+        if revenue is not None and net_income is not None and revenue != 0:
             after_tax_margin = round(net_income / revenue * 100, 2)
 
         # YoY growth: compare to same quarter 4 periods back
@@ -254,8 +254,8 @@ def fetch_deep_fundamentals(ticker: str) -> DeepFundamentals:
     annual_history = _build_annual_history(tk)
     sponsorship_history = _build_sponsorship_history(tk)
 
-    next_year_eps = _safe(lambda: float(info.get("forwardEps", 0) or 0))
-    trailing_eps = _safe(lambda: float(info.get("trailingEps", 0) or 0))
+    next_year_eps = _safe(lambda: float(info["forwardEps"]) if info.get("forwardEps") is not None else None)
+    trailing_eps = _safe(lambda: float(info["trailingEps"]) if info.get("trailingEps") is not None else None)
     next_year_growth = _pct_change(next_year_eps, trailing_eps)
 
     return DeepFundamentals(

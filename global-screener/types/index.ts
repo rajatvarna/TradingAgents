@@ -48,6 +48,8 @@ export interface StockData {
   marketCap: number | null;
   volume: number | null;
   avgVolume20d: number | null;
+  fiftyTwoWeekLow: number | null;
+  fiftyTwoWeekHigh: number | null;
   performance: PerformanceMetrics;
   isStale?: boolean;
   error?: string;
@@ -90,6 +92,7 @@ export interface FilterState {
   minChangePct: number | null;
   search: string;
   volSurge?: boolean;
+  watchlistOnly?: boolean;
 }
 
 export type PresetName =
@@ -99,4 +102,5 @@ export type PresetName =
   | "five-year-compounders"
   | "most-active"
   | "52w-highs"
-  | "vol-surge";
+  | "vol-surge"
+  | "watchlist";

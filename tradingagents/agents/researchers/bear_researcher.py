@@ -4,6 +4,7 @@ from tradingagents.agents.utils.agent_utils import (
     trim_debate_history,
 )
 from tradingagents.audit.prompt_registry import default_registry
+from tradingagents.agents.researchers.bull_researcher import _format_monster_block_for_researcher
 
 def create_bear_researcher(llm, prompt_registry=None):
     """Create the Bear researcher node.
@@ -26,6 +27,8 @@ def create_bear_researcher(llm, prompt_registry=None):
         esg_report = state.get("esg_report", "")
         derivatives_report = state.get("derivatives_report", "")
         user_research_report = state.get("user_research_report", "")
+        group_sector_report = state.get("group_sector_report", "")
+        market_phase_report = state.get("market_phase_report", "")
 
         user_research_block = ""
         if user_research_report.strip():
@@ -34,6 +37,10 @@ def create_bear_researcher(llm, prompt_registry=None):
                 "opinion among many, NOT ground truth):\n"
                 f"{user_research_report}\n"
             )
+
+        monster_stock_block = _format_monster_block_for_researcher(
+            state.get("monster_stock_score") or {}
+        )
 
         scope_guard = build_scope_guard(state["company_of_interest"])
         asset_type = state.get("asset_type", "stock")
@@ -58,6 +65,9 @@ def create_bear_researcher(llm, prompt_registry=None):
             esg_report=esg_report,
             derivatives_report=derivatives_report,
             user_research_block=user_research_block,
+            group_sector_report=group_sector_report,
+            market_phase_report=market_phase_report,
+            monster_stock_block=monster_stock_block,
             history=history,
             current_response=current_response,
             language_instruction=get_language_instruction(),

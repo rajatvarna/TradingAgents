@@ -8,10 +8,9 @@ from pathlib import Path
 from typing import Any
 
 import yfinance as yf
+from langgraph.prebuilt import ToolNode
 
 logger = logging.getLogger(__name__)
-
-from langgraph.prebuilt import ToolNode
 
 from tradingagents.agents.analysts.valuation_analyst import (
     get_dcf_valuation,

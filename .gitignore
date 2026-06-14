@@ -1,3 +1,6 @@
+# Claude Code internal directories
+.claude/worktrees/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

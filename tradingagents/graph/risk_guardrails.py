@@ -102,6 +102,13 @@ class RiskGuardrails:
             clamped["Rating"] = (rating, "Hold")
 
         # ── 2. Position sizing cap ──
+        # Hook point: call apply_correlation_sizing_adjustment() from
+        # tradingagents.graph.correlation_guard here (before the cap check)
+        # to reduce the recommended size when the new ticker is highly
+        # correlated with existing portfolio holdings.  Pass the parsed
+        # position percentage, the target ticker, the list of current
+        # portfolio tickers, and the trade date string.  Inject the result
+        # back into `sizing` before the cap check below.
         sizing = self._extract_field(decision, "Position Sizing")
         if sizing:
             pct = self._extract_percentage(sizing)

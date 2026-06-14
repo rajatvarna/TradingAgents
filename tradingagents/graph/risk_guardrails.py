@@ -33,6 +33,9 @@ class GuardrailConfig:
     max_single_loss_pct: float = 5.0     # max loss per trade before forced exit
     require_stop_loss: bool = True       # reject Buy/Overweight without stop-loss
     blocked_ratings: list = field(default_factory=list)  # hard-block certain actions
+    portfolio_tickers: list = field(default_factory=list)
+    trade_date_str: str | None = None
+    ticker: str | None = None
 
 
 @dataclass
@@ -66,6 +69,9 @@ class RiskGuardrails:
             blocked_ratings=[
                 r.lower() for r in config.get("blocked_ratings", [])
             ],
+            portfolio_tickers=list(config.get("portfolio_tickers", [])),
+            trade_date_str=config.get("trade_date_str"),
+            ticker=config.get("ticker"),
         )
         self.gc = gc
 
@@ -111,15 +117,20 @@ class RiskGuardrails:
                     from tradingagents.graph.correlation_guard import (
                         apply_correlation_sizing_adjustment,
                     )
-                    existing = list(self.gc.portfolio_tickers) if hasattr(self.gc, "portfolio_tickers") else []
-                    trade_date_str = getattr(self.gc, "trade_date_str", None)
-                    if existing and trade_date_str:
-                        ticker = getattr(self.gc, "ticker", None)
-                        if ticker:
-                            pct, corr_note = apply_correlation_sizing_adjustment(
-                                pct, ticker, existing, trade_date_str
+                    existing = list(self.gc.portfolio_tickers)
+                    if existing and self.gc.trade_date_str and self.gc.ticker:
+                        original_pct = pct
+                        pct, corr_note = apply_correlation_sizing_adjustment(
+                            pct, self.gc.ticker, existing, self.gc.trade_date_str
+                        )
+                        if pct < original_pct:
+                            corr_capped = (
+                                f"{pct:.0f}% of portfolio "
+                                f"(reduced by correlation guard from {original_pct:.0f}%)"
                             )
-                            if corr_note and "reduced" in corr_note.lower():
+                            decision = self._replace_field(decision, "Position Sizing", corr_capped)
+                            clamped["Position Sizing"] = (sizing, corr_capped)
+                            if corr_note:
                                 violations.append(corr_note)
                 except Exception:
                     pass

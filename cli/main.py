@@ -24,6 +24,7 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 
 
 def _port_open(port: int) -> bool:
+    """Return True if a TCP connection to 127.0.0.1:port succeeds within 0.2 s."""
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=0.2):
             return True
@@ -101,6 +102,7 @@ class MessageBuffer:
     }
 
     def __init__(self, max_length=100):
+        """Initialise the buffer with empty collections and default state."""
         self.messages = deque(maxlen=max_length)
         self.tool_calls = deque(maxlen=max_length)
         self.current_report = None
@@ -168,24 +170,29 @@ class MessageBuffer:
         return count
 
     def add_message(self, message_type, content):
+        """Append a timestamped message to the message buffer."""
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
         self.messages.append((timestamp, message_type, content))
 
     def add_tool_call(self, tool_name, args):
+        """Append a timestamped tool call record to the tool calls buffer."""
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
         self.tool_calls.append((timestamp, tool_name, args))
 
     def update_agent_status(self, agent, status):
+        """Update the status of a known agent and set it as the current agent."""
         if agent in self.agent_status:
             self.agent_status[agent] = status
             self.current_agent = agent
 
     def update_report_section(self, section_name, content):
+        """Store content for a report section and refresh the display report."""
         if section_name in self.report_sections:
             self.report_sections[section_name] = content
             self._update_current_report()
 
     def _update_current_report(self):
+        """Update the current_report display string from the latest non-empty section."""
         # For the panel display, only show the most recently updated section
         latest_section = None
         latest_content = None
@@ -215,6 +222,7 @@ class MessageBuffer:
         self._update_final_report()
 
     def _update_final_report(self):
+        """Rebuild the consolidated final_report string from all populated sections."""
         report_parts = []
 
         # Analyst Team Reports - use .get() to handle missing sections
@@ -260,6 +268,7 @@ message_buffer = MessageBuffer()
 
 
 def create_layout():
+    """Create and return the Rich terminal layout for the analysis dashboard."""
     layout = Layout()
     layout.split_column(
         Layout(name="header", size=3),
@@ -283,6 +292,7 @@ def format_tokens(n):
 
 
 def update_display(layout, spinner_text=None, stats_handler=None, start_time=None):
+    """Refresh all panels in the Rich layout with current agent/report/stats state."""
     # Header with welcome message
     layout["header"].update(
         Panel(

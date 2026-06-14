@@ -84,16 +84,19 @@ _SCHEDULER_POLL_SECONDS = 30
 
 
 def _utc_now() -> datetime.datetime:
+    """Return the current UTC datetime."""
     return datetime.datetime.now(datetime.timezone.utc)
 
 
 def _next_midnight_utc_iso(now: datetime.datetime | None = None) -> str:
+    """Return the next midnight UTC as an ISO 8601 string."""
     current = now or _utc_now()
     next_day = (current + datetime.timedelta(days=1)).date()
     return datetime.datetime.combine(next_day, datetime.time.min, tzinfo=datetime.timezone.utc).isoformat()
 
 
 def _next_run_utc_iso(frequency: str, from_time: datetime.datetime | None = None) -> str:
+    """Return the next scheduled run time ISO string based on frequency."""
     base = from_time or _utc_now()
     f = frequency.lower()
     if f == "daily":
@@ -121,6 +124,7 @@ def _latest_business_date_iso(from_time: datetime.datetime | None = None) -> str
 
 
 def _build_status(row: dict, base_url: str) -> RequestStatus:
+    """Build a RequestStatus from a database row dict."""
     analysis_url: str | None = None
     debug_log_url: str | None = None
     agent_recommendations = None
@@ -195,6 +199,7 @@ def _build_agent_recommendations(final_state: dict | None) -> dict:
 
 
 def _validate_env_name(var_name: str) -> str:
+    """Validate and normalise an environment variable name."""
     name = (var_name or "").strip().upper()
     if not _ENV_NAME_PATTERN.fullmatch(name):
         raise HTTPException(status_code=400, detail="Invalid env variable name format")
@@ -202,6 +207,7 @@ def _validate_env_name(var_name: str) -> str:
 
 
 def _read_env_keys() -> list[str]:
+    """Return a deduplicated list of env variable names found in the .env file."""
     keys: list[str] = []
     if not _ENV_FILE.exists():
         return keys
@@ -225,6 +231,7 @@ def _read_env_keys() -> list[str]:
 
 
 def _read_env_file_value(var_name: str) -> str | None:
+    """Read the raw value of a single env variable from the .env file."""
     if not _ENV_FILE.exists():
         return None
     text = _ENV_FILE.read_text(encoding="utf-8", errors="replace")
@@ -239,6 +246,7 @@ def _read_env_file_value(var_name: str) -> str | None:
 
 
 def _upsert_env_file_value(var_name: str, value: str) -> None:
+    """Insert or update a single env variable in the .env file."""
     lines: list[str] = []
     if _ENV_FILE.exists():
         lines = _ENV_FILE.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -267,6 +275,7 @@ def _upsert_env_file_value(var_name: str, value: str) -> None:
 
 
 def _refresh_vault_keys_and_persist() -> dict:
+    """Refresh API keys from Vault and persist them to the .env file."""
     summary = refresh_runtime_env_from_vault()
     for key in summary.get("keys", []):
         val = os.getenv(key)
@@ -276,6 +285,7 @@ def _refresh_vault_keys_and_persist() -> dict:
 
 
 def _build_batch_schedule_item(row: dict, base_url: str) -> BatchScheduleItem:
+    """Build a BatchScheduleItem response model from a database row dict."""
     latest_request_id = row.get("latest_request_id")
     latest_logs_url: str | None = None
     latest_analysis_url: str | None = None
@@ -310,6 +320,7 @@ async def _enqueue_due_pending_requests_once() -> int:
 
 
 async def _pending_enqueue_loop() -> None:
+    """Continuously poll for due pending requests and enqueue them."""
     while True:
         await _enqueue_due_pending_requests_once()
         await asyncio.sleep(_SCHEDULER_POLL_SECONDS)
@@ -341,6 +352,7 @@ async def _batch_schedule_loop() -> None:
 
 
 def _wants_html_response(request: Request) -> bool:
+    """Return True if the client prefers an HTML response over JSON."""
     fmt = (request.query_params.get("format") or "").lower()
     pretty = (request.query_params.get("pretty") or "").lower()
     if fmt == "html" or pretty in ("1", "true", "yes"):
@@ -350,6 +362,7 @@ def _wants_html_response(request: Request) -> bool:
 
 
 def _render_closed_requests_html(items: list[RequestStatus]) -> str:
+    """Render a list of closed RequestStatus objects as an HTML page."""
     lines: list[str] = []
     for item in items:
         rec = html.escape(item.recommendation or "-")
@@ -437,6 +450,7 @@ def _render_closed_requests_html(items: list[RequestStatus]) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Manage application startup and shutdown: init DB, workers, and schedulers."""
     try:
         _refresh_vault_keys_and_persist()
     except VaultError as exc:
@@ -868,6 +882,7 @@ async def get_env_var(var_name: str):
 
 @app.get("/env", response_class=JSONResponse)
 async def list_env_vars():
+    """List all env variable names and values from the .env file."""
     keys = _read_env_keys()
     items = []
     for name in keys:

@@ -15,7 +15,6 @@ from tradingagents.agents.utils.agent_utils import (
 )
 from tradingagents.agents.utils.tool_fallback import bind_tools_or_none, safe_tool_text
 
-
 # ──────────────────────────────────────────────────────────────────────────────
 # Tool definitions
 # ──────────────────────────────────────────────────────────────────────────────
@@ -34,9 +33,12 @@ def _make_tools():
     )
     from tradingagents.valuation.roic import (
         invested_capital as calc_invested_capital,
+    )
+    from tradingagents.valuation.roic import (
         nopat as calc_nopat,
+    )
+    from tradingagents.valuation.roic import (
         roic as calc_roic,
-        roic_trend,
     )
     from tradingagents.valuation.scenarios import (
         default_scenario_set,
@@ -47,6 +49,8 @@ def _make_tools():
         after_tax_cost_of_debt,
         cost_of_equity,
         value_spread,
+    )
+    from tradingagents.valuation.wacc import (
         wacc as calc_wacc,
     )
 
@@ -87,7 +91,7 @@ def _make_tools():
 
         try:
             wacc_val = calc_wacc(equity_value, total_debt, ke, kd)
-        except ValueError as exc:
+        except ValueError:
             wacc_val = ke  # Fallback to cost of equity if no debt
 
         lines = [

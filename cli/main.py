@@ -532,6 +532,7 @@ def get_user_selections():
 
     # Create a boxed questionnaire for each step
     def create_question_box(title, prompt, default=None):
+        """Build and return a Rich Panel for a numbered questionnaire step."""
         box_content = f"[bold]{title}[/bold]\n"
         box_content += f"[dim]{prompt}[/dim]"
         if default:
@@ -1102,6 +1103,7 @@ def _configure_file_logging() -> None:
 
 
 def run_analysis(checkpoint: bool = False):
+    """Gather user selections, run the trading analysis graph, and display results."""
     # Send library logs to a file so they don't corrupt the Rich Live display.
     _configure_file_logging()
 
@@ -1155,6 +1157,7 @@ def run_analysis(checkpoint: bool = False):
     log_file.touch(exist_ok=True)
 
     def save_message_decorator(obj, func_name):
+        """Wrap a message-adding method to also persist messages to the log file."""
         func = getattr(obj, func_name)
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -1166,6 +1169,7 @@ def run_analysis(checkpoint: bool = False):
         return wrapper
 
     def save_tool_call_decorator(obj, func_name):
+        """Wrap a tool-call-adding method to also persist tool calls to the log file."""
         func = getattr(obj, func_name)
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -1399,6 +1403,7 @@ def analyze(
         help="Delete all saved checkpoints before running (force fresh start).",
     ),
 ):
+    """Run an interactive stock analysis session with optional checkpoint support."""
     if clear_checkpoints:
         from tradingagents.graph.checkpointer import clear_all_checkpoints
         n = clear_all_checkpoints(DEFAULT_CONFIG["data_cache_dir"])

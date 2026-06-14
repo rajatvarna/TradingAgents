@@ -42,10 +42,8 @@ def after_tax_cost_of_debt(
         tax_rate: Effective tax rate as a decimal.
 
     Returns:
-        After-tax cost of debt as a decimal.
-
-    Raises:
-        ValueError: If total_debt is zero.
+        After-tax cost of debt as a decimal.  Returns 0.0 when total_debt is
+        zero (debt-free companies have no cost of debt).
     """
     if total_debt == 0:
         return 0.0

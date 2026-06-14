@@ -90,6 +90,7 @@ class GraphSetup:
                 - "options": Options analyst
                 - "esg": ESG analyst
                 - "derivatives": Derivatives analyst
+                - "valuation": Valuation analyst
             run_recorder_node: Optional node for recording runs
         """
         if selected_analysts is None:

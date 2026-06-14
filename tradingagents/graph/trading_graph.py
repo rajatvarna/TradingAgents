@@ -14,6 +14,13 @@ logger = logging.getLogger(__name__)
 from langgraph.prebuilt import ToolNode
 
 # Import the new abstract tool methods from agent_utils
+from tradingagents.agents.analysts.valuation_analyst import (
+    get_dcf_valuation,
+    get_ddm_valuation,
+    get_roic_analysis,
+    get_scenario_analysis,
+    get_wacc_components,
+)
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_balance_sheet,
@@ -262,6 +269,15 @@ class TradingAgentsGraph:
                     get_balance_sheet,
                     get_cashflow,
                     get_income_statement,
+                ]
+            ),
+            "valuation": ToolNode(
+                [
+                    get_wacc_components,
+                    get_roic_analysis,
+                    get_dcf_valuation,
+                    get_ddm_valuation,
+                    get_scenario_analysis,
                 ]
             ),
         }

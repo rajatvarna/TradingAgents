@@ -1065,7 +1065,7 @@ def score_valuation_block(
 
     if earnings_yield is not None and risk_free_rate is not None:
         s = score_earnings_yield_vs_rfr(earnings_yield, risk_free_rate)
-        scores["earnings_yield_vs_rfr"] = s
+        scores["earnings_yield_vs_rf"] = s
         total += s
         count += 1
 

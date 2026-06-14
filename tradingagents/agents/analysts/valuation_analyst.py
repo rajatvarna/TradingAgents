@@ -291,8 +291,11 @@ def _make_tools():
         except Exception as exc:
             return f"Error fetching valuation inputs for {ticker}: {exc}"
 
-        dps = inputs.get("dividends_per_share") or 0.0
         div_history = inputs.get("dividend_history") or []
+        dps = inputs.get("dividends_per_share") or 0.0
+        # Prefer most-recent annual DPS from history over the yfinance field
+        if dps == 0.0 and div_history:
+            dps = div_history[0]
 
         if not is_dividend_payer(div_history if div_history else ([dps] if dps > 0 else [])):
             return f"Company does not pay dividends — DDM is not applicable for {ticker.upper()}."

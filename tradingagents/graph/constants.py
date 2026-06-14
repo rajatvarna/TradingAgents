@@ -28,7 +28,7 @@ TOOL_NODE_KEY: dict[str, str] = {
     "options": "options",
     "esg": "esg",
     "derivatives": "derivatives",
-    "valuation": "fundamentals",   # reuses fundamentals tool node (calls yfinance directly)
+    "valuation": "valuation",
 }
 
 # Node-name helpers — single source of truth so renaming only happens here.

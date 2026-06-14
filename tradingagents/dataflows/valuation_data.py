@@ -89,7 +89,7 @@ def get_valuation_inputs(ticker: str) -> dict[str, Any]:
         # Fallback: try to derive from pretax income and income tax expense
         pretax = _get("pretaxIncome")
         income_tax = _get("incomeTaxExpense")
-        if pretax and income_tax and pretax != 0:
+        if pretax is not None and income_tax is not None and pretax != 0:
             derived = income_tax / pretax
             tax_rate = max(0.0, min(0.5, derived))
         else:
@@ -133,7 +133,7 @@ def get_valuation_inputs(ticker: str) -> dict[str, Any]:
         if hist is not None and len(hist) > 0:
             # Resample to annual sums, most recent first
             annual = hist.resample("YE").sum()
-            dividend_history = [float(v) for v in reversed(annual.values[:5])]
+            dividend_history = [float(v) for v in annual.iloc[-5:][::-1]]
     except Exception:
         dividend_history = []
 

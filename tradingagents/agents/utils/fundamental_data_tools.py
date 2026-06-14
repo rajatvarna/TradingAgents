@@ -7,8 +7,8 @@ from tradingagents.dataflows.interface import route_to_vendor
 from tradingagents.dataflows.run_cache import cached
 
 
-@cached
 @tool
+@cached
 def get_fundamentals(
     ticker: Annotated[str, "ticker symbol"],
     curr_date: Annotated[str, "current date you are trading at, yyyy-mm-dd"],
@@ -28,8 +28,8 @@ def get_fundamentals(
         return tool_error_text(tool="get_fundamentals", error=exc)
 
 
-@cached
 @tool
+@cached
 def get_balance_sheet(
     ticker: Annotated[str, "ticker symbol"],
     freq: Annotated[str, "reporting frequency: annual/quarterly"] = "quarterly",
@@ -51,8 +51,8 @@ def get_balance_sheet(
         return tool_error_text(tool="get_balance_sheet", error=exc)
 
 
-@cached
 @tool
+@cached
 def get_cashflow(
     ticker: Annotated[str, "ticker symbol"],
     freq: Annotated[str, "reporting frequency: annual/quarterly"] = "quarterly",
@@ -74,8 +74,8 @@ def get_cashflow(
         return tool_error_text(tool="get_cashflow", error=exc)
 
 
-@cached
 @tool
+@cached
 def get_income_statement(
     ticker: Annotated[str, "ticker symbol"],
     freq: Annotated[str, "reporting frequency: annual/quarterly"] = "quarterly",

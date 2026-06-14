@@ -6,8 +6,8 @@ from tradingagents.dataflows.interface import route_to_vendor
 from tradingagents.dataflows.run_cache import cached
 
 
-@cached
 @tool
+@cached
 def get_indicators(
     symbol: Annotated[str, "ticker symbol of the company"],
     indicator: Annotated[str, "technical indicator to get the analysis and report of"],

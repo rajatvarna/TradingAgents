@@ -7,8 +7,8 @@ from tradingagents.dataflows.interface import route_to_vendor
 from tradingagents.dataflows.run_cache import cached
 
 
-@cached
 @tool
+@cached
 def get_stock_data(
     symbol: Annotated[str, "ticker symbol of the company"],
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],

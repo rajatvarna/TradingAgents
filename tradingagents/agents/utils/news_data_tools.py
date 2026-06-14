@@ -7,8 +7,8 @@ from tradingagents.dataflows.interface import route_to_vendor
 from tradingagents.dataflows.run_cache import cached
 
 
-@cached
 @tool
+@cached
 def get_news(
     ticker: Annotated[str, "Ticker symbol"],
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
@@ -29,8 +29,8 @@ def get_news(
     except Exception as exc:
         return tool_error_text(tool="get_news", error=exc)
 
-@cached
 @tool
+@cached
 def get_global_news(
     curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
     look_back_days: Annotated[int | None, "Days to look back; omit to use the configured default"] = None,
@@ -55,8 +55,8 @@ def get_global_news(
     except Exception as exc:
         return tool_error_text(tool="get_global_news", error=exc)
 
-@cached
 @tool
+@cached
 def get_insider_transactions(
     ticker: Annotated[str, "ticker symbol"],
     curr_date: Annotated[str, "current date you are trading at, yyyy-mm-dd"] = None,

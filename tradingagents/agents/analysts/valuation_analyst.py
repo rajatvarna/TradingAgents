@@ -452,6 +452,16 @@ def _make_tools():
     ]
 
 
+# Module-level exports so trading_graph.py can import tool functions directly.
+(
+    get_wacc_components,
+    get_roic_analysis,
+    get_dcf_valuation,
+    get_ddm_valuation,
+    get_scenario_analysis,
+) = _make_tools()
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Pre-fetch helper (tool-free fallback)
 # ──────────────────────────────────────────────────────────────────────────────

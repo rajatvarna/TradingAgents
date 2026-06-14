@@ -116,9 +116,14 @@ class TestRunRoicScenarios:
             scenario_set=self._scenario_set(),
             current_price=50.0,
         )
-        # base IV should differ from price so upside is non-zero
         base = results["base"]
         assert isinstance(base.upside_pct, float)
+        expected = (
+            (base.intrinsic_value - 50.0) / base.intrinsic_value * 100.0
+            if base.intrinsic_value != 0
+            else 0.0
+        )
+        assert base.upside_pct == pytest.approx(expected)
 
 
 @pytest.mark.unit

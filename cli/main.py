@@ -24,6 +24,7 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 
 
 def _port_open(port: int) -> bool:
+    """Return True if a TCP connection to 127.0.0.1:port succeeds within 0.2 s."""
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=0.2):
             return True
@@ -101,6 +102,7 @@ class MessageBuffer:
     }
 
     def __init__(self, max_length=100):
+        """Initialise the buffer with empty collections and default state."""
         self.messages = deque(maxlen=max_length)
         self.tool_calls = deque(maxlen=max_length)
         self.current_report = None
@@ -168,24 +170,29 @@ class MessageBuffer:
         return count
 
     def add_message(self, message_type, content):
+        """Append a timestamped message to the message buffer."""
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
         self.messages.append((timestamp, message_type, content))
 
     def add_tool_call(self, tool_name, args):
+        """Append a timestamped tool call record to the tool calls buffer."""
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
         self.tool_calls.append((timestamp, tool_name, args))
 
     def update_agent_status(self, agent, status):
+        """Update the status of a known agent and set it as the current agent."""
         if agent in self.agent_status:
             self.agent_status[agent] = status
             self.current_agent = agent
 
     def update_report_section(self, section_name, content):
+        """Store content for a report section and refresh the display report."""
         if section_name in self.report_sections:
             self.report_sections[section_name] = content
             self._update_current_report()
 
     def _update_current_report(self):
+        """Update the current_report display string from the latest non-empty section."""
         # For the panel display, only show the most recently updated section
         latest_section = None
         latest_content = None
@@ -215,6 +222,7 @@ class MessageBuffer:
         self._update_final_report()
 
     def _update_final_report(self):
+        """Rebuild the consolidated final_report string from all populated sections."""
         report_parts = []
 
         # Analyst Team Reports - use .get() to handle missing sections
@@ -260,6 +268,7 @@ message_buffer = MessageBuffer()
 
 
 def create_layout():
+    """Create and return the Rich terminal layout for the analysis dashboard."""
     layout = Layout()
     layout.split_column(
         Layout(name="header", size=3),
@@ -283,6 +292,7 @@ def format_tokens(n):
 
 
 def update_display(layout, spinner_text=None, stats_handler=None, start_time=None):
+    """Refresh all panels in the Rich layout with current agent/report/stats state."""
     # Header with welcome message
     layout["header"].update(
         Panel(
@@ -522,6 +532,7 @@ def get_user_selections():
 
     # Create a boxed questionnaire for each step
     def create_question_box(title, prompt, default=None):
+        """Build and return a Rich Panel for a numbered questionnaire step."""
         box_content = f"[bold]{title}[/bold]\n"
         box_content += f"[dim]{prompt}[/dim]"
         if default:
@@ -1092,6 +1103,7 @@ def _configure_file_logging() -> None:
 
 
 def run_analysis(checkpoint: bool = False):
+    """Gather user selections, run the trading analysis graph, and display results."""
     # Send library logs to a file so they don't corrupt the Rich Live display.
     _configure_file_logging()
 
@@ -1145,6 +1157,7 @@ def run_analysis(checkpoint: bool = False):
     log_file.touch(exist_ok=True)
 
     def save_message_decorator(obj, func_name):
+        """Wrap a message-adding method to also persist messages to the log file."""
         func = getattr(obj, func_name)
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -1156,6 +1169,7 @@ def run_analysis(checkpoint: bool = False):
         return wrapper
 
     def save_tool_call_decorator(obj, func_name):
+        """Wrap a tool-call-adding method to also persist tool calls to the log file."""
         func = getattr(obj, func_name)
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -1167,6 +1181,7 @@ def run_analysis(checkpoint: bool = False):
         return wrapper
 
     def save_report_section_decorator(obj, func_name):
+        """Wrap a report-section-updating method to also write section files to disk."""
         func = getattr(obj, func_name)
         @wraps(func)
         def wrapper(section_name, content):
@@ -1226,6 +1241,7 @@ def run_analysis(checkpoint: bool = False):
         # stay on the same path as programmatic callers. The on_chunk hook keeps
         # the TUI render loop and stats callbacks intact.
         def render_chunk(chunk):
+            """Process one graph output chunk and refresh the TUI display."""
             # Process all messages in chunk, deduplicating by message ID
             for message in chunk.get("messages", []):
                 msg_id = getattr(message, "id", None)
@@ -1389,11 +1405,96 @@ def analyze(
         help="Delete all saved checkpoints before running (force fresh start).",
     ),
 ):
+    """Run an interactive stock analysis session with optional checkpoint support."""
     if clear_checkpoints:
         from tradingagents.graph.checkpointer import clear_all_checkpoints
         n = clear_all_checkpoints(DEFAULT_CONFIG["data_cache_dir"])
         console.print(f"[yellow]Cleared {n} checkpoint(s).[/yellow]")
     run_analysis(checkpoint=checkpoint)
+
+
+@app.command()
+def stats(
+    days: int = typer.Option(7, "--days", "-d", help="Show stats for the last N days"),
+    limit: int = typer.Option(20, "--limit", "-n", help="Max runs to show"),
+):
+    """Show token usage and cost statistics for recent analysis runs."""
+    import sqlite3
+    from datetime import UTC, datetime, timedelta
+    from pathlib import Path
+
+    from rich.console import Console
+    from rich.table import Table
+
+    console = Console()
+
+    # Try to find the IIC db
+    db_candidates = [
+        Path.home() / ".tradingagents" / "iic.db",
+        Path.home() / ".tradingagents" / "trading_agents.db",
+    ]
+    db_path = next((p for p in db_candidates if p.exists()), None)
+
+    if db_path is None:
+        console.print("[yellow]No run database found. Run an analysis first.[/yellow]")
+        raise typer.Exit(0)
+
+    since = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        # Try the costs table (IIC-FORGE schema)
+        try:
+            rows = cur.execute(
+                """
+                SELECT r.ticker, r.started_ts,
+                       SUM(c.in_tokens) as in_tok, SUM(c.out_tokens) as out_tok,
+                       SUM(c.in_tokens + c.out_tokens) as total_tok
+                FROM runs r
+                JOIN costs c ON c.run_id = r.run_id
+                WHERE r.started_ts >= ?
+                GROUP BY r.run_id
+                ORDER BY r.started_ts DESC
+                LIMIT ?
+                """,
+                (since, limit),
+            ).fetchall()
+        except sqlite3.OperationalError as db_err:
+            logging.debug("stats: cost table query failed: %s", db_err)
+            rows = []
+        conn.close()
+    except Exception as exc:
+        console.print(f"[red]Failed to read database: {exc}[/red]")
+        raise typer.Exit(1)
+
+    if not rows:
+        console.print(f"[yellow]No run data found in the last {days} days.[/yellow]")
+        raise typer.Exit(0)
+
+    table = Table(title=f"TradingAgents Token Usage — Last {days} Days", show_lines=True)
+    table.add_column("Ticker", style="cyan", no_wrap=True)
+    table.add_column("Run At (UTC)", style="white")
+    table.add_column("In Tokens", justify="right", style="green")
+    table.add_column("Out Tokens", justify="right", style="yellow")
+    table.add_column("Total Tokens", justify="right", style="bold white")
+
+    grand_total = 0
+    for row in rows:
+        total = row["total_tok"] or 0
+        grand_total += total
+        table.add_row(
+            row["ticker"] or "—",
+            (row["started_ts"] or "")[:16],
+            f"{row['in_tok'] or 0:,}",
+            f"{row['out_tok'] or 0:,}",
+            f"{total:,}",
+        )
+
+    console.print(table)
+    console.print(f"\n[bold]Grand total:[/bold] {grand_total:,} tokens across {len(rows)} runs")
 
 
 from cli.deepdive import deepdive as _deepdive_cmd

@@ -19,11 +19,16 @@ import os
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
-from fastapi.responses import RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 
 from api.db import (
     DB_PATH,
@@ -34,14 +39,14 @@ from api.db import (
     delete_batch_schedule,
     get_batch_schedule,
     get_llm_calls_by_provider_between,
-    get_llm_usage_by_provider_between,
     get_llm_role_stats_between,
+    get_llm_usage_by_provider_between,
     get_recommendation_history,
-    list_due_batch_schedules,
-    list_due_pending_requests,
     get_request,
     init_db,
     list_batch_schedules,
+    list_due_batch_schedules,
+    list_due_pending_requests,
     list_requests,
     mark_stale_running_requests,
     update_batch_schedule_config,
@@ -79,16 +84,19 @@ _SCHEDULER_POLL_SECONDS = 30
 
 
 def _utc_now() -> datetime.datetime:
+    """Return the current UTC datetime."""
     return datetime.datetime.now(datetime.timezone.utc)
 
 
-def _next_midnight_utc_iso(now: Optional[datetime.datetime] = None) -> str:
+def _next_midnight_utc_iso(now: datetime.datetime | None = None) -> str:
+    """Return the next midnight UTC as an ISO 8601 string."""
     current = now or _utc_now()
     next_day = (current + datetime.timedelta(days=1)).date()
     return datetime.datetime.combine(next_day, datetime.time.min, tzinfo=datetime.timezone.utc).isoformat()
 
 
-def _next_run_utc_iso(frequency: str, from_time: Optional[datetime.datetime] = None) -> str:
+def _next_run_utc_iso(frequency: str, from_time: datetime.datetime | None = None) -> str:
+    """Return the next scheduled run time ISO string based on frequency."""
     base = from_time or _utc_now()
     f = frequency.lower()
     if f == "daily":
@@ -101,7 +109,7 @@ def _next_run_utc_iso(frequency: str, from_time: Optional[datetime.datetime] = N
     return nxt.isoformat()
 
 
-def _latest_business_date_iso(from_time: Optional[datetime.datetime] = None) -> str:
+def _latest_business_date_iso(from_time: datetime.datetime | None = None) -> str:
     """Return latest business date (Mon-Fri) in UTC.
 
     If current day is Saturday/Sunday, returns the most recent Friday.
@@ -116,22 +124,23 @@ def _latest_business_date_iso(from_time: Optional[datetime.datetime] = None) -> 
 
 
 def _build_status(row: dict, base_url: str) -> RequestStatus:
-    analysis_url: Optional[str] = None
-    debug_log_url: Optional[str] = None
+    """Build a RequestStatus from a database row dict."""
+    analysis_url: str | None = None
+    debug_log_url: str | None = None
     agent_recommendations = None
-    
+
     if row.get("analysis_file"):
         analysis_url = f"{base_url}/analysis/{row['analysis_file']}"
     if row.get("status") != "canceled":
         debug_log_url = f"{base_url}/logs/{row['id']}"
-    
+
     # Parse agent_recommendations JSON if present
     if row.get("agent_recommendations"):
         try:
             agent_recommendations = json.loads(row["agent_recommendations"])
         except (json.JSONDecodeError, TypeError):
             agent_recommendations = None
-    
+
     return RequestStatus(
         request_id=row["id"],
         ticker=row["ticker"],
@@ -157,7 +166,7 @@ def _build_status(row: dict, base_url: str) -> RequestStatus:
     )
 
 
-def _build_agent_recommendations(final_state: Optional[dict]) -> dict:
+def _build_agent_recommendations(final_state: dict | None) -> dict:
     """Normalize graph output into a UI-friendly agent recommendation payload."""
     if not final_state:
         return {}
@@ -190,6 +199,7 @@ def _build_agent_recommendations(final_state: Optional[dict]) -> dict:
 
 
 def _validate_env_name(var_name: str) -> str:
+    """Validate and normalise an environment variable name."""
     name = (var_name or "").strip().upper()
     if not _ENV_NAME_PATTERN.fullmatch(name):
         raise HTTPException(status_code=400, detail="Invalid env variable name format")
@@ -197,6 +207,7 @@ def _validate_env_name(var_name: str) -> str:
 
 
 def _read_env_keys() -> list[str]:
+    """Return a deduplicated list of env variable names found in the .env file."""
     keys: list[str] = []
     if not _ENV_FILE.exists():
         return keys
@@ -219,7 +230,8 @@ def _read_env_keys() -> list[str]:
     return unique
 
 
-def _read_env_file_value(var_name: str) -> Optional[str]:
+def _read_env_file_value(var_name: str) -> str | None:
+    """Read the raw value of a single env variable from the .env file."""
     if not _ENV_FILE.exists():
         return None
     text = _ENV_FILE.read_text(encoding="utf-8", errors="replace")
@@ -234,6 +246,7 @@ def _read_env_file_value(var_name: str) -> Optional[str]:
 
 
 def _upsert_env_file_value(var_name: str, value: str) -> None:
+    """Insert or update a single env variable in the .env file."""
     lines: list[str] = []
     if _ENV_FILE.exists():
         lines = _ENV_FILE.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -262,6 +275,7 @@ def _upsert_env_file_value(var_name: str, value: str) -> None:
 
 
 def _refresh_vault_keys_and_persist() -> dict:
+    """Refresh API keys from Vault and persist them to the .env file."""
     summary = refresh_runtime_env_from_vault()
     for key in summary.get("keys", []):
         val = os.getenv(key)
@@ -271,9 +285,10 @@ def _refresh_vault_keys_and_persist() -> dict:
 
 
 def _build_batch_schedule_item(row: dict, base_url: str) -> BatchScheduleItem:
+    """Build a BatchScheduleItem response model from a database row dict."""
     latest_request_id = row.get("latest_request_id")
-    latest_logs_url: Optional[str] = None
-    latest_analysis_url: Optional[str] = None
+    latest_logs_url: str | None = None
+    latest_analysis_url: str | None = None
     if latest_request_id:
         latest_logs_url = f"{base_url}/logs/{latest_request_id}"
     if row.get("latest_analysis_file"):
@@ -305,6 +320,7 @@ async def _enqueue_due_pending_requests_once() -> int:
 
 
 async def _pending_enqueue_loop() -> None:
+    """Continuously poll for due pending requests and enqueue them."""
     while True:
         await _enqueue_due_pending_requests_once()
         await asyncio.sleep(_SCHEDULER_POLL_SECONDS)
@@ -336,6 +352,7 @@ async def _batch_schedule_loop() -> None:
 
 
 def _wants_html_response(request: Request) -> bool:
+    """Return True if the client prefers an HTML response over JSON."""
     fmt = (request.query_params.get("format") or "").lower()
     pretty = (request.query_params.get("pretty") or "").lower()
     if fmt == "html" or pretty in ("1", "true", "yes"):
@@ -345,6 +362,7 @@ def _wants_html_response(request: Request) -> bool:
 
 
 def _render_closed_requests_html(items: list[RequestStatus]) -> str:
+    """Render a list of closed RequestStatus objects as an HTML page."""
     lines: list[str] = []
     for item in items:
         rec = html.escape(item.recommendation or "-")
@@ -432,6 +450,7 @@ def _render_closed_requests_html(items: list[RequestStatus]) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Manage application startup and shutdown: init DB, workers, and schedulers."""
     try:
         _refresh_vault_keys_and_persist()
     except VaultError as exc:
@@ -560,6 +579,66 @@ async def get_status(request_id: str, request: Request):
 
 
 # ---------------------------------------------------------------------------
+# GET /stream/{request_id}
+# ---------------------------------------------------------------------------
+@app.get("/stream/{request_id}", tags=["streaming"])
+async def stream_analysis_status(request_id: str, request: Request) -> StreamingResponse:
+    """Stream analysis status updates via Server-Sent Events.
+
+    Pushes a JSON event every 2 seconds until the request reaches a terminal
+    state (completed, failed, canceled). Clients can close the connection at
+    any time.
+
+    Event format:
+        data: {"type": "status", "data": {"request_id": "...", "status": "running", ...}}
+    """
+    async def _event_generator():
+        poll_interval = 2.0
+        terminal_states = {"completed", "failed", "canceled"}
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                row = await get_request(request_id, db_path=DB_PATH)
+            except Exception:
+                payload = {"type": "error", "data": {"message": "Unable to load request status right now."}}
+                yield f"data: {json.dumps(payload)}\n\n"
+                break
+            if row is None:
+                payload = {"type": "error", "data": {"message": f"request_id {request_id!r} not found"}}
+                yield f"data: {json.dumps(payload)}\n\n"
+                break
+
+            status_val = row.get("status", "unknown")
+            status_data = {
+                "request_id": request_id,
+                "status": status_val,
+                "ticker": row.get("ticker"),
+                "created_at": row.get("submitted_at"),
+                "updated_at": row.get("completed_at") or row.get("started_at"),
+                "result_file": row.get("analysis_file"),
+                "error": row.get("error_message"),
+            }
+            yield f"data: {json.dumps({'type': 'status', 'data': status_data})}\n\n"
+
+            if status_val in terminal_states:
+                terminal_type = "complete" if status_val == "completed" else "error"
+                yield f"data: {json.dumps({'type': terminal_type, 'data': status_data})}\n\n"
+                break
+
+            await asyncio.sleep(poll_interval)
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
 # GET /requests/open
 # ---------------------------------------------------------------------------
 @app.get("/requests/open", response_model=RequestListResponse)
@@ -606,14 +685,15 @@ async def list_batched_schedules(request: Request):
 
 
 @app.get("/batching/history/{ticker}", response_class=JSONResponse)
-async def get_batching_history(ticker: str, provider: Optional[str] = None, limit: int = 20):
+async def get_batching_history(ticker: str, provider: str | None = None, limit: int = 20):
     """Get recommendation/date history for a ticker (optionally filtered by provider)."""
     cleaned_ticker = ticker.strip().upper()
     if not cleaned_ticker:
         raise HTTPException(status_code=400, detail="ticker must not be empty")
+    normalized_provider = (provider or "").strip().lower() or None
     rows = await get_recommendation_history(
         ticker=cleaned_ticker,
-        llm_provider=(provider or None),
+        llm_provider=normalized_provider,
         limit=limit,
         db_path=DB_PATH,
     )
@@ -621,7 +701,7 @@ async def get_batching_history(ticker: str, provider: Optional[str] = None, limi
     return JSONResponse(
         content={
             "ticker": cleaned_ticker,
-            "provider": (provider or "").strip().lower() or None,
+            "provider": normalized_provider,
             "latest_final_recommendation": latest.get("recommendation") if latest else None,
             "history": rows,
         }
@@ -804,6 +884,7 @@ async def get_env_var(var_name: str):
 
 @app.get("/env", response_class=JSONResponse)
 async def list_env_vars():
+    """List all env variable names and values from the .env file."""
     keys = _read_env_keys()
     items = []
     for name in keys:
@@ -834,7 +915,7 @@ async def force_refresh_vault_keys():
 
 
 @app.get("/recommendations/latest/{ticker}", response_model=LatestRecommendationResponse)
-async def latest_recommendation_for_ticker(ticker: str, provider: Optional[str] = None):
+async def latest_recommendation_for_ticker(ticker: str, provider: str | None = None):
     """Return latest completed recommendation for a stock ticker, if available."""
     cleaned_ticker = ticker.strip().upper()
     if not cleaned_ticker:
@@ -1799,7 +1880,7 @@ async def completed_requests_page():
             return html_file.read_text(encoding="utf-8")
     except Exception:
         pass
-    
+
     # Fallback if file not found
     return """
 <!DOCTYPE html>

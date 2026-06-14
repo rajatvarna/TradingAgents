@@ -33,6 +33,9 @@ class GuardrailConfig:
     max_single_loss_pct: float = 5.0     # max loss per trade before forced exit
     require_stop_loss: bool = True       # reject Buy/Overweight without stop-loss
     blocked_ratings: list = field(default_factory=list)  # hard-block certain actions
+    portfolio_tickers: list = field(default_factory=list)
+    trade_date_str: str | None = None
+    ticker: str | None = None
 
 
 @dataclass
@@ -66,6 +69,9 @@ class RiskGuardrails:
             blocked_ratings=[
                 r.lower() for r in config.get("blocked_ratings", [])
             ],
+            portfolio_tickers=list(config.get("portfolio_tickers") or []),
+            trade_date_str=config.get("trade_date_str"),
+            ticker=config.get("ticker"),
         )
         self.gc = gc
 
@@ -105,6 +111,29 @@ class RiskGuardrails:
         sizing = self._extract_field(decision, "Position Sizing")
         if sizing:
             pct = self._extract_percentage(sizing)
+            # Apply correlation-aware size reduction before the hard cap check.
+            if pct is not None:
+                try:
+                    from tradingagents.graph.correlation_guard import (
+                        apply_correlation_sizing_adjustment,
+                    )
+                    existing = list(self.gc.portfolio_tickers)
+                    if existing and self.gc.trade_date_str and self.gc.ticker:
+                        original_pct = pct
+                        pct, corr_note = apply_correlation_sizing_adjustment(
+                            pct, self.gc.ticker, existing, self.gc.trade_date_str
+                        )
+                        if pct < original_pct:
+                            corr_capped = (
+                                f"{pct:.0f}% of portfolio "
+                                f"(reduced by correlation guard from {original_pct:.0f}%)"
+                            )
+                            decision = self._replace_field(decision, "Position Sizing", corr_capped)
+                            clamped["Position Sizing"] = (sizing, corr_capped)
+                            if corr_note:
+                                violations.append(corr_note)
+                except Exception as exc:
+                    logger.debug("Correlation sizing adjustment skipped due to error: %s", exc)
             if pct is not None and pct > self.gc.max_position_pct:
                 capped = f"{self.gc.max_position_pct:.0f}% of portfolio (clamped from {pct:.0f}%)"
                 violations.append(

@@ -35,8 +35,14 @@ from tradingagents.agents.utils.agent_utils import (
     resolve_instrument_identity,
     resolve_risk_constraints,
 )
+from tradingagents.agents.utils.core_stock_tools import (
+    get_atr_stop_suggestion,
+    get_peer_performance,
+)
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.dataflows.config import set_config
+from tradingagents.dataflows.run_cache import reset as reset_run_cache
+from tradingagents.dataflows.run_cache import stats as run_cache_stats
 from tradingagents.dataflows.symbol_utils import normalize_symbol
 from tradingagents.dataflows.utils import safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
@@ -103,8 +109,12 @@ class TradingAgentsGraph:
 
         # IIC-FORGE F1: token accumulator — must be in self.callbacks BEFORE
         # the LLM clients are constructed, so the LLM clients pick it up.
-        from tradingagents.graph.cost_callback import RunCostCallback
-        self._cost_cb = RunCostCallback()
+        from tradingagents.graph.cost_callback import CostGuard, RunCostCallback
+        _guard = CostGuard(
+            per_run_token_budget=self.config.get("max_tokens_per_run", 500_000),
+            enabled=self.config.get("cost_guard_enabled", False),
+        )
+        self._cost_cb = RunCostCallback(cost_guard=_guard)
         self.callbacks = list(self.callbacks or []) + [self._cost_cb]
 
         # Update the interface's config
@@ -246,6 +256,10 @@ class TradingAgentsGraph:
                     get_stock_data,
                     # Technical indicators
                     get_indicators,
+                    # Sector peer relative strength
+                    get_peer_performance,
+                    # ATR-based dynamic stop-loss suggestions
+                    get_atr_stop_suggestion,
                 ]
             ),
             "social": ToolNode(
@@ -430,6 +444,16 @@ class TradingAgentsGraph:
         self.ticker = company_name
         self.structured_output_cache.clear()
 
+        # Reset per-run data cache at the start of each analysis run.
+        reset_run_cache()
+
+        # Apply market calendar guard — shift weekend/holiday dates to nearest trading day.
+        from tradingagents.graph.market_calendar import nearest_trading_day
+        exchange = self.config.get("benchmark_exchange", "NYSE")
+        trade_date, adjusted = nearest_trading_day(str(trade_date), exchange)
+        if adjusted:
+            logger.warning("Analysis date shifted to nearest trading day: %s", trade_date)
+
         # Resolve any pending memory-log entries for this ticker before the pipeline runs.
         self._resolve_pending_entries(company_name)
 
@@ -461,6 +485,7 @@ class TradingAgentsGraph:
                 target_profile=target_profile,
             )
         finally:
+            logger.info("run_cache stats: %s", run_cache_stats())
             if self._checkpointer_ctx is not None:
                 self._checkpointer_ctx.__exit__(None, None, None)
                 self._checkpointer_ctx = None
@@ -495,6 +520,17 @@ class TradingAgentsGraph:
         )
         if monster_score:
             init_agent_state["monster_stock_score"] = monster_score
+
+        # Earnings calendar awareness — warn before analysis if earnings are near.
+        from tradingagents.dataflows.earnings_calendar import get_earnings_warning
+        earnings_warning = get_earnings_warning(
+            company_name,
+            str(trade_date),
+            lookahead_days=self.config.get("earnings_lookahead_days", 7),
+        )
+        if earnings_warning["has_warning"]:
+            logger.warning("Earnings warning for %s: %s", company_name, earnings_warning["message"])
+        init_agent_state["earnings_warning"] = earnings_warning
 
         # IIC-FORGE F4: event-context injection — seed event text into state.
         # Empty string when not in event_alert mode (deep-dive path unchanged).

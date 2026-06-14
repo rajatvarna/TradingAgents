@@ -622,7 +622,8 @@ async def stream_analysis_status(request_id: str, request: Request) -> Streaming
             yield f"data: {json.dumps({'type': 'status', 'data': status_data})}\n\n"
 
             if status_val in terminal_states:
-                yield f"data: {json.dumps({'type': 'complete', 'data': status_data})}\n\n"
+                terminal_type = "complete" if status_val == "completed" else "error"
+                yield f"data: {json.dumps({'type': terminal_type, 'data': status_data})}\n\n"
                 break
 
             await asyncio.sleep(poll_interval)

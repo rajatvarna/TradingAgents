@@ -69,7 +69,7 @@ class RiskGuardrails:
             blocked_ratings=[
                 r.lower() for r in config.get("blocked_ratings", [])
             ],
-            portfolio_tickers=list(config.get("portfolio_tickers", [])),
+            portfolio_tickers=list(config.get("portfolio_tickers") or []),
             trade_date_str=config.get("trade_date_str"),
             ticker=config.get("ticker"),
         )
@@ -132,8 +132,8 @@ class RiskGuardrails:
                             clamped["Position Sizing"] = (sizing, corr_capped)
                             if corr_note:
                                 violations.append(corr_note)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Correlation sizing adjustment skipped due to error: %s", exc)
             if pct is not None and pct > self.gc.max_position_pct:
                 capped = f"{self.gc.max_position_pct:.0f}% of portfolio (clamped from {pct:.0f}%)"
                 violations.append(

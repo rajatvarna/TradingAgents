@@ -15,18 +15,16 @@ from tradingagents.agents import (
     create_derivative_analyst,
     create_esg_analyst,
     create_fundamentals_analyst,
-    create_group_sector_analyst,
     create_market_analyst,
-    create_market_phase_analyst,
     create_msg_delete,
     create_neutral_debator,
     create_news_analyst,
     create_options_analyst,
     create_portfolio_manager,
-    create_postmortem_analyst,
     create_research_manager,
     create_sentiment_analyst,
     create_trader,
+    create_valuation_analyst,
 )
 from tradingagents.agents.utils.agent_states import AgentState
 from tradingagents.agents.utils.tool_provenance import create_tool_provenance_capture_node
@@ -51,9 +49,7 @@ _ANALYST_FACTORIES = {
     "options": create_options_analyst,
     "esg": create_esg_analyst,
     "derivatives": create_derivative_analyst,
-    "group_sector": create_group_sector_analyst,
-    "market_phase": create_market_phase_analyst,
-    "postmortem": create_postmortem_analyst,
+    "valuation": create_valuation_analyst,
 }
 
 _DEFAULT_ANALYSTS = ("market", "sentiment", "news", "fundamentals")
@@ -94,6 +90,7 @@ class GraphSetup:
                 - "options": Options analyst
                 - "esg": ESG analyst
                 - "derivatives": Derivatives analyst
+                - "valuation": Valuation analyst
             run_recorder_node: Optional node for recording runs
         """
         if selected_analysts is None:

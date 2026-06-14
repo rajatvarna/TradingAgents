@@ -668,6 +668,122 @@ def score_stock(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Valuation criteria scoring (ROIC/DCF-based, optional add-on)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def score_valuation_criteria(
+    roic: float,
+    wacc: float,
+    margin_of_safety_pct: float,
+    roic_trend_label: str,
+    earnings_yield: float,
+    risk_free_rate: float,
+) -> list:
+    """Score four valuation criteria and return a list of CriterionScore.
+
+    Optional add-on to score_stock(); include results in all_scores when
+    valuation data is available.
+
+    Args:
+        roic: Return on Invested Capital (decimal, e.g. 0.15).
+        wacc: Weighted Average Cost of Capital (decimal).
+        margin_of_safety_pct: (IV - Price) / IV × 100 from base-case DCF.
+        roic_trend_label: "expanding" | "stable" | "contracting".
+        earnings_yield: EPS / Price (decimal, e.g. 0.05 for 5%).
+        risk_free_rate: Current 10-year risk-free rate (decimal).
+
+    Returns:
+        List of four CriterionScore objects.
+    """
+    spread = roic - wacc
+
+    # 1. ROIC vs WACC spread
+    if spread >= 0.05:
+        vs_score, vs_pf = 10.0, "PASS"
+        vs_rat = f"Strong value creation: ROIC-WACC spread = {spread:.1%}"
+    elif spread >= 0.02:
+        vs_score, vs_pf = 6.0, "PASS"
+        vs_rat = f"Moderate value creation: spread = {spread:.1%}"
+    elif spread >= 0.0:
+        vs_score, vs_pf = 4.0, "WARN"
+        vs_rat = f"Marginal value creation: spread = {spread:.1%}"
+    else:
+        vs_score, vs_pf = 1.0, "FAIL"
+        vs_rat = f"Value destruction: ROIC ({roic:.1%}) < WACC ({wacc:.1%})"
+
+    value_spread_score = CriterionScore(
+        name="ROIC vs WACC Spread",
+        score=vs_score,
+        weight=WEIGHTS.get("roic_wacc_spread", 1.2),
+        pass_fail=vs_pf,
+        rationale=vs_rat,
+    )
+
+    # 2. Margin of safety (base-case DCF vs current price)
+    if margin_of_safety_pct >= 30.0:
+        mos_score, mos_pf = 10.0, "PASS"
+        mos_rat = f"Deep margin of safety: {margin_of_safety_pct:.1f}% discount to IV"
+    elif margin_of_safety_pct >= 15.0:
+        mos_score, mos_pf = 7.0, "PASS"
+        mos_rat = f"Adequate margin of safety: {margin_of_safety_pct:.1f}% discount"
+    elif margin_of_safety_pct >= 0.0:
+        mos_score, mos_pf = 4.0, "WARN"
+        mos_rat = f"Minimal margin of safety: {margin_of_safety_pct:.1f}% discount"
+    else:
+        mos_score, mos_pf = 1.0, "FAIL"
+        mos_rat = f"Premium to IV: stock is {abs(margin_of_safety_pct):.1f}% above intrinsic value"
+
+    mos_criterion = CriterionScore(
+        name="Margin of Safety (DCF)",
+        score=mos_score,
+        weight=WEIGHTS.get("margin_of_safety", 1.0),
+        pass_fail=mos_pf,
+        rationale=mos_rat,
+    )
+
+    # 3. ROIC trend
+    if roic_trend_label == "expanding":
+        rt_score, rt_pf = 10.0, "PASS"
+        rt_rat = "ROIC expanding over time — capital deployment is improving"
+    elif roic_trend_label == "stable":
+        rt_score, rt_pf = 6.0, "WARN"
+        rt_rat = "ROIC stable — consistent but not compounding its edge"
+    else:
+        rt_score, rt_pf = 2.0, "FAIL"
+        rt_rat = "ROIC contracting — returns on capital are eroding"
+
+    roic_trend_score = CriterionScore(
+        name="ROIC Trend",
+        score=rt_score,
+        weight=WEIGHTS.get("roic_trend", 0.8),
+        pass_fail=rt_pf,
+        rationale=rt_rat,
+    )
+
+    # 4. Earnings yield vs risk-free rate
+    ey_ratio = earnings_yield / risk_free_rate if risk_free_rate > 0 else 0.0
+    if ey_ratio >= 2.0:
+        ey_score, ey_pf = 10.0, "PASS"
+        ey_rat = f"Earnings yield ({earnings_yield:.1%}) is {ey_ratio:.1f}x the risk-free rate"
+    elif ey_ratio >= 1.0:
+        ey_score, ey_pf = 5.0, "WARN"
+        ey_rat = f"Earnings yield ({earnings_yield:.1%}) barely exceeds risk-free rate ({risk_free_rate:.1%})"
+    else:
+        ey_score, ey_pf = 1.0, "FAIL"
+        ey_rat = f"Earnings yield ({earnings_yield:.1%}) below risk-free rate ({risk_free_rate:.1%})"
+
+    earnings_yield_score = CriterionScore(
+        name="Earnings Yield vs Rf",
+        score=ey_score,
+        weight=WEIGHTS.get("earnings_yield_vs_rf", 0.7),
+        pass_fail=ey_pf,
+        rationale=ey_rat,
+    )
+
+    return [value_spread_score, mos_criterion, roic_trend_score, earnings_yield_score]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Corrected standalone scoring functions (public API)
 #
 # These replace / complement the private _score_* functions above with
@@ -821,3 +937,141 @@ def _build_narrative(fund, tech, group, market, composite, grade, action, blocke
     if blockers:
         lines.append(f"BLOCKERS active ({len(blockers)}): {'; '.join(blockers[:2])}.")
     return " ".join(lines)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Valuation Criteria Scoring (optional block — graceful if data not provided)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def score_roic_wacc_spread(value_spread_decimal: float) -> float:
+    """Score the ROIC vs WACC value spread.
+
+    A wider positive spread indicates the company is creating more shareholder value.
+
+    Args:
+        value_spread_decimal: ROIC minus WACC as a decimal (e.g. 0.05 for 5%).
+
+    Returns:
+        Score from 0.0 to 1.0.
+    """
+    if value_spread_decimal >= 0.05:
+        return 1.0
+    if value_spread_decimal >= 0.02:
+        return 0.5
+    return 0.0
+
+
+def score_margin_of_safety(mos_pct: float) -> float:
+    """Score the margin of safety versus intrinsic value.
+
+    Args:
+        mos_pct: Margin of safety as a percentage (e.g. 30.0 for 30%).
+            A positive value means the stock is below intrinsic value.
+
+    Returns:
+        Score from 0.0 to 1.0.
+    """
+    if mos_pct >= 30.0:
+        return 1.0
+    if mos_pct >= 15.0:
+        return 0.5
+    return 0.0
+
+
+def score_roic_trend_valuation(trend: str) -> float:
+    """Score the ROIC trend direction.
+
+    Args:
+        trend: One of "expanding", "stable", or "contracting"
+            as returned by tradingagents.valuation.roic.roic_trend().
+
+    Returns:
+        Score from 0.0 to 1.0.
+    """
+    if trend == "expanding":
+        return 1.0
+    if trend == "stable":
+        return 0.5
+    return 0.0
+
+
+def score_earnings_yield_vs_rfr(earnings_yield: float, risk_free_rate: float) -> float:
+    """Score earnings yield relative to the risk-free rate.
+
+    The earnings yield (E/P) is the inverse of the P/E ratio.  A high earnings
+    yield relative to the risk-free rate indicates relative attractiveness.
+
+    Args:
+        earnings_yield: Earnings per share divided by price (E/P), as a decimal.
+        risk_free_rate: Current risk-free rate as a decimal (e.g. 0.045 for 4.5%).
+
+    Returns:
+        Score from 0.0 to 1.0.
+    """
+    if risk_free_rate <= 0:
+        return 0.5
+    ratio = earnings_yield / risk_free_rate
+    if ratio >= 2.0:
+        return 1.0
+    if ratio >= 1.0:
+        return 0.5
+    return 0.0
+
+
+def score_valuation_block(
+    value_spread_decimal: float = None,
+    margin_of_safety_pct: float = None,
+    roic_trend: str = None,
+    earnings_yield: float = None,
+    risk_free_rate: float = None,
+) -> dict:
+    """Compute all four valuation criterion scores and return a summary dict.
+
+    All parameters are optional.  If a parameter is None, that criterion is
+    skipped and does not contribute to the composite.
+
+    Args:
+        value_spread_decimal: ROIC minus WACC as a decimal.
+        margin_of_safety_pct: Margin of safety percentage (positive = undervalued).
+        roic_trend: "expanding" | "stable" | "contracting".
+        earnings_yield: Earnings per share / price as a decimal.
+        risk_free_rate: Risk-free rate as a decimal.
+
+    Returns:
+        Dict with keys: scores (dict), composite (float | None),
+        criteria_available (int).
+    """
+    scores = {}
+    total = 0.0
+    count = 0
+
+    if value_spread_decimal is not None:
+        s = score_roic_wacc_spread(value_spread_decimal)
+        scores["roic_wacc_spread"] = s
+        total += s
+        count += 1
+
+    if margin_of_safety_pct is not None:
+        s = score_margin_of_safety(margin_of_safety_pct)
+        scores["margin_of_safety"] = s
+        total += s
+        count += 1
+
+    if roic_trend is not None:
+        s = score_roic_trend_valuation(roic_trend)
+        scores["roic_trend"] = s
+        total += s
+        count += 1
+
+    if earnings_yield is not None and risk_free_rate is not None:
+        s = score_earnings_yield_vs_rfr(earnings_yield, risk_free_rate)
+        scores["earnings_yield_vs_rf"] = s
+        total += s
+        count += 1
+
+    composite = (total / count) if count > 0 else None
+    return {
+        "scores": scores,
+        "composite": composite,
+        "criteria_available": count,
+    }

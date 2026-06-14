@@ -1,16 +1,14 @@
 from .analysts.derivative_analyst import create_derivative_analyst
 from .analysts.esg_analyst import create_esg_analyst
 from .analysts.fundamentals_analyst import create_fundamentals_analyst
-from .analysts.group_sector_analyst import create_group_sector_analyst
 from .analysts.market_analyst import create_market_analyst
-from .analysts.market_phase_analyst import create_market_phase_analyst
 from .analysts.news_analyst import create_news_analyst
 from .analysts.options_analyst import create_options_analyst
-from .analysts.postmortem_analyst import create_postmortem_analyst
 from .analysts.sentiment_analyst import (
     create_sentiment_analyst,
     create_social_media_analyst,  # deprecated alias kept for back-compat
 )
+from .analysts.valuation_analyst import create_valuation_analyst
 from .managers.portfolio_manager import create_portfolio_manager
 from .managers.portfolio_state_manager import (
     MarketState,
@@ -54,7 +52,5 @@ __all__ = [
     "create_social_media_analyst",  # deprecated; will be removed in a future version
     "create_trader",
     "create_esg_analyst",
-    "create_group_sector_analyst",
-    "create_market_phase_analyst",
-    "create_postmortem_analyst",
+    "create_valuation_analyst",
 ]

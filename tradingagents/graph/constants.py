@@ -11,9 +11,7 @@ ANALYST_REPORT_KEYS: dict[str, str] = {
     "options": "options_report",
     "esg": "esg_report",
     "derivatives": "derivatives_report",
-    "group_sector": "group_sector_report",
-    "market_phase": "market_phase_report",
-    "postmortem": "postmortem_report",
+    "valuation": "valuation_report",
 }
 
 # Set of valid analyst names for input validation.
@@ -21,7 +19,6 @@ VALID_ANALYSTS: frozenset[str] = frozenset(ANALYST_REPORT_KEYS.keys())
 
 # Maps analyst type → the key used to look up its ToolNode in GraphSetup.tool_nodes.
 # "sentiment" / "social" analyst uses the "social" tool-node bucket.
-# group_sector and market_phase are tool-free (they call data fetchers directly).
 TOOL_NODE_KEY: dict[str, str] = {
     "market": "market",
     "sentiment": "social",
@@ -31,14 +28,8 @@ TOOL_NODE_KEY: dict[str, str] = {
     "options": "options",
     "esg": "esg",
     "derivatives": "derivatives",
-    "group_sector": "fundamentals",   # reuses fundamentals tool node (no tools needed)
-    "market_phase": "market",         # reuses market tool node (no tools needed)
-    "postmortem": "market",           # reuses market tool node (no tools needed)
+    "valuation": "valuation",
 }
-
-# Analysts that do not use LangChain tool calls (call data fetchers directly).
-# For these analysts, the "tools" conditional edge always routes to the clear node.
-TOOL_FREE_ANALYSTS: frozenset[str] = frozenset({"group_sector", "market_phase", "postmortem"})
 
 # Node-name helpers — single source of truth so renaming only happens here.
 def analyst_node_name(analyst_type: str) -> str:

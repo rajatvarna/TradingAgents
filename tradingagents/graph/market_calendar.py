@@ -89,6 +89,4 @@ def _check_day(exchange: str, d: date) -> bool:
     # Fallback: weekday + approximate holiday check
     if _is_weekend(d):
         return False
-    if (d.month, d.day) in _US_HOLIDAYS:
-        return False
-    return True
+    return (d.month, d.day) not in _US_HOLIDAYS

@@ -37,13 +37,14 @@ from tradingagents.agents.utils.agent_utils import (
 )
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.dataflows.config import set_config
+from tradingagents.dataflows.run_cache import reset as reset_run_cache
+from tradingagents.dataflows.run_cache import stats as run_cache_stats
 from tradingagents.dataflows.symbol_utils import normalize_symbol
 from tradingagents.dataflows.utils import safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.llm_clients import create_llm_client
 
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
-from tradingagents.dataflows.run_cache import reset as reset_run_cache, stats as run_cache_stats
 
 
 def _precompute_monster_score(ticker: str, trade_date: str, config: dict) -> dict:

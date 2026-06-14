@@ -1402,11 +1402,12 @@ def stats(
     limit: int = typer.Option(20, "--limit", "-n", help="Max runs to show"),
 ):
     """Show token usage and cost statistics for recent analysis runs."""
-    from rich.table import Table
-    from rich.console import Console
-    from pathlib import Path
     import sqlite3
-    from datetime import datetime, timezone, timedelta
+    from datetime import UTC, datetime, timedelta
+    from pathlib import Path
+
+    from rich.console import Console
+    from rich.table import Table
 
     console = Console()
 
@@ -1421,7 +1422,7 @@ def stats(
         console.print("[yellow]No run database found. Run an analysis first.[/yellow]")
         raise typer.Exit(0)
 
-    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    since = (datetime.now(UTC) - timedelta(days=days)).isoformat()
 
     try:
         conn = sqlite3.connect(str(db_path))

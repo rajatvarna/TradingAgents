@@ -22,7 +22,7 @@ class RunCostCallback(BaseCallbackHandler):
     ``costs`` table.
     """
 
-    def __init__(self, cost_guard: "CostGuard | None" = None) -> None:
+    def __init__(self, cost_guard: CostGuard | None = None) -> None:
         self._totals: dict[str, dict[str, int]] = defaultdict(
             lambda: {"in_tokens": 0, "out_tokens": 0}
         )

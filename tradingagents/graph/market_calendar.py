@@ -26,7 +26,7 @@ def _is_weekend(d: date) -> bool:
 
 
 def _try_mcal(exchange: str, d: date) -> bool | None:
-    """Return True if `d` is a valid trading day per pandas_market_calendars."""
+    """Return True if d is a valid trading day per pandas_market_calendars, or None if unavailable."""
     try:
         import pandas_market_calendars as mcal  # type: ignore[import]
         cal = mcal.get_calendar(exchange)
@@ -80,7 +80,7 @@ def nearest_trading_day(
 
 
 def _check_day(exchange: str, d: date) -> bool:
-    """Return True if d is a valid trading day for the exchange."""
+    """Return True if d is a valid trading day, using pandas_market_calendars with a weekday fallback."""
     # Try authoritative calendar first
     mcal_result = _try_mcal(exchange, d)
     if mcal_result is not None:

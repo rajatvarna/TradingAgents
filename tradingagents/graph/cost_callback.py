@@ -23,12 +23,14 @@ class RunCostCallback(BaseCallbackHandler):
     """
 
     def __init__(self, cost_guard: CostGuard | None = None) -> None:
+        """Initialise with an optional CostGuard for budget enforcement."""
         self._totals: dict[str, dict[str, int]] = defaultdict(
             lambda: {"in_tokens": 0, "out_tokens": 0}
         )
         self._cost_guard = cost_guard
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
+        """Accumulate token counts from the completed LLM call and check budget."""
         info = response.llm_output or {}
         usage = info.get("token_usage") or {}
         model = info.get("model_name") or info.get("model") or "unknown"
@@ -43,6 +45,7 @@ class RunCostCallback(BaseCallbackHandler):
             self._cost_guard.check_or_raise(total_tokens=self.total_tokens())
 
     def totals_by_model(self) -> dict[str, dict[str, int]]:
+        """Return per-model token counts as a plain dict."""
         return dict(self._totals)
 
     def total_tokens(self) -> int:
@@ -71,10 +74,12 @@ class CostGuard:
         per_run_token_budget: int,
         enabled: bool = False,
     ) -> None:
+        """Configure the token budget and whether enforcement is active."""
         self._budget = per_run_token_budget
         self._enabled = enabled
 
     def check_or_raise(self, *, total_tokens: int) -> None:
+        """Raise CostGuardExceeded if enforcement is on and budget is exceeded."""
         if not self._enabled:
             return  # measurement only — no enforcement during F0–F5
         if total_tokens > self._budget:

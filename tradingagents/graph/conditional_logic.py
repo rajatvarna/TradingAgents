@@ -43,21 +43,27 @@ class ConditionalLogic:
 
     # Backward-compatible named wrappers — delegate to the factory.
     def should_continue_market(self, state: AgentState) -> str:
+        """Route market analyst to tool node or clear node."""
         return self.should_continue_analyst("market")(state)
 
     def should_continue_sentiment(self, state: AgentState) -> str:
+        """Route sentiment analyst to tool node or clear node."""
         return self.should_continue_analyst("sentiment")(state)
 
     def should_continue_news(self, state: AgentState) -> str:
+        """Route news analyst to tool node or clear node."""
         return self.should_continue_analyst("news")(state)
 
     def should_continue_fundamentals(self, state: AgentState) -> str:
+        """Route fundamentals analyst to tool node or clear node."""
         return self.should_continue_analyst("fundamentals")(state)
 
     def should_continue_options(self, state: AgentState) -> str:
+        """Route options analyst to tool node or clear node."""
         return self.should_continue_analyst("options")(state)
 
     def should_continue_esg(self, state: AgentState) -> str:
+        """Route ESG analyst to tool node or clear node."""
         return self.should_continue_analyst("esg")(state)
 
     def wait_for_all_analysts(self, state: AgentState, selected_analysts: list) -> str:
@@ -152,6 +158,7 @@ class ConditionalLogic:
         return dir_a == dir_b
 
     def _early_stop_investment_debate(self, state: AgentState) -> bool:
+        """Return True if the investment debate should terminate early due to stale responses."""
         inv = state["investment_debate_state"]
         current = (inv.get("current_response") or "").strip()
         if not current:
@@ -177,6 +184,7 @@ class ConditionalLogic:
         return bool(r_bull == "Hold" and r_bear == "Hold")
 
     def _early_stop_risk_debate(self, state: AgentState) -> bool:
+        """Return True if the risk debate should terminate early due to repeated responses."""
         risk = state["risk_debate_state"]
         latest = (risk.get("latest_speaker") or "").strip().lower()
         if not latest:
@@ -192,6 +200,7 @@ class ConditionalLogic:
         return bool(last and prev and self._similar(last, prev) >= 0.98)
 
     def _last_two_blocks(self, history: str) -> tuple[str, str]:
+        """Return the last two non-empty lines from a history string."""
         blocks = [b.strip() for b in history.splitlines() if b.strip()]
         if not blocks:
             return "", ""
@@ -200,4 +209,5 @@ class ConditionalLogic:
         return last, prev
 
     def _similar(self, a: str, b: str) -> float:
+        """Return the similarity ratio between two strings in [0, 1]."""
         return difflib.SequenceMatcher(None, a, b).ratio()

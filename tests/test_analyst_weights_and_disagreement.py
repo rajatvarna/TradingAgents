@@ -5,11 +5,7 @@ These tests run without any external dependencies (no langchain, no API keys).
 """
 from __future__ import annotations
 
-import json
-import sqlite3
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -81,7 +77,9 @@ class TestAnalystWeightsMemoryLog:
     """Tests for get_analyst_weights in TradingMemoryLog."""
 
     def _make_log(self, tmp_path: Path):
-        import importlib.util, sys
+        import importlib.util
+        import sys
+
         root = Path(__file__).parent.parent / "tradingagents" / "agents" / "utils"
 
         def _load(name, filename):
@@ -172,7 +170,9 @@ class TestIsHighUncertainty:
     def _import(self):
         try:
             from tradingagents.agents.utils.conflict_detector import (
-                ConflictReport, CrossFactorConflict, _is_high_uncertainty
+                ConflictReport,
+                CrossFactorConflict,
+                _is_high_uncertainty,
             )
             return _is_high_uncertainty, ConflictReport, CrossFactorConflict
         except ImportError:

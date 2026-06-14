@@ -12,6 +12,7 @@ from tradingagents.agents import (
     create_bear_researcher,
     create_bull_researcher,
     create_conservative_debator,
+    create_conflict_detector,
     create_derivative_analyst,
     create_esg_analyst,
     create_fundamentals_analyst,
@@ -131,6 +132,7 @@ class GraphSetup:
 
     def _build_fixed_nodes(self, workflow: StateGraph) -> None:
         """Add researcher, trader, risk analysts, and portfolio manager nodes."""
+        workflow.add_node("Conflict Detector", create_conflict_detector(self.quick_thinking_llm))
         workflow.add_node("Bull Researcher", create_bull_researcher(self.quick_thinking_llm))
         workflow.add_node("Bear Researcher", create_bear_researcher(self.quick_thinking_llm))
         workflow.add_node("Research Manager", create_research_manager(
@@ -173,11 +175,11 @@ class GraphSetup:
                 workflow.add_edge(current_tools, f"Capture Tools {spec.key.capitalize()}")
                 workflow.add_edge(f"Capture Tools {spec.key.capitalize()}", current_analyst)
 
-                # Connect to next analyst or to Bull Researcher if this is the last analyst
+                # Connect to next analyst or to Conflict Detector if this is the last analyst
                 if i < len(plan.specs) - 1:
                     workflow.add_edge(current_clear, plan.specs[i + 1].agent_node)
                 else:
-                    workflow.add_edge(current_clear, "Bull Researcher")
+                    workflow.add_edge(current_clear, "Conflict Detector")
         else:
             # Wire analysts in parallel (Local parallel flow with Join Analysts)
             def join_analysts_node(state):
@@ -253,11 +255,12 @@ class GraphSetup:
                     self.conditional_logic.wait_for_all_analysts,
                     selected_analysts=selected_analysts,
                 ),
-                {"continue": "Bull Researcher", "wait": END},
+                {"continue": "Conflict Detector", "wait": END},
             )
 
     def _wire_fixed_flow(self, workflow: StateGraph, selected_analysts: list[str], run_recorder_node: Any = None) -> None:
         """Wire the research debate, trader, risk debate, and portfolio manager."""
+        workflow.add_edge("Conflict Detector", "Bull Researcher")
         workflow.add_conditional_edges(
             "Bull Researcher",
             self.conditional_logic.should_continue_debate,

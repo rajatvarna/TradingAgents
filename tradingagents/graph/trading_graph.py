@@ -51,6 +51,42 @@ from tradingagents.llm_clients import create_llm_client
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
 
 
+_BULLISH_KEYWORDS = frozenset({"bull", "bullish", "buy", "long", "upside", "positive", "outperform", "overweight"})
+_BEARISH_KEYWORDS = frozenset({"bear", "bearish", "sell", "short", "downside", "negative", "underperform", "underweight"})
+
+_ANALYST_REPORT_KEYS = {
+    "market": "market_report",
+    "sentiment": "sentiment_report",
+    "news": "news_report",
+    "fundamentals": "fundamentals_report",
+    "options": "options_report",
+    "esg": "esg_report",
+    "derivatives": "derivatives_report",
+}
+
+
+def _extract_analyst_signals(final_state: dict) -> dict[str, str]:
+    """Extract a bullish/bearish/neutral direction from each analyst report.
+
+    Used to persist per-analyst signals alongside the final decision so the
+    memory log can track analyst accuracy over time (Item 6).
+    """
+    signals: dict[str, str] = {}
+    for analyst, key in _ANALYST_REPORT_KEYS.items():
+        report = (final_state.get(key) or "").lower()
+        if not report:
+            continue
+        bull_hits = sum(1 for w in _BULLISH_KEYWORDS if w in report)
+        bear_hits = sum(1 for w in _BEARISH_KEYWORDS if w in report)
+        if bull_hits > bear_hits * 1.5:
+            signals[analyst] = "bullish"
+        elif bear_hits > bull_hits * 1.5:
+            signals[analyst] = "bearish"
+        else:
+            signals[analyst] = "neutral"
+    return signals
+
+
 def _precompute_monster_score(ticker: str, trade_date: str, config: dict) -> dict:
     """Pre-compute MonsterStockScore before the graph runs.
 
@@ -532,6 +568,16 @@ class TradingAgentsGraph:
             logger.warning("Earnings warning for %s: %s", company_name, earnings_warning["message"])
         init_agent_state["earnings_warning"] = earnings_warning
 
+        # Analyst accuracy weights — derived from the memory log (Item 6).
+        try:
+            analyst_weights = self.memory_log.get_analyst_weights(n_entries=self.config.get("analyst_weights_lookback", 20))
+            init_agent_state["analyst_weights"] = analyst_weights
+            if analyst_weights:
+                logger.info("Analyst accuracy weights loaded: %s", analyst_weights)
+        except Exception as exc:
+            logger.debug("Analyst weights computation skipped: %s", exc)
+            init_agent_state["analyst_weights"] = {}
+
         # Macro regime classification — inject FRED-based regime label before analysis.
         try:
             from tradingagents.graph.macro_regime_classifier import classify_macro_regime
@@ -588,10 +634,13 @@ class TradingAgentsGraph:
         self._log_state(trade_date, final_state)
 
         # Store decision for deferred reflection on the next same-ticker run.
+        # Extract per-analyst directional signals for accuracy tracking (Item 6).
+        analyst_signals = _extract_analyst_signals(final_state)
         self.memory_log.store_decision(
             ticker=company_name,
             trade_date=trade_date,
             final_trade_decision=final_state["final_trade_decision"],
+            analyst_signals=analyst_signals if analyst_signals else None,
         )
 
         # Clear checkpoint on successful completion to avoid stale state.

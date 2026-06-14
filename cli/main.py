@@ -1181,6 +1181,7 @@ def run_analysis(checkpoint: bool = False):
         return wrapper
 
     def save_report_section_decorator(obj, func_name):
+        """Wrap a report-section-updating method to also write section files to disk."""
         func = getattr(obj, func_name)
         @wraps(func)
         def wrapper(section_name, content):
@@ -1240,6 +1241,7 @@ def run_analysis(checkpoint: bool = False):
         # stay on the same path as programmatic callers. The on_chunk hook keeps
         # the TUI render loop and stats callbacks intact.
         def render_chunk(chunk):
+            """Process one graph output chunk and refresh the TUI display."""
             # Process all messages in chunk, deduplicating by message ID
             for message in chunk.get("messages", []):
                 msg_id = getattr(message, "id", None)

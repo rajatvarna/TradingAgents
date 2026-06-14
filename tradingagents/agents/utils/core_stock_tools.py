@@ -35,6 +35,7 @@ def get_stock_data(
 
 
 @tool
+@cached
 def get_peer_performance(
     ticker: Annotated[str, "ticker symbol of the company"],
     trade_date: Annotated[str, "current trading date in yyyy-mm-dd format"],

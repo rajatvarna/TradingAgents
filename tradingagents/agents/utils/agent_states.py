@@ -136,4 +136,4 @@ class AgentState(MessagesState):
     valuation_report: Annotated[str, "Intrinsic value report from the Valuation Analyst (ROIC-DCF, Revenue-DCF, DDM, scenarios)"]
 
     # Earnings calendar warning injected before analysis
-    earnings_warning: Annotated[dict, "Earnings proximity warning injected before analysis"]
+    earnings_warning: Annotated[dict[str, Any], "Earnings proximity warning injected before analysis"]

@@ -102,16 +102,27 @@ class RiskGuardrails:
             clamped["Rating"] = (rating, "Hold")
 
         # ── 2. Position sizing cap ──
-        # Hook point: call apply_correlation_sizing_adjustment() from
-        # tradingagents.graph.correlation_guard here (before the cap check)
-        # to reduce the recommended size when the new ticker is highly
-        # correlated with existing portfolio holdings.  Pass the parsed
-        # position percentage, the target ticker, the list of current
-        # portfolio tickers, and the trade date string.  Inject the result
-        # back into `sizing` before the cap check below.
         sizing = self._extract_field(decision, "Position Sizing")
         if sizing:
             pct = self._extract_percentage(sizing)
+            # Apply correlation-aware size reduction before the hard cap check.
+            if pct is not None:
+                try:
+                    from tradingagents.graph.correlation_guard import (
+                        apply_correlation_sizing_adjustment,
+                    )
+                    existing = list(self.gc.portfolio_tickers) if hasattr(self.gc, "portfolio_tickers") else []
+                    trade_date_str = getattr(self.gc, "trade_date_str", None)
+                    if existing and trade_date_str:
+                        ticker = getattr(self.gc, "ticker", None)
+                        if ticker:
+                            pct, corr_note = apply_correlation_sizing_adjustment(
+                                pct, ticker, existing, trade_date_str
+                            )
+                            if corr_note and "reduced" in corr_note.lower():
+                                violations.append(corr_note)
+                except Exception:
+                    pass
             if pct is not None and pct > self.gc.max_position_pct:
                 capped = f"{self.gc.max_position_pct:.0f}% of portfolio (clamped from {pct:.0f}%)"
                 violations.append(

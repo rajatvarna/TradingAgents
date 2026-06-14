@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # Sector ETF → representative peer tickers (top 5 per sector)
 _SECTOR_PEERS: dict[str, list[str]] = {
-    "Technology": ["AAPL", "MSFT", "NVDA", "GOOGL", "META"],
+    "Technology": ["AAPL", "MSFT", "NVDA", "ORCL", "AVGO"],
     "Healthcare": ["JNJ", "UNH", "LLY", "ABBV", "MRK"],
     "Financials": ["JPM", "BAC", "WFC", "GS", "MS"],
     "Consumer Discretionary": ["AMZN", "TSLA", "HD", "MCD", "NKE"],
@@ -27,7 +27,7 @@ _SECTOR_PEERS: dict[str, list[str]] = {
 
 
 def _get_sector(ticker: str) -> str | None:
-    """Return the sector for ticker using yfinance."""
+    """Return the GICS sector name for ticker via yfinance, or None on failure."""
     try:
         import yfinance as yf
         info = yf.Ticker(ticker).info
@@ -37,7 +37,7 @@ def _get_sector(ticker: str) -> str | None:
 
 
 def _ytd_return(ticker: str, trade_date_str: str) -> float | None:
-    """Return YTD % return for ticker as of trade_date."""
+    """Return YTD % return for ticker from January 1 through trade_date, or None on failure."""
     try:
         import yfinance as yf
         trade_date = date.fromisoformat(trade_date_str)

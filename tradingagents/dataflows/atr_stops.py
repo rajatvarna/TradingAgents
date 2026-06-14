@@ -37,7 +37,8 @@ def compute_atr(ticker: str, trade_date_str: str, period: int = 14) -> float | N
             .combine((low - prev_close).abs(), max)
         )
         atr = tr.rolling(period).mean().iloc[-1]
-        return round(float(atr), 4) if atr == atr else None  # NaN check: NaN != NaN is True
+        import pandas as pd
+        return round(float(atr), 4) if pd.notna(atr) else None
     except Exception as exc:
         logger.debug("ATR computation failed for %s: %s", ticker, exc)
         return None

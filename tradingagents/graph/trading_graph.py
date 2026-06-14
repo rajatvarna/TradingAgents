@@ -485,6 +485,7 @@ class TradingAgentsGraph:
                 target_profile=target_profile,
             )
         finally:
+            logger.info("run_cache stats: %s", run_cache_stats())
             if self._checkpointer_ctx is not None:
                 self._checkpointer_ctx.__exit__(None, None, None)
                 self._checkpointer_ctx = None
@@ -582,8 +583,6 @@ class TradingAgentsGraph:
             clear_checkpoint(
                 self.config["data_cache_dir"], company_name, str(trade_date)
             )
-
-        logger.info("run_cache stats: %s", run_cache_stats())
 
         return final_state, self.process_signal(final_state["final_trade_decision"])
 

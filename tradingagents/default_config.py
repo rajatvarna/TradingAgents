@@ -273,6 +273,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "risk_tolerance": "moderate",
     "atr_stop_multiple": 2.0,       # ATR multiple for dynamic stop-loss calculation
     "atr_stop_period": 14,          # ATR lookback period in days
+    "benchmark_exchange": "NYSE",   # Exchange for market calendar validation
     # News / data fetching parameters
     # Increase for longer lookback strategies or to broaden macro coverage;
     # decrease to reduce token usage in agent prompts.

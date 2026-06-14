@@ -66,4 +66,5 @@ def get_earnings_warning(ticker: str, trade_date_str: str, lookahead_days: int =
 
 
 def _no_warning() -> dict[str, Any]:
+    """Return a neutral earnings warning dict indicating no upcoming earnings."""
     return {"has_warning": False, "days_until_earnings": None, "earnings_date": None, "message": ""}

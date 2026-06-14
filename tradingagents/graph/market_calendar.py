@@ -21,6 +21,7 @@ _US_HOLIDAYS = {
 
 
 def _is_weekend(d: date) -> bool:
+    """Return True if date falls on Saturday or Sunday."""
     return d.weekday() >= 5  # Saturday=5, Sunday=6
 
 
@@ -79,7 +80,7 @@ def nearest_trading_day(
 
 
 def _check_day(exchange: str, d: date) -> bool:
-    """Return True if `d` is a valid trading day for the exchange."""
+    """Return True if d is a valid trading day for the exchange."""
     # Try authoritative calendar first
     mcal_result = _try_mcal(exchange, d)
     if mcal_result is not None:

@@ -7,10 +7,10 @@ runnable without network access or credentials.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
-def get_valuation_inputs(ticker: str) -> Dict[str, Any]:
+def get_valuation_inputs(ticker: str) -> dict[str, Any]:
     """Fetch all inputs required by the valuation engine for a given ticker.
 
     Uses yfinance as the data source.  Gracefully handles missing fields by
@@ -53,7 +53,7 @@ def get_valuation_inputs(ticker: str) -> Dict[str, Any]:
 
     try:
         tk = yf.Ticker(ticker)
-        info: Dict[str, Any] = tk.info or {}
+        info: dict[str, Any] = tk.info or {}
     except Exception as exc:
         raise ValueError(
             f"Could not retrieve data for ticker '{ticker}' via yfinance: {exc}"
@@ -64,7 +64,7 @@ def get_valuation_inputs(ticker: str) -> Dict[str, Any]:
         pass
 
     # ── Helper ──────────────────────────────────────────────────────────────
-    def _get(key: str, default: Optional[float] = None) -> Optional[float]:
+    def _get(key: str, default: float | None = None) -> float | None:
         val = info.get(key)
         if val is None or val == "N/A":
             return default
@@ -74,10 +74,10 @@ def get_valuation_inputs(ticker: str) -> Dict[str, Any]:
             return default
 
     # ── Income statement fields ──────────────────────────────────────────────
-    ebit: Optional[float] = _get("ebit") or _get("operatingIncome")
-    revenue: Optional[float] = _get("totalRevenue")
-    interest_expense_raw: Optional[float] = _get("interestExpense")
-    interest_expense: Optional[float] = (
+    ebit: float | None = _get("ebit") or _get("operatingIncome")
+    revenue: float | None = _get("totalRevenue")
+    interest_expense_raw: float | None = _get("interestExpense")
+    interest_expense: float | None = (
         abs(interest_expense_raw) if interest_expense_raw is not None else None
     )
 
@@ -96,29 +96,29 @@ def get_valuation_inputs(ticker: str) -> Dict[str, Any]:
             tax_rate = 0.21  # US federal statutory rate as default
 
     # ── Balance sheet fields ─────────────────────────────────────────────────
-    total_assets: Optional[float] = _get("totalAssets")
-    cash_and_equivalents: Optional[float] = (
+    total_assets: float | None = _get("totalAssets")
+    cash_and_equivalents: float | None = (
         _get("totalCash") or _get("cashAndCashEquivalentsAtCarryingValue")
     )
 
     # Non-interest current liabilities proxy: accounts payable
-    non_interest_current_liabilities: Optional[float] = _get("accountsPayable")
+    non_interest_current_liabilities: float | None = _get("accountsPayable")
     # Supplement with other current liabilities if available
     other_current = _get("otherCurrentLiabilities")
     if non_interest_current_liabilities is not None and other_current is not None:
         non_interest_current_liabilities += other_current
 
-    total_debt: Optional[float] = _get("totalDebt")
-    net_debt: Optional[float] = None
+    total_debt: float | None = _get("totalDebt")
+    net_debt: float | None = None
     if total_debt is not None and cash_and_equivalents is not None:
         net_debt = total_debt - cash_and_equivalents
 
     # ── Equity data ──────────────────────────────────────────────────────────
-    shares_outstanding: Optional[float] = (
+    shares_outstanding: float | None = (
         _get("sharesOutstanding") or _get("impliedSharesOutstanding")
     )
 
-    current_price: Optional[float] = (
+    current_price: float | None = (
         _get("currentPrice") or _get("regularMarketPrice")
     )
 
@@ -127,7 +127,7 @@ def get_valuation_inputs(ticker: str) -> Dict[str, Any]:
     # ── Dividend data ────────────────────────────────────────────────────────
     dividends_per_share: float = _get("dividendRate") or 0.0
 
-    dividend_history: List[float] = []
+    dividend_history: list[float] = []
     try:
         hist = tk.dividends
         if hist is not None and len(hist) > 0:

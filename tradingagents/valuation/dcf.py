@@ -6,8 +6,6 @@ Pure math — no external dependencies, no LLM, no I/O.
 
 from __future__ import annotations
 
-from typing import List
-
 
 def roic_dcf(
     nopat: float,
@@ -69,7 +67,7 @@ def roic_dcf(
 
 def revenue_dcf(
     revenue: float,
-    growth_rates: List[float],
+    growth_rates: list[float],
     ebit_margin: float,
     tax_rate: float,
     wacc_val: float,

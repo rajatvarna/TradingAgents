@@ -6,8 +6,6 @@ Pure math — no external dependencies, no LLM, no I/O.
 
 from __future__ import annotations
 
-from typing import List
-
 
 def nopat(ebit: float, effective_tax_rate: float) -> float:
     """Compute Net Operating Profit After Tax.
@@ -60,7 +58,7 @@ def roic(nopat_val: float, invested_capital_val: float) -> float:
     return nopat_val / invested_capital_val
 
 
-def roic_trend(historical_roics: List[float]) -> str:
+def roic_trend(historical_roics: list[float]) -> str:
     """Classify the direction of ROIC over a historical series.
 
     Args:

@@ -1,16 +1,19 @@
 # TradingAgents/graph/setup.py
 
-from typing import Any, Dict, List
+from functools import partial
+from typing import Any
+
 from langchain_core.messages import HumanMessage, RemoveMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
-from functools import partial
 
 from tradingagents.agents import (
     create_aggressive_debator,
     create_bear_researcher,
     create_bull_researcher,
     create_conservative_debator,
+    create_derivative_analyst,
+    create_esg_analyst,
     create_fundamentals_analyst,
     create_market_analyst,
     create_msg_delete,
@@ -21,15 +24,13 @@ from tradingagents.agents import (
     create_research_manager,
     create_sentiment_analyst,
     create_trader,
-    create_esg_analyst,
-    create_derivative_analyst,
     create_valuation_analyst,
 )
 from tradingagents.agents.utils.agent_states import AgentState
 from tradingagents.agents.utils.tool_provenance import create_tool_provenance_capture_node
 
-from .conditional_logic import ConditionalLogic
 from .analyst_execution import build_analyst_execution_plan
+from .conditional_logic import ConditionalLogic
 from .constants import (
     ANALYST_REPORT_KEYS,
     TOOL_NODE_KEY,
@@ -61,9 +62,9 @@ class GraphSetup:
         self,
         quick_thinking_llm: Any,
         deep_thinking_llm: Any,
-        tool_nodes: Dict[str, ToolNode],
+        tool_nodes: dict[str, ToolNode],
         conditional_logic: ConditionalLogic,
-        structured_output_cache: Dict[str, str] = None,
+        structured_output_cache: dict[str, str] = None,
         analyst_concurrency_limit: int = 1,
     ):
         self.quick_thinking_llm = quick_thinking_llm
@@ -75,7 +76,7 @@ class GraphSetup:
 
     def setup_graph(
         self,
-        selected_analysts: List[str] = None,
+        selected_analysts: list[str] = None,
         run_recorder_node: Any = None,
     ):
         """Set up and compile the agent workflow graph.
@@ -115,7 +116,7 @@ class GraphSetup:
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _build_analyst_nodes(self, workflow: StateGraph, selected_analysts: List[str]) -> None:
+    def _build_analyst_nodes(self, workflow: StateGraph, selected_analysts: list[str]) -> None:
         """Add analyst, clear, and tool nodes to the workflow."""
         for analyst_type in selected_analysts:
             factory = _ANALYST_FACTORIES[analyst_type]
@@ -147,7 +148,7 @@ class GraphSetup:
             cache=self.structured_output_cache,
         ))
 
-    def _wire_analyst_branches(self, workflow: StateGraph, selected_analysts: List[str]) -> None:
+    def _wire_analyst_branches(self, workflow: StateGraph, selected_analysts: list[str]) -> None:
         """Wire sequential or parallel analyst fan-out, tool loops, clear nodes, and join."""
         plan = build_analyst_execution_plan(selected_analysts)
 
@@ -187,7 +188,7 @@ class GraphSetup:
                     if analyst == "sentiment" and not state.get("sentiment_report") and not state.get("social_report"):
                         return {}
                 messages = state.get("messages", [])
-                
+
                 tool_errors = state.get("tool_errors", [])
                 error_count = int(state.get("error_count", 0) or 0)
                 tool_call_count = int(state.get("tool_call_count", 0) or 0)
@@ -254,7 +255,7 @@ class GraphSetup:
                 {"continue": "Bull Researcher", "wait": END},
             )
 
-    def _wire_fixed_flow(self, workflow: StateGraph, selected_analysts: List[str], run_recorder_node: Any = None) -> None:
+    def _wire_fixed_flow(self, workflow: StateGraph, selected_analysts: list[str], run_recorder_node: Any = None) -> None:
         """Wire the research debate, trader, risk debate, and portfolio manager."""
         workflow.add_conditional_edges(
             "Bull Researcher",

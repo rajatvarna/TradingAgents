@@ -6,8 +6,6 @@ Pure math — no external dependencies, no LLM, no I/O.
 
 from __future__ import annotations
 
-from typing import List
-
 
 def gordon_growth_ddm(
     dps: float,
@@ -37,7 +35,7 @@ def gordon_growth_ddm(
 
 
 def multi_stage_ddm(
-    dividends: List[float],
+    dividends: list[float],
     terminal_growth: float,
     cost_of_equity: float,
 ) -> float:
@@ -78,7 +76,7 @@ def multi_stage_ddm(
     return pv + pv_terminal
 
 
-def is_dividend_payer(dividend_history: List[float]) -> bool:
+def is_dividend_payer(dividend_history: list[float]) -> bool:
     """Determine whether a company is an active dividend payer.
 
     A company is considered a dividend payer if it has paid a non-zero dividend

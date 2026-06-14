@@ -7,7 +7,6 @@ Pure math — no external dependencies, no LLM, no I/O.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 from tradingagents.valuation.dcf import margin_of_safety, revenue_dcf, roic_dcf
 
@@ -20,7 +19,7 @@ class ScenarioAssumptions:
     terminal_growth: float      # Perpetual terminal growth rate
     ebit_margin: float          # EBIT as a fraction of revenue
     reinvestment_rate: float    # Fraction of NOPAT reinvested
-    wacc_override: Optional[float] = None  # Override WACC if provided
+    wacc_override: float | None = None  # Override WACC if provided
 
 
 @dataclass
@@ -49,7 +48,7 @@ def run_roic_scenarios(
     scenario_set: ScenarioSet,
     projection_years: int = 10,
     current_price: float = 0.0,
-) -> Dict[str, ScenarioResult]:
+) -> dict[str, ScenarioResult]:
     """Run bear / base / bull ROIC-DCF scenarios.
 
     Args:
@@ -64,7 +63,7 @@ def run_roic_scenarios(
     Returns:
         Dict mapping label string to ScenarioResult.
     """
-    results: Dict[str, ScenarioResult] = {}
+    results: dict[str, ScenarioResult] = {}
     for label, scenario in [
         ("bear", scenario_set.bear),
         ("base", scenario_set.base),
@@ -94,7 +93,7 @@ def run_revenue_scenarios(
     projection_years: int = 10,
     tax_rate: float = 0.21,
     current_price: float = 0.0,
-) -> Dict[str, ScenarioResult]:
+) -> dict[str, ScenarioResult]:
     """Run bear / base / bull Revenue-DCF scenarios.
 
     Args:
@@ -110,14 +109,14 @@ def run_revenue_scenarios(
     Returns:
         Dict mapping label string to ScenarioResult.
     """
-    results: Dict[str, ScenarioResult] = {}
+    results: dict[str, ScenarioResult] = {}
     for label, scenario in [
         ("bear", scenario_set.bear),
         ("base", scenario_set.base),
         ("bull", scenario_set.bull),
     ]:
         effective_wacc = scenario.wacc_override if scenario.wacc_override is not None else wacc_val
-        growth_rates: List[float] = [scenario.growth_rate] * projection_years
+        growth_rates: list[float] = [scenario.growth_rate] * projection_years
         iv = revenue_dcf(
             revenue=revenue,
             growth_rates=growth_rates,

@@ -3,8 +3,6 @@ Item 8 (Structured Analyst Disagreement Escalation).
 
 These tests run without any external dependencies (no langchain, no API keys).
 """
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

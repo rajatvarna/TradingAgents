@@ -469,7 +469,13 @@ def _make_tools():
 
 def _prefetch_valuation_data(ticker: str) -> str:
     """Pre-fetch valuation data for tool-less LLM providers."""
-    tools = _make_tools()
+    tools = [
+        get_wacc_components,
+        get_roic_analysis,
+        get_dcf_valuation,
+        get_ddm_valuation,
+        get_scenario_analysis,
+    ]
     tool_map = {t.name: t for t in tools}
 
     sections = []
@@ -514,7 +520,13 @@ def create_valuation_analyst(llm, toolkit=None):
         subject_label = "company" if asset_type == "stock" else "asset or protocol"
         instrument_context = get_instrument_context_from_state(state)
 
-        tools = _make_tools()
+        tools = [
+            get_wacc_components,
+            get_roic_analysis,
+            get_dcf_valuation,
+            get_ddm_valuation,
+            get_scenario_analysis,
+        ]
 
         system_message = (
             f"You are a Valuation Analyst specializing in intrinsic value estimation "

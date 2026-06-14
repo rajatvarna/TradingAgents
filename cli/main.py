@@ -1433,19 +1433,20 @@ def stats(
         try:
             rows = cur.execute(
                 """
-                SELECT r.ticker, r.trade_date, r.created_at,
+                SELECT r.ticker, r.started_ts,
                        SUM(c.in_tokens) as in_tok, SUM(c.out_tokens) as out_tok,
                        SUM(c.in_tokens + c.out_tokens) as total_tok
                 FROM runs r
                 JOIN costs c ON c.run_id = r.run_id
-                WHERE r.created_at >= ?
+                WHERE r.started_ts >= ?
                 GROUP BY r.run_id
-                ORDER BY r.created_at DESC
+                ORDER BY r.started_ts DESC
                 LIMIT ?
                 """,
                 (since, limit),
             ).fetchall()
-        except sqlite3.OperationalError:
+        except sqlite3.OperationalError as db_err:
+            logging.debug("stats: cost table query failed: %s", db_err)
             rows = []
         conn.close()
     except Exception as exc:
@@ -1458,7 +1459,6 @@ def stats(
 
     table = Table(title=f"TradingAgents Token Usage — Last {days} Days", show_lines=True)
     table.add_column("Ticker", style="cyan", no_wrap=True)
-    table.add_column("Date", style="white")
     table.add_column("Run At (UTC)", style="white")
     table.add_column("In Tokens", justify="right", style="green")
     table.add_column("Out Tokens", justify="right", style="yellow")
@@ -1470,8 +1470,7 @@ def stats(
         grand_total += total
         table.add_row(
             row["ticker"] or "—",
-            row["trade_date"] or "—",
-            (row["created_at"] or "")[:16],
+            (row["started_ts"] or "")[:16],
             f"{row['in_tok'] or 0:,}",
             f"{row['out_tok'] or 0:,}",
             f"{total:,}",

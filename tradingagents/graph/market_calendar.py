@@ -17,7 +17,6 @@ _US_HOLIDAYS = {
     (1, 1),   # New Year's Day
     (7, 4),   # Independence Day
     (12, 25), # Christmas
-    (11, 11), # Veterans Day (not a market holiday but good to note)
 }
 
 

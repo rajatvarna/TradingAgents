@@ -19,11 +19,16 @@ import os
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 
 from api.db import (
     DB_PATH,
@@ -34,14 +39,14 @@ from api.db import (
     delete_batch_schedule,
     get_batch_schedule,
     get_llm_calls_by_provider_between,
-    get_llm_usage_by_provider_between,
     get_llm_role_stats_between,
+    get_llm_usage_by_provider_between,
     get_recommendation_history,
-    list_due_batch_schedules,
-    list_due_pending_requests,
     get_request,
     init_db,
     list_batch_schedules,
+    list_due_batch_schedules,
+    list_due_pending_requests,
     list_requests,
     mark_stale_running_requests,
     update_batch_schedule_config,
@@ -79,16 +84,16 @@ _SCHEDULER_POLL_SECONDS = 30
 
 
 def _utc_now() -> datetime.datetime:
-    return datetime.datetime.now(datetime.timezone.utc)
+    return datetime.datetime.now(datetime.UTC)
 
 
-def _next_midnight_utc_iso(now: Optional[datetime.datetime] = None) -> str:
+def _next_midnight_utc_iso(now: datetime.datetime | None = None) -> str:
     current = now or _utc_now()
     next_day = (current + datetime.timedelta(days=1)).date()
-    return datetime.datetime.combine(next_day, datetime.time.min, tzinfo=datetime.timezone.utc).isoformat()
+    return datetime.datetime.combine(next_day, datetime.time.min, tzinfo=datetime.UTC).isoformat()
 
 
-def _next_run_utc_iso(frequency: str, from_time: Optional[datetime.datetime] = None) -> str:
+def _next_run_utc_iso(frequency: str, from_time: datetime.datetime | None = None) -> str:
     base = from_time or _utc_now()
     f = frequency.lower()
     if f == "daily":
@@ -101,7 +106,7 @@ def _next_run_utc_iso(frequency: str, from_time: Optional[datetime.datetime] = N
     return nxt.isoformat()
 
 
-def _latest_business_date_iso(from_time: Optional[datetime.datetime] = None) -> str:
+def _latest_business_date_iso(from_time: datetime.datetime | None = None) -> str:
     """Return latest business date (Mon-Fri) in UTC.
 
     If current day is Saturday/Sunday, returns the most recent Friday.
@@ -116,22 +121,22 @@ def _latest_business_date_iso(from_time: Optional[datetime.datetime] = None) -> 
 
 
 def _build_status(row: dict, base_url: str) -> RequestStatus:
-    analysis_url: Optional[str] = None
-    debug_log_url: Optional[str] = None
+    analysis_url: str | None = None
+    debug_log_url: str | None = None
     agent_recommendations = None
-    
+
     if row.get("analysis_file"):
         analysis_url = f"{base_url}/analysis/{row['analysis_file']}"
     if row.get("status") != "canceled":
         debug_log_url = f"{base_url}/logs/{row['id']}"
-    
+
     # Parse agent_recommendations JSON if present
     if row.get("agent_recommendations"):
         try:
             agent_recommendations = json.loads(row["agent_recommendations"])
         except (json.JSONDecodeError, TypeError):
             agent_recommendations = None
-    
+
     return RequestStatus(
         request_id=row["id"],
         ticker=row["ticker"],
@@ -157,7 +162,7 @@ def _build_status(row: dict, base_url: str) -> RequestStatus:
     )
 
 
-def _build_agent_recommendations(final_state: Optional[dict]) -> dict:
+def _build_agent_recommendations(final_state: dict | None) -> dict:
     """Normalize graph output into a UI-friendly agent recommendation payload."""
     if not final_state:
         return {}
@@ -219,7 +224,7 @@ def _read_env_keys() -> list[str]:
     return unique
 
 
-def _read_env_file_value(var_name: str) -> Optional[str]:
+def _read_env_file_value(var_name: str) -> str | None:
     if not _ENV_FILE.exists():
         return None
     text = _ENV_FILE.read_text(encoding="utf-8", errors="replace")
@@ -272,8 +277,8 @@ def _refresh_vault_keys_and_persist() -> dict:
 
 def _build_batch_schedule_item(row: dict, base_url: str) -> BatchScheduleItem:
     latest_request_id = row.get("latest_request_id")
-    latest_logs_url: Optional[str] = None
-    latest_analysis_url: Optional[str] = None
+    latest_logs_url: str | None = None
+    latest_analysis_url: str | None = None
     if latest_request_id:
         latest_logs_url = f"{base_url}/logs/{latest_request_id}"
     if row.get("latest_analysis_file"):
@@ -542,7 +547,7 @@ async def submit_analysis(body: AnalyzeRequest, request: Request):
         analysis_date=analysis_date,
         llm_provider=llm_provider,
         status="pending",
-        submitted_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        submitted_at=datetime.datetime.now(datetime.UTC).isoformat(),
     )
 
 
@@ -563,7 +568,7 @@ async def get_status(request_id: str, request: Request):
 # GET /stream/{request_id}
 # ---------------------------------------------------------------------------
 @app.get("/stream/{request_id}", tags=["streaming"])
-async def stream_analysis_status(request_id: str, request: Request):
+async def stream_analysis_status(request_id: str, request: Request) -> StreamingResponse:
     """Stream analysis status updates via Server-Sent Events.
 
     Pushes a JSON event every 2 seconds until the request reaches a terminal
@@ -579,7 +584,12 @@ async def stream_analysis_status(request_id: str, request: Request):
         while True:
             if await request.is_disconnected():
                 break
-            row = await get_request(request_id, db_path=DB_PATH)
+            try:
+                row = await get_request(request_id, db_path=DB_PATH)
+            except Exception as exc:
+                payload = {"error": f"Database error: {exc}"}
+                yield f"event: error\ndata: {json.dumps(payload)}\n\n"
+                break
             if row is None:
                 payload = {"error": f"request_id {request_id!r} not found"}
                 yield f"event: error\ndata: {json.dumps(payload)}\n\n"
@@ -660,7 +670,7 @@ async def list_batched_schedules(request: Request):
 
 
 @app.get("/batching/history/{ticker}", response_class=JSONResponse)
-async def get_batching_history(ticker: str, provider: Optional[str] = None, limit: int = 20):
+async def get_batching_history(ticker: str, provider: str | None = None, limit: int = 20):
     """Get recommendation/date history for a ticker (optionally filtered by provider)."""
     cleaned_ticker = ticker.strip().upper()
     if not cleaned_ticker:
@@ -832,7 +842,7 @@ async def cancel_open_request(request_id: str):
     return CancelResponse(
         request_id=request_id,
         status="canceled",
-        canceled_at=updated["completed_at"] if updated and updated.get("completed_at") else datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        canceled_at=updated["completed_at"] if updated and updated.get("completed_at") else datetime.datetime.now(datetime.UTC).isoformat(),
     )
 
 
@@ -842,7 +852,7 @@ async def cancel_all_open_requests_endpoint():
     count = await cancel_all_open_requests(db_path=DB_PATH)
     return CancelAllResponse(
         canceled_count=count,
-        canceled_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        canceled_at=datetime.datetime.now(datetime.UTC).isoformat(),
     )
 
 
@@ -888,7 +898,7 @@ async def force_refresh_vault_keys():
 
 
 @app.get("/recommendations/latest/{ticker}", response_model=LatestRecommendationResponse)
-async def latest_recommendation_for_ticker(ticker: str, provider: Optional[str] = None):
+async def latest_recommendation_for_ticker(ticker: str, provider: str | None = None):
     """Return latest completed recommendation for a stock ticker, if available."""
     cleaned_ticker = ticker.strip().upper()
     if not cleaned_ticker:
@@ -914,7 +924,7 @@ async def latest_recommendation_for_ticker(ticker: str, provider: Optional[str] 
 async def get_today_llm_calls_by_provider():
     """Return today's LLM calls grouped by provider (UTC day), including in-flight requests."""
     now = _utc_now()
-    start = datetime.datetime.combine(now.date(), datetime.time.min, tzinfo=datetime.timezone.utc)
+    start = datetime.datetime.combine(now.date(), datetime.time.min, tzinfo=datetime.UTC)
     end = start + datetime.timedelta(days=1)
     # Completed requests from DB
     db_items = await get_llm_calls_by_provider_between(
@@ -1853,7 +1863,7 @@ async def completed_requests_page():
             return html_file.read_text(encoding="utf-8")
     except Exception:
         pass
-    
+
     # Fallback if file not found
     return """
 <!DOCTYPE html>

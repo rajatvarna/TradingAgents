@@ -9,6 +9,11 @@ Breaking changes within the 0.x line are called out explicitly.
 ## [Unreleased]
 ### Added
 
+- **Portfolio-level risk budget** (`tradingagents/graph/risk_guardrails.py`): `GuardrailConfig` now accepts `max_portfolio_heat_pct` (default 20%) and `portfolio_positions` (list of existing open positions). When `risk_guardrails_enabled=True`, the guardrail checks total portfolio heat (sum of `position_pct × stop_loss_pct / 100` across all positions) and clamps new Buy/Overweight positions to keep aggregate heat within budget. `PortfolioPosition` dataclass added for type-safe position input. New config keys `max_portfolio_heat_pct` and `portfolio_positions` added to `DEFAULT_CONFIG`.
+- **FRED-based macro regime classifier** (`tradingagents/graph/macro_regime_classifier.py`): Pure-Python rule engine that fetches T10Y2Y yield curve spread, UNRATE, and CPI YoY from FRED and classifies the current macro regime as `expansion`, `stagflation`, `recession`, or `recovery`. Falls back to `unknown` when `FRED_API_KEY` is absent. `classify_macro_regime()` is called at graph run start and the result is injected into `AgentState["macro_regime"]`. `format_macro_regime_for_prompt()` renders the regime into analyst context blocks.
+- `macro_regime` field added to `AgentState` (typed `dict[str, Any]`).
+- 18 unit tests covering portfolio heat budget enforcement and macro regime classification logic.
+
 - Valuation Analyst agent with ROIC-driven DCF, Revenue DCF, DDM, and bear/base/bull scenario analysis (`tradingagents/agents/analysts/valuation_analyst.py`).
 - Pure-Python valuation engine (`tradingagents/valuation/`) with ROIC, WACC, DCF, DDM, and scenario modules.
 - Valuation data adapter (`tradingagents/dataflows/valuation_data.py`) using yfinance with lazy imports per repo convention.

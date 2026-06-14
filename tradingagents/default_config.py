@@ -274,6 +274,13 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "atr_stop_multiple": 2.0,       # ATR multiple for dynamic stop-loss calculation
     "atr_stop_period": 14,          # ATR lookback period in days
     "benchmark_exchange": "NYSE",   # Exchange for market calendar validation
+    # Portfolio-level risk budget: sum of (position_pct * stop_loss_pct / 100) across
+    # all open positions must not exceed this value. Enforced by RiskGuardrails when
+    # risk_guardrails_enabled=True and portfolio_positions is non-empty.
+    "max_portfolio_heat_pct": 20.0,
+    # Existing open positions for heat budget and correlation checks.
+    # Each entry: {"ticker": str, "position_pct": float, "stop_loss_pct": float}
+    "portfolio_positions": [],
     # News / data fetching parameters
     # Increase for longer lookback strategies or to broaden macro coverage;
     # decrease to reduce token usage in agent prompts.

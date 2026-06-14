@@ -137,3 +137,6 @@ class AgentState(MessagesState):
 
     # Earnings calendar warning injected before analysis
     earnings_warning: Annotated[dict[str, Any], "Earnings proximity warning injected before analysis"]
+
+    # FRED-based macro regime classification injected before analysis
+    macro_regime: Annotated[dict[str, Any], "Macro regime classification (expansion/stagflation/recession/recovery)"]

@@ -17,6 +17,15 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class PortfolioPosition:
+    """A single existing portfolio position for heat calculation."""
+
+    ticker: str
+    position_pct: float   # % of portfolio allocated to this position
+    stop_loss_pct: float  # % loss from entry that triggers the stop
+
+
+@dataclass
 class GuardrailConfig:
     """Hard risk limits. These are NOT suggestions — they are circuit breakers.
 
@@ -26,6 +35,8 @@ class GuardrailConfig:
         max_single_loss_pct: float = 5.0
         require_stop_loss: bool = True
         blocked_ratings: list[str] = []  # e.g. ["Buy"] to prevent buys
+        max_portfolio_heat_pct: float = 20.0  # max total portfolio heat (sum of position_pct * stop_loss_pct / 100)
+        portfolio_positions: list[PortfolioPosition] = []  # existing open positions
     """
 
     enabled: bool = False
@@ -36,6 +47,8 @@ class GuardrailConfig:
     portfolio_tickers: list = field(default_factory=list)
     trade_date_str: str | None = None
     ticker: str | None = None
+    max_portfolio_heat_pct: float = 20.0  # max aggregate portfolio heat
+    portfolio_positions: list = field(default_factory=list)  # list of PortfolioPosition
 
 
 @dataclass
@@ -61,6 +74,23 @@ class RiskGuardrails:
     """
 
     def __init__(self, config: dict):
+        raw_positions = config.get("portfolio_positions") or []
+        positions = []
+        for p in raw_positions:
+            if isinstance(p, PortfolioPosition):
+                positions.append(p)
+            elif isinstance(p, dict):
+                try:
+                    positions.append(
+                        PortfolioPosition(
+                            ticker=str(p["ticker"]),
+                            position_pct=float(p["position_pct"]),
+                            stop_loss_pct=float(p["stop_loss_pct"]),
+                        )
+                    )
+                except (KeyError, TypeError, ValueError):
+                    pass
+
         gc = GuardrailConfig(
             enabled=config.get("risk_guardrails_enabled", False),
             max_position_pct=config.get("max_position_pct", 25.0),
@@ -72,6 +102,8 @@ class RiskGuardrails:
             portfolio_tickers=list(config.get("portfolio_tickers") or []),
             trade_date_str=config.get("trade_date_str"),
             ticker=config.get("ticker"),
+            max_portfolio_heat_pct=config.get("max_portfolio_heat_pct", 20.0),
+            portfolio_positions=positions,
         )
         self.gc = gc
 
@@ -143,7 +175,47 @@ class RiskGuardrails:
                 decision = self._replace_field(decision, "Position Sizing", capped)
                 clamped["Position Sizing"] = (sizing, capped)
 
-        # ── 3. Stop-loss requirement ──
+        # ── 3. Portfolio heat budget ──
+        # Heat = position_pct * stop_loss_pct / 100 for each position.
+        # stop_loss_pct is derived from entry and stop prices in the decision.
+        rating_for_heat = self._extract_field(decision, "Rating") or ""
+        if rating_for_heat.lower() in ("buy", "overweight"):
+            sizing_after = self._extract_field(decision, "Position Sizing")
+            new_pos_pct = self._extract_percentage(sizing_after or "") if sizing_after else None
+            entry_price = self._extract_number(self._extract_field(decision, "Entry Price") or "")
+            stop_price = self._extract_number(self._extract_field(decision, "Stop Loss") or "")
+            new_stop_pct: float | None = None
+            if entry_price and stop_price and entry_price > 0:
+                new_stop_pct = abs(entry_price - stop_price) / entry_price * 100.0
+            if new_pos_pct is not None and new_stop_pct is not None:
+                existing_heat = sum(
+                    (p.position_pct * p.stop_loss_pct / 100.0)
+                    for p in self.gc.portfolio_positions
+                )
+                new_heat = new_pos_pct * new_stop_pct / 100.0
+                total_heat = existing_heat + new_heat
+                budget = self.gc.max_portfolio_heat_pct
+                if total_heat > budget:
+                    # Scale new position down so total heat stays within budget
+                    remaining_budget = max(0.0, budget - existing_heat)
+                    if new_stop_pct > 0:
+                        max_new_pos = remaining_budget * 100.0 / new_stop_pct
+                    else:
+                        max_new_pos = 0.0
+                    max_new_pos = round(max(0.0, max_new_pos), 2)
+                    violation_msg = (
+                        f"HEAT CAP: Adding {new_pos_pct:.1f}% position (heat={new_heat:.2f}%) "
+                        f"would push total portfolio heat to {total_heat:.2f}%, "
+                        f"exceeding budget of {budget:.1f}%. "
+                        f"Position clamped to {max_new_pos:.1f}%."
+                    )
+                    violations.append(violation_msg)
+                    heat_capped = f"{max_new_pos:.0f}% of portfolio (clamped by portfolio heat budget)"
+                    decision = self._replace_field(decision, "Position Sizing", heat_capped)
+                    clamped["Position Sizing (heat)"] = (f"{new_pos_pct:.1f}%", f"{max_new_pos:.1f}%")
+                    logger.warning("Portfolio heat guardrail: %s", violation_msg)
+
+        # ── 5. Stop-loss requirement ──
         if self.gc.require_stop_loss:
             stop_loss = self._extract_field(decision, "Stop Loss")
             rating_lower = (rating or "").lower()
@@ -158,7 +230,7 @@ class RiskGuardrails:
                     "A stop-loss is strongly recommended before execution."
                 )
 
-        # ── 4. Loss-per-trade sanity check ──
+        # ── 6. Loss-per-trade sanity check ──
         entry = self._extract_number(self._extract_field(decision, "Entry Price") or "")
         stop = self._extract_number(self._extract_field(decision, "Stop Loss") or "")
         if entry and stop and entry > 0:

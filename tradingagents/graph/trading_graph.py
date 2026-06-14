@@ -532,6 +532,22 @@ class TradingAgentsGraph:
             logger.warning("Earnings warning for %s: %s", company_name, earnings_warning["message"])
         init_agent_state["earnings_warning"] = earnings_warning
 
+        # Macro regime classification — inject FRED-based regime label before analysis.
+        try:
+            from tradingagents.graph.macro_regime_classifier import classify_macro_regime
+            macro_regime_info = classify_macro_regime(str(trade_date))
+            init_agent_state["macro_regime"] = macro_regime_info
+            if macro_regime_info.get("regime") not in ("unknown", None):
+                logger.info(
+                    "Macro regime for %s: %s (%s)",
+                    company_name,
+                    macro_regime_info["regime"],
+                    macro_regime_info.get("note", "")[:120],
+                )
+        except Exception as exc:
+            logger.debug("Macro regime classification skipped: %s", exc)
+            init_agent_state["macro_regime"] = {"regime": "unknown", "note": str(exc)}
+
         # IIC-FORGE F4: event-context injection — seed event text into state.
         # Empty string when not in event_alert mode (deep-dive path unchanged).
         init_agent_state["event_context_text"] = self.config.get("event_context", "") or ""

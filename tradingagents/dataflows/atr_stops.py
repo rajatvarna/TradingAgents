@@ -37,7 +37,7 @@ def compute_atr(ticker: str, trade_date_str: str, period: int = 14) -> float | N
             .combine((low - prev_close).abs(), max)
         )
         atr = tr.rolling(period).mean().iloc[-1]
-        return round(float(atr), 4) if not (atr != atr) else None  # NaN check
+        return round(float(atr), 4) if atr == atr else None  # NaN check: NaN != NaN is True
     except Exception as exc:
         logger.debug("ATR computation failed for %s: %s", ticker, exc)
         return None
@@ -68,7 +68,7 @@ def suggest_atr_stop(
             "atr_multiple": atr_multiple,
             "stop_loss_price": None,
             "stop_loss_pct": None,
-            "description": "ATR unavailable — unable to compute dynamic stop.",
+            "description": "ATR unavailable -- unable to compute dynamic stop.",
         }
 
     stop_distance = atr * atr_multiple
@@ -81,7 +81,7 @@ def suggest_atr_stop(
         "stop_loss_price": stop_price,
         "stop_loss_pct": stop_pct,
         "description": (
-            f"ATR({period})={atr:.4f} × {atr_multiple} = {stop_distance:.4f} stop distance. "
+            f"ATR({period})={atr:.4f} x {atr_multiple} = {stop_distance:.4f} stop distance. "
             f"Suggested stop: {stop_price:.4f} ({stop_pct:.1f}% below entry)."
         ),
     }

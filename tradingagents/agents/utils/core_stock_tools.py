@@ -5,8 +5,10 @@ from langchain_core.tools import tool
 from tradingagents.agents.utils.tool_errors import tool_error_text
 from tradingagents.dataflows.atr_stops import suggest_atr_stop as _suggest_atr_stop
 from tradingagents.dataflows.interface import route_to_vendor
+from tradingagents.dataflows.peer_performance import (
+    get_peer_relative_strength as _get_peer_strength,
+)
 from tradingagents.dataflows.run_cache import cached
-from tradingagents.dataflows.peer_performance import get_peer_relative_strength as _get_peer_strength
 
 
 @tool

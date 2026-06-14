@@ -7,7 +7,6 @@ size to avoid concentrated factor risk.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +18,9 @@ _REDUCTION_FACTOR = 0.5     # cut size by this fraction when highly correlated
 def _get_returns(ticker: str, trade_date_str: str, lookback: int = _LOOKBACK_DAYS):
     """Fetch daily returns for ticker over the lookback window."""
     try:
-        import pandas as pd
-        import yfinance as yf
         from datetime import date, timedelta
+
+        import yfinance as yf
 
         end = date.fromisoformat(trade_date_str)
         start = (end - timedelta(days=lookback + 10)).isoformat()
@@ -92,7 +91,7 @@ def apply_correlation_sizing_adjustment(
         adjusted = round(position_size_pct * reduction_factor, 2)
         explanation = (
             f"Position size reduced from {position_size_pct:.1f}% to {adjusted:.1f}% "
-            f"due to high portfolio correlation ({max_corr:.2f} ≥ {threshold} threshold)."
+            f"due to high portfolio correlation ({max_corr:.2f} >= {threshold} threshold)."
         )
         logger.info("Correlation guard: %s", explanation)
         return adjusted, explanation

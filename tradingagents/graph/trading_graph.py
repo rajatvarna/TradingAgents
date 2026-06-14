@@ -35,7 +35,10 @@ from tradingagents.agents.utils.agent_utils import (
     resolve_instrument_identity,
     resolve_risk_constraints,
 )
-from tradingagents.agents.utils.core_stock_tools import get_atr_stop_suggestion, get_peer_performance
+from tradingagents.agents.utils.core_stock_tools import (
+    get_atr_stop_suggestion,
+    get_peer_performance,
+)
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.dataflows.config import set_config
 from tradingagents.dataflows.run_cache import reset as reset_run_cache

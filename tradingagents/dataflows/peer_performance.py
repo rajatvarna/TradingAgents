@@ -6,7 +6,7 @@ computes the ticker's relative strength ranking among them.
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import date
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ _SECTOR_PEERS: dict[str, list[str]] = {
 }
 
 
-def _get_sector(ticker: str) -> "str | None":
+def _get_sector(ticker: str) -> str | None:
     """Return the sector for ticker using yfinance."""
     try:
         import yfinance as yf
@@ -36,7 +36,7 @@ def _get_sector(ticker: str) -> "str | None":
         return None
 
 
-def _ytd_return(ticker: str, trade_date_str: str) -> "float | None":
+def _ytd_return(ticker: str, trade_date_str: str) -> float | None:
     """Return YTD % return for ticker as of trade_date."""
     try:
         import yfinance as yf
@@ -66,7 +66,7 @@ def get_peer_relative_strength(ticker: str, trade_date_str: str) -> str:
     peers = _SECTOR_PEERS.get(sector, [])
     all_tickers = list(dict.fromkeys([ticker] + [p for p in peers if p != ticker]))
 
-    results: dict[str, "float | None"] = {}
+    results: dict[str, float | None] = {}
     for t in all_tickers:
         results[t] = _ytd_return(t, trade_date_str)
 

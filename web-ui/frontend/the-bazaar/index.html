@@ -7,6 +7,7 @@
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://s3.tradingview.com/tv.js"></script>
 <style>
   /* ═══════════════════════════════════════════════════
      THE BAZAAR — Design Tokens & Global Styles
@@ -872,6 +873,51 @@
     from { opacity: 1; }
     to   { opacity: 0; }
   }
+
+  /* ═══════════════════════════════════════════════════
+     TRADINGVIEW CHART
+     ═══════════════════════════════════════════════════ */
+  .tv-chart-wrap {
+    width: 100%; max-width: 480px;
+    margin-top: 16px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border-default);
+    animation: fadeInUp 0.4s ease;
+    background: var(--bg-surface);
+  }
+  .tv-chart-wrap .tv-chart-label {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-muted);
+    padding: 8px 14px 0;
+  }
+  .tv-chart-wrap iframe {
+    display: block;
+    border: none;
+    width: 100%;
+    height: 300px;
+  }
+  .dashboard-chart-wrap {
+    width: 100%;
+    max-width: 640px;
+    margin: 16px auto 0;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border-default);
+    animation: fadeInUp 0.4s ease;
+    background: var(--bg-surface);
+  }
+  .dashboard-chart-wrap .tv-chart-label {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-muted);
+    padding: 8px 14px 0;
+  }
+  .dashboard-chart-wrap iframe {
+    display: block;
+    border: none;
+    width: 100%;
+    height: 320px;
+  }
 </style>
 </head>
 <body>
@@ -1003,6 +1049,46 @@ const DEEPSEEK_PRESETS = [
     llm_provider: 'deepseek', deep_think_llm: 'deepseek-r1', quick_think_llm: 'deepseek-v4-flash' },
 ];
 
+/* ── TradingView Chart Widget ───────────────────── */
+function TradingViewChart({ ticker, wrapClass }) {
+  const iframeRef = useRef(null);
+  const [src, setSrc] = useState('');
+
+  useEffect(() => {
+    if (!ticker || ticker.length < 1) { setSrc(''); return; }
+    const params = new URLSearchParams({
+      symbol: ticker,
+      interval: 'D',
+      theme: 'dark',
+      style: '1',
+      locale: 'en',
+      toolbar_bg: '%231A1410',
+      hide_top_toolbar: 'false',
+      hide_legend: 'false',
+      save_image: 'false',
+      hide_volume: 'false',
+      autosize: '1',
+    });
+    setSrc(`https://www.tradingview.com/widgetembed/?${params.toString()}`);
+  }, [ticker]);
+
+  if (!src) return null;
+
+  return (
+    <div className={wrapClass || 'tv-chart-wrap'}>
+      <div className="tv-chart-label">📈 {ticker} — Live Chart</div>
+      <iframe
+        ref={iframeRef}
+        key={src}
+        src={src}
+        allowTransparency="true"
+        allowFullScreen="true"
+        scrolling="no"
+      />
+    </div>
+  );
+}
+
 /* ── Bazaar Input Screen ────────────────────────── */
 function BazaarInput({ onSubmit, isSubmitting, prefillTicker }) {
   const [ticker, setTicker] = useState(prefillTicker || '');
@@ -1010,8 +1096,13 @@ function BazaarInput({ onSubmit, isSubmitting, prefillTicker }) {
   const [analysts, setAnalysts] = useState(['market','social','news','fundamentals']);
   const [depth, setDepth] = useState('standard');
   const [modelPreset, setModelPreset] = useState('v4pro');
+  const [chartTicker, setChartTicker] = useState(prefillTicker || '');
 
-  useEffect(() => { if (prefillTicker) setTicker(prefillTicker); }, [prefillTicker]);
+  useEffect(() => { if (prefillTicker) { setTicker(prefillTicker); setChartTicker(prefillTicker); } }, [prefillTicker]);
+  useEffect(() => {
+    const t = setTimeout(() => setChartTicker(ticker), 700);
+    return () => clearTimeout(t);
+  }, [ticker]);
 
   function toggleAnalyst(id) {
     setAnalysts(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]);
@@ -1097,6 +1188,7 @@ function BazaarInput({ onSubmit, isSubmitting, prefillTicker }) {
           {isSubmitting ? 'Summoning the Council...' : 'Summon the Council ⚡'}
         </button>
       </form>
+      <TradingViewChart ticker={chartTicker} wrapClass="tv-chart-wrap" />
     </div>
   );
 }
@@ -1302,6 +1394,12 @@ function Dashboard({ onQuickAnalyze, onViewReport, apiBase, token, onNavHistory 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [quickTicker, setQuickTicker] = useState('');
+  const [chartTicker, setChartTicker] = useState('');
+
+  useEffect(() => {
+    const t = setTimeout(() => setChartTicker(quickTicker), 700);
+    return () => clearTimeout(t);
+  }, [quickTicker]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1336,6 +1434,7 @@ function Dashboard({ onQuickAnalyze, onViewReport, apiBase, token, onNavHistory 
                  value={quickTicker} onChange={e => setQuickTicker(e.target.value.toUpperCase())} />
           <button className="btn-go" type="submit" disabled={!quickTicker.trim()}>Analyze →</button>
         </form>
+        <TradingViewChart ticker={chartTicker} wrapClass="dashboard-chart-wrap" />
       </div>
 
       <div>

@@ -43,6 +43,7 @@ from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.llm_clients import create_llm_client
 
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
+from tradingagents.dataflows.run_cache import reset as reset_run_cache, stats as run_cache_stats
 
 
 def _precompute_monster_score(ticker: str, trade_date: str, config: dict) -> dict:
@@ -434,6 +435,16 @@ class TradingAgentsGraph:
         self.ticker = company_name
         self.structured_output_cache.clear()
 
+        # Reset per-run data cache at the start of each analysis run.
+        reset_run_cache()
+
+        # Apply market calendar guard — shift weekend/holiday dates to nearest trading day.
+        from tradingagents.graph.market_calendar import nearest_trading_day
+        exchange = self.config.get("benchmark_exchange", "NYSE")
+        trade_date, adjusted = nearest_trading_day(str(trade_date), exchange)
+        if adjusted:
+            logger.warning("Analysis date shifted to nearest trading day: %s", trade_date)
+
         # Resolve any pending memory-log entries for this ticker before the pipeline runs.
         self._resolve_pending_entries(company_name)
 
@@ -551,6 +562,8 @@ class TradingAgentsGraph:
             clear_checkpoint(
                 self.config["data_cache_dir"], company_name, str(trade_date)
             )
+
+        logger.info("run_cache stats: %s", run_cache_stats())
 
         return final_state, self.process_signal(final_state["final_trade_decision"])
 

@@ -3,8 +3,10 @@ from typing import Annotated
 from langchain_core.tools import tool
 
 from tradingagents.dataflows.interface import route_to_vendor
+from tradingagents.dataflows.run_cache import cached
 
 
+@cached
 @tool
 def get_indicators(
     symbol: Annotated[str, "ticker symbol of the company"],

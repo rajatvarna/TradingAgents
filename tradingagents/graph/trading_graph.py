@@ -35,6 +35,7 @@ from tradingagents.agents.utils.agent_utils import (
     resolve_instrument_identity,
     resolve_risk_constraints,
 )
+from tradingagents.agents.utils.core_stock_tools import get_atr_stop_suggestion, get_peer_performance
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.dataflows.config import set_config
 from tradingagents.dataflows.run_cache import reset as reset_run_cache
@@ -252,6 +253,10 @@ class TradingAgentsGraph:
                     get_stock_data,
                     # Technical indicators
                     get_indicators,
+                    # Sector peer relative strength
+                    get_peer_performance,
+                    # ATR-based dynamic stop-loss suggestions
+                    get_atr_stop_suggestion,
                 ]
             ),
             "social": ToolNode(
@@ -511,6 +516,17 @@ class TradingAgentsGraph:
         )
         if monster_score:
             init_agent_state["monster_stock_score"] = monster_score
+
+        # Earnings calendar awareness — warn before analysis if earnings are near.
+        from tradingagents.dataflows.earnings_calendar import get_earnings_warning
+        earnings_warning = get_earnings_warning(
+            company_name,
+            str(trade_date),
+            lookahead_days=self.config.get("earnings_lookahead_days", 7),
+        )
+        if earnings_warning["has_warning"]:
+            logger.warning("Earnings warning for %s: %s", company_name, earnings_warning["message"])
+        init_agent_state["earnings_warning"] = earnings_warning
 
         # IIC-FORGE F4: event-context injection — seed event text into state.
         # Empty string when not in event_alert mode (deep-dive path unchanged).

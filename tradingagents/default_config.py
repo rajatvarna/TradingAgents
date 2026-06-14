@@ -271,6 +271,8 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "max_risk_per_trade_pct": 2.0,
     "stop_loss_pct": 5.0,
     "risk_tolerance": "moderate",
+    "atr_stop_multiple": 2.0,       # ATR multiple for dynamic stop-loss calculation
+    "atr_stop_period": 14,          # ATR lookback period in days
     # News / data fetching parameters
     # Increase for longer lookback strategies or to broaden macro coverage;
     # decrease to reduce token usage in agent prompts.
@@ -326,6 +328,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "tool_vendors": {
         # Example: "get_stock_data": "alpha_vantage",  # Override category default
     },
+    "earnings_lookahead_days": 7,  # Days ahead to check for earnings events
     "trade_filter_enabled": False,
     "trade_filter_threshold": 0.65,
     "futu_opend_host": "127.0.0.1",

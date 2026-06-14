@@ -22,10 +22,11 @@ class RunCostCallback(BaseCallbackHandler):
     ``costs`` table.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, cost_guard: "CostGuard | None" = None) -> None:
         self._totals: dict[str, dict[str, int]] = defaultdict(
             lambda: {"in_tokens": 0, "out_tokens": 0}
         )
+        self._cost_guard = cost_guard
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
         info = response.llm_output or {}
@@ -37,9 +38,18 @@ class RunCostCallback(BaseCallbackHandler):
             return
         self._totals[model]["in_tokens"] += in_t
         self._totals[model]["out_tokens"] += out_t
+        # Check budget after accumulating tokens
+        if self._cost_guard is not None:
+            self._cost_guard.check_or_raise(total_tokens=self.total_tokens())
 
     def totals_by_model(self) -> dict[str, dict[str, int]]:
         return dict(self._totals)
+
+    def total_tokens(self) -> int:
+        """Return the total token count across all models for this run."""
+        return sum(
+            v["in_tokens"] + v["out_tokens"] for v in self._totals.values()
+        )
 
 
 class CostGuardExceeded(RuntimeError):

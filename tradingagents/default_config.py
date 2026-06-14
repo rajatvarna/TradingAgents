@@ -107,7 +107,8 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "iic_data_dir": os.path.join(_TRADINGAGENTS_HOME, "data"),
     # IIC-FORGE F1 — cost guards (coded but disabled by default — see
     # docs/superpowers/specs/2026-05-25-iic-forge-program-design.md Appendix A).
-    "cost_guard_enabled": False,
+    "cost_guard_enabled": False,          # Set True to enforce per-run token budget
+    "max_tokens_per_run": 500_000,        # Max tokens per analysis run (when guard enabled)
     # IIC-FORGE F3 — always-on sensing + triage
     "sensing_redis_url": "redis://127.0.0.1:6379/0",
     "sensing_ingest_stream": "ingest:raw",

@@ -103,8 +103,12 @@ class TradingAgentsGraph:
 
         # IIC-FORGE F1: token accumulator — must be in self.callbacks BEFORE
         # the LLM clients are constructed, so the LLM clients pick it up.
-        from tradingagents.graph.cost_callback import RunCostCallback
-        self._cost_cb = RunCostCallback()
+        from tradingagents.graph.cost_callback import CostGuard, RunCostCallback
+        _guard = CostGuard(
+            per_run_token_budget=self.config.get("max_tokens_per_run", 500_000),
+            enabled=self.config.get("cost_guard_enabled", False),
+        )
+        self._cost_cb = RunCostCallback(cost_guard=_guard)
         self.callbacks = list(self.callbacks or []) + [self._cost_cb]
 
         # Update the interface's config

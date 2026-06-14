@@ -1,7 +1,10 @@
 # TradingAgents/graph/conditional_logic.py
 
 import difflib
+import logging
 from collections.abc import Callable
+
+logger = logging.getLogger(__name__)
 
 from tradingagents.agents.utils.agent_states import AgentState
 from tradingagents.agents.utils.rating import extract_rating
@@ -75,6 +78,16 @@ class ConditionalLogic:
 
     def should_continue_debate(self, state: AgentState) -> str:
         """Determine if debate should continue."""
+        inv = state["investment_debate_state"]
+        # Early exit if both sides converged (at least 1 full round has happened)
+        if inv["count"] >= 2 and self._detect_consensus(
+            inv.get("bull_history", ""), inv.get("bear_history", "")
+        ):
+            logger.debug(
+                "Debate consensus detected at round %d — exiting early",
+                inv["count"] // 2,
+            )
+            return "Research Manager"
 
         if (
             state["investment_debate_state"]["count"] >= 2 * self.max_debate_rounds
@@ -88,6 +101,18 @@ class ConditionalLogic:
 
     def should_continue_risk_analysis(self, state: AgentState) -> str:
         """Determine if risk analysis should continue."""
+        risk = state["risk_debate_state"]
+        # Early exit if aggressive and conservative sides converged (at least 2 turns)
+        if risk["count"] >= 2 and self._detect_consensus(
+            risk.get("current_aggressive_response", ""),
+            risk.get("current_conservative_response", ""),
+        ):
+            logger.debug(
+                "Risk debate consensus detected at round %d — exiting early",
+                risk["count"],
+            )
+            return "Portfolio Manager"
+
         if (
             state["risk_debate_state"]["count"] >= 3 * self.max_risk_discuss_rounds
         ):  # 3 * max_risk_discuss_rounds turns total (default 1 -> one per risk agent)
@@ -99,6 +124,32 @@ class ConditionalLogic:
         if state["risk_debate_state"]["latest_speaker"].startswith("Conservative"):
             return "Neutral Analyst"
         return "Aggressive Analyst"
+
+    def _detect_consensus(self, text_a: str, text_b: str) -> bool:
+        """Return True if both debate sides appear to have converged.
+
+        Looks for dominant directional keywords in each side's latest response.
+        If both point the same way (e.g. both "bullish" or both "bearish"),
+        we treat this as consensus and exit the debate early.
+        """
+        BULLISH_WORDS = {"bull", "bullish", "buy", "long", "upside", "positive"}
+        BEARISH_WORDS = {"bear", "bearish", "sell", "short", "downside", "negative"}
+
+        def _dominant_direction(text: str):
+            lower = text.lower()
+            bull_hits = sum(1 for w in BULLISH_WORDS if w in lower)
+            bear_hits = sum(1 for w in BEARISH_WORDS if w in lower)
+            if bull_hits > bear_hits * 2:
+                return "bull"
+            if bear_hits > bull_hits * 2:
+                return "bear"
+            return None
+
+        dir_a = _dominant_direction(text_a)
+        dir_b = _dominant_direction(text_b)
+        if dir_a is None or dir_b is None:
+            return False
+        return dir_a == dir_b
 
     def _early_stop_investment_debate(self, state: AgentState) -> bool:
         inv = state["investment_debate_state"]

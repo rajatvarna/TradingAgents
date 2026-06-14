@@ -23,7 +23,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 
 from api.db import (
     DB_PATH,
@@ -557,6 +557,60 @@ async def get_status(request_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Request not found")
     base_url = str(request.base_url).rstrip("/")
     return _build_status(row, base_url)
+
+
+# ---------------------------------------------------------------------------
+# GET /stream/{request_id}
+# ---------------------------------------------------------------------------
+@app.get("/stream/{request_id}", tags=["streaming"])
+async def stream_analysis_status(request_id: str, request: Request):
+    """Stream analysis status updates via Server-Sent Events.
+
+    Pushes a JSON event every 2 seconds until the request reaches a terminal
+    state (completed, failed, canceled). Clients can close the connection at
+    any time.
+
+    Event format:
+        data: {"request_id": "...", "status": "running", "ticker": "AAPL", ...}
+    """
+    async def _event_generator():
+        poll_interval = 2.0
+        terminal_states = {"completed", "failed", "canceled"}
+        while True:
+            if await request.is_disconnected():
+                break
+            row = await get_request(request_id, db_path=DB_PATH)
+            if row is None:
+                payload = {"error": f"request_id {request_id!r} not found"}
+                yield f"event: error\ndata: {json.dumps(payload)}\n\n"
+                break
+
+            status_val = row.get("status", "unknown")
+            payload = {
+                "request_id": request_id,
+                "status": status_val,
+                "ticker": row.get("ticker"),
+                "created_at": row.get("submitted_at"),
+                "updated_at": row.get("completed_at") or row.get("started_at"),
+                "result_file": row.get("analysis_file"),
+                "error": row.get("error_message"),
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+
+            if status_val in terminal_states:
+                yield "event: done\ndata: {}\n\n"
+                break
+
+            await asyncio.sleep(poll_interval)
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

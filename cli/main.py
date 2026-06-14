@@ -1396,6 +1396,90 @@ def analyze(
     run_analysis(checkpoint=checkpoint)
 
 
+@app.command()
+def stats(
+    days: int = typer.Option(7, "--days", "-d", help="Show stats for the last N days"),
+    limit: int = typer.Option(20, "--limit", "-n", help="Max runs to show"),
+):
+    """Show token usage and cost statistics for recent analysis runs."""
+    from rich.table import Table
+    from rich.console import Console
+    from pathlib import Path
+    import sqlite3
+    from datetime import datetime, timezone, timedelta
+
+    console = Console()
+
+    # Try to find the IIC db
+    db_candidates = [
+        Path.home() / ".tradingagents" / "iic.db",
+        Path.home() / ".tradingagents" / "trading_agents.db",
+    ]
+    db_path = next((p for p in db_candidates if p.exists()), None)
+
+    if db_path is None:
+        console.print("[yellow]No run database found. Run an analysis first.[/yellow]")
+        raise typer.Exit(0)
+
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        # Try the costs table (IIC-FORGE schema)
+        try:
+            rows = cur.execute(
+                """
+                SELECT r.ticker, r.trade_date, r.created_at,
+                       SUM(c.in_tokens) as in_tok, SUM(c.out_tokens) as out_tok,
+                       SUM(c.in_tokens + c.out_tokens) as total_tok
+                FROM runs r
+                JOIN costs c ON c.run_id = r.run_id
+                WHERE r.created_at >= ?
+                GROUP BY r.run_id
+                ORDER BY r.created_at DESC
+                LIMIT ?
+                """,
+                (since, limit),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            rows = []
+        conn.close()
+    except Exception as exc:
+        console.print(f"[red]Failed to read database: {exc}[/red]")
+        raise typer.Exit(1)
+
+    if not rows:
+        console.print(f"[yellow]No run data found in the last {days} days.[/yellow]")
+        raise typer.Exit(0)
+
+    table = Table(title=f"TradingAgents Token Usage — Last {days} Days", show_lines=True)
+    table.add_column("Ticker", style="cyan", no_wrap=True)
+    table.add_column("Date", style="white")
+    table.add_column("Run At (UTC)", style="white")
+    table.add_column("In Tokens", justify="right", style="green")
+    table.add_column("Out Tokens", justify="right", style="yellow")
+    table.add_column("Total Tokens", justify="right", style="bold white")
+
+    grand_total = 0
+    for row in rows:
+        total = row["total_tok"] or 0
+        grand_total += total
+        table.add_row(
+            row["ticker"] or "—",
+            row["trade_date"] or "—",
+            (row["created_at"] or "")[:16],
+            f"{row['in_tok'] or 0:,}",
+            f"{row['out_tok'] or 0:,}",
+            f"{total:,}",
+        )
+
+    console.print(table)
+    console.print(f"\n[bold]Grand total:[/bold] {grand_total:,} tokens across {len(rows)} runs")
+
+
 from cli.deepdive import deepdive as _deepdive_cmd
 
 app.command(name="deepdive")(_deepdive_cmd)

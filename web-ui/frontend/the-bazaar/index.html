@@ -7,7 +7,6 @@
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://s3.tradingview.com/tv.js"></script>
 <style>
   /* ═══════════════════════════════════════════════════
      THE BAZAAR — Design Tokens & Global Styles
@@ -1049,6 +1048,16 @@ const DEEPSEEK_PRESETS = [
     llm_provider: 'deepseek', deep_think_llm: 'deepseek-r1', quick_think_llm: 'deepseek-v4-flash' },
 ];
 
+/* ── Shared hook: debounced value ───────────────── */
+function useDebouncedValue(value, delay) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
 /* ── TradingView Chart Widget ───────────────────── */
 function TradingViewChart({ ticker, wrapClass }) {
   const iframeRef = useRef(null);
@@ -1062,7 +1071,7 @@ function TradingViewChart({ ticker, wrapClass }) {
       theme: 'dark',
       style: '1',
       locale: 'en',
-      toolbar_bg: '%231A1410',
+      toolbar_bg: '#1A1410',
       hide_top_toolbar: 'false',
       hide_legend: 'false',
       save_image: 'false',
@@ -1081,6 +1090,7 @@ function TradingViewChart({ ticker, wrapClass }) {
         ref={iframeRef}
         key={src}
         src={src}
+        title={`${ticker} TradingView chart`}
         allowTransparency="true"
         allowFullScreen="true"
         scrolling="no"
@@ -1096,13 +1106,8 @@ function BazaarInput({ onSubmit, isSubmitting, prefillTicker }) {
   const [analysts, setAnalysts] = useState(['market','social','news','fundamentals']);
   const [depth, setDepth] = useState('standard');
   const [modelPreset, setModelPreset] = useState('v4pro');
-  const [chartTicker, setChartTicker] = useState(prefillTicker || '');
-
-  useEffect(() => { if (prefillTicker) { setTicker(prefillTicker); setChartTicker(prefillTicker); } }, [prefillTicker]);
-  useEffect(() => {
-    const t = setTimeout(() => setChartTicker(ticker), 700);
-    return () => clearTimeout(t);
-  }, [ticker]);
+  useEffect(() => { if (prefillTicker) setTicker(prefillTicker); }, [prefillTicker]);
+  const chartTicker = useDebouncedValue(ticker, 700);
 
   function toggleAnalyst(id) {
     setAnalysts(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]);
@@ -1394,12 +1399,7 @@ function Dashboard({ onQuickAnalyze, onViewReport, apiBase, token, onNavHistory 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [quickTicker, setQuickTicker] = useState('');
-  const [chartTicker, setChartTicker] = useState('');
-
-  useEffect(() => {
-    const t = setTimeout(() => setChartTicker(quickTicker), 700);
-    return () => clearTimeout(t);
-  }, [quickTicker]);
+  const chartTicker = useDebouncedValue(quickTicker, 700);
 
   useEffect(() => {
     let cancelled = false;

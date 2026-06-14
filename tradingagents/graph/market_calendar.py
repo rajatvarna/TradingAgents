@@ -11,6 +11,11 @@ from datetime import date, timedelta
 
 logger = logging.getLogger(__name__)
 
+try:
+    import pandas_market_calendars as mcal  # noqa: F401
+except ImportError:
+    mcal = None  # type: ignore[assignment]
+
 # Common US market holidays (month, day) — approximate; exchange calendar
 # is the authoritative source when pandas_market_calendars is available.
 _US_HOLIDAYS = {
@@ -27,8 +32,9 @@ def _is_weekend(d: date) -> bool:
 
 def _try_mcal(exchange: str, d: date) -> bool | None:
     """Return True if d is a valid trading day per pandas_market_calendars, or None if unavailable."""
+    if mcal is None:
+        return None
     try:
-        import pandas_market_calendars as mcal  # type: ignore[import]
         cal = mcal.get_calendar(exchange)
         schedule = cal.schedule(
             start_date=d.isoformat(),

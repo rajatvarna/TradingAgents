@@ -590,7 +590,7 @@ async def stream_analysis_status(request_id: str, request: Request) -> Streaming
     any time.
 
     Event format:
-        data: {"request_id": "...", "status": "running", "ticker": "AAPL", ...}
+        data: {"type": "status", "data": {"request_id": "...", "status": "running", ...}}
     """
     async def _event_generator():
         poll_interval = 2.0
@@ -600,17 +600,17 @@ async def stream_analysis_status(request_id: str, request: Request) -> Streaming
                 break
             try:
                 row = await get_request(request_id, db_path=DB_PATH)
-            except Exception as exc:
-                payload = {"error": f"Database error: {exc}"}
-                yield f"event: error\ndata: {json.dumps(payload)}\n\n"
+            except Exception:
+                payload = {"type": "error", "data": {"message": "Unable to load request status right now."}}
+                yield f"data: {json.dumps(payload)}\n\n"
                 break
             if row is None:
-                payload = {"error": f"request_id {request_id!r} not found"}
-                yield f"event: error\ndata: {json.dumps(payload)}\n\n"
+                payload = {"type": "error", "data": {"message": f"request_id {request_id!r} not found"}}
+                yield f"data: {json.dumps(payload)}\n\n"
                 break
 
             status_val = row.get("status", "unknown")
-            payload = {
+            status_data = {
                 "request_id": request_id,
                 "status": status_val,
                 "ticker": row.get("ticker"),
@@ -619,10 +619,10 @@ async def stream_analysis_status(request_id: str, request: Request) -> Streaming
                 "result_file": row.get("analysis_file"),
                 "error": row.get("error_message"),
             }
-            yield f"data: {json.dumps(payload)}\n\n"
+            yield f"data: {json.dumps({'type': 'status', 'data': status_data})}\n\n"
 
             if status_val in terminal_states:
-                yield "event: done\ndata: {}\n\n"
+                yield f"data: {json.dumps({'type': 'complete', 'data': status_data})}\n\n"
                 break
 
             await asyncio.sleep(poll_interval)
@@ -689,9 +689,10 @@ async def get_batching_history(ticker: str, provider: str | None = None, limit: 
     cleaned_ticker = ticker.strip().upper()
     if not cleaned_ticker:
         raise HTTPException(status_code=400, detail="ticker must not be empty")
+    normalized_provider = (provider or "").strip().lower() or None
     rows = await get_recommendation_history(
         ticker=cleaned_ticker,
-        llm_provider=(provider or None),
+        llm_provider=normalized_provider,
         limit=limit,
         db_path=DB_PATH,
     )
@@ -699,7 +700,7 @@ async def get_batching_history(ticker: str, provider: str | None = None, limit: 
     return JSONResponse(
         content={
             "ticker": cleaned_ticker,
-            "provider": (provider or "").strip().lower() or None,
+            "provider": normalized_provider,
             "latest_final_recommendation": latest.get("recommendation") if latest else None,
             "history": rows,
         }

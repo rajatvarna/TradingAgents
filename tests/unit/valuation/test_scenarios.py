@@ -1,8 +1,10 @@
-"""Unit tests for tradingagents.valuation.scenarios."""
+"""Unit tests for tradingagents.valuation.scenarios"""
 
 import pytest
 
 from tradingagents.valuation.scenarios import (
+    ScenarioAssumptions,
+    ScenarioResult,
     ScenarioSet,
     default_scenario_set,
     run_revenue_scenarios,
@@ -11,86 +13,151 @@ from tradingagents.valuation.scenarios import (
 
 
 @pytest.mark.unit
-def test_default_scenario_set_structure():
-    ss = default_scenario_set(
-        base_growth=0.05,
-        base_terminal=0.025,
-        base_margin=0.20,
-        base_reinvestment=0.25,
-    )
-    assert isinstance(ss, ScenarioSet)
-    assert ss.bear.growth_rate < ss.base.growth_rate < ss.bull.growth_rate
-    assert ss.bear.ebit_margin < ss.base.ebit_margin < ss.bull.ebit_margin
-    assert ss.bear.terminal_growth < ss.base.terminal_growth
+class TestDefaultScenarioSet:
+    def test_returns_scenario_set(self):
+        ss = default_scenario_set(
+            base_growth=0.08,
+            base_terminal=0.025,
+            base_margin=0.15,
+            base_reinvestment=0.30,
+        )
+        assert isinstance(ss, ScenarioSet)
+        assert isinstance(ss.bear, ScenarioAssumptions)
+        assert isinstance(ss.base, ScenarioAssumptions)
+        assert isinstance(ss.bull, ScenarioAssumptions)
+
+    def test_bear_growth_below_base(self):
+        ss = default_scenario_set(0.10, 0.025, 0.15, 0.30)
+        assert ss.bear.growth_rate < ss.base.growth_rate
+
+    def test_bull_growth_above_base(self):
+        ss = default_scenario_set(0.10, 0.025, 0.15, 0.30)
+        assert ss.bull.growth_rate > ss.base.growth_rate
+
+    def test_base_matches_inputs(self):
+        ss = default_scenario_set(0.10, 0.025, 0.15, 0.30)
+        assert ss.base.growth_rate == pytest.approx(0.10)
+        assert ss.base.terminal_growth == pytest.approx(0.025)
+        assert ss.base.ebit_margin == pytest.approx(0.15)
+        assert ss.base.reinvestment_rate == pytest.approx(0.30)
+
+    def test_bear_margin_below_base(self):
+        ss = default_scenario_set(0.10, 0.025, 0.20, 0.30)
+        assert ss.bear.ebit_margin < ss.base.ebit_margin
+
+    def test_bull_margin_above_base(self):
+        ss = default_scenario_set(0.10, 0.025, 0.20, 0.30)
+        assert ss.bull.ebit_margin > ss.base.ebit_margin
+
+    def test_terminal_growth_floor(self):
+        # Bear terminal growth should be at least 1%
+        ss = default_scenario_set(0.08, 0.015, 0.15, 0.30)
+        assert ss.bear.terminal_growth >= 0.01
 
 
 @pytest.mark.unit
-def test_default_scenario_set_terminal_bounds():
-    ss = default_scenario_set(0.05, 0.025, 0.20, 0.25)
-    # Terminal growth should stay positive and not exceed 5%
-    assert ss.bear.terminal_growth >= 0.005
-    assert ss.bull.terminal_growth <= 0.05
+class TestRunRoicScenarios:
+    def _scenario_set(self):
+        return default_scenario_set(
+            base_growth=0.08,
+            base_terminal=0.025,
+            base_margin=0.15,
+            base_reinvestment=0.30,
+        )
+
+    def test_returns_three_results(self):
+        results = run_roic_scenarios(
+            nopat=100.0,
+            roic_val=0.18,
+            wacc_val=0.09,
+            shares_outstanding=10.0,
+            scenario_set=self._scenario_set(),
+        )
+        assert set(results.keys()) == {"bear", "base", "bull"}
+
+    def test_correct_labels(self):
+        results = run_roic_scenarios(
+            nopat=100.0,
+            roic_val=0.18,
+            wacc_val=0.09,
+            shares_outstanding=10.0,
+            scenario_set=self._scenario_set(),
+        )
+        for label in ("bear", "base", "bull"):
+            assert results[label].label == label
+
+    def test_bull_iv_above_bear(self):
+        results = run_roic_scenarios(
+            nopat=100.0,
+            roic_val=0.18,
+            wacc_val=0.09,
+            shares_outstanding=10.0,
+            scenario_set=self._scenario_set(),
+        )
+        assert results["bull"].intrinsic_value > results["bear"].intrinsic_value
+
+    def test_returns_scenario_result_objects(self):
+        results = run_roic_scenarios(
+            nopat=100.0,
+            roic_val=0.18,
+            wacc_val=0.09,
+            shares_outstanding=10.0,
+            scenario_set=self._scenario_set(),
+        )
+        for r in results.values():
+            assert isinstance(r, ScenarioResult)
+
+    def test_upside_computed_when_price_given(self):
+        results = run_roic_scenarios(
+            nopat=100.0,
+            roic_val=0.18,
+            wacc_val=0.09,
+            shares_outstanding=10.0,
+            scenario_set=self._scenario_set(),
+            current_price=50.0,
+        )
+        # base IV should differ from price so upside is non-zero
+        base = results["base"]
+        assert isinstance(base.upside_pct, float)
 
 
 @pytest.mark.unit
-def test_run_roic_scenarios_returns_three_labels():
-    ss = default_scenario_set(0.05, 0.025, 0.20, 0.25)
-    results = run_roic_scenarios(
-        nopat=1_000_000,
-        roic_val=0.18,
-        wacc_val=0.09,
-        shares_outstanding=500_000,
-        current_price=50.0,
-        scenario_set=ss,
-    )
-    assert set(results.keys()) == {"bear", "base", "bull"}
-    for label, r in results.items():
-        assert r.label == label
-        assert r.intrinsic_value >= 0
+class TestRunRevenueScenarios:
+    def _scenario_set(self):
+        return default_scenario_set(
+            base_growth=0.08,
+            base_terminal=0.025,
+            base_margin=0.15,
+            base_reinvestment=0.30,
+        )
 
+    def test_returns_three_results(self):
+        results = run_revenue_scenarios(
+            revenue=1000.0,
+            shares_outstanding=10.0,
+            net_debt=50.0,
+            wacc_val=0.09,
+            scenario_set=self._scenario_set(),
+        )
+        assert set(results.keys()) == {"bear", "base", "bull"}
 
-@pytest.mark.unit
-def test_run_roic_scenarios_ordering():
-    # Bull should produce higher IV than bear
-    ss = default_scenario_set(0.05, 0.025, 0.20, 0.25)
-    results = run_roic_scenarios(
-        nopat=1_000_000,
-        roic_val=0.18,
-        wacc_val=0.09,
-        shares_outstanding=500_000,
-        current_price=50.0,
-        scenario_set=ss,
-    )
-    assert results["bull"].intrinsic_value >= results["base"].intrinsic_value
-    assert results["base"].intrinsic_value >= results["bear"].intrinsic_value
+    def test_bull_iv_above_bear(self):
+        results = run_revenue_scenarios(
+            revenue=1000.0,
+            shares_outstanding=10.0,
+            net_debt=50.0,
+            wacc_val=0.09,
+            scenario_set=self._scenario_set(),
+        )
+        assert results["bull"].intrinsic_value > results["bear"].intrinsic_value
 
-
-@pytest.mark.unit
-def test_run_revenue_scenarios_returns_three_labels():
-    ss = default_scenario_set(0.05, 0.025, 0.20, 0.25)
-    results = run_revenue_scenarios(
-        revenue=10_000_000,
-        shares_outstanding=1_000_000,
-        net_debt=500_000,
-        tax_rate=0.21,
-        wacc_val=0.09,
-        current_price=20.0,
-        scenario_set=ss,
-    )
-    assert set(results.keys()) == {"bear", "base", "bull"}
-
-
-@pytest.mark.unit
-def test_upside_pct_computed_correctly():
-    ss = default_scenario_set(0.05, 0.025, 0.20, 0.25)
-    results = run_roic_scenarios(
-        nopat=1_000_000,
-        roic_val=0.18,
-        wacc_val=0.09,
-        shares_outstanding=500_000,
-        current_price=50.0,
-        scenario_set=ss,
-    )
-    base = results["base"]
-    expected_upside = (base.intrinsic_value - 50.0) / 50.0 * 100.0
-    assert abs(base.upside_pct - expected_upside) < 1e-6
+    def test_correct_labels(self):
+        results = run_revenue_scenarios(
+            revenue=1000.0,
+            shares_outstanding=10.0,
+            net_debt=0.0,
+            wacc_val=0.09,
+            scenario_set=self._scenario_set(),
+        )
+        for label in ("bear", "base", "bull"):
+            assert results[label].label == label

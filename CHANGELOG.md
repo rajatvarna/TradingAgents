@@ -8,54 +8,12 @@ Breaking changes within the 0.x line are called out explicitly.
 
 ## [Unreleased]
 ### Added
-- Valuation Analyst agent (`tradingagents/agents/analysts/valuation_analyst.py`) with ROIC-driven DCF, Revenue DCF, DDM, and bear/base/bull scenario analysis; enabled by adding `"valuation"` to the analysts config list.
-- Pure-Python valuation engine (`tradingagents/valuation/`) with five modules: `roic` (NOPAT, Invested Capital, ROIC, trend), `wacc` (CAPM, after-tax cost of debt, WACC), `dcf` (ROIC-DCF, Revenue DCF, margin of safety), `ddm` (Gordon Growth, multi-stage DDM), and `scenarios` (ScenarioSet, bear/base/bull runner).
-- Valuation data adapter (`tradingagents/dataflows/valuation_data.py`) that fetches all valuation inputs from yfinance using the existing lazy-import convention; falls back to sensible defaults when optional data is unavailable.
-- `score_valuation_criteria()` function in `monster_stock_scorer.py` for four optional add-on valuation scores: ROIC vs WACC spread, margin of safety (DCF), ROIC trend, and earnings yield vs risk-free rate.
-- `valuation_report` field added to `AgentState` for the new analyst node.
-- 46 unit tests in `tests/unit/valuation/` covering all valuation engine functions (`@pytest.mark.unit`).
-- CI workflow (`.github/workflows/ci.yml`) runs ruff lint and unit tests on every push/PR against Python 3.11 and 3.12.
-- `[tool.ruff]` and `[tool.mypy]` configuration sections added to `pyproject.toml` for consistent static analysis.
-- `portfolio` and `dashboard` optional dependency extras — install with `pip install -e ".[portfolio]"` or `pip install -e ".[dashboard]"` — to avoid pulling Flask, Dash, Plotly, and robin-stocks into a base install.
-- `__init__.py` files added to all agent sub-packages (`analysts`, `researchers`, `managers`, `risk_mgmt`, `trader`, `utils`) enabling direct module imports and correct mypy namespace handling.
 
-### Fixed
-- `TradingMemoryLog._get_conn` now caches one connection per (instance, thread) via `threading.local()` instead of opening a new SQLite file descriptor on every query.
-- Thread safety bug in `propagate_portfolio`: each ticker analysis now runs in its own `TradingAgentsGraph` instance instead of sharing mutable state (`self.ticker`, `self.curr_state`, `self.structured_output_cache`) across threads.
-- `_log_state` now uses `.get()` for all `final_state` key accesses, producing a clear `None` instead of a `KeyError` when a graph node fails silently.
-- Duplicate `logger = logging.getLogger(__name__)` line and duplicate `import logging` removed from `memory.py`.
-- JSON parse failures in `memory.py._row_to_dict` now log a `WARNING` with row context instead of silently swallowing the error.
-- Star imports in `trading_graph.py`, `parallel_setup.py`, and `cli/main.py` replaced with explicit imports.
-- `self.selected_analysts` now stored on `TradingAgentsGraph` instance for use in `propagate_portfolio`.
-
-### Removed
-- `scratch_test.py` (ad-hoc prototype, never part of test suite).
-- `requirements.txt` (stale single-entry file; `pypdf` is already declared in `pyproject.toml`).
-
-- `tradingagents/dataflows/_indicator_descriptions.py` — single source of truth for all 13 technical indicator descriptions; eliminates three separate copies across `y_finance.py`, `alpha_vantage_indicator.py`, and `twelve_data_indicator.py`.
-- `SIGNAL_CONVICTION_WEIGHTS` and signal name constants (`SIGNAL_BUY`, `SIGNAL_SELL`, etc.) in `signal_processing.py` — replace raw string literals in `_conviction_score` and portfolio summary counting.
-- `portfolio_propagation_max_workers` and `outcome_holding_days` added to `DEFAULT_CONFIG` (and `_ENV_OVERRIDES`) — replaces hardcoded `4` and `5` in `propagate_portfolio` and `_fetch_returns`.
-
-### Added
-
-- **Monster Stock / TraderLion framework integration** — deterministic scoring engine implementing the Boik/TraderLion methodology across 22 criteria (EPS acceleration, institutional sponsorship, MVP technical grades, group confirmation, market phase). Adds `tradingagents/scoring/monster_stock_scorer.py` with `MonsterStockScore` (0-100 composite) and `score_stock()`.
-- **Deep data layer** — four new dataflow modules: `fundamentals_deep.py` (8-quarter EPS/revenue snapshots, institutional holder history), `technicals_deep.py` (MA grading A-E, base pattern detection, sell signal detection, relative strength), `market_health.py` (IBD-phase classification, H/L/G proxy, distribution day counting), `sector_groups.py` (group RS rank, 3-leader confirmation check, Boik 50% rule).
-- **Group & Sector Leadership Analyst** (`group_sector_analyst.py`) — evaluates whether a stock's industry group is in the top third and whether 3+ high-RS stocks confirm the group move.
-- **Market Phase Analyst** (`market_phase_analyst.py`) — classifies market as Confirmed Uptrend / Under Pressure / Correction and recommends MMSS mode and position-sizing aggression level.
-- **Post-Mortem Analyst** (`postmortem_analyst.py`) — reviews past recommendations 4-12 weeks later, identifies missed sell signals, and extracts one actionable lesson per trade.
-- **Monster Stock Screener** (`global-screener/monster_stock_screener.py`) — async multi-ticker scanner that pre-filters, scores, and ranks a universe (S&P 500 + Nasdaq 100 default) against the Monster Stock criteria. Outputs A-List / Watch / Monitor tiers.
-- New config keys: `monster_stock_mode`, `min_composite_score_for_buy`, `sell_discipline`, `screener_universe`, `screener_top_n`, `market_phase_gate`, `group_confirmation_required`, `postmortem_lookback_weeks`.
-- New `AgentState` fields: `monster_stock_score`, `group_sector_report`, `market_phase_report`, `postmortem_report`.
-- 34 new unit tests (`test_monster_stock_scorer.py`, `test_deep_dataflows.py`) covering all scoring criteria and composite logic.
-- **Monster Stock pre-compute pipeline** — `TradingAgentsGraph._run_graph()` now calls `score_stock()` deterministically before the LangGraph workflow starts, serialises `MonsterStockScore` to a dict, and injects it into `AgentState["monster_stock_score"]` so every downstream agent has access to the full scored context without redundant data fetching.
-- **Fundamentals Analyst upgraded** — system prompt now includes a structured TraderLion/Boik context block (EPS acceleration trend, revenue acceleration, ROE, margin trend, fund count growth, flagship fund presence) drawn from the pre-computed `MonsterStockScore`. The analyst is now instructed to confirm or challenge each criterion and conclude with a PASS / WARN / FAIL verdict.
-- **Market Analyst upgraded** — system prompt now includes an MVP (Moving Average, Volume, Price) context block (MA grade A-E, volume quality, base pattern, breakout quality, RS percentile, sell signal check, extension risk) and explicit Monster Stock trading rules (buy only Grade A/B; never buy into climax run; confirm stage; provide entry zone and stop-loss).
-- **Bull Researcher v2 prompt** — includes Monster Stock composite score, action signal, stage, hard blockers, key strengths, and narrative summary. Also receives group & sector report and market phase report from the new analysts.
-- **Bear Researcher v2 prompt** — includes Monster Stock score plus mandatory checklist of classic topping signals (EPS deceleration, sell signal events, extension above 50-day, market phase, group rotation risk).
-- **Trader system v2 prompt** — explicit TraderLion buy discipline (never buy below Grade B, never buy in correction, pilot buys) and sell discipline (offensive: climax run / 25% extension rule; defensive: 21-day / 50-day MA breaks with volume, 7-8% hard stop).
-- `propagation.py` initial state now includes all new AgentState fields (`monster_stock_score`, `group_sector_report`, `market_phase_report`, `postmortem_report`, `conflict_report`, `holdings_info`, `trading_history_summary`, `prior_pending_orders`, `trading_mode`).
-- Prompt version registry bumped: `researchers/bull_researcher` → v2, `researchers/bear_researcher` → v2, `trader/trader_system` → v2.
-
+- Valuation Analyst agent with ROIC-driven DCF, Revenue DCF, DDM, and bear/base/bull scenario analysis (`tradingagents/agents/analysts/valuation_analyst.py`).
+- Pure-Python valuation engine (`tradingagents/valuation/`) with ROIC, WACC, DCF, DDM, and scenario modules.
+- Valuation data adapter (`tradingagents/dataflows/valuation_data.py`) using yfinance with lazy imports per repo convention.
+- ROIC vs WACC value-spread scoring integrated into MonsterStockScorer (`score_valuation_block`, `score_roic_wacc_spread`, `score_margin_of_safety`, `score_roic_trend_valuation`, `score_earnings_yield_vs_rfr`).
+- Unit tests for all valuation engine functions (76 tests in `tests/unit/valuation/`).
 - Native Kimi (Moonshot AI) provider support (`kimi`) with correct reasoning_content round-tripping for K2 models.
 
 ### Fixed

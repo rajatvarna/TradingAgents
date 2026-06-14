@@ -1,43 +1,136 @@
-"""Bear / Base / Bull scenario analysis for DCF valuation.
+"""
+Scenario analysis for DCF valuation — bear / base / bull.
 
-No LLM dependency — pure deterministic math.
+Pure math — no external dependencies, no LLM, no I/O.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, List, Optional
 
-from tradingagents.valuation.dcf import revenue_dcf, roic_dcf
+from tradingagents.valuation.dcf import margin_of_safety, revenue_dcf, roic_dcf
 
 
 @dataclass
 class ScenarioAssumptions:
-    """Assumptions for a single scenario (bear, base, or bull)."""
+    """Assumptions for a single valuation scenario."""
 
-    growth_rate: float          # Implied annual growth (used to set reinvestment_rate for ROIC-DCF)
-    terminal_growth: float      # Perpetuity growth rate
-    ebit_margin: float          # EBIT margin fraction (for Revenue DCF)
-    reinvestment_rate: float    # Fraction of NOPAT reinvested (for ROIC-DCF)
-    wacc_override: Optional[float] = None  # If set, overrides the base WACC
-
-
-@dataclass
-class ScenarioResult:
-    """Output of a single scenario valuation run."""
-
-    label: str              # "bear" | "base" | "bull"
-    intrinsic_value: float  # Per-share intrinsic value
-    upside_pct: float       # (IV − current_price) / current_price × 100
+    growth_rate: float          # Annual growth rate applied during projection
+    terminal_growth: float      # Perpetual terminal growth rate
+    ebit_margin: float          # EBIT as a fraction of revenue
+    reinvestment_rate: float    # Fraction of NOPAT reinvested
+    wacc_override: Optional[float] = None  # Override WACC if provided
 
 
 @dataclass
 class ScenarioSet:
-    """Container for all three scenario assumptions."""
+    """Bear / base / bull triplet of scenario assumptions."""
 
     bear: ScenarioAssumptions
     base: ScenarioAssumptions
     bull: ScenarioAssumptions
+
+
+@dataclass
+class ScenarioResult:
+    """Result for a single scenario."""
+
+    intrinsic_value: float   # Intrinsic value per share
+    upside_pct: float        # Upside percentage vs current price
+    label: str               # "bear" | "base" | "bull"
+
+
+def run_roic_scenarios(
+    nopat: float,
+    roic_val: float,
+    wacc_val: float,
+    shares_outstanding: float,
+    scenario_set: ScenarioSet,
+    projection_years: int = 10,
+    current_price: float = 0.0,
+) -> Dict[str, ScenarioResult]:
+    """Run bear / base / bull ROIC-DCF scenarios.
+
+    Args:
+        nopat: Base-year Net Operating Profit After Tax.
+        roic_val: Current ROIC as a decimal.
+        wacc_val: Weighted average cost of capital as a decimal (used unless overridden).
+        shares_outstanding: Shares outstanding.
+        scenario_set: Bear / base / bull ScenarioAssumptions.
+        projection_years: Number of explicit forecast years.
+        current_price: Current market price for upside computation.
+
+    Returns:
+        Dict mapping label string to ScenarioResult.
+    """
+    results: Dict[str, ScenarioResult] = {}
+    for label, scenario in [
+        ("bear", scenario_set.bear),
+        ("base", scenario_set.base),
+        ("bull", scenario_set.bull),
+    ]:
+        effective_wacc = scenario.wacc_override if scenario.wacc_override is not None else wacc_val
+        iv = roic_dcf(
+            nopat=nopat,
+            roic_val=roic_val,
+            wacc_val=effective_wacc,
+            reinvestment_rate=scenario.reinvestment_rate,
+            projection_years=projection_years,
+            terminal_growth=scenario.terminal_growth,
+            shares_outstanding=shares_outstanding,
+        )
+        upside = margin_of_safety(iv, current_price) if current_price > 0 and iv != 0 else 0.0
+        results[label] = ScenarioResult(intrinsic_value=iv, upside_pct=upside, label=label)
+    return results
+
+
+def run_revenue_scenarios(
+    revenue: float,
+    shares_outstanding: float,
+    net_debt: float,
+    wacc_val: float,
+    scenario_set: ScenarioSet,
+    projection_years: int = 10,
+    tax_rate: float = 0.21,
+    current_price: float = 0.0,
+) -> Dict[str, ScenarioResult]:
+    """Run bear / base / bull Revenue-DCF scenarios.
+
+    Args:
+        revenue: Base-year annual revenue.
+        shares_outstanding: Shares outstanding.
+        net_debt: Net debt (debt minus cash).
+        wacc_val: Weighted average cost of capital (used unless scenario overrides).
+        scenario_set: Bear / base / bull ScenarioAssumptions.
+        projection_years: Number of explicit forecast years.
+        tax_rate: Effective tax rate as a decimal.
+        current_price: Current market price for upside computation.
+
+    Returns:
+        Dict mapping label string to ScenarioResult.
+    """
+    results: Dict[str, ScenarioResult] = {}
+    for label, scenario in [
+        ("bear", scenario_set.bear),
+        ("base", scenario_set.base),
+        ("bull", scenario_set.bull),
+    ]:
+        effective_wacc = scenario.wacc_override if scenario.wacc_override is not None else wacc_val
+        growth_rates: List[float] = [scenario.growth_rate] * projection_years
+        iv = revenue_dcf(
+            revenue=revenue,
+            growth_rates=growth_rates,
+            ebit_margin=scenario.ebit_margin,
+            tax_rate=tax_rate,
+            wacc_val=effective_wacc,
+            terminal_growth=scenario.terminal_growth,
+            shares_outstanding=shares_outstanding,
+            net_debt=net_debt,
+        )
+        upside = margin_of_safety(iv, current_price) if current_price > 0 and iv != 0 else 0.0
+        results[label] = ScenarioResult(intrinsic_value=iv, upside_pct=upside, label=label)
+    return results
 
 
 def default_scenario_set(
@@ -46,94 +139,36 @@ def default_scenario_set(
     base_margin: float,
     base_reinvestment: float,
 ) -> ScenarioSet:
-    """Build a reasonable ScenarioSet centred on the base-case assumptions.
+    """Create a reasonable bear / base / bull ScenarioSet around base assumptions.
 
-    Bear: 60% of base growth, margin compressed 20%, terminal 1% lower.
-    Base: as provided.
-    Bull: 140% of base growth, margin expanded 20%, terminal 0.5% higher.
+    The bear case uses 40% haircut on growth, tighter margins, and lower terminal growth.
+    The bull case uses 40% premium on growth, better margins, and higher terminal growth.
+
+    Args:
+        base_growth: Base-case annual growth rate as a decimal.
+        base_terminal: Base-case terminal growth rate as a decimal.
+        base_margin: Base-case EBIT margin as a decimal.
+        base_reinvestment: Base-case reinvestment rate as a decimal.
+
+    Returns:
+        ScenarioSet with bear / base / bull assumptions.
     """
-    return ScenarioSet(
-        bear=ScenarioAssumptions(
-            growth_rate=base_growth * 0.6,
-            terminal_growth=max(base_terminal - 0.01, 0.005),
-            ebit_margin=base_margin * 0.80,
-            reinvestment_rate=min(base_reinvestment * 1.2, 0.95),
-        ),
-        base=ScenarioAssumptions(
-            growth_rate=base_growth,
-            terminal_growth=base_terminal,
-            ebit_margin=base_margin,
-            reinvestment_rate=base_reinvestment,
-        ),
-        bull=ScenarioAssumptions(
-            growth_rate=base_growth * 1.4,
-            terminal_growth=min(base_terminal + 0.005, 0.05),
-            ebit_margin=base_margin * 1.20,
-            reinvestment_rate=max(base_reinvestment * 0.8, 0.05),
-        ),
+    bear = ScenarioAssumptions(
+        growth_rate=base_growth * 0.6,
+        terminal_growth=max(0.01, base_terminal - 0.01),
+        ebit_margin=base_margin * 0.85,
+        reinvestment_rate=min(1.0, base_reinvestment * 1.1),
     )
-
-
-def run_roic_scenarios(
-    nopat: float,
-    roic_val: float,
-    wacc_val: float,
-    shares_outstanding: float,
-    current_price: float,
-    scenario_set: ScenarioSet,
-    projection_years: int = 7,
-) -> dict:
-    """Run bear/base/bull ROIC-DCF and return a dict of ScenarioResult."""
-    results: dict = {}
-    for label, assumptions in [
-        ("bear", scenario_set.bear),
-        ("base", scenario_set.base),
-        ("bull", scenario_set.bull),
-    ]:
-        effective_wacc = assumptions.wacc_override if assumptions.wacc_override else wacc_val
-        iv = roic_dcf(
-            nopat=nopat,
-            roic_val=roic_val,
-            wacc_val=effective_wacc,
-            reinvestment_rate=assumptions.reinvestment_rate,
-            projection_years=projection_years,
-            terminal_growth=assumptions.terminal_growth,
-            shares_outstanding=shares_outstanding,
-        )
-        upside = (iv - current_price) / current_price * 100.0 if current_price > 0 else 0.0
-        results[label] = ScenarioResult(label=label, intrinsic_value=iv, upside_pct=upside)
-    return results
-
-
-def run_revenue_scenarios(
-    revenue: float,
-    shares_outstanding: float,
-    net_debt: float,
-    tax_rate: float,
-    wacc_val: float,
-    current_price: float,
-    scenario_set: ScenarioSet,
-    projection_years: int = 7,
-) -> dict:
-    """Run bear/base/bull Revenue-DCF and return a dict of ScenarioResult."""
-    results: dict = {}
-    for label, assumptions in [
-        ("bear", scenario_set.bear),
-        ("base", scenario_set.base),
-        ("bull", scenario_set.bull),
-    ]:
-        effective_wacc = assumptions.wacc_override if assumptions.wacc_override else wacc_val
-        growth_rates = [assumptions.growth_rate] * projection_years
-        iv = revenue_dcf(
-            revenue=revenue,
-            growth_rates=growth_rates,
-            ebit_margin=assumptions.ebit_margin,
-            tax_rate=tax_rate,
-            wacc_val=effective_wacc,
-            terminal_growth=assumptions.terminal_growth,
-            shares_outstanding=shares_outstanding,
-            net_debt=net_debt,
-        )
-        upside = (iv - current_price) / current_price * 100.0 if current_price > 0 else 0.0
-        results[label] = ScenarioResult(label=label, intrinsic_value=iv, upside_pct=upside)
-    return results
+    base = ScenarioAssumptions(
+        growth_rate=base_growth,
+        terminal_growth=base_terminal,
+        ebit_margin=base_margin,
+        reinvestment_rate=base_reinvestment,
+    )
+    bull = ScenarioAssumptions(
+        growth_rate=base_growth * 1.4,
+        terminal_growth=min(0.05, base_terminal + 0.01),
+        ebit_margin=base_margin * 1.15,
+        reinvestment_rate=max(0.0, base_reinvestment * 0.9),
+    )
+    return ScenarioSet(bear=bear, base=base, bull=bull)

@@ -1,15 +1,24 @@
-"""ROIC (Return on Invested Capital) computation.
+"""
+ROIC (Return on Invested Capital) computation functions.
 
-No LLM dependency — pure deterministic math.
+Pure math — no external dependencies, no LLM, no I/O.
 """
 
 from __future__ import annotations
 
+from typing import List
+
 
 def nopat(ebit: float, effective_tax_rate: float) -> float:
-    """Net Operating Profit After Tax = EBIT × (1 − tax_rate)."""
-    if effective_tax_rate < 0 or effective_tax_rate > 1:
-        raise ValueError(f"effective_tax_rate must be in [0, 1], got {effective_tax_rate}")
+    """Compute Net Operating Profit After Tax.
+
+    Args:
+        ebit: Earnings before interest and taxes.
+        effective_tax_rate: Effective tax rate as a decimal (e.g. 0.21 for 21%).
+
+    Returns:
+        NOPAT value.
+    """
     return ebit * (1.0 - effective_tax_rate)
 
 
@@ -18,52 +27,63 @@ def invested_capital(
     excess_cash: float,
     non_interest_current_liabilities: float,
 ) -> float:
-    """Invested Capital = Total Assets − Excess Cash − Non-interest Current Liabilities.
+    """Compute Invested Capital.
 
-    Excess cash is cash beyond what is needed for day-to-day operations
-    (typically total cash minus ~2% of revenue used as working-capital cash).
-    Non-interest current liabilities include accounts payable, accrued expenses, etc.
+    IC = Total Assets - Excess Cash - Non-Interest-Bearing Current Liabilities
+
+    Args:
+        total_assets: Total assets from the balance sheet.
+        excess_cash: Cash and equivalents held in excess of operating needs.
+        non_interest_current_liabilities: Accounts payable, accrued liabilities, etc.
+
+    Returns:
+        Invested capital value.
     """
-    ic = total_assets - excess_cash - non_interest_current_liabilities
-    if ic <= 0:
-        raise ValueError(
-            f"Invested capital is non-positive ({ic:.0f}). "
-            "Check inputs: total_assets={total_assets}, excess_cash={excess_cash}, "
-            "non_interest_current_liabilities={non_interest_current_liabilities}"
-        )
-    return ic
+    return total_assets - excess_cash - non_interest_current_liabilities
 
 
 def roic(nopat_val: float, invested_capital_val: float) -> float:
-    """ROIC = NOPAT / Invested Capital."""
-    if invested_capital_val <= 0:
-        raise ValueError(f"invested_capital_val must be positive, got {invested_capital_val}")
+    """Compute Return on Invested Capital.
+
+    Args:
+        nopat_val: Net Operating Profit After Tax.
+        invested_capital_val: Invested Capital (must not be zero).
+
+    Returns:
+        ROIC as a decimal (e.g. 0.15 = 15%).
+
+    Raises:
+        ValueError: If invested_capital_val is zero.
+    """
+    if invested_capital_val == 0:
+        raise ValueError("Invested capital cannot be zero when computing ROIC.")
     return nopat_val / invested_capital_val
 
 
-def roic_trend(historical_roics: list) -> str:
-    """Classify the direction of ROIC over time.
+def roic_trend(historical_roics: List[float]) -> str:
+    """Classify the direction of ROIC over a historical series.
 
     Args:
-        historical_roics: List of ROIC values ordered oldest → newest (at least 2).
+        historical_roics: List of ROIC values ordered from oldest to most recent.
 
     Returns:
-        "expanding" | "stable" | "contracting"
+        One of "expanding", "stable", or "contracting".
     """
     if len(historical_roics) < 2:
         return "stable"
 
+    # Compare simple linear slope across the series
     first_half = historical_roics[: len(historical_roics) // 2]
     second_half = historical_roics[len(historical_roics) // 2 :]
 
     avg_first = sum(first_half) / len(first_half)
     avg_second = sum(second_half) / len(second_half)
 
-    delta = avg_second - avg_first
-    threshold = 0.01  # 1 percentage-point band for "stable"
+    change = avg_second - avg_first
 
-    if delta > threshold:
+    # 1 percentage point threshold for meaningful change
+    if change > 0.01:
         return "expanding"
-    if delta < -threshold:
+    if change < -0.01:
         return "contracting"
     return "stable"

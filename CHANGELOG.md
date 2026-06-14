@@ -8,6 +8,12 @@ Breaking changes within the 0.x line are called out explicitly.
 
 ## [Unreleased]
 ### Added
+- Valuation Analyst agent (`tradingagents/agents/analysts/valuation_analyst.py`) with ROIC-driven DCF, Revenue DCF, DDM, and bear/base/bull scenario analysis; enabled by adding `"valuation"` to the analysts config list.
+- Pure-Python valuation engine (`tradingagents/valuation/`) with five modules: `roic` (NOPAT, Invested Capital, ROIC, trend), `wacc` (CAPM, after-tax cost of debt, WACC), `dcf` (ROIC-DCF, Revenue DCF, margin of safety), `ddm` (Gordon Growth, multi-stage DDM), and `scenarios` (ScenarioSet, bear/base/bull runner).
+- Valuation data adapter (`tradingagents/dataflows/valuation_data.py`) that fetches all valuation inputs from yfinance using the existing lazy-import convention; falls back to sensible defaults when optional data is unavailable.
+- `score_valuation_criteria()` function in `monster_stock_scorer.py` for four optional add-on valuation scores: ROIC vs WACC spread, margin of safety (DCF), ROIC trend, and earnings yield vs risk-free rate.
+- `valuation_report` field added to `AgentState` for the new analyst node.
+- 46 unit tests in `tests/unit/valuation/` covering all valuation engine functions (`@pytest.mark.unit`).
 - CI workflow (`.github/workflows/ci.yml`) runs ruff lint and unit tests on every push/PR against Python 3.11 and 3.12.
 - `[tool.ruff]` and `[tool.mypy]` configuration sections added to `pyproject.toml` for consistent static analysis.
 - `portfolio` and `dashboard` optional dependency extras — install with `pip install -e ".[portfolio]"` or `pip install -e ".[dashboard]"` — to avoid pulling Flask, Dash, Plotly, and robin-stocks into a base install.

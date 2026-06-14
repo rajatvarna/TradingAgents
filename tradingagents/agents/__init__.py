@@ -7,6 +7,7 @@ from .analysts.market_phase_analyst import create_market_phase_analyst
 from .analysts.news_analyst import create_news_analyst
 from .analysts.options_analyst import create_options_analyst
 from .analysts.postmortem_analyst import create_postmortem_analyst
+from .analysts.valuation_analyst import create_valuation_analyst
 from .analysts.sentiment_analyst import (
     create_sentiment_analyst,
     create_social_media_analyst,  # deprecated alias kept for back-compat
@@ -57,4 +58,5 @@ __all__ = [
     "create_group_sector_analyst",
     "create_market_phase_analyst",
     "create_postmortem_analyst",
+    "create_valuation_analyst",
 ]

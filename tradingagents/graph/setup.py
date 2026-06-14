@@ -27,6 +27,7 @@ from tradingagents.agents import (
     create_research_manager,
     create_sentiment_analyst,
     create_trader,
+    create_valuation_analyst,
 )
 from tradingagents.agents.utils.agent_states import AgentState
 from tradingagents.agents.utils.tool_provenance import create_tool_provenance_capture_node
@@ -54,6 +55,7 @@ _ANALYST_FACTORIES = {
     "group_sector": create_group_sector_analyst,
     "market_phase": create_market_phase_analyst,
     "postmortem": create_postmortem_analyst,
+    "valuation": create_valuation_analyst,
 }
 
 _DEFAULT_ANALYSTS = ("market", "sentiment", "news", "fundamentals")

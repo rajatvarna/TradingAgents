@@ -137,5 +137,6 @@ class AgentState(MessagesState):
     group_sector_report: Annotated[str, "Report from the Group & Sector Leadership Analyst"]
     market_phase_report: Annotated[str, "Report from the Market Phase Analyst"]
     postmortem_report: Annotated[str, "Post-mortem analysis from the Post-Mortem Analyst"]
+    valuation_report: Annotated[str, "Report from the Valuation Analyst (ROIC-DCF, Revenue DCF, DDM, scenarios)"]
     postmortem_past_recommendation: Annotated[str, "Past recommendation text for post-mortem input"]
     postmortem_outcome_data: Annotated[str, "Outcome data for post-mortem input"]

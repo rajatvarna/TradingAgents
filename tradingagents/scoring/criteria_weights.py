@@ -28,4 +28,9 @@ WEIGHTS: dict = {
     "group_rank":               1.5,   # group environment gates 50% of move
     "group_confirmation":       1.5,
     "market_health":            1.5,   # market phase gates everything
+    # Valuation criteria (optional; included when valuation block is active)
+    "roic_wacc_spread":         1.2,
+    "margin_of_safety":         1.0,
+    "roic_trend":               0.8,
+    "earnings_yield_vs_rf":     0.7,
 }

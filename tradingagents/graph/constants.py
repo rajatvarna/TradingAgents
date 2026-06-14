@@ -14,6 +14,7 @@ ANALYST_REPORT_KEYS: dict[str, str] = {
     "group_sector": "group_sector_report",
     "market_phase": "market_phase_report",
     "postmortem": "postmortem_report",
+    "valuation": "valuation_report",
 }
 
 # Set of valid analyst names for input validation.
@@ -34,6 +35,7 @@ TOOL_NODE_KEY: dict[str, str] = {
     "group_sector": "fundamentals",   # reuses fundamentals tool node (no tools needed)
     "market_phase": "market",         # reuses market tool node (no tools needed)
     "postmortem": "market",           # reuses market tool node (no tools needed)
+    "valuation": "fundamentals",      # reuses fundamentals tool node
 }
 
 # Analysts that do not use LangChain tool calls (call data fetchers directly).

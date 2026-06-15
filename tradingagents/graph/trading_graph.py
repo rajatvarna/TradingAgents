@@ -10,8 +10,6 @@ from typing import Any
 import yfinance as yf
 from langgraph.prebuilt import ToolNode
 
-logger = logging.getLogger(__name__)
-
 from tradingagents.agents.analysts.valuation_analyst import (
     get_dcf_valuation,
     get_ddm_valuation,
@@ -47,7 +45,13 @@ from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.llm_clients import create_llm_client
 
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
+from .conditional_logic import ConditionalLogic
+from .propagation import Propagator
+from .reflection import Reflector
+from .setup import GraphSetup
+from .signal_processing import SIGNAL_CONVICTION_WEIGHTS, SignalProcessor
 
+logger = logging.getLogger(__name__)
 
 _BULLISH_KEYWORDS = frozenset({"bull", "bullish", "buy", "long", "upside", "positive", "outperform", "overweight"})
 _BEARISH_KEYWORDS = frozenset({"bear", "bearish", "sell", "short", "downside", "negative", "underperform", "underweight"})
@@ -111,11 +115,6 @@ def _precompute_monster_score(ticker: str, trade_date: str, config: dict) -> dic
     except Exception as exc:
         logger.warning("Monster Stock pre-score failed for %s on %s: %s", ticker, trade_date, exc)
         return {}
-from .conditional_logic import ConditionalLogic
-from .propagation import Propagator
-from .reflection import Reflector
-from .setup import GraphSetup
-from .signal_processing import SIGNAL_CONVICTION_WEIGHTS, SignalProcessor
 
 
 class TradingAgentsGraph:

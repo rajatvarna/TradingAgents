@@ -5,8 +5,7 @@ These tests run without any external dependencies (no langchain, no API keys).
 """
 from pathlib import Path
 
-import pytest
-
+import pytest  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Item 6 helpers

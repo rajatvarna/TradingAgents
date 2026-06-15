@@ -28,6 +28,7 @@ __all__ = [
     "detect_conflicts",
     "format_conflict_report_for_prompt",
     "create_conflict_detector",
+    "_is_high_uncertainty",
 ]
 
 _FACTORS = (
@@ -273,6 +274,26 @@ def format_conflict_report_for_prompt(report: dict | ConflictReport | None) -> s
     return "\n".join(lines)
 
 
+_HIGH_UNCERTAINTY_ALIGNMENT_THRESHOLD = 0.4
+_HIGH_UNCERTAINTY_SEVERITY_THRESHOLD = 0.6
+_HIGH_UNCERTAINTY_MIN_CONFLICTS = 1
+
+
+def _is_high_uncertainty(report: ConflictReport) -> bool:
+    """Return True when analyst signals diverge severely enough to warrant an extra debate round.
+
+    Triggered when overall_alignment is below the threshold AND at least one
+    conflict pair has severity above the threshold.
+    """
+    if report.overall_alignment > _HIGH_UNCERTAINTY_ALIGNMENT_THRESHOLD:
+        return False
+    high_severity = [
+        c for c in report.conflicts
+        if c.severity >= _HIGH_UNCERTAINTY_SEVERITY_THRESHOLD
+    ]
+    return len(high_severity) >= _HIGH_UNCERTAINTY_MIN_CONFLICTS
+
+
 def create_conflict_detector(llm):
     """Graph-node factory. Computes short-term anchors, runs conflict detection."""
 
@@ -297,6 +318,13 @@ def create_conflict_detector(llm):
             anchors=anchors,
             llm=llm,
         )
-        return {"conflict_report": report.model_dump()}
+        high_uncertainty = _is_high_uncertainty(report)
+        if high_uncertainty:
+            logger.info(
+                "conflict_detector: HIGH UNCERTAINTY flagged (alignment=%.2f, severe_conflicts=%d) — extra debate round will be triggered",
+                report.overall_alignment,
+                sum(1 for c in report.conflicts if c.severity >= _HIGH_UNCERTAINTY_SEVERITY_THRESHOLD),
+            )
+        return {"conflict_report": report.model_dump(), "high_uncertainty": high_uncertainty}
 
     return conflict_detector_node

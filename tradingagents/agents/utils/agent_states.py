@@ -140,3 +140,9 @@ class AgentState(MessagesState):
 
     # FRED-based macro regime classification injected before analysis
     macro_regime: Annotated[dict[str, Any], "Macro regime classification (expansion/stagflation/recession/recovery)"]
+
+    # Set to True when cross-analyst signals are severely conflicted; triggers extra debate round (Item 8)
+    high_uncertainty: Annotated[bool, "True when analyst signals diverge severely; triggers an extra debate round"]
+
+    # Per-analyst accuracy weights derived from the memory log (Item 6)
+    analyst_weights: Annotated[dict[str, float], "Per-analyst accuracy weights (0..1) from historical prediction log"]

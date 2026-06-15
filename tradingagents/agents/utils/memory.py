@@ -101,13 +101,24 @@ class TradingMemoryLog:
         trade_date: str,
         final_trade_decision: str,
         meta: dict[str, Any] | None = None,
+        analyst_signals: dict[str, str] | None = None,
     ) -> None:
-        """Insert a pending entry at end of propagate()."""
+        """Insert a pending entry at end of propagate().
+
+        Args:
+            analyst_signals: Optional dict of analyst_name → direction string
+                (``"bullish"`` / ``"bearish"`` / ``"neutral"``).  Stored under
+                the ``analyst_signals`` key of the meta field and later used by
+                :meth:`get_analyst_weights` to track per-analyst accuracy.
+        """
         if not self._db_path:
             return
         rating = parse_rating(final_trade_decision, default="Unknown")
 
-        meta_json = json.dumps(meta or {}, ensure_ascii=False)
+        merged_meta = dict(meta or {})
+        if analyst_signals:
+            merged_meta["analyst_signals"] = analyst_signals
+        meta_json = json.dumps(merged_meta, ensure_ascii=False)
         with self._get_conn() as conn:
             # INSERT OR IGNORE respects the UNIQUE(ticker, trade_date, pending) constraint,
             # replacing the previous SELECT + conditional INSERT (two round-trips → one).
@@ -128,16 +139,19 @@ class TradingMemoryLog:
         alpha_pct = f"{row['alpha_return']:+.1%}" if row['alpha_return'] is not None else None
         holding_str = f"{row['holding_days']}d" if row['holding_days'] is not None else None
 
-        # Safely parse meta and outcome JSON
+        # Safely parse meta and outcome JSON.
+        # sqlite3.Row.__contains__ checks integer indexes, not column names, so use
+        # row.keys() for membership testing to avoid always-False results.
+        _col_names = row.keys()
         meta_dict = {}
-        if "meta" in row and row["meta"]:
+        if "meta" in _col_names and row["meta"]:
             try:
                 meta_dict = json.loads(row["meta"])
             except (json.JSONDecodeError, ValueError) as exc:
                 logger.warning("Failed to parse meta JSON for row %s: %s", dict(row).get("id"), exc)
 
         outcome_dict = {}
-        if "outcome" in row and row["outcome"]:
+        if "outcome" in _col_names and row["outcome"]:
             try:
                 outcome_dict = json.loads(row["outcome"])
             except (json.JSONDecodeError, ValueError) as exc:
@@ -211,6 +225,74 @@ class TradingMemoryLog:
                     parts.append(self._format_reflection_only(e))
 
         return "\n\n".join(parts)
+
+    # --- Analyst accuracy weights (Item 6) ---
+
+    def get_analyst_weights(self, n_entries: int = 20) -> dict[str, float]:
+        """Return per-analyst accuracy weights derived from the memory log.
+
+        For each resolved entry that has per-analyst directions stored in meta
+        (key ``analyst_signals``, a dict of analyst_name → "bullish"/"bearish"/
+        "neutral"), we check whether the analyst's direction agreed with the
+        final resolved rating.  The weight is the fraction of entries where the
+        analyst was directionally correct, smoothed toward 0.5 (uninformative
+        prior) when fewer than 3 matching entries exist.
+
+        Returns an empty dict when no data is available.  Callers should treat
+        a missing weight as equal weight (0.5 or normalised to 1.0).
+        """
+        if not self._db_path or not self._db_path.exists():
+            return {}
+
+        with self._get_conn() as conn:
+            cursor = conn.execute(
+                """
+                SELECT rating, meta FROM memory_log
+                WHERE pending = 0 AND meta IS NOT NULL AND meta != '{}'
+                ORDER BY id DESC LIMIT ?
+                """,
+                (n_entries,),
+            )
+            rows = cursor.fetchall()
+
+        if not rows:
+            return {}
+
+        hits: dict[str, int] = {}
+        totals: dict[str, int] = {}
+
+        for row in rows:
+            final_rating = (row["rating"] or "").strip().lower()
+            is_bullish_outcome = final_rating in {"buy", "overweight"}
+            is_bearish_outcome = final_rating in {"sell", "underweight"}
+            if not (is_bullish_outcome or is_bearish_outcome):
+                continue  # skip Hold / Unknown outcomes — no clear ground truth
+
+            try:
+                meta = json.loads(row["meta"] or "{}")
+            except Exception:
+                continue
+
+            signals: dict[str, str] = meta.get("analyst_signals", {})
+            for analyst, direction in signals.items():
+                direction = (direction or "").strip().lower()
+                if direction not in {"bullish", "bearish"}:
+                    continue
+                totals[analyst] = totals.get(analyst, 0) + 1
+                analyst_bullish = direction == "bullish"
+                if analyst_bullish == is_bullish_outcome:
+                    hits[analyst] = hits.get(analyst, 0) + 1
+
+        weights: dict[str, float] = {}
+        _PRIOR = 0.5
+        _PRIOR_STRENGTH = 2  # equivalent to 2 pseudo-observations
+        for analyst, total in totals.items():
+            h = hits.get(analyst, 0)
+            # Beta-smoothed accuracy toward uninformative prior 0.5
+            smoothed = (h + _PRIOR * _PRIOR_STRENGTH) / (total + _PRIOR_STRENGTH)
+            weights[analyst] = round(smoothed, 3)
+
+        return weights
 
     # --- Update path (Phase B) ---
 

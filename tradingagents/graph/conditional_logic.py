@@ -83,8 +83,17 @@ class ConditionalLogic:
         return "Msg Clear Derivatives"
 
     def should_continue_debate(self, state: AgentState) -> str:
-        """Determine if debate should continue."""
+        """Determine if debate should continue.
+
+        When ``high_uncertainty`` is True (set by the Conflict Detector when
+        analyst signals diverge severely), the effective debate limit is raised
+        by one extra full round so the researchers can work through the
+        contradictions before the Research Manager decides.
+        """
         inv = state["investment_debate_state"]
+        high_uncertainty = bool(state.get("high_uncertainty", False))
+        effective_max_rounds = self.max_debate_rounds + (1 if high_uncertainty else 0)
+
         # Early exit if both sides converged (at least 1 full round has happened)
         if inv["count"] >= 2 and self._detect_consensus(
             inv.get("bull_history", ""), inv.get("bear_history", "")
@@ -95,9 +104,12 @@ class ConditionalLogic:
             )
             return "Research Manager"
 
-        if (
-            state["investment_debate_state"]["count"] >= 2 * self.max_debate_rounds
-        ):  # 2 * max_debate_rounds turns total (default 1 -> bull + bear)
+        if inv["count"] >= 2 * effective_max_rounds:
+            if high_uncertainty:
+                logger.debug(
+                    "High-uncertainty extra debate round completed at round %d — handing off to Research Manager",
+                    inv["count"] // 2,
+                )
             return "Research Manager"
         if self._early_stop_investment_debate(state):
             return "Research Manager"

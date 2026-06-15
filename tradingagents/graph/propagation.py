@@ -105,6 +105,8 @@ class Propagator:
             "postmortem_outcome_data": "",
             # Optional fields initialised to safe defaults
             "conflict_report": {},
+            "high_uncertainty": False,
+            "analyst_weights": {},
             "holdings_info": {},
             "trading_history_summary": {},
             "prior_pending_orders": [],

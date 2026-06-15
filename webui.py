@@ -69,6 +69,74 @@ def _user_home_for(email: str) -> Path:
 # ════════════════════════════════════════════════════════════════════
 # Range stats card (pre-analysis, cached)
 # ════════════════════════════════════════════════════════════════════
+@st.cache_data(show_spinner=False, ttl=60 * 60)
+def _build_analysis_pdf_bytes(ticker: str, date: str, full_json_str: str) -> bytes:
+    """Assemble a PDF from a full state JSON string and return the raw bytes.
+
+    Cached so repeated downloads within a session don't re-render.
+    """
+    import json as _j
+    import tempfile
+    from automation.pdf import write_investment_pdf
+
+    full = _j.loads(full_json_str)
+
+    section_order = [
+        ("market_report",              "Market Analysis"),
+        ("sentiment_report",           "Sentiment Analysis"),
+        ("news_report",                "News Analysis"),
+        ("fundamentals_report",        "Fundamentals Analysis"),
+        ("investment_plan",            "Investment Plan (Research Manager)"),
+        ("trader_investment_decision", "Trader Plan"),
+        ("final_trade_decision",       "Final Decision (Portfolio Manager)"),
+    ]
+
+    parts: list[str] = []
+    for key, label in section_order:
+        content = (full.get(key) or "").strip()
+        if content:
+            parts.append(f"## {label}\n\n{content}")
+
+    debate = full.get("investment_debate_state") or {}
+    bull = (debate.get("bull_history") or "").strip()
+    bear = (debate.get("bear_history") or "").strip()
+    rj   = (debate.get("judge_decision") or "").strip()
+    if bull or bear or rj:
+        debate_parts = []
+        if bull: debate_parts.append(f"### Bull\n{bull}")
+        if bear: debate_parts.append(f"### Bear\n{bear}")
+        if rj:   debate_parts.append(f"### Research Manager\n{rj}")
+        parts.append("## Bull/Bear Debate\n\n" + "\n\n".join(debate_parts))
+
+    risk = full.get("risk_debate_state") or {}
+    agg = (risk.get("aggressive_history") or "").strip()
+    con = (risk.get("conservative_history") or "").strip()
+    neu = (risk.get("neutral_history") or "").strip()
+    rrj = (risk.get("judge_decision") or "").strip()
+    if agg or con or neu or rrj:
+        risk_parts = []
+        if agg: risk_parts.append(f"### Aggressive\n{agg}")
+        if con: risk_parts.append(f"### Conservative\n{con}")
+        if neu: risk_parts.append(f"### Neutral\n{neu}")
+        if rrj: risk_parts.append(f"### Portfolio Manager\n{rrj}")
+        parts.append("## Risk Debate\n\n" + "\n\n".join(risk_parts))
+
+    markdown = "\n\n---\n\n".join(parts)
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+
+    write_investment_pdf(
+        markdown,
+        tmp_path,
+        title=f"{ticker} — {date}",
+        signal={"ticker": ticker},
+    )
+    data = tmp_path.read_bytes()
+    tmp_path.unlink(missing_ok=True)
+    return data
+
+
 @st.cache_data(show_spinner=False, ttl=15 * 60)
 def _range_stats_cached(t: str, d: str):
     """Memoized fetch+format for the range-stats card. Returns None on
@@ -786,6 +854,25 @@ if not run and worker_info is None:
                             tab_objs = st.tabs([s[0] for s in all_sections])
                             for tab, (_, content) in zip(tab_objs, all_sections):
                                 tab.markdown(content)
+
+                        # PDF export
+                        _dl_label = "📄 导出 PDF" if _is_zh else "📄 Export PDF"
+                        _dl_fn    = f"{e['ticker']}_{e['date']}_analysis.pdf"
+                        _pdf_key  = f"pdf_btn_{_idx}"
+                        try:
+                            import json as _pj
+                            _pdf_bytes = _build_analysis_pdf_bytes(
+                                e["ticker"], e["date"], _pj.dumps(full)
+                            )
+                            st.download_button(
+                                label=_dl_label,
+                                data=_pdf_bytes,
+                                file_name=_dl_fn,
+                                mime="application/pdf",
+                                key=_pdf_key,
+                            )
+                        except Exception as _pdf_err:
+                            st.caption(f"PDF unavailable: {_pdf_err}")
                     else:
                         # Fallback: only the lean memory log was available
                         if e.get("decision"):
@@ -1179,3 +1266,25 @@ push_event(T("ev_complete"), decision[:200] if decision else "")
 
 with st.expander(T("raw_decision")):
     st.code(decision or "(empty)", language="markdown")
+
+# ─── PDF export for the just-completed run ───
+_live_pdf_label = "📄 导出 PDF" if st.session_state.get("ui_lang") == "zh" else "📄 Export PDF"
+_live_pdf_fn = f"{ticker}_{trade_date}_analysis.pdf"
+try:
+    import json as _live_pj
+    # Merge all worker chunks into a single state dict (last value wins per key)
+    _live_full: dict = {}
+    for _ch in worker_info.get("chunks", []):
+        _live_full.update(_ch)
+    _live_pdf_bytes = _build_analysis_pdf_bytes(
+        ticker, str(trade_date), _live_pj.dumps(_live_full)
+    )
+    st.download_button(
+        label=_live_pdf_label,
+        data=_live_pdf_bytes,
+        file_name=_live_pdf_fn,
+        mime="application/pdf",
+        key="live_run_pdf_export",
+    )
+except Exception as _live_pdf_err:
+    st.caption(f"PDF unavailable: {_live_pdf_err}")

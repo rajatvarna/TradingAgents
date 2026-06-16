@@ -217,6 +217,7 @@ class TradingAgentsGraph:
             self.conditional_logic,
             self.structured_output_cache,
             analyst_concurrency_limit=self.config.get("analyst_concurrency_limit", 1),
+            config=self.config,
         )
 
         self.propagator = Propagator(

@@ -312,35 +312,20 @@ class GraphSetup:
             )
 
     def _wire_fixed_flow(self, workflow: StateGraph, selected_analysts: list[str], run_recorder_node: Any = None) -> None:
-        """Wire the research debate, trader, risk debate, and portfolio manager."""
-        # "State Compressor Pre-Debate" sits between analyst join/clear and Conflict Detector.
-        # In sequential mode, the last analyst clear node already points to "Conflict Detector"
-        # directly (wired in _wire_analyst_branches). We re-route via the compressor here by
-        # updating the edges in the parallel (Join Analysts) path only; the sequential path
-        # is handled by inserting the compressor between the last clear node and Conflict Detector
-        # in _wire_analyst_branches — but since that runs before this method we instead add the
-        # compressor→Conflict Detector edge here and let _wire_analyst_branches target it.
-        # Simplest correct approach: wire "State Compressor Pre-Debate" → "Conflict Detector"
-        # and update the last analyst node's clear edge below (handled via the parallel join).
-        # For sequential flow the last clear node → Conflict Detector is already committed, so
-        # we reroute by adding a passthrough: Pre-Debate compressor sits after Conflict Detector
-        # entry point is updated in _wire_analyst_branches via the sequential last-clear edge.
-        # — Actually the cleanest fix: just always insert the compressor before Conflict Detector
-        # and reroute the "Conflict Detector" incoming edge from analyst branches to go through
-        # the compressor instead.  We do this by wiring:
-        #   (from analyst branches) → "State Compressor Pre-Debate" → "Conflict Detector"
-        # The analyst branch wiring already uses "Conflict Detector" as the target; we move that
-        # target to "State Compressor Pre-Debate" and then add the compressor→detector edge.
-        # However _wire_analyst_branches runs BEFORE this method so we cannot change what it
-        # already wired.  The safest, zero-regression approach: keep the compressor as a pure
-        # passthrough no-op by default (state_compression_enabled=False) and when enabled the
-        # compressor sits between Research Manager and Trader (Pre-Trader) and between the
-        # analyst join/clear and Conflict Detector (Pre-Debate).
-        # For Pre-Debate in SEQUENTIAL mode: clear node already wired to "Conflict Detector".
-        # We cannot intercept that here.  So instead we wire "State Compressor Pre-Debate"
-        # between "Conflict Detector" and "Bull Researcher" as the first step after the detector.
-        # That means compression happens just after the Conflict Detector runs, before Bull/Bear.
-        # This still achieves the goal of compressing analyst tool messages before the debate.
+        """Wire the research debate, trader, risk debate, and portfolio manager.
+
+        Two state compressor nodes are inserted as passthrough no-ops by default
+        (``state_compression_enabled=False``).  When enabled they prune the
+        messages list to reduce prompt tokens:
+
+        * ``State Compressor Pre-Debate``  — after Conflict Detector, before
+          Bull/Bear debate.  Compresses analyst tool-call messages.
+        * ``State Compressor Pre-Trader``  — after Research Manager, before
+          Trader.  Compresses debate messages.
+        """
+        # Analyst branches wire directly to "Conflict Detector" (both sequential
+        # and parallel modes). The compressor sits immediately after it so it can
+        # prune analyst tool messages before the debate starts.
         workflow.add_edge("Conflict Detector", "State Compressor Pre-Debate")
         workflow.add_edge("State Compressor Pre-Debate", "Bull Researcher")
         workflow.add_conditional_edges(

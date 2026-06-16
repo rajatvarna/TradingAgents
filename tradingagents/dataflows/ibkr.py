@@ -22,8 +22,8 @@ Config keys (all optional — defaults shown):
 """
 
 import contextlib
-from datetime import date, datetime, timedelta
-from typing import Generator
+from collections.abc import Generator
+from datetime import date, datetime
 
 from .config import get_config
 from .errors import DataVendorError

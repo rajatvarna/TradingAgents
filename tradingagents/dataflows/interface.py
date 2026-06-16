@@ -62,6 +62,7 @@ from .futu import (
 from .futu import (
     get_stock_data as get_futu_stock,
 )
+from .google_news import get_global_news_google, get_news_google
 from .ibkr import (
     get_options_chain as get_ibkr_options_chain,
 )
@@ -71,7 +72,6 @@ from .ibkr import (
 from .ibkr import (
     get_stock_data as get_ibkr_stock,
 )
-from .google_news import get_global_news_google, get_news_google
 from .polygon import (
     get_news as get_polygon_news,
 )

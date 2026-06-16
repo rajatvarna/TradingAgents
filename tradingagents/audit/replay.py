@@ -393,7 +393,7 @@ def _parse_trader_version(composite: str, side: str) -> str:
 
 
 def _print_reasoning_blocks(
-    replayer: "Replayer",
+    replayer: Replayer,
     json_out: bool,
 ) -> None:
     """Print reasoning_content for each llm_end record that has it.

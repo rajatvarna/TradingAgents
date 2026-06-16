@@ -69,6 +69,7 @@ class GraphSetup:
         analyst_concurrency_limit: int = 1,
         config: dict = None,
     ):
+        """Initialise the graph builder with LLM clients, tool nodes, and config."""
         self.quick_thinking_llm = quick_thinking_llm
         self.deep_thinking_llm = deep_thinking_llm
         self.tool_nodes = tool_nodes
@@ -141,6 +142,7 @@ class GraphSetup:
         compression_enabled = self.config.get("state_compression_enabled", False)
 
         def compressor_node(state):
+            """Prune old messages to reduce prompt token counts between graph phases."""
             if not compression_enabled:
                 return {}
             msgs = state.get("messages", [])
@@ -236,6 +238,7 @@ class GraphSetup:
         else:
             # Wire analysts in parallel (Local parallel flow with Join Analysts)
             def join_analysts_node(state):
+                """Wait until all selected analyst reports are present before proceeding."""
                 import json
                 for analyst in selected_analysts:
                     key = ANALYST_REPORT_KEYS.get(analyst)

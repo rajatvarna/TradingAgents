@@ -47,6 +47,8 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_SPONSORSHIP_REFRESH_WEEKLY":  "sponsorship_refresh_weekly",
     "TRADINGAGENTS_PORTFOLIO_MAX_WORKERS":       "portfolio_propagation_max_workers",
     "TRADINGAGENTS_OUTCOME_HOLDING_DAYS":        "outcome_holding_days",
+    "TRADINGAGENTS_STATE_COMPRESSION_ENABLED":  "state_compression_enabled",
+    "TRADINGAGENTS_TRADER_TOOLS_ENABLED":       "trader_tools_enabled",
 }
 
 _DATA_VENDOR_ENV_OVERRIDES = {

@@ -29,6 +29,7 @@ _BASE = "https://api.polygon.io"
 
 
 def _key() -> str:
+    """Return the Polygon API key from the environment, raising DataVendorError if absent."""
     k = os.environ.get("POLYGON_API_KEY")
     if not k:
         raise DataVendorError("POLYGON_API_KEY not set")
@@ -36,6 +37,7 @@ def _key() -> str:
 
 
 def _get(path: str, **params: Any) -> dict[str, Any]:
+    """Perform an authenticated GET against the Polygon REST API."""
     params["apiKey"] = _key()
     try:
         r = requests.get(f"{_BASE}{path}", params=params, timeout=20)
@@ -82,7 +84,14 @@ def get_options_chain(symbol: str, expiration: str = "") -> str:
     results = data.get("results") or []
 
     # Collect all expiration dates present
-    all_exps = sorted({r["details"]["expiration_date"] for r in results if r.get("details")})
+    all_exps = sorted(
+        {
+            exp
+            for r in results
+            for exp in [r.get("details", {}).get("expiration_date")]
+            if exp
+        }
+    )
 
     if expiration:
         exp = expiration
@@ -95,6 +104,7 @@ def get_options_chain(symbol: str, expiration: str = "") -> str:
     ]
 
     def _row(r: dict) -> str:
+        """Format a single options snapshot record as a Markdown table row."""
         det = r.get("details", {})
         day = r.get("day", {})
         greeks = r.get("greeks", {})
@@ -140,16 +150,22 @@ def get_options_overview(symbol: str) -> str:
     data = _get(f"/v3/snapshot/options/{symbol}")
     results = data.get("results") or []
 
-    all_exps = sorted({r["details"]["expiration_date"] for r in results if r.get("details")})
+    all_exps = sorted(
+        {
+            exp
+            for r in results
+            for exp in [r.get("details", {}).get("expiration_date")]
+            if exp
+        }
+    )
     nearest_exp = all_exps[0] if all_exps else ""
     furthest_exp = all_exps[-1] if all_exps else ""
 
     nearest = [r for r in results if r.get("details", {}).get("expiration_date") == nearest_exp]
 
-    # Spot price heuristic: last_price of first result's day
-    spot: float | None = None
-    if results:
-        spot = results[0].get("day", {}).get("last_price")
+    # Underlying spot price from the top-level response object
+    spot_raw = data.get("underlying_asset", {}).get("price")
+    spot: float | None = float(spot_raw) if spot_raw is not None else None
 
     call_oi = sum(r.get("open_interest", 0) or 0 for r in nearest if r.get("details", {}).get("contract_type") == "call")
     put_oi  = sum(r.get("open_interest", 0) or 0 for r in nearest if r.get("details", {}).get("contract_type") == "put")

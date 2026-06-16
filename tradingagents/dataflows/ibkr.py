@@ -114,19 +114,24 @@ def get_stock_data(symbol: str, start_date: str, end_date: str) -> str:
     end = _parse_date(end_date)
     duration = _duration_str(start, end)
 
-    with _ctx() as ib:
-        from ib_insync import Stock
+    try:
+        with _ctx() as ib:
+            from ib_insync import Stock
 
-        contract = Stock(symbol, "SMART", "USD")
-        bars = ib.reqHistoricalData(
-            contract,
-            endDateTime=end.strftime("%Y%m%d %H:%M:%S"),
-            durationStr=duration,
-            barSizeSetting="1 day",
-            whatToShow="TRADES",
-            useRTH=True,
-            formatDate=1,
-        )
+            contract = Stock(symbol, "SMART", "USD")
+            bars = ib.reqHistoricalData(
+                contract,
+                endDateTime=end.strftime("%Y%m%d %H:%M:%S"),
+                durationStr=duration,
+                barSizeSetting="1 day",
+                whatToShow="TRADES",
+                useRTH=True,
+                formatDate=1,
+            )
+    except DataVendorError:
+        raise
+    except Exception as exc:
+        raise DataVendorError(f"IBKR get_stock_data RPC failed: {exc}") from exc
 
     if not bars:
         return (
@@ -167,93 +172,98 @@ def get_options_chain(symbol: str, expiration: str = "") -> str:
     symbol:     Ticker symbol (e.g. ``"AAPL"``).
     expiration: Target expiration as ``"YYYYMMDD"`` or ``""`` for nearest.
     """
-    with _ctx() as ib:
-        from ib_insync import Option, Stock
+    try:
+        with _ctx() as ib:
+            from ib_insync import Option, Stock
 
-        # ------------------------------------------------------------------ #
-        # 1. Qualify the underlying to get its conId
-        # ------------------------------------------------------------------ #
-        underlying = Stock(symbol, "SMART", "USD")
-        qualified = ib.qualifyContracts(underlying)
-        if not qualified:
-            return f"NOTICE: could not qualify {symbol} as a US stock on IBKR."
-        con_id = qualified[0].conId
+            # ------------------------------------------------------------------ #
+            # 1. Qualify the underlying to get its conId
+            # ------------------------------------------------------------------ #
+            underlying = Stock(symbol, "SMART", "USD")
+            qualified = ib.qualifyContracts(underlying)
+            if not qualified:
+                return f"NOTICE: could not qualify {symbol} as a US stock on IBKR."
+            con_id = qualified[0].conId
 
-        # ------------------------------------------------------------------ #
-        # 2. Fetch option parameter sets (exchanges, expirations, strikes)
-        # ------------------------------------------------------------------ #
-        opt_params = ib.reqSecDefOptParams(
-            underlyingSymbol=symbol,
-            futFopExchange="",
-            underlyingSecType="STK",
-            underlyingConId=con_id,
-        )
-        if not opt_params:
-            return f"NOTICE: no option parameters found for {symbol} on IBKR."
+            # ------------------------------------------------------------------ #
+            # 2. Fetch option parameter sets (exchanges, expirations, strikes)
+            # ------------------------------------------------------------------ #
+            opt_params = ib.reqSecDefOptParams(
+                underlyingSymbol=symbol,
+                futFopExchange="",
+                underlyingSecType="STK",
+                underlyingConId=con_id,
+            )
+            if not opt_params:
+                return f"NOTICE: no option parameters found for {symbol} on IBKR."
 
-        # Prefer SMART or the first exchange returned
-        smart_params = [p for p in opt_params if p.exchange == "SMART"]
-        params = smart_params[0] if smart_params else opt_params[0]
+            # Prefer SMART or the first exchange returned
+            smart_params = [p for p in opt_params if p.exchange == "SMART"]
+            params = smart_params[0] if smart_params else opt_params[0]
 
-        expirations: list = sorted(params.expirations)
-        strikes: list = sorted(params.strikes)
+            expirations: list = sorted(params.expirations)
+            strikes: list = sorted(params.strikes)
 
-        if not expirations or not strikes:
-            return f"NOTICE: IBKR returned empty expirations or strikes for {symbol}."
+            if not expirations or not strikes:
+                return f"NOTICE: IBKR returned empty expirations or strikes for {symbol}."
 
-        # ------------------------------------------------------------------ #
-        # 3. Choose expiration
-        # ------------------------------------------------------------------ #
-        if expiration and expiration in expirations:
-            chosen_exp = expiration
-        else:
-            # Pick nearest expiration on or after today
-            today_str = date.today().strftime("%Y%m%d")
-            future_exps = [e for e in expirations if e >= today_str]
-            chosen_exp = future_exps[0] if future_exps else expirations[0]
+            # ------------------------------------------------------------------ #
+            # 3. Choose expiration
+            # ------------------------------------------------------------------ #
+            if expiration and expiration in expirations:
+                chosen_exp = expiration
+            else:
+                # Pick nearest expiration on or after today
+                today_str = date.today().strftime("%Y%m%d")
+                future_exps = [e for e in expirations if e >= today_str]
+                chosen_exp = future_exps[0] if future_exps else expirations[0]
 
-        # ------------------------------------------------------------------ #
-        # 4. Get current price to narrow strike selection
-        # ------------------------------------------------------------------ #
-        ticker = ib.reqMktData(qualified[0], snapshot=True)
-        ib.sleep(2)  # allow snapshot to populate
-        mid_price = ticker.last or ticker.close or ticker.bid or 0.0
+            # ------------------------------------------------------------------ #
+            # 4. Get current price to narrow strike selection
+            # ------------------------------------------------------------------ #
+            ticker = ib.reqMktData(qualified[0], snapshot=True)
+            ib.sleep(2)  # allow snapshot to populate
+            mid_price = ticker.last or ticker.close or ticker.bid or 0.0
 
-        if mid_price and strikes:
-            # Keep ±20 strikes closest to the current price
-            strikes_sorted = sorted(strikes, key=lambda s: abs(s - mid_price))
-            selected_strikes = sorted(strikes_sorted[:40])
-        else:
-            selected_strikes = strikes[:40]
+            if mid_price and strikes:
+                # Keep ±20 strikes closest to the current price
+                strikes_sorted = sorted(strikes, key=lambda s: abs(s - mid_price))
+                selected_strikes = sorted(strikes_sorted[:40])
+            else:
+                selected_strikes = strikes[:40]
 
-        # ------------------------------------------------------------------ #
-        # 5. Request snapshots for each strike / right combination
-        # ------------------------------------------------------------------ #
-        call_rows: list = []
-        put_rows: list = []
+            # ------------------------------------------------------------------ #
+            # 5. Request snapshots for each strike / right combination
+            # ------------------------------------------------------------------ #
+            call_rows: list = []
+            put_rows: list = []
 
-        for strike in selected_strikes:
-            for right, bucket in (("C", call_rows), ("P", put_rows)):
-                opt = Option(symbol, chosen_exp, strike, right, "SMART")
-                try:
-                    qualified_opts = ib.qualifyContracts(opt)
-                except Exception:
-                    qualified_opts = []
-                if not qualified_opts:
-                    continue
-                opt_ticker = ib.reqMktData(qualified_opts[0], genericTickList="", snapshot=True)
-                ib.sleep(0.1)
-                bucket.append(
-                    (
-                        strike,
-                        _fmt_float(opt_ticker.last),
-                        _fmt_float(opt_ticker.bid),
-                        _fmt_float(opt_ticker.ask),
-                        _fmt_int(opt_ticker.volume),
-                        _fmt_int(getattr(opt_ticker, "openInterest", None)),
-                        _fmt_float(getattr(opt_ticker, "impliedVol", None)),
+            for strike in selected_strikes:
+                for right, bucket in (("C", call_rows), ("P", put_rows)):
+                    opt = Option(symbol, chosen_exp, strike, right, "SMART")
+                    try:
+                        qualified_opts = ib.qualifyContracts(opt)
+                    except Exception:
+                        qualified_opts = []
+                    if not qualified_opts:
+                        continue
+                    opt_ticker = ib.reqMktData(qualified_opts[0], genericTickList="", snapshot=True)
+                    ib.sleep(0.1)
+                    bucket.append(
+                        (
+                            strike,
+                            _fmt_float(opt_ticker.last),
+                            _fmt_float(opt_ticker.bid),
+                            _fmt_float(opt_ticker.ask),
+                            _fmt_int(opt_ticker.volume),
+                            _fmt_int(getattr(opt_ticker, "openInterest", None)),
+                            _fmt_float(getattr(opt_ticker, "impliedVol", None)),
+                        )
                     )
-                )
+    except DataVendorError:
+        raise
+    except Exception as exc:
+        raise DataVendorError(f"IBKR get_options_chain RPC failed: {exc}") from exc
 
     headers = ["strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility"]
     exps_display = expirations[:8]
@@ -278,73 +288,78 @@ def get_options_overview(symbol: str) -> str:
     ----------
     symbol: Ticker symbol (e.g. ``"AAPL"``).
     """
-    with _ctx() as ib:
-        from ib_insync import Option, Stock
+    try:
+        with _ctx() as ib:
+            from ib_insync import Option, Stock
 
-        underlying = Stock(symbol, "SMART", "USD")
-        qualified = ib.qualifyContracts(underlying)
-        if not qualified:
-            return f"NOTICE: could not qualify {symbol} as a US stock on IBKR."
-        con_id = qualified[0].conId
+            underlying = Stock(symbol, "SMART", "USD")
+            qualified = ib.qualifyContracts(underlying)
+            if not qualified:
+                return f"NOTICE: could not qualify {symbol} as a US stock on IBKR."
+            con_id = qualified[0].conId
 
-        opt_params = ib.reqSecDefOptParams(
-            underlyingSymbol=symbol,
-            futFopExchange="",
-            underlyingSecType="STK",
-            underlyingConId=con_id,
-        )
-        if not opt_params:
-            return f"NOTICE: no option parameters found for {symbol} on IBKR."
+            opt_params = ib.reqSecDefOptParams(
+                underlyingSymbol=symbol,
+                futFopExchange="",
+                underlyingSecType="STK",
+                underlyingConId=con_id,
+            )
+            if not opt_params:
+                return f"NOTICE: no option parameters found for {symbol} on IBKR."
 
-        smart_params = [p for p in opt_params if p.exchange == "SMART"]
-        params = smart_params[0] if smart_params else opt_params[0]
-        expirations: list = sorted(params.expirations)
-        strikes: list = sorted(params.strikes)
+            smart_params = [p for p in opt_params if p.exchange == "SMART"]
+            params = smart_params[0] if smart_params else opt_params[0]
+            expirations: list = sorted(params.expirations)
+            strikes: list = sorted(params.strikes)
 
-        if not expirations or not strikes:
-            return f"NOTICE: IBKR returned empty expirations or strikes for {symbol}."
+            if not expirations or not strikes:
+                return f"NOTICE: IBKR returned empty expirations or strikes for {symbol}."
 
-        today_str = date.today().strftime("%Y%m%d")
-        future_exps = [e for e in expirations if e >= today_str]
-        nearest_exp = future_exps[0] if future_exps else expirations[0]
-        furthest_exp = expirations[-1]
+            today_str = date.today().strftime("%Y%m%d")
+            future_exps = [e for e in expirations if e >= today_str]
+            nearest_exp = future_exps[0] if future_exps else expirations[0]
+            furthest_exp = expirations[-1]
 
-        # Limit to a central slice of strikes for the overview
-        ticker = ib.reqMktData(qualified[0], snapshot=True)
-        ib.sleep(2)
-        mid_price = ticker.last or ticker.close or ticker.bid or 0.0
+            # Limit to a central slice of strikes for the overview
+            ticker = ib.reqMktData(qualified[0], snapshot=True)
+            ib.sleep(2)
+            mid_price = ticker.last or ticker.close or ticker.bid or 0.0
 
-        if mid_price:
-            selected_strikes = sorted(
-                strikes, key=lambda s: abs(s - mid_price)
-            )[:20]
-            selected_strikes = sorted(selected_strikes)
-        else:
-            selected_strikes = strikes[:20]
+            if mid_price:
+                selected_strikes = sorted(
+                    strikes, key=lambda s: abs(s - mid_price)
+                )[:20]
+                selected_strikes = sorted(selected_strikes)
+            else:
+                selected_strikes = strikes[:20]
 
-        call_oi_total = 0.0
-        put_oi_total = 0.0
-        iv_samples: list = []
+            call_oi_total = 0.0
+            put_oi_total = 0.0
+            iv_samples: list = []
 
-        for strike in selected_strikes:
-            for right in ("C", "P"):
-                opt = Option(symbol, nearest_exp, strike, right, "SMART")
-                try:
-                    q_opts = ib.qualifyContracts(opt)
-                except Exception:
-                    q_opts = []
-                if not q_opts:
-                    continue
-                opt_ticker = ib.reqMktData(q_opts[0], genericTickList="", snapshot=True)
-                ib.sleep(0.1)
-                oi = getattr(opt_ticker, "openInterest", None) or 0
-                iv = getattr(opt_ticker, "impliedVol", None)
-                if right == "C":
-                    call_oi_total += float(oi)
-                else:
-                    put_oi_total += float(oi)
-                if iv and iv > 0:
-                    iv_samples.append(float(iv))
+            for strike in selected_strikes:
+                for right in ("C", "P"):
+                    opt = Option(symbol, nearest_exp, strike, right, "SMART")
+                    try:
+                        q_opts = ib.qualifyContracts(opt)
+                    except Exception:
+                        q_opts = []
+                    if not q_opts:
+                        continue
+                    opt_ticker = ib.reqMktData(q_opts[0], genericTickList="", snapshot=True)
+                    ib.sleep(0.1)
+                    oi = getattr(opt_ticker, "openInterest", None) or 0
+                    iv = getattr(opt_ticker, "impliedVol", None)
+                    if right == "C":
+                        call_oi_total += float(oi)
+                    else:
+                        put_oi_total += float(oi)
+                    if iv and iv > 0:
+                        iv_samples.append(float(iv))
+    except DataVendorError:
+        raise
+    except Exception as exc:
+        raise DataVendorError(f"IBKR get_options_overview RPC failed: {exc}") from exc
 
     pcr = (put_oi_total / call_oi_total) if call_oi_total else float("nan")
     median_iv = _median(iv_samples) if iv_samples else float("nan")
@@ -368,9 +383,11 @@ def get_options_overview(symbol: str) -> str:
 
 def _fmt_float(value: object) -> str:
     """Format a float for table output; return 'N/A' for None/nan."""
+    if value is None:
+        return "N/A"
     try:
-        f = float(value)  # type: ignore[arg-type]
-        if f != f:  # nan
+        f = float(str(value))
+        if f != f:  # nan check
             return "N/A"
         return f"{f:.4f}"
     except (TypeError, ValueError):
@@ -379,9 +396,11 @@ def _fmt_float(value: object) -> str:
 
 def _fmt_int(value: object) -> str:
     """Format an integer for table output; return 'N/A' for None/nan."""
+    if value is None:
+        return "N/A"
     try:
-        f = float(value)  # type: ignore[arg-type]
-        if f != f:  # nan
+        f = float(str(value))
+        if f != f:  # nan check
             return "N/A"
         return f"{int(f):,}"
     except (TypeError, ValueError):

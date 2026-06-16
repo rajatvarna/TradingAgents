@@ -20,11 +20,18 @@ from tradingagents.audit.prompt_registry import default_registry
 
 
 def create_trader(llm, cache=None, prompt_registry=None, tools=None):
+    """Create the Trader node function.
+
+    When *tools* is provided the trader performs a read-only tool-call
+    pre-pass (current price, options overview, recent news) before
+    generating the structured ``TraderProposal``.
+    """
     structured_llm = bind_structured(llm, TraderProposal, "Trader")
     registry = prompt_registry or default_registry()
     llm_with_tools = llm.bind_tools(tools) if tools else None
 
     def trader_node(state, name):
+        """Execute the trader node: optionally call tools, then emit a TraderProposal."""
         company_name = state["company_of_interest"]
         asset_type = state.get("asset_type", "stock")
         instrument_context = build_instrument_context(company_name, asset_type)
@@ -73,17 +80,19 @@ def create_trader(llm, cache=None, prompt_registry=None, tools=None):
             if getattr(tool_response, "tool_calls", None):
                 tool_map = {t.name: t for t in (tools or [])}
                 messages = list(messages) + [tool_response]
+                from langchain_core.messages import ToolMessage
                 for tc in tool_response.tool_calls:
                     fn = tool_map.get(tc["name"])
-                    if fn is not None:
+                    if fn is None:
+                        result: str = f"Unknown tool requested: {tc['name']}"
+                    else:
                         try:
                             result = fn.invoke(tc["args"])
                         except Exception as exc:
                             result = str(exc)
-                        from langchain_core.messages import ToolMessage
-                        messages.append(
-                            ToolMessage(content=str(result), tool_call_id=tc["id"])
-                        )
+                    messages.append(
+                        ToolMessage(content=str(result), tool_call_id=tc["id"])
+                    )
 
         trader_plan, structured_valid = invoke_structured_or_freetext_with_meta(
             structured_llm,

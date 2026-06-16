@@ -153,6 +153,7 @@ class TraceRecord(BaseModel):
             "node": self.node,
             "payload": self.payload,
             "payload_hash": self.payload_hash,
+            "reasoning_content": self.reasoning_content,
         }
 
     def canonical(self) -> str:

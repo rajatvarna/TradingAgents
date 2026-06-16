@@ -257,6 +257,7 @@ class TraceCallback(BaseCallbackHandler):
         jsonl_path: str | Path | None = None,
         session_id: str | None = None,
     ) -> None:
+        """Initialise the callback, optionally persisting records to *jsonl_path*."""
         super().__init__()
         self._lock = threading.Lock()
         self.session_id: str = session_id or str(uuid.uuid4())
@@ -363,6 +364,7 @@ class TraceCallback(BaseCallbackHandler):
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
+        """Record an LLM_START event when a chat model invocation begins."""
         with self._lock:
             self._append(
                 type_=LLM_START,
@@ -416,6 +418,7 @@ class TraceCallback(BaseCallbackHandler):
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
+        """Record an LLM_END event, extracting and persisting any reasoning content."""
         with self._lock:
             self._append(
                 type_=LLM_END,
@@ -441,6 +444,7 @@ class TraceCallback(BaseCallbackHandler):
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
+        """Record a TOOL_START event when a tool invocation begins."""
         with self._lock:
             self._append(
                 type_=TOOL_START,
@@ -465,6 +469,7 @@ class TraceCallback(BaseCallbackHandler):
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
+        """Record a TOOL_END event when a tool invocation completes."""
         with self._lock:
             self._append(
                 type_=TOOL_END,
@@ -517,6 +522,7 @@ class TraceCallback(BaseCallbackHandler):
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
+        """Record a NODE_EXIT event when a LangGraph node or chain completes."""
         with self._lock:
             self._append(
                 type_=NODE_EXIT,

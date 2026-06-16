@@ -86,6 +86,7 @@ class PromptVerification:
     template_missing: bool
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialise to a plain dict (delegates to dataclasses.asdict)."""
         return asdict(self)
 
 
@@ -104,6 +105,7 @@ class ReplaySummary:
     wall_seconds: float | None
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialise to a plain dict (delegates to dataclasses.asdict)."""
         return asdict(self)
 
 
@@ -126,6 +128,7 @@ class Replayer:
         *,
         prompt_registry: PromptRegistry | None = None,
     ) -> None:
+        """Initialise the Replayer pointing at the given trace file path."""
         self.path = Path(path).expanduser()
         self.registry = prompt_registry or default_registry()
         self._records: list[dict[str, Any]] | None = None  # lazy
@@ -254,6 +257,7 @@ class Replayer:
     # ------------------------------------------------------------------ #
 
     def summary(self) -> ReplaySummary:
+        """Compute high-level statistics from the trace file."""
         recs = self.records()
         session_ids = {r.get("session_id") for r in recs if r.get("session_id")}
         # All records in one file share a session_id; if multiple appear,
@@ -422,6 +426,7 @@ def _print_reasoning_blocks(
 
 
 def _print_summary(summary: ReplaySummary, json_out: bool) -> None:
+    """Print a human-readable or JSON summary of the replay statistics."""
     if json_out:
         print(json.dumps(summary.to_dict(), indent=2, default=str))
         return
@@ -439,6 +444,7 @@ def _print_summary(summary: ReplaySummary, json_out: bool) -> None:
 
 
 def _print_verify(result: VerifyResult, json_out: bool) -> None:
+    """Print the hash-chain verification result in human or JSON form."""
     if json_out:
         print(json.dumps(asdict(result), indent=2))
         return
@@ -451,6 +457,7 @@ def _print_verify(result: VerifyResult, json_out: bool) -> None:
 
 
 def _print_prompts(checks: list[PromptVerification], json_out: bool) -> None:
+    """Print prompt-hash verification results in human or JSON form."""
     if json_out:
         print(json.dumps([c.to_dict() for c in checks], indent=2))
         return
@@ -469,11 +476,13 @@ def _print_prompts(checks: list[PromptVerification], json_out: bool) -> None:
 
 
 def _print_tree(roots: list[dict[str, Any]], json_out: bool) -> None:
+    """Print the call tree in human-readable indented or JSON form."""
     if json_out:
         print(json.dumps(roots, indent=2, default=str))
         return
 
     def _walk(node: dict[str, Any], depth: int) -> None:
+        """Recursively print one tree node and its children."""
         indent = "  " * depth
         label = f"[{node['type']}]"
         if node.get("node"):
@@ -492,6 +501,7 @@ def _print_tree(roots: list[dict[str, Any]], json_out: bool) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI entry point: verify, summarise, or inspect a TradingAgents trace file."""
     parser = argparse.ArgumentParser(
         prog="python -m tradingagents.audit.replay",
         description="Verify and inspect TradingAgents trace files.",

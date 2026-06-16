@@ -146,6 +146,79 @@ def _serialize_tool_output(output: Any) -> Any:
     return repr(output)
 
 
+def _extract_reasoning(response: LLMResult) -> str:
+    """Extract reasoning / thinking content from an LLMResult.
+
+    Providers surface reasoning in three different shapes:
+
+    * **Anthropic** (extended-thinking): ``generation.message.content`` is a
+      list of content blocks; blocks with ``type == "thinking"`` carry the
+      chain-of-thought in their ``thinking`` attribute.
+    * **OpenAI o-series** (o1, o3, o4-mini): ``generation_info`` or
+      ``message.additional_kwargs`` may carry ``"reasoning_content"``.
+    * **Google Gemini** (thinking models): ``generation_info`` may carry
+      ``"thought_parts"`` — a list of dicts with a ``"text"`` key.
+
+    All three are combined into one string with double-newline separators.
+    Any exception silently produces an empty string so a malformed provider
+    response never breaks the audit pipeline.
+    """
+    try:
+        parts: list[str] = []
+        gens = getattr(response, "generations", None) or []
+        gen = (gens[0][0] if gens and gens[0] else None) if gens else None
+        if gen is None:
+            return ""
+
+        # --- Anthropic extended-thinking ---
+        try:
+            msg = getattr(gen, "message", None)
+            content_blocks = getattr(msg, "content", None) if msg is not None else None
+            if isinstance(content_blocks, list):
+                for block in content_blocks:
+                    if isinstance(block, dict):
+                        block_type = block.get("type", "")
+                        thinking = block.get("thinking", "")
+                    else:
+                        block_type = getattr(block, "type", "")
+                        thinking = getattr(block, "thinking", "")
+                    if block_type == "thinking" and thinking:
+                        parts.append(str(thinking))
+        except Exception:
+            pass
+
+        # --- OpenAI reasoning models ---
+        try:
+            gen_info = dict(getattr(gen, "generation_info", None) or {})
+            openai_reasoning = gen_info.get("reasoning_content") or ""
+            if not openai_reasoning:
+                msg = getattr(gen, "message", None)
+                add_kwargs = dict(getattr(msg, "additional_kwargs", None) or {}) if msg is not None else {}
+                openai_reasoning = add_kwargs.get("reasoning_content") or ""
+            if openai_reasoning:
+                parts.append(str(openai_reasoning))
+        except Exception:
+            pass
+
+        # --- Google Gemini thinking models ---
+        try:
+            gen_info_gemini = dict(getattr(gen, "generation_info", None) or {})
+            thought_parts = gen_info_gemini.get("thought_parts") or []
+            if isinstance(thought_parts, list):
+                gemini_text = "\n\n".join(
+                    p.get("text", "") for p in thought_parts
+                    if isinstance(p, dict) and p.get("text")
+                )
+                if gemini_text:
+                    parts.append(gemini_text)
+        except Exception:
+            pass
+
+        return "\n\n".join(parts)
+    except Exception:
+        return ""
+
+
 def _extract_node(metadata: dict[str, Any] | None, tags: list[str] | None) -> str | None:
     """Pull the LangGraph node name out of callback metadata when present.
 
@@ -228,6 +301,7 @@ class TraceCallback(BaseCallbackHandler):
         run_id: uuid.UUID | None,
         parent_run_id: uuid.UUID | None,
         node: str | None,
+        reasoning_content: str = "",
     ) -> TraceRecord:
         """Build, persist, and return one TraceRecord. Caller-agnostic."""
         record_id = str(uuid.uuid4())
@@ -249,6 +323,7 @@ class TraceCallback(BaseCallbackHandler):
             node=node,
             payload=payload,
             payload_hash=hash_payload(payload),
+            reasoning_content=reasoning_content,
             prev_hash="",  # reserved for T1.3
         )
 
@@ -352,6 +427,7 @@ class TraceCallback(BaseCallbackHandler):
                 run_id=run_id,
                 parent_run_id=parent_run_id,
                 node=_extract_node(metadata, tags),
+                reasoning_content=_extract_reasoning(response),
             )
 
     def on_tool_start(

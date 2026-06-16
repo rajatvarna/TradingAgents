@@ -115,6 +115,16 @@ class TraceRecord(BaseModel):
     payload_hash: str = Field(
         description="Hex SHA-256 of the canonical JSON encoding of payload."
     )
+    reasoning_content: str = Field(
+        default="",
+        description=(
+            "Reasoning / thinking text emitted by the model alongside its visible "
+            "response, when the provider exposes it. Populated for Anthropic "
+            "extended-thinking (thinking content blocks), OpenAI o-series "
+            "(reasoning_content), and Google Gemini thinking models (thought_parts). "
+            "Empty string when the provider does not surface reasoning."
+        ),
+    )
     prev_hash: str = Field(
         default="",
         description=(

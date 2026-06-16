@@ -47,6 +47,8 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_SPONSORSHIP_REFRESH_WEEKLY":  "sponsorship_refresh_weekly",
     "TRADINGAGENTS_PORTFOLIO_MAX_WORKERS":       "portfolio_propagation_max_workers",
     "TRADINGAGENTS_OUTCOME_HOLDING_DAYS":        "outcome_holding_days",
+    "TRADINGAGENTS_STATE_COMPRESSION_ENABLED":  "state_compression_enabled",
+    "TRADINGAGENTS_TRADER_TOOLS_ENABLED":       "trader_tools_enabled",
 }
 
 _DATA_VENDOR_ENV_OVERRIDES = {
@@ -338,6 +340,8 @@ DEFAULT_CONFIG = _apply_env_overrides({
     },
     "earnings_lookahead_days": 7,  # Days ahead to check for earnings events
     "analyst_weights_lookback": 20,  # Number of resolved memory entries to use for analyst accuracy weights (Item 6)
+    "state_compression_enabled": False,
+    "trader_tools_enabled": True,
     "trade_filter_enabled": False,
     "trade_filter_threshold": 0.65,
     "futu_opend_host": "127.0.0.1",

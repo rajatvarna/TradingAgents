@@ -217,6 +217,7 @@ class TradingAgentsGraph:
             self.conditional_logic,
             self.structured_output_cache,
             analyst_concurrency_limit=self.config.get("analyst_concurrency_limit", 1),
+            config=self.config,
         )
 
         self.propagator = Propagator(
@@ -735,6 +736,7 @@ class TradingAgentsGraph:
         _propagate = self.propagate
 
         def _analyse_one(ticker: str) -> dict[str, Any]:
+            """Run the full agent pipeline for one ticker and return a result dict."""
             try:
                 final_state, signal = _propagate(ticker, trade_date)
                 decision_text = final_state.get("final_trade_decision", "")

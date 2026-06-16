@@ -86,6 +86,7 @@ class PromptVerification:
     template_missing: bool
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialise to a plain dict (delegates to dataclasses.asdict)."""
         return asdict(self)
 
 
@@ -104,6 +105,7 @@ class ReplaySummary:
     wall_seconds: float | None
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialise to a plain dict (delegates to dataclasses.asdict)."""
         return asdict(self)
 
 
@@ -126,6 +128,7 @@ class Replayer:
         *,
         prompt_registry: PromptRegistry | None = None,
     ) -> None:
+        """Initialise the Replayer pointing at the given trace file path."""
         self.path = Path(path).expanduser()
         self.registry = prompt_registry or default_registry()
         self._records: list[dict[str, Any]] | None = None  # lazy
@@ -254,6 +257,7 @@ class Replayer:
     # ------------------------------------------------------------------ #
 
     def summary(self) -> ReplaySummary:
+        """Compute high-level statistics from the trace file."""
         recs = self.records()
         session_ids = {r.get("session_id") for r in recs if r.get("session_id")}
         # All records in one file share a session_id; if multiple appear,
@@ -392,7 +396,37 @@ def _parse_trader_version(composite: str, side: str) -> str:
     return "v1"
 
 
+def _print_reasoning_blocks(
+    replayer: Replayer,
+    json_out: bool,
+) -> None:
+    """Print reasoning_content for each llm_end record that has it.
+
+    Called after the summary when ``--show-reasoning`` is active.
+    In JSON mode this is a no-op (reasoning is already embedded in the
+    per-record payloads when the caller adds it to the JSON dict).
+    In human-readable mode we emit a fenced block for each call.
+    """
+    if json_out:
+        return
+    printed_any = False
+    for rec in replayer.records():
+        if rec.get("type") != "llm_end":
+            continue
+        reasoning = rec.get("reasoning_content", "")
+        if not reasoning:
+            continue
+        if not printed_any:
+            print()
+        print(f"[record {rec.get('record_id', '?')}  node={rec.get('node') or '-'}]")
+        print("--- REASONING ---")
+        print(reasoning)
+        print("--- END REASONING ---")
+        printed_any = True
+
+
 def _print_summary(summary: ReplaySummary, json_out: bool) -> None:
+    """Print a human-readable or JSON summary of the replay statistics."""
     if json_out:
         print(json.dumps(summary.to_dict(), indent=2, default=str))
         return
@@ -410,6 +444,7 @@ def _print_summary(summary: ReplaySummary, json_out: bool) -> None:
 
 
 def _print_verify(result: VerifyResult, json_out: bool) -> None:
+    """Print the hash-chain verification result in human or JSON form."""
     if json_out:
         print(json.dumps(asdict(result), indent=2))
         return
@@ -422,6 +457,7 @@ def _print_verify(result: VerifyResult, json_out: bool) -> None:
 
 
 def _print_prompts(checks: list[PromptVerification], json_out: bool) -> None:
+    """Print prompt-hash verification results in human or JSON form."""
     if json_out:
         print(json.dumps([c.to_dict() for c in checks], indent=2))
         return
@@ -440,11 +476,13 @@ def _print_prompts(checks: list[PromptVerification], json_out: bool) -> None:
 
 
 def _print_tree(roots: list[dict[str, Any]], json_out: bool) -> None:
+    """Print the call tree in human-readable indented or JSON form."""
     if json_out:
         print(json.dumps(roots, indent=2, default=str))
         return
 
     def _walk(node: dict[str, Any], depth: int) -> None:
+        """Recursively print one tree node and its children."""
         indent = "  " * depth
         label = f"[{node['type']}]"
         if node.get("node"):
@@ -463,6 +501,7 @@ def _print_tree(roots: list[dict[str, Any]], json_out: bool) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI entry point: verify, summarise, or inspect a TradingAgents trace file."""
     parser = argparse.ArgumentParser(
         prog="python -m tradingagents.audit.replay",
         description="Verify and inspect TradingAgents trace files.",
@@ -481,6 +520,15 @@ def main(argv: list[str] | None = None) -> int:
         "--registry-dir", default=None,
         help="Override prompt template directory (default: packaged prompts).",
     )
+    parser.add_argument(
+        "--show-reasoning", "-r",
+        action="store_true",
+        help=(
+            "After the summary, print the reasoning/thinking content captured "
+            "from extended-thinking models (Anthropic, OpenAI o-series, Gemini). "
+            "Only meaningful with the 'summary' command; ignored otherwise."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.registry_dir:
@@ -498,6 +546,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "summary":
         summary = replayer.summary()
         _print_summary(summary, args.json)
+        if args.show_reasoning:
+            _print_reasoning_blocks(replayer, args.json)
         return 0
 
     if args.command == "prompts":

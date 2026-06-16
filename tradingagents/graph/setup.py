@@ -67,13 +67,16 @@ class GraphSetup:
         conditional_logic: ConditionalLogic,
         structured_output_cache: dict[str, str] = None,
         analyst_concurrency_limit: int = 1,
+        config: dict = None,
     ):
+        """Initialise the graph builder with LLM clients, tool nodes, and config."""
         self.quick_thinking_llm = quick_thinking_llm
         self.deep_thinking_llm = deep_thinking_llm
         self.tool_nodes = tool_nodes
         self.conditional_logic = conditional_logic
         self.structured_output_cache = structured_output_cache if structured_output_cache is not None else {}
         self.analyst_concurrency_limit = analyst_concurrency_limit
+        self.config = config if config is not None else {}
 
     def setup_graph(
         self,
@@ -130,8 +133,40 @@ class GraphSetup:
                 create_tool_provenance_capture_node(analyst_type),
             )
 
+    def _build_compressor_node(self, label: str):
+        """Return a LangGraph node function that compresses the messages list.
+
+        When ``state_compression_enabled`` is False (the default) the node is a
+        no-op so existing behaviour is preserved exactly.
+        """
+        compression_enabled = self.config.get("state_compression_enabled", False)
+
+        def compressor_node(state):
+            """Prune old messages to reduce prompt token counts between graph phases."""
+            if not compression_enabled:
+                return {}
+            msgs = state.get("messages", [])
+            n = len(msgs)
+            if n <= 2:
+                return {}
+            # Remove all but the last 2 messages then prepend a summary note.
+            removals = [RemoveMessage(id=m.id) for m in msgs[:-2] if m.id is not None]
+            summary = HumanMessage(
+                content=f"[prior tool outputs summarised — {n} messages compressed]"
+            )
+            return {"messages": [summary] + removals}
+
+        compressor_node.__name__ = label.replace(" ", "_").lower()
+        return compressor_node
+
     def _build_fixed_nodes(self, workflow: StateGraph) -> None:
         """Add researcher, trader, risk analysts, and portfolio manager nodes."""
+        from tradingagents.agents.trader.trader_tools import (
+            trader_get_current_price,
+            trader_get_news_summary,
+            trader_get_options_overview,
+        )
+
         workflow.add_node("Conflict Detector", create_conflict_detector(self.quick_thinking_llm))
         workflow.add_node("Bull Researcher", create_bull_researcher(self.quick_thinking_llm))
         workflow.add_node("Bear Researcher", create_bear_researcher(self.quick_thinking_llm))
@@ -139,10 +174,30 @@ class GraphSetup:
             self.deep_thinking_llm,
             cache=self.structured_output_cache,
         ))
+
+        trader_tools = None
+        if self.config.get("trader_tools_enabled", True):
+            trader_tools = [
+                trader_get_current_price,
+                trader_get_options_overview,
+                trader_get_news_summary,
+            ]
+
         workflow.add_node("Trader", create_trader(
             self.quick_thinking_llm,
             cache=self.structured_output_cache,
+            tools=trader_tools,
         ))
+
+        # State compressor nodes (no-ops when state_compression_enabled=False)
+        workflow.add_node(
+            "State Compressor Pre-Debate",
+            self._build_compressor_node("State Compressor Pre-Debate"),
+        )
+        workflow.add_node(
+            "State Compressor Pre-Trader",
+            self._build_compressor_node("State Compressor Pre-Trader"),
+        )
         workflow.add_node("Aggressive Analyst", create_aggressive_debator(self.quick_thinking_llm))
         workflow.add_node("Neutral Analyst", create_neutral_debator(self.quick_thinking_llm))
         workflow.add_node("Conservative Analyst", create_conservative_debator(self.quick_thinking_llm))
@@ -183,6 +238,7 @@ class GraphSetup:
         else:
             # Wire analysts in parallel (Local parallel flow with Join Analysts)
             def join_analysts_node(state):
+                """Wait until all selected analyst reports are present before proceeding."""
                 import json
                 for analyst in selected_analysts:
                     key = ANALYST_REPORT_KEYS.get(analyst)
@@ -259,8 +315,22 @@ class GraphSetup:
             )
 
     def _wire_fixed_flow(self, workflow: StateGraph, selected_analysts: list[str], run_recorder_node: Any = None) -> None:
-        """Wire the research debate, trader, risk debate, and portfolio manager."""
-        workflow.add_edge("Conflict Detector", "Bull Researcher")
+        """Wire the research debate, trader, risk debate, and portfolio manager.
+
+        Two state compressor nodes are inserted as passthrough no-ops by default
+        (``state_compression_enabled=False``).  When enabled they prune the
+        messages list to reduce prompt tokens:
+
+        * ``State Compressor Pre-Debate``  — after Conflict Detector, before
+          Bull/Bear debate.  Compresses analyst tool-call messages.
+        * ``State Compressor Pre-Trader``  — after Research Manager, before
+          Trader.  Compresses debate messages.
+        """
+        # Analyst branches wire directly to "Conflict Detector" (both sequential
+        # and parallel modes). The compressor sits immediately after it so it can
+        # prune analyst tool messages before the debate starts.
+        workflow.add_edge("Conflict Detector", "State Compressor Pre-Debate")
+        workflow.add_edge("State Compressor Pre-Debate", "Bull Researcher")
         workflow.add_conditional_edges(
             "Bull Researcher",
             self.conditional_logic.should_continue_debate,
@@ -271,7 +341,8 @@ class GraphSetup:
             self.conditional_logic.should_continue_debate,
             {"Bull Researcher": "Bull Researcher", "Research Manager": "Research Manager"},
         )
-        workflow.add_edge("Research Manager", "Trader")
+        workflow.add_edge("Research Manager", "State Compressor Pre-Trader")
+        workflow.add_edge("State Compressor Pre-Trader", "Trader")
         workflow.add_edge("Trader", "Aggressive Analyst")
         workflow.add_conditional_edges(
             "Aggressive Analyst",

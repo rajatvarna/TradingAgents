@@ -63,6 +63,15 @@ from .futu import (
     get_stock_data as get_futu_stock,
 )
 from .google_news import get_global_news_google, get_news_google
+from .ibkr import (
+    get_options_chain as get_ibkr_options_chain,
+)
+from .ibkr import (
+    get_options_overview as get_ibkr_options_overview,
+)
+from .ibkr import (
+    get_stock_data as get_ibkr_stock,
+)
 from .polygon import (
     get_news as get_polygon_news,
 )
@@ -213,6 +222,7 @@ VENDOR_LIST = [
     "twelve_data",
     "polygon",
     "futu",
+    "ibkr",
 ]
 
 # Mapping of methods to their vendor-specific implementations
@@ -225,6 +235,7 @@ VENDOR_METHODS = {
         "twelve_data": get_twelve_data_stock,
         "polygon": get_polygon_stock,
         "futu": get_futu_stock,
+        "ibkr": get_ibkr_stock,
     },
     # technical_indicators
     "get_indicators": {
@@ -291,10 +302,12 @@ VENDOR_METHODS = {
         "yfinance": get_yfinance_options_chain,
         "polygon": get_polygon_options_chain,
         "futu": get_futu_options_chain,
+        "ibkr": get_ibkr_options_chain,
     },
     "get_options_overview": {
         "yfinance": get_yfinance_options_overview,
         "polygon": get_polygon_options_overview,
+        "ibkr": get_ibkr_options_overview,
     },
     # osint_social
     "get_telegram_signals": {

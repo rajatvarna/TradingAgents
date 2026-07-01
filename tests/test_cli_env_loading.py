@@ -39,15 +39,17 @@ def test_cli_dotenv_searches_from_current_working_directory(monkeypatch):
         "anthropic_effort": None,
     }
 
+    old_modules = {k: v for k, v in sys.modules.items() if k.startswith("tradingagents") or k.startswith("cli")}
+
     for k in list(sys.modules.keys()):
         if k.startswith("tradingagents") or k.startswith("cli"):
             sys.modules.pop(k, None)
 
-    monkeypatch.setitem(sys.modules, "tradingagents.graph", graph_package)
-    monkeypatch.setitem(sys.modules, "tradingagents.graph.trading_graph", graph_module)
-    monkeypatch.setitem(sys.modules, "tradingagents.graph.analyst_execution", analyst_execution)
-    monkeypatch.setitem(sys.modules, "tradingagents.reporting", reporting_module)
-    monkeypatch.setitem(sys.modules, "tradingagents.default_config", config_module)
+    sys.modules["tradingagents.graph"] = graph_package
+    sys.modules["tradingagents.graph.trading_graph"] = graph_module
+    sys.modules["tradingagents.graph.analyst_execution"] = analyst_execution
+    sys.modules["tradingagents.reporting"] = reporting_module
+    sys.modules["tradingagents.default_config"] = config_module
 
     try:
         importlib.import_module("cli.main")
@@ -55,6 +57,7 @@ def test_cli_dotenv_searches_from_current_working_directory(monkeypatch):
         for k in list(sys.modules.keys()):
             if k.startswith("tradingagents") or k.startswith("cli"):
                 sys.modules.pop(k, None)
+        sys.modules.update(old_modules)
 
     assert calls[:4] == [
         ("find", ".env", True),

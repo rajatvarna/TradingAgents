@@ -51,7 +51,7 @@ def connect(db_path: str) -> sqlite3.Connection:
     Idempotent: safe to call repeatedly on the same db file.
     """
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=30.0)
     conn.row_factory = sqlite3.Row
 
     # Load the sqlite-vec extension. Must happen before CREATE VIRTUAL TABLE.

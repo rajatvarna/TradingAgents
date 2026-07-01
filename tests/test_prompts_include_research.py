@@ -32,7 +32,7 @@ def _capturing_llm():
     """Returns (llm, captured_prompts: list[str])."""
     llm = MagicMock()
     captured = []
-    def _inv(prompt):
+    def _inv(prompt, *args, **kwargs):
         if isinstance(prompt, list):
             content = "\n".join(m.get("content", "") for m in prompt if isinstance(m, dict))
         else:

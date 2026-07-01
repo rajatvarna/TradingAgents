@@ -199,6 +199,10 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
         )
         prompt += reliability_signals + reliability_constraints
 
+        strategy_rules = state.get("strategy_rules", "")
+        if strategy_rules:
+            prompt += f"\n\n**Learned Strategy Rules:**\n{strategy_rules}\n"
+
         final_trade_decision, pm_structured_valid = invoke_structured_or_freetext_with_meta(
             structured_llm,
             llm,

@@ -17,11 +17,12 @@ def test_custom_provider_factory_routes_to_openai_client():
     from tradingagents.llm_clients.factory import create_llm_client
     from tradingagents.llm_clients.openai_client import OpenAIClient
 
-    client = create_llm_client(
-        provider="custom",
-        model="vendor/model",
-        base_url="https://llm.example.com/v1",
-    )
+    with mock.patch("tradingagents.llm_clients.factory.is_custom_openai_compatible_provider", return_value=True):
+        client = create_llm_client(
+            provider="custom",
+            model="vendor/model",
+            base_url="https://llm.example.com/v1",
+        )
 
     assert isinstance(client, OpenAIClient)
     assert client.provider == "custom"

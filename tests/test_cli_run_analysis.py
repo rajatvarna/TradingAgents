@@ -40,6 +40,8 @@ def test_run_analysis_routes_through_propagate(monkeypatch, tmp_path):
     monkeypatch.setitem(m.DEFAULT_CONFIG, "results_dir", str(tmp_path / "results"))
     monkeypatch.setitem(m.DEFAULT_CONFIG, "data_cache_dir", str(tmp_path / "cache"))
 
+    from cli.models import AnalystType
+
     monkeypatch.setattr(
         m,
         "get_user_selections",
@@ -47,7 +49,7 @@ def test_run_analysis_routes_through_propagate(monkeypatch, tmp_path):
             "ticker": "AAPL",
             "asset_type": "stock",
             "analysis_date": "2024-01-02",
-            "analysts": [m.AnalystType.MARKET],
+            "analysts": [AnalystType.MARKET],
             "research_depth": 1,
             "llm_provider": "openai",
             "backend_url": "",

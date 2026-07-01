@@ -39,6 +39,15 @@ from tradingagents.agents.utils.core_stock_tools import (
     get_atr_stop_suggestion,
     get_peer_performance,
 )
+from tradingagents.agents.utils.derivatives_tools import (
+    get_options_chain,
+    get_options_overview,
+)
+from tradingagents.agents.utils.esg_data_tools import (
+    get_esg_news,
+    get_esg_scores,
+)
+from tradingagents.agents.utils.options_tools import get_options_data
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.dataflows.config import set_config
 from tradingagents.dataflows.run_cache import reset as reset_run_cache
@@ -365,6 +374,23 @@ class TradingAgentsGraph:
                     get_scenario_analysis,
                 ]
             ),
+            "options": ToolNode(
+                [
+                    get_options_data,
+                ]
+            ),
+            "esg": ToolNode(
+                [
+                    get_esg_scores,
+                    get_esg_news,
+                ]
+            ),
+            "derivatives": ToolNode(
+                [
+                    get_options_overview,
+                    get_options_chain,
+                ]
+            ),
         }
 
     def _resolve_benchmark(self, ticker: str) -> str:
@@ -399,7 +425,7 @@ class TradingAgentsGraph:
 
     def _fetch_returns(
         self, ticker: str, trade_date: str, holding_days: int = None,
-        benchmark: str = "SPY",
+        benchmark: str = None,
     ) -> tuple[float | None, float | None, int | None]:
         """Fetch raw and alpha return for ticker over holding_days from trade_date.
 
@@ -409,9 +435,12 @@ class TradingAgentsGraph:
         unavailable (too recent, delisted, or network error).
         """
         from tradingagents.dataflows.symbol_utils import normalize_symbol
+        if benchmark is None:
+            benchmark = self._resolve_benchmark(ticker)
         if holding_days is None:
             cfg = getattr(self, "config", {}) or {}
-            holding_days = self._coerce_positive_int(cfg.get("outcome_holding_days", 5), 5)
+            raw_val = cfg.get("outcome_holding_days", 5) if isinstance(cfg, dict) else 5
+            holding_days = TradingAgentsGraph._coerce_positive_int(raw_val, 5)
         try:
             start = datetime.strptime(trade_date, "%Y-%m-%d")
             end = start + timedelta(days=holding_days + 7)  # buffer for weekends/holidays
@@ -420,8 +449,12 @@ class TradingAgentsGraph:
             # Normalize so the realized-return lookup hits the same instrument
             # the analysis priced (e.g. XAUUSD -> GC=F) (#984). The benchmark is
             # already a canonical Yahoo symbol from ``_resolve_benchmark``.
-            stock = yf.Ticker(normalize_symbol(ticker)).history(start=trade_date, end=end_str)
-            bench = yf.Ticker(benchmark).history(start=trade_date, end=end_str)
+            yahoo_symbol = normalize_symbol(ticker)
+            stock = yf.Ticker(yahoo_symbol).history(start=trade_date, end=end_str)
+            if yahoo_symbol == benchmark:
+                bench = stock
+            else:
+                bench = yf.Ticker(benchmark).history(start=trade_date, end=end_str)
 
             if len(stock) < 2 or len(bench) < 2:
                 return None, None, None

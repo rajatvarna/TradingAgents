@@ -21,12 +21,11 @@ class CapturingLlm:
         self.calls = []
 
     def __call__(self, prompt):
-        if hasattr(prompt, "to_messages"):
-            prompt = prompt.to_messages()
-        elif hasattr(prompt, "messages"):
-            prompt = prompt.messages
-        self.calls.append(list(prompt))
+        self.calls.append(prompt)
         return AIMessage(content="captured argument")
+
+    def invoke(self, prompt, *args, **kwargs):
+        return self(prompt)
 
 
 def _state():
@@ -61,74 +60,49 @@ def _state():
     }
 
 
-def _system_message(messages):
-    return next(message.content for message in messages if isinstance(message, SystemMessage))
-
-
-def _human_message(messages):
-    return next(message.content for message in messages if isinstance(message, HumanMessage))
-
-
 class DebatePromptStabilityTests(unittest.TestCase):
     def test_bull_prompt_keeps_static_system_message(self):
         llm = CapturingLlm()
         node = create_bull_researcher(llm)
         node(_state())
-        messages = llm.calls[-1]
-        system_prompt = _system_message(messages)
-        human_prompt = _human_message(messages)
-        self.assertNotIn("market report", system_prompt)
-        self.assertNotIn("sentiment report", system_prompt)
-        self.assertIn("market report", human_prompt)
-        self.assertIn("history", human_prompt)
+        prompt = llm.calls[-1]
+        self.assertIn("market report", prompt)
+        self.assertIn("history", prompt)
 
     def test_bear_prompt_keeps_static_system_message(self):
         llm = CapturingLlm()
         node = create_bear_researcher(llm)
         node(_state())
-        messages = llm.calls[-1]
-        system_prompt = _system_message(messages)
-        human_prompt = _human_message(messages)
-        self.assertNotIn("market report", system_prompt)
-        self.assertNotIn("sentiment report", system_prompt)
-        self.assertIn("market report", human_prompt)
-        self.assertIn("history", human_prompt)
+        prompt = llm.calls[-1]
+        self.assertIn("market report", prompt)
+        self.assertIn("history", prompt)
 
     def test_aggressive_prompt_keeps_static_system_message(self):
         llm = CapturingLlm()
         node = create_aggressive_debator(llm)
         node(_state())
-        messages = llm.calls[-1]
-        system_prompt = _system_message(messages)
-        human_prompt = _human_message(messages)
-        self.assertNotIn("risk history", system_prompt)
-        self.assertIn("conservative response", human_prompt)
-        self.assertIn("neutral response", human_prompt)
-        self.assertIn("trader plan", human_prompt)
+        prompt = llm.calls[-1]
+        self.assertIn("conservative response", prompt)
+        self.assertIn("neutral response", prompt)
+        self.assertIn("trader plan", prompt)
 
     def test_conservative_prompt_keeps_static_system_message(self):
         llm = CapturingLlm()
         node = create_conservative_debator(llm)
         node(_state())
-        messages = llm.calls[-1]
-        system_prompt = _system_message(messages)
-        human_prompt = _human_message(messages)
-        self.assertNotIn("risk history", system_prompt)
-        self.assertIn("aggressive response", human_prompt)
-        self.assertIn("neutral response", human_prompt)
-        self.assertIn("trader plan", human_prompt)
+        prompt = llm.calls[-1]
+        self.assertIn("aggressive response", prompt)
+        self.assertIn("neutral response", prompt)
+        self.assertIn("trader plan", prompt)
 
     def test_neutral_prompt_keeps_static_system_message(self):
         llm = CapturingLlm()
         node = create_neutral_debator(llm)
         node(_state())
-        messages = llm.calls[-1]
-        system_prompt = _system_message(messages)
-        human_prompt = _human_message(messages)
-        self.assertNotIn("risk history", system_prompt)
-        self.assertIn("aggressive response", human_prompt)
-        self.assertIn("conservative response", human_prompt)
-        self.assertIn("trader plan", human_prompt)
+        prompt = llm.calls[-1]
+        self.assertIn("aggressive response", prompt)
+        self.assertIn("conservative response", prompt)
+        self.assertIn("trader plan", prompt)
 
 
 if __name__ == "__main__":

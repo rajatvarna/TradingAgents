@@ -64,9 +64,10 @@ def stub_questionary(monkeypatch):
 
     class _Choice:
         """Minimal questionary.Choice stand-in that exposes .value."""
-        def __init__(self, label, value=None):
+        def __init__(self, label, value=None, title=None):
             self.label = label
             self.value = value
+            self.title = title or label
 
     mock_q.Choice.side_effect = _Choice
     monkeypatch.setitem(sys.modules, "questionary", mock_q)

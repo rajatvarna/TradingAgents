@@ -68,7 +68,7 @@ def _apply_patches(names):
 def _build_graph(selected_analysts):
     quick_llm = MagicMock()
     deep_llm = MagicMock()
-    tool_nodes = {k: MagicMock() for k in {"market", "social", "news", "fundamentals", "options", "esg"}}
+    tool_nodes = {k: MagicMock() for k in {"market", "social", "news", "fundamentals", "options", "esg", "derivatives", "valuation"}}
     cond = ConditionalLogic()
     gs = GraphSetup(quick_llm, deep_llm, tool_nodes, cond)
 
@@ -197,17 +197,28 @@ class TestNodePresence:
 class TestConstants:
     @pytest.mark.parametrize("analyst", list(VALID_ANALYSTS))
     def test_analyst_node_name_format(self, analyst):
-        expected = "ESG Analyst" if analyst == "esg" else f"{analyst.capitalize()} Analyst"
+        if analyst == "esg":
+            expected = "ESG Analyst"
+        elif analyst == "social":
+            expected = "Sentiment Analyst"
+        else:
+            expected = f"{analyst.capitalize()} Analyst"
         assert analyst_node_name(analyst) == expected
 
     @pytest.mark.parametrize("analyst", list(VALID_ANALYSTS))
     def test_clear_node_name_format(self, analyst):
-        expected = "Msg Clear ESG" if analyst == "esg" else f"Msg Clear {analyst.capitalize()}"
+        if analyst == "esg":
+            expected = "Msg Clear ESG"
+        elif analyst == "social":
+            expected = "Msg Clear Sentiment"
+        else:
+            expected = f"Msg Clear {analyst.capitalize()}"
         assert clear_node_name(analyst) == expected
 
     @pytest.mark.parametrize("analyst", list(VALID_ANALYSTS))
     def test_tools_node_name_format(self, analyst):
-        assert tools_node_name(analyst) == f"tools_{analyst}"
+        expected = "tools_sentiment" if analyst == "social" else f"tools_{analyst}"
+        assert tools_node_name(analyst) == expected
 
     def test_valid_analysts_matches_report_keys(self):
         from tradingagents.graph.constants import ANALYST_REPORT_KEYS

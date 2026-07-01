@@ -25,6 +25,8 @@ class Propagator:
         target_profile: dict[str, Any] | None = None,
         risk_constraints: dict[str, Any] | None = None,
         instrument_context: str = "",
+        visual_report: str = "",
+        strategy_rules: str = "",
     ) -> dict[str, Any]:
         """Create the initial state for the agent graph.
 
@@ -43,6 +45,8 @@ class Propagator:
             "past_context": past_context,
             "user_research_report": user_research,
             "risk_constraints": risk_constraints or {},
+            "visual_report": visual_report,
+            "strategy_rules": strategy_rules,
             "tool_errors": [],
             "tool_call_count": 0,
             "error_count": 0,

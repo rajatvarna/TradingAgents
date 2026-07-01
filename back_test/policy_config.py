@@ -370,7 +370,7 @@ def add_portfolio_state_policy_args(parser) -> None:
     group.add_argument("--ps-add-max", type=float, default=None,
         dest="ps_add_max_pct", help="覆盖单次加仓上限百分比，同时作用于普通、回调和弱趋势软量能加仓。")
     group.add_argument("--ps-max-trade-risk", type=float, default=None,
-        dest="ps_max_trade_risk_pct", help="整笔交易最大账户风险，例如 0.020 表示 2%。")
+        dest="ps_max_trade_risk_pct", help="整笔交易最大账户风险，例如 0.020 表示 2%%。")
     group.add_argument("--ps-add-ttl", type=int, default=None,
         dest="ps_add_signal_ttl_trading_days", help="加仓信号有效交易日数，默认 1。")
     group.add_argument("--ps-entry-ttl", type=int, default=None,

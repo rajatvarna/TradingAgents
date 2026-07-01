@@ -14,7 +14,15 @@
       "Bash(git diff *)",
       "Bash(git fetch *)",
       "Bash(git checkout *)",
-      "Bash(git merge *)"
+      "Bash(git merge *)",
+      "PowerShell(gh pr list --repo TauricResearch/TradingAgents --state merged --limit 30 --json number,title,mergedAt,url,author | ConvertFrom-Json | Where-Object { $_.mergedAt -gt \"2026-06-17\" } | ForEach-Object { \"$\\($_.number\\) | $\\($_.mergedAt\\) | $\\($_.title\\) | $\\($_.author.login\\)\" })",
+      "Bash(curl -s \"https://api.github.com/repos/TauricResearch/TradingAgents/pulls?state=closed&sort=updated&direction=desc&per_page=30\" -o /tmp/prs.json)",
+      "Read(//tmp/**)",
+      "Bash(/c/Users/User/Documents/GitHub/TradingAgents/.venv/Scripts/python.exe -c ' *)",
+      "Bash(curl -s 'https://api.github.com/repos/TauricResearch/TradingAgents/pulls?state=closed&sort=updated&direction=desc&per_page=30' -o /c/Users/User/AppData/Local/Temp/claude/C--Users-User-Documents-GitHub-TradingAgents/b4098326-9a82-4588-a958-8b551c983a11/scratchpad/prs.json)",
+      "Read(//c/Users/User/AppData/Local/Temp/claude/C--Users-User-Documents-GitHub-TradingAgents/b4098326-9a82-4588-a958-8b551c983a11/scratchpad/**)",
+      "Bash(curl -s 'https://api.github.com/search/issues?q=repo:TauricResearch/TradingAgents+is:pr+is:merged&sort=updated&order=desc&per_page=30' -o 'C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-User-Documents-GitHub-TradingAgents\\\\b4098326-9a82-4588-a958-8b551c983a11\\\\scratchpad/merged.json')",
+      "Bash(git rev-list *)"
     ]
   }
 }

@@ -115,7 +115,7 @@ class TestOpenAICompatibleResponsesApiRouting:
     def test_openai_provider_with_custom_compatible_base_url_uses_chat_completions(self, monkeypatch):
         llm = self._openai_llm(monkeypatch, "https://compatible.example/v1")
 
-        assert isinstance(llm, NormalizedChatOpenAI)
+        assert llm.__class__.__name__ == "NormalizedChatOpenAI"
         assert llm.use_responses_api is False
 
 

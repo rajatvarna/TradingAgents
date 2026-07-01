@@ -112,22 +112,24 @@ def test_portfolio_manager_prompt_includes_strategy_rules():
         "Structured",
         (),
         {
-            "invoke": lambda self, prompt: (
+            "invoke": lambda self, prompt, *args, **kwargs: (
                 captured.__setitem__("prompt", prompt)
                 or PortfolioDecision(
                     rating=PortfolioRating.HOLD,
+                    confidence=1.0,
                     executive_summary="Wait.",
                     investment_thesis="Balanced.",
                 )
             )
         },
     )()
+    response_mock = type("Response", (), {"content": "mock content"})()
     llm = type(
         "LLM",
         (),
         {
             "with_structured_output": lambda self, *args, **kwargs: structured,
-            "invoke": lambda self, prompt: None,
+            "invoke": lambda self, prompt, *args, **kwargs: response_mock,
         },
     )()
     state = Propagator().create_initial_state("NVDA", "2026-01-01", strategy_rules="Avoid chasing.")

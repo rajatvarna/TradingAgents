@@ -97,5 +97,11 @@ def write_report_tree(final_state: dict, ticker: str, save_path) -> Path:
 
     # Write consolidated report
     header = f"# Trading Analysis Report: {ticker}\n\nGenerated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-    (save_path / "complete_report.md").write_text(header + "\n\n".join(sections), encoding="utf-8")
+    report_text = header + "\n\n".join(sections)
+    try:
+        from cli.report_headings import transform as _prune_report_headings
+        report_text = _prune_report_headings(report_text)
+    except ImportError:
+        pass
+    (save_path / "complete_report.md").write_text(report_text, encoding="utf-8")
     return save_path / "complete_report.md"

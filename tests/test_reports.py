@@ -12,7 +12,7 @@ def test_reports_endpoint_lists_generated_markdown(monkeypatch, tmp_path):
     run_id = uuid4()
     report_path = tmp_path / "reports" / "IBM" / "2025-05-05" / f"{run_id}.md"
     report_path.parent.mkdir(parents=True)
-    report_path.write_text("# Report\n", encoding="utf-8")
+    report_path.write_bytes(b"# Report\n")
     monkeypatch.setattr(reports_routes, "REPORT_OUTPUT_ROOT", tmp_path)
 
     app = create_app()

@@ -11,11 +11,16 @@ import tradingagents.default_config as default_config_module
 
 def _reload_with_env(monkeypatch, **overrides):
     """Set/clear env vars then reload default_config to re-evaluate DEFAULT_CONFIG."""
-    for key in list(default_config_module._ENV_OVERRIDES):
+    import sys
+    if "tradingagents.default_config" not in sys.modules:
+        import tradingagents.default_config as dc_module
+    else:
+        dc_module = sys.modules["tradingagents.default_config"]
+    for key in list(dc_module._ENV_OVERRIDES):
         monkeypatch.delenv(key, raising=False)
     for key, val in overrides.items():
         monkeypatch.setenv(key, val)
-    return importlib.reload(default_config_module)
+    return importlib.reload(dc_module)
 
 
 def test_no_env_uses_built_in_defaults(monkeypatch):

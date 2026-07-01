@@ -2,13 +2,13 @@
 from tradingagents.llm_clients.api_key_env import get_api_key_env
 from tradingagents.llm_clients.factory import create_llm_client
 from tradingagents.llm_clients.model_catalog import get_known_models, get_model_options
-from tradingagents.llm_clients.openai_client import OpenAIClient
+from tradingagents.llm_clients.openai_oauth_client import OpenAIOAuthClient
 from tradingagents.llm_clients.validators import validate_model
 
 
 def test_factory_dispatches_openai_oauth():
     client = create_llm_client("openai-oauth", "gpt-5.3-codex")
-    assert isinstance(client, OpenAIClient)
+    assert isinstance(client, OpenAIOAuthClient)
     assert client.provider == "openai-oauth"
 
 

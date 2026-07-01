@@ -6,9 +6,25 @@ import urllib.request
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
+import socket
 import pytest
 
 BASE_URL = "http://localhost:9000"
+
+
+def _is_server_running() -> bool:
+    try:
+        with socket.create_connection(("localhost", 9000), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+if not _is_server_running():
+    pytest.skip(
+        "Local API server at http://localhost:9000 is not running. Skipping post-deploy smoke/UI tests.",
+        allow_module_level=True,
+    )
 
 
 def _get_text(path: str) -> str:

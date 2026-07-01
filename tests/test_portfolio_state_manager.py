@@ -277,6 +277,7 @@ def test_weak_uptrend_soft_volume_caps_pullback_add():
         holdings_info={"quantity": 100, "avg_buy_price": 450.0},
         constraints={"bearish_volume_divergence": False},
         volume_regime="soft",
+        policy_config=PortfolioStatePolicyConfig(add_requires_confirmation=False),
     )
 
     assert state.regime == "weak_uptrend"

@@ -30,6 +30,7 @@ def _port_open(port: int) -> bool:
             return True
     except OSError:
         return False
+from cli.report_headings import transform as _prune_report_headings
 from cli.announcements import display_announcements, fetch_announcements
 from cli.stats_handler import StatsCallbackHandler
 from cli.utils import (

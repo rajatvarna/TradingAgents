@@ -103,6 +103,10 @@ class GraphSetup:
         if not selected_analysts:
             raise ValueError("Trading Agents Graph Setup Error: no analysts selected!")
 
+        # Normalize 'social' to 'sentiment' and de-duplicate
+        selected_analysts = ["sentiment" if a == "social" else a for a in selected_analysts]
+        selected_analysts = list(dict.fromkeys(selected_analysts))
+
         unknown = set(selected_analysts) - VALID_ANALYSTS
         if unknown:
             raise ValueError(

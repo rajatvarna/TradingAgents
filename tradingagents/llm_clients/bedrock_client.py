@@ -2,15 +2,30 @@ import os
 from typing import Any
 
 from .base_client import BaseLLMClient, normalize_content
+from .validators import validate_model
+
+# Bedrock has no global default region; us-west-2 hosts the broadest model set.
+_DEFAULT_REGION = "us-west-2"
+_BEDROCK_CLASS = None
 
 
-def _load_chat_bedrock_converse():
+def _bedrock_class():
+    """Lazily import langchain-aws (the optional ``[bedrock]`` extra) and return a
+    ChatBedrockConverse subclass with normalized content output.
+
+    Imported on demand so the optional dependency (and boto3) isn't required by
+    the rest of the package; cached after the first call.
+    """
+    global _BEDROCK_CLASS
+    if _BEDROCK_CLASS is not None:
+        return _BEDROCK_CLASS
+
     try:
         from langchain_aws import ChatBedrockConverse
     except ImportError as exc:
         raise ImportError(
-            "AWS Bedrock support requires the 'langchain-aws' package. "
-            "Install project dependencies again, or run: pip install langchain-aws"
+            "AWS Bedrock support requires the optional 'langchain-aws' dependency. "
+            'Install it with: pip install "tradingagents[bedrock]"'
         ) from exc
 
     class NormalizedChatBedrockConverse(ChatBedrockConverse):
@@ -26,7 +41,8 @@ def _load_chat_bedrock_converse():
             method = method or "function_calling"
             return super().with_structured_output(schema, method=method, **kwargs)
 
-    return NormalizedChatBedrockConverse
+    _BEDROCK_CLASS = NormalizedChatBedrockConverse
+    return _BEDROCK_CLASS
 
 
 def _env_int(name: str, default: int) -> int:
@@ -56,13 +72,13 @@ class BedrockClient(BaseLLMClient):
         from botocore.config import Config
 
         self.warn_if_unknown_model()
-        chat_cls = _load_chat_bedrock_converse()
+        chat_cls = _bedrock_class()
 
         region = (
             self.kwargs.get("region_name")
             or os.getenv("AWS_REGION")
             or os.getenv("AWS_DEFAULT_REGION")
-            or "us-west-2"
+            or _DEFAULT_REGION
         )
         profile = self.kwargs.get("credentials_profile_name") or os.getenv("AWS_PROFILE")
 
@@ -108,5 +124,5 @@ class BedrockClient(BaseLLMClient):
         return chat_cls(**llm_kwargs)
 
     def validate_model(self) -> bool:
-        """Validate model against Bedrock. Returns True as Bedrock accepts arbitrary model IDs."""
-        return True
+        """Validate model for Bedrock (any model ID accepted)."""
+        return validate_model("bedrock", self.model)

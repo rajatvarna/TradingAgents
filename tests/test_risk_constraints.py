@@ -191,7 +191,7 @@ def test_portfolio_manager_prompt_starts_with_constraints():
         investment_thesis="Constraints cap the position.",
     )
     structured = MagicMock()
-    structured.invoke.side_effect = lambda prompt: (
+    structured.invoke.side_effect = lambda prompt, *args, **kwargs: (
         captured.__setitem__("prompt", prompt) or decision
     )
     llm = MagicMock()

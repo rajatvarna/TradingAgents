@@ -47,4 +47,6 @@ def clear_node_name(analyst_type: str) -> str:
     return f"Msg Clear {analyst_type.capitalize()}"
 
 def tools_node_name(analyst_type: str) -> str:
+    if analyst_type.lower() == "social":
+        return "tools_sentiment"
     return f"tools_{analyst_type}"

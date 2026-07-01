@@ -1,14 +1,17 @@
 import logging
 from datetime import datetime, timedelta
 
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from tradingagents.agents.utils.agent_utils import (
+    build_cacheable_system_content,
     get_global_news,
     get_instrument_context_from_state,
     get_language_instruction,
+    get_macro_indicators,
     get_news,
+    get_prediction_markets,
 )
 from tradingagents.agents.utils.tool_fallback import bind_tools_or_none, safe_tool_text
 
@@ -157,12 +160,15 @@ def create_news_analyst(llm):
         tools = [
             get_news,
             get_global_news,
+            get_macro_indicators,
+            get_prediction_markets,
         ]
 
-        system_message = (
-            f"You are a news researcher tasked with analyzing recent news and trends over the past week. Please write a comprehensive report of the current state of the world that is relevant for trading and macroeconomics. Use the available tools: get_news(ticker, start_date, end_date) for {asset_label}-specific or targeted news searches, and get_global_news(curr_date, look_back_days, limit) for broader macroeconomic news. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."
+        system_message = build_cacheable_system_content(
+            f"You are a news researcher tasked with analyzing recent news and trends over the past week. Please write a comprehensive report of the current state of the world that is relevant for trading and macroeconomics. Use the available tools: get_news(ticker, start_date, end_date) for {asset_label}-specific or targeted news searches, get_global_news(curr_date, look_back_days, limit) for broader macroeconomic news, get_macro_indicators(indicator, curr_date, look_back_days) to ground macro commentary in actual data from FRED (e.g. 'cpi', 'core_pce', 'unemployment', 'fed_funds_rate', '10y_treasury', 'yield_curve'), and get_prediction_markets(topic, limit) for live market-implied probabilities of forward-looking events (e.g. 'Fed rate cut', 'recession 2026', geopolitical or sector events). Provide specific, actionable insights with supporting evidence to help traders make informed decisions."
             + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
-            + get_language_instruction()
+            + get_language_instruction(),
+            llm,
         )
 
         bound_llm = bind_tools_or_none(llm, tools, "News Analyst")
@@ -170,22 +176,24 @@ def create_news_analyst(llm):
         if bound_llm is not None:
             prompt = ChatPromptTemplate.from_messages(
                 [
+                    SystemMessage(content=system_message),
                     (
-                        "system",
+                        "human",
                         "You are a helpful AI assistant, collaborating with other assistants."
                         " Use the provided tools to progress towards answering the question."
                         " If you are unable to fully answer, that's OK; another assistant with different tools"
                         " will help where you left off. Execute what you can to make progress."
                         " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
                         " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
-                        " You have access to the following tools: {tool_names}.\n{system_message}"
-                        "For your reference, the current date is {current_date}. {instrument_context}",
+                        " You have access to the following tools: {tool_names}.\n"
+                        "Analysis context:\n"
+                        "- Current date: {current_date}\n"
+                        "- Instrument context: {instrument_context}",
                     ),
                     MessagesPlaceholder(variable_name="messages"),
                 ]
             )
 
-            prompt = prompt.partial(system_message=system_message)
             prompt = prompt.partial(tool_names=", ".join([tool.name for tool in tools]))
             prompt = prompt.partial(current_date=current_date)
             prompt = prompt.partial(instrument_context=instrument_context)
@@ -234,23 +242,24 @@ def create_news_analyst(llm):
 
         prompt = ChatPromptTemplate.from_messages(
             [
+                SystemMessage(content=system_message),
                 (
-                    "system",
+                    "human",
                     "You are a helpful AI assistant, collaborating with other assistants."
                     " The news you need has ALREADY been gathered for you and is included below;"
                     " do NOT call any tools and disregard any instruction below to call a tool —"
                     " base your report only on the provided news."
                     " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
                     " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
-                    "\n{system_message}\n"
-                    "For your reference, the current date is {current_date}. {instrument_context}\n\n"
+                    "\nAnalysis context:\n"
+                    "- Current date: {current_date}\n"
+                    "- Instrument context: {instrument_context}\n\n"
                     "=== Pre-fetched news ===\n{news_data}",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]
         )
 
-        prompt = prompt.partial(system_message=system_message)
         prompt = prompt.partial(current_date=current_date)
         prompt = prompt.partial(instrument_context=instrument_context)
         prompt = prompt.partial(news_data=news_data)

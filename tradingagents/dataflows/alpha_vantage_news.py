@@ -9,6 +9,7 @@ from .alpha_vantage_common import _make_api_request, format_datetime_for_api
 from .snapshots import GLOBAL_SCOPE, snapshot
 
 
+
 def _format_score(value: Any) -> str:
     try:
         return f"{float(value):.3f}"
@@ -124,5 +125,19 @@ def get_global_news(curr_date, look_back_days: int = 7, limit: int = 50) -> str:
 
 
 def get_insider_transactions(symbol: str) -> dict[str, str] | str:
-    """Returns latest and historical insider transactions by key stakeholders."""
-    return _make_api_request("INSIDER_TRANSACTIONS", {"symbol": symbol})
+    """Returns latest and historical insider transactions by key stakeholders.
+
+    Covers transactions by founders, executives, board members, etc.
+
+    Args:
+        symbol: Ticker symbol. Example: "IBM".
+
+    Returns:
+        Dictionary containing insider transaction data or JSON string.
+    """
+
+    params = {
+        "symbol": symbol,
+    }
+
+    return _make_api_request("INSIDER_TRANSACTIONS", params)

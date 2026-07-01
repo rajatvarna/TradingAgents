@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tradingagents"
-version = "0.2.5"
+version = "0.3.0"
 description = "TradingAgents: Multi-Agents LLM Financial Trading Framework"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
@@ -60,7 +60,11 @@ news = [
     "pydantic>=2.0.0",
     "googlenewsdecoder>=0.1.3",
 ]
-bedrock = ["langchain-aws>=1.5.0"]
+# Amazon Bedrock support (AWS SigV4 auth + boto3). Optional so the core install
+# stays lean: pip install "tradingagents[bedrock]".
+bedrock = [
+    "langchain-aws>=1.5.0",
+]
 # Optional vendors enabled via IIC-FORGE-02. Install with:
 #   pip install -e .[polygon,futu,osint]
 # Each vendor's module raises DataVendorError on missing creds/deps so the
@@ -78,8 +82,10 @@ dev = [
     "fakeredis>=2.20",                 # async-compatible Redis fake for unit tests
     "pytest-asyncio>=0.23",            # async test support (declared with asyncio_mode=auto below)
     "freezegun>=1.4",                  # F4: deterministic time control for cooldown tests
-    "ruff>=0.9.0",                     # linter — also run in CI
+    "ruff>=0.15",                      # linter — also run in CI
     "mypy>=1.10",                      # type checker
+    "pytest>=8.0",
+    "pytest-subtests>=0.13",
 ]
 portfolio = [
     "apscheduler>=3.10.0",
@@ -131,8 +137,9 @@ filterwarnings = [
 ]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py310"
 line-length = 100
+extend-exclude = ["results", "worklog"]
 # Restrict linting to library code we own. Root-level deployment scripts
 # (webui.py, worker.py, auth.py, etc.) have many pre-existing violations
 # and are not part of the installable library surface.
@@ -143,7 +150,8 @@ include = [
 ]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "SIM"]
+# Combine both HEAD and upstream checks (E, W, F, I, N, B, UP, C4, SIM)
+select = ["E", "W", "F", "I", "N", "B", "UP", "C4", "SIM"]
 ignore = [
     "E501",   # line too long — enforced by formatter, not linter
     "N806",   # variable in function should be lowercase (conflicts with pandas df.Column patterns)
@@ -156,6 +164,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]   # intentional re-exports
 # Test method names that include class names are intentionally descriptive.
 # E702: inline semicolons used for compact mock setup in test files.
 "tests/**" = ["N802", "E702", "E741"]
@@ -175,7 +184,10 @@ ignore = [
 # test_reddit_fallback uses self_inner to avoid shadowing outer self in nested class
 "tests/test_reddit_fallback.py" = ["N802", "N805"]
 
+[tool.ruff.lint.isort]
+combine-as-imports = true
+
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.10"
 strict = false
 ignore_missing_imports = true

@@ -3,7 +3,8 @@
 import json
 import logging
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
@@ -26,8 +27,11 @@ from tradingagents.agents.utils.agent_utils import (
     get_income_statement,
     get_indicators,
     get_insider_transactions,
+    get_macro_indicators,
     get_news,
+    get_prediction_markets,
     get_stock_data,
+    get_verified_market_snapshot,
     resolve_instrument_identity,
     resolve_risk_constraints,
 )
@@ -43,6 +47,7 @@ from tradingagents.dataflows.symbol_utils import normalize_symbol
 from tradingagents.dataflows.utils import safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.llm_clients import create_llm_client
+from tradingagents.reporting import write_report_tree
 
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
 from .conditional_logic import ConditionalLogic
@@ -122,7 +127,7 @@ class TradingAgentsGraph:
 
     def __init__(
         self,
-        selected_analysts=["market", "social", "news", "fundamentals"],
+        selected_analysts=("market", "social", "news", "fundamentals"),
         debug=False,
         config: dict[str, Any] = None,
         callbacks: list | None = None,
@@ -137,8 +142,25 @@ class TradingAgentsGraph:
         """
         self.debug = debug
         self.config = config or DEFAULT_CONFIG
-        self.callbacks = callbacks or []
         self.selected_analysts = selected_analysts
+
+        # T1.2 — when full-trace audit is enabled (default), prepend a
+        # TraceCallback to whatever callbacks the caller supplied.
+        user_callbacks = list(callbacks) if callbacks else []
+        if self.config.get("audit_full_trace_enabled", True):
+            import uuid
+            from tradingagents.audit import TraceCallback
+            audit_root = Path(
+                self.config.get("audit_dir") or Path.home() / ".tradingagents" / "audit"
+            ).expanduser()
+            trace_path = audit_root / "traces" / f"{uuid.uuid4()}.jsonl"
+            self.trace_callback = TraceCallback(
+                jsonl_path=trace_path,
+            )
+            self.callbacks = [self.trace_callback, *user_callbacks]
+        else:
+            self.trace_callback = None
+            self.callbacks = user_callbacks
 
         # IIC-FORGE F1: token accumulator — must be in self.callbacks BEFORE
         # the LLM clients are constructed, so the LLM clients pick it up.
@@ -275,6 +297,15 @@ class TradingAgentsGraph:
         if max_retries is not None and max_retries != "":
             kwargs["max_retries"] = int(max_retries)
 
+        # Determinism keys (T0.1)
+        llm_temp = self.config.get("llm_temperature")
+        if llm_temp is not None and llm_temp != "":
+            kwargs["llm_temperature"] = float(llm_temp)
+
+        llm_seed = self.config.get("llm_seed")
+        if llm_seed is not None and llm_seed != "":
+            kwargs["llm_seed"] = int(llm_seed)
+
         return kwargs
 
     def _risk_constraints_from_config(self) -> dict[str, Any]:
@@ -294,6 +325,10 @@ class TradingAgentsGraph:
                     get_peer_performance,
                     # ATR-based dynamic stop-loss suggestions
                     get_atr_stop_suggestion,
+                    # Deterministic verification snapshot (bound to the analyst
+                    # LLM and required by its prompt; must be executable here or
+                    # the call fails and the model reports it "unavailable").
+                    get_verified_market_snapshot,
                 ]
             ),
             "social": ToolNode(
@@ -308,6 +343,8 @@ class TradingAgentsGraph:
                     get_news,
                     get_global_news,
                     get_insider_transactions,
+                    get_macro_indicators,
+                    get_prediction_markets,
                 ]
             ),
             "fundamentals": ToolNode(
@@ -333,7 +370,7 @@ class TradingAgentsGraph:
     def _resolve_benchmark(self, ticker: str) -> str:
         """Pick the benchmark ticker for alpha calculation against ``ticker``.
 
-        ``config["benchmark_ticker"]`` overrides everything when set; otherwise
+        `config["benchmark_ticker"]` overrides everything when set; otherwise
         the suffix map matches the ticker's exchange suffix (e.g. ``.T`` for
         Tokyo). US-listed tickers without a dotted suffix fall through to the
         empty-suffix entry (SPY by default). Unrecognised suffixes (including
@@ -371,6 +408,7 @@ class TradingAgentsGraph:
         actual_holding_days)`` or ``(None, None, None)`` if price data is
         unavailable (too recent, delisted, or network error).
         """
+        from tradingagents.dataflows.symbol_utils import normalize_symbol
         if holding_days is None:
             cfg = getattr(self, "config", {}) or {}
             holding_days = self._coerce_positive_int(cfg.get("outcome_holding_days", 5), 5)
@@ -379,10 +417,11 @@ class TradingAgentsGraph:
             end = start + timedelta(days=holding_days + 7)  # buffer for weekends/holidays
             end_str = end.strftime("%Y-%m-%d")
 
-            yahoo_symbol = normalize_symbol(ticker)
-            yahoo_bench = normalize_symbol(benchmark)
-            stock = yf.Ticker(yahoo_symbol).history(start=trade_date, end=end_str)
-            bench = yf.Ticker(yahoo_bench).history(start=trade_date, end=end_str)
+            # Normalize so the realized-return lookup hits the same instrument
+            # the analysis priced (e.g. XAUUSD -> GC=F) (#984). The benchmark is
+            # already a canonical Yahoo symbol from ``_resolve_benchmark``.
+            stock = yf.Ticker(normalize_symbol(ticker)).history(start=trade_date, end=end_str)
+            bench = yf.Ticker(benchmark).history(start=trade_date, end=end_str)
 
             if len(stock) < 2 or len(bench) < 2:
                 return None, None, None
@@ -525,6 +564,21 @@ class TradingAgentsGraph:
                 self._checkpointer_ctx = None
                 self.graph = self.workflow.compile()
 
+    def save_reports(self, final_state, ticker, save_path=None) -> Path:
+        """Write the markdown report tree for a completed run, like the CLI does.
+
+        Programmatic callers get the same on-disk reports the CLI produces. Pass
+        an explicit ``save_path`` or let it default under ``results_dir``.
+        """
+        if save_path is None:
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            save_path = (
+                Path(self.config["results_dir"])
+                / "reports"
+                / f"{safe_ticker_component(ticker)}_{stamp}"
+            )
+        return write_report_tree(final_state, ticker, save_path)
+
     def _run_graph(
         self,
         company_name,
@@ -606,19 +660,24 @@ class TradingAgentsGraph:
 
         # Inject thread_id so same ticker+date resumes, different date starts fresh.
         if self.config.get("checkpoint_enabled"):
-            tid = thread_id(company_name, str(trade_date))
-            args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = tid
+            args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = thread_id(company_name, str(trade_date))
 
         if self.debug or on_chunk is not None:
             trace = []
+            last_printed = None
             for chunk in self.graph.stream(init_agent_state, **args):
                 if on_chunk is not None:
                     on_chunk(chunk)
                 elif chunk.get("messages"):
-                    chunk["messages"][-1].pretty_print()
+                    msg = chunk["messages"][-1]
+                    # Nodes after the trader don't append to messages, so the
+                    # same trailing message repeats across chunks. Print it only
+                    # when it changes (#1027); the trace/state merge is unchanged.
+                    signature = (type(msg).__name__, getattr(msg, "content", None))
+                    if signature != last_printed:
+                        msg.pretty_print()
+                        last_printed = signature
                 trace.append(chunk)
-            # stream_mode='values' yields cumulative state snapshots. Merging is
-            # still harmless and keeps returned state parity with graph.invoke().
             final_state = {}
             for chunk in trace:
                 final_state.update(chunk)

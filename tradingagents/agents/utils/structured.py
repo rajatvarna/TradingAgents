@@ -87,7 +87,10 @@ def invoke_structured_or_freetext(
         try:
             result = structured_llm.invoke(prompt)
             if result is None:
-                raise ValueError("structured output returned None")
+                # A thinking model can answer in plain text instead of calling
+                # the tool, leaving the parser with nothing to return. Treat it
+                # as a structured miss and fall back, with a clear reason.
+                raise ValueError("structured output returned no parsed result")
             rendered = render(result)
             if cache is not None:
                 cache[key] = rendered
@@ -129,7 +132,10 @@ def invoke_structured_or_freetext_with_meta(
         try:
             result = structured_llm.invoke(prompt, **kwargs)
             if result is None:
-                raise ValueError("structured output returned None")
+                # A thinking model can answer in plain text instead of calling
+                # the tool, leaving the parser with nothing to return. Treat it
+                # as a structured miss and fall back, with a clear reason.
+                raise ValueError("structured output returned no parsed result")
             rendered = render(result)
             if cache is not None:
                 cache[key] = rendered

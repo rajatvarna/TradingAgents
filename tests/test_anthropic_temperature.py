@@ -26,7 +26,7 @@ def _capture_kwargs(monkeypatch):
 class TestTemperatureGate:
     @pytest.mark.parametrize(
         "model",
-        ["claude-haiku-4-5", "claude-haiku-5-0", "claude-3-5-haiku"],
+        ["claude-haiku-4-5", "claude-haiku-5-0", "claude-3-5-haiku", "claude-sonnet-4-5"],
     )
     def test_haiku_receives_temperature(self, monkeypatch, model):
         captured = _capture_kwargs(monkeypatch)
@@ -37,7 +37,7 @@ class TestTemperatureGate:
         "model",
         [
             "claude-opus-4-5", "claude-opus-4-6", "claude-opus-4-8",
-            "claude-sonnet-4-5", "claude-sonnet-4-6", "claude-opus-5-0",
+            "claude-sonnet-4-6", "claude-opus-5-0",
         ],
     )
     def test_reasoning_models_do_not_receive_temperature(self, monkeypatch, model):

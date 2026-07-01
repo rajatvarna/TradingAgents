@@ -12,7 +12,6 @@ prompts for it automatically instead of failing on first API call.
 from __future__ import annotations
 
 from tradingagents.llm_clients.custom_provider_config import get_custom_api_key_env
-
 PROVIDER_API_KEY_ENV: dict[str, str | None] = {
     "openai":     "OPENAI_API_KEY",
     # ChatGPT OAuth: nessuna env key; l'auth passa per il token store OAuth.
@@ -21,6 +20,8 @@ PROVIDER_API_KEY_ENV: dict[str, str | None] = {
     "tencent":    "TENCENT_API_KEY",
     "google":     "GOOGLE_API_KEY",
     "azure":      "AZURE_OPENAI_API_KEY",
+    # Bedrock authenticates via the AWS credential chain, not a single key env.
+    "bedrock":    None,
     "xai":        "XAI_API_KEY",
     "deepseek":   "DEEPSEEK_API_KEY",
     "kimi":       "MOONSHOT_API_KEY",
@@ -42,7 +43,6 @@ PROVIDER_API_KEY_ENV: dict[str, str | None] = {
     "custom_openai": "CUSTOM_OPENAI_API_KEY",
     "lm-studio":  None,
     "llama-cpp":  None,
-    "bedrock":    None,
     "openai_oauth":  None,
     "opencode":   "OPENCODE_API_KEY",
     "custom":     "CUSTOM_PROVIDER_API_KEY",
@@ -55,6 +55,12 @@ PROVIDER_API_KEY_ENV: dict[str, str | None] = {
     # The codex CLI owns its own auth — configured by `codex login` —
     # so there is no env-var check at the TradingAgents layer.
     "codex":      None,
+    "groq":       "GROQ_API_KEY",
+    "nvidia":     "NVIDIA_API_KEY",
+    # Generic OpenAI-compatible endpoint: the client reads this when set (keyed
+    # relays), but it is marked key-optional in the provider registry so the CLI
+    # never forces a prompt and keyless local servers still work.
+    "openai_compatible": "OPENAI_COMPATIBLE_API_KEY",
 }
 
 

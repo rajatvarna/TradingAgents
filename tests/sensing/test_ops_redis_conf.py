@@ -23,4 +23,6 @@ def test_backup_script_is_executable_and_handles_both_stores():
     assert "BGREWRITEAOF" in text                # Redis
     assert "appendonly.aof" in text              # the artifact being copied
     mode = path.stat().st_mode
-    assert mode & stat.S_IXUSR
+    import sys
+    if sys.platform != "win32":
+        assert mode & stat.S_IXUSR

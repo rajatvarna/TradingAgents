@@ -136,7 +136,6 @@ class GoogleClient(BaseLLMClient):
         "gemini-3.1-pro-preview": "gemini-2.5-pro",
         "gemini-3-flash-preview": "gemini-2.5-flash",
     }
-
     def __init__(self, model: str, base_url: str | None = None, **kwargs):
         super().__init__(model, base_url, **kwargs)
 
@@ -169,10 +168,10 @@ class GoogleClient(BaseLLMClient):
         if google_api_key:
             llm_kwargs["google_api_key"] = google_api_key
 
-        # Map thinking_level to appropriate API param based on model
-        # Gemini 3 Pro: low, high
-        # Gemini 3 Flash: minimal, low, medium, high
-        # Gemini 2.5: thinking_budget (0=disable, -1=dynamic)
+        # Gemini 3.x takes the string ``thinking_level`` (the integer
+        # ``thinking_budget`` was for the now-retired 2.5 line). Pro accepts
+        # low/high; Flash also accepts minimal/medium — so map an unsupported
+        # "minimal" on Pro to the nearest level it does accept.
         thinking_level = self.kwargs.get("thinking_level")
         if thinking_level:
             model_lower = model.lower()

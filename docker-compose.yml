@@ -78,6 +78,7 @@ services:
     environment:
       - TRADINGAGENTS_LLM_PROVIDER=ollama
       - TRADINGAGENTS_LLM_BACKEND_URL=http://ollama:11434/v1
+      - OLLAMA_BASE_URL=http://ollama:11434/v1
     volumes:
       - tradingagents_data:/home/appuser/.tradingagents
       - ./reports:/home/appuser/app/reports

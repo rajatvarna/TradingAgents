@@ -20,12 +20,12 @@ def _reload_with_env(monkeypatch, **overrides):
 
 def test_no_env_uses_built_in_defaults(monkeypatch):
     dc = _reload_with_env(monkeypatch)
-    assert dc.DEFAULT_CONFIG["llm_provider"] == "openai"
-    assert dc.DEFAULT_CONFIG["deep_think_llm"] == "gpt-5.5"
-    assert dc.DEFAULT_CONFIG["quick_think_llm"] == "gpt-5.4-mini"
+    assert dc.DEFAULT_CONFIG["llm_provider"] == "google"
+    assert dc.DEFAULT_CONFIG["deep_think_llm"] == "gemini-2.5-pro"
+    assert dc.DEFAULT_CONFIG["quick_think_llm"] == "gemini-2.5-flash-lite"
     assert dc.DEFAULT_CONFIG["backend_url"] is None
     assert dc.DEFAULT_CONFIG["max_debate_rounds"] == 1
-    assert dc.DEFAULT_CONFIG["checkpoint_enabled"] is False
+    assert dc.DEFAULT_CONFIG["checkpoint_enabled"] is True
 
 
 def test_string_overrides(monkeypatch):
@@ -68,6 +68,27 @@ def test_bool_coercion(monkeypatch, raw, expected):
     assert dc.DEFAULT_CONFIG["checkpoint_enabled"] is expected
 
 
+def test_reasoning_thinking_overrides(monkeypatch):
+    """The provider reasoning/thinking knobs are env-configurable (non-interactive runs)."""
+    dc = _reload_with_env(
+        monkeypatch,
+        TRADINGAGENTS_OPENAI_REASONING_EFFORT="high",
+        TRADINGAGENTS_GOOGLE_THINKING_LEVEL="minimal",
+        TRADINGAGENTS_ANTHROPIC_EFFORT="low",
+    )
+    assert dc.DEFAULT_CONFIG["openai_reasoning_effort"] == "high"
+    assert dc.DEFAULT_CONFIG["google_thinking_level"] == "minimal"
+    assert dc.DEFAULT_CONFIG["anthropic_effort"] == "low"
+
+
+def test_reasoning_effort_defaults_to_none(monkeypatch):
+    """Unset reasoning/thinking knobs stay at their built-in defaults (or None if not set)."""
+    dc = _reload_with_env(monkeypatch)
+    assert dc.DEFAULT_CONFIG["openai_reasoning_effort"] == "max"
+    assert dc.DEFAULT_CONFIG["google_thinking_level"] is None
+    assert dc.DEFAULT_CONFIG["anthropic_effort"] is None
+
+
 def test_empty_env_value_is_passthrough(monkeypatch):
     """Empty TRADINGAGENTS_* values must not clobber the built-in default."""
     dc = _reload_with_env(
@@ -75,17 +96,27 @@ def test_empty_env_value_is_passthrough(monkeypatch):
         TRADINGAGENTS_LLM_PROVIDER="",
         TRADINGAGENTS_MAX_DEBATE_ROUNDS="",
     )
-    assert dc.DEFAULT_CONFIG["llm_provider"] == "openai"
+    assert dc.DEFAULT_CONFIG["llm_provider"] == "google"
     assert dc.DEFAULT_CONFIG["max_debate_rounds"] == 1
 
 
 def test_invalid_int_raises(monkeypatch):
     """Garbage int values should surface a ValueError at import, not silently misconfigure."""
     monkeypatch.setenv("TRADINGAGENTS_MAX_DEBATE_ROUNDS", "not-a-number")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="TRADINGAGENTS_MAX_DEBATE_ROUNDS"):
         importlib.reload(default_config_module)
     # Restore module state for subsequent tests in this process
     monkeypatch.delenv("TRADINGAGENTS_MAX_DEBATE_ROUNDS", raising=False)
+    importlib.reload(default_config_module)
+
+
+@pytest.mark.parametrize("bad", ["treu", "flase", "maybe", "2", "enabled"])
+def test_invalid_bool_raises(monkeypatch, bad):
+    """A misspelled boolean must fail loudly (like ints) instead of silently False."""
+    monkeypatch.setenv("TRADINGAGENTS_CHECKPOINT_ENABLED", bad)
+    with pytest.raises(ValueError, match="TRADINGAGENTS_CHECKPOINT_ENABLED"):
+        importlib.reload(default_config_module)
+    monkeypatch.delenv("TRADINGAGENTS_CHECKPOINT_ENABLED", raising=False)
     importlib.reload(default_config_module)
 
 

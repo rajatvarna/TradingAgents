@@ -1,31 +1,43 @@
-
 import pytest
-
 from tradingagents.graph.analyst_execution import (
     AnalystWallTimeTracker,
     build_analyst_execution_plan,
     sync_analyst_tracker_from_chunk,
+    get_initial_analyst_node,
 )
 
 
 def test_build_analyst_execution_plan():
     selected = ["market", "news", "sentiment"]
-    plan = build_analyst_execution_plan(selected, concurrency_limit=2)
-    assert plan.concurrency_limit == 2
+    plan = build_analyst_execution_plan(selected)
     assert len(plan.specs) == 3
     assert plan.specs[0].key == "market"
     assert plan.specs[1].key == "news"
     assert plan.specs[2].key == "sentiment"
 
     with pytest.raises(ValueError):
-        build_analyst_execution_plan([], concurrency_limit=1)
+        build_analyst_execution_plan([])
 
     with pytest.raises(ValueError):
-        build_analyst_execution_plan(["invalid_key"], concurrency_limit=1)
+        build_analyst_execution_plan(["invalid_key"])
+
+
+def test_build_plan_preserves_selected_order():
+    plan = build_analyst_execution_plan(["news", "market"])
+    assert [spec.key for spec in plan.specs] == ["news", "market"]
+    assert plan.specs[0].agent_node == "News Analyst"
+    assert plan.specs[0].tool_node == "tools_news"
+    assert plan.specs[0].clear_node == "Msg Clear News"
+
+
+def test_get_initial_analyst_node():
+    plan = build_analyst_execution_plan(["fundamentals", "news"])
+    assert get_initial_analyst_node(plan) == "Fundamentals Analyst"
+
 
 def test_wall_time_tracker():
     selected = ["market", "news"]
-    plan = build_analyst_execution_plan(selected, concurrency_limit=1)
+    plan = build_analyst_execution_plan(selected)
     tracker = AnalystWallTimeTracker(plan)
 
     # Initial formatted summary when pending
@@ -41,9 +53,10 @@ def test_wall_time_tracker():
     summary = tracker.format_summary()
     assert "Market 5.50s" in summary
 
+
 def test_sync_tracker_from_chunk():
     selected = ["market", "news"]
-    plan = build_analyst_execution_plan(selected, concurrency_limit=1)
+    plan = build_analyst_execution_plan(selected)
     tracker = AnalystWallTimeTracker(plan)
 
     # First chunk has no report

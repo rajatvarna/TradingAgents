@@ -22,7 +22,6 @@ class TradingMemoryLog:
 
     _SEPARATOR = "\n\n<!-- ENTRY_END -->\n\n"
 
-
     def __init__(self, config: dict = None):
         cfg = config or {}
         self._db_path = None

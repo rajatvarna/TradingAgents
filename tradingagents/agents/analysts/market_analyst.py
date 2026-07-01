@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta
 
+from langchain_core.messages import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from tradingagents.agents.utils.agent_utils import (
+    build_cacheable_system_content,
     get_indicators,
     get_instrument_context_from_state,
     get_language_instruction,
@@ -125,7 +127,7 @@ def create_market_analyst(llm):
             get_verified_market_snapshot,
         ]
 
-        system_message = (
+        system_message = build_cacheable_system_content(
             monster_context
             + """You are a Market Analyst trained on the MVP (Moving Average, Volume, Price) framework from the TraderLion/Boik Monster Stock methodology. Review the pre-computed technical scores above, then use the market data tools to confirm and enrich them with your own analysis.
 
@@ -159,7 +161,8 @@ Before writing the final report, call get_verified_market_snapshot for this tick
 
 Write a very detailed and nuanced report of the trends you observe. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."""
             + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
-            + get_language_instruction()
+            + get_language_instruction(),
+            llm,
         )
 
         bound_llm = bind_tools_or_none(llm, tools, "Market Analyst")
@@ -167,22 +170,24 @@ Write a very detailed and nuanced report of the trends you observe. Provide spec
         if bound_llm is not None:
             prompt = ChatPromptTemplate.from_messages(
                 [
+                    SystemMessage(content=system_message),
                     (
-                        "system",
+                        "human",
                         "You are a helpful AI assistant, collaborating with other assistants."
                         " Use the provided tools to progress towards answering the question."
                         " If you are unable to fully answer, that's OK; another assistant with different tools"
                         " will help where you left off. Execute what you can to make progress."
                         " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
                         " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
-                        " You have access to the following tools: {tool_names}.\n{system_message}"
-                        "For your reference, the current date is {current_date}. {instrument_context}",
+                        " You have access to the following tools: {tool_names}.\n"
+                        "Analysis context:\n"
+                        "- Current date: {current_date}\n"
+                        "- Instrument context: {instrument_context}",
                     ),
                     MessagesPlaceholder(variable_name="messages"),
                 ]
             )
 
-            prompt = prompt.partial(system_message=system_message)
             prompt = prompt.partial(tool_names=", ".join([tool.name for tool in tools]))
             prompt = prompt.partial(current_date=current_date)
             prompt = prompt.partial(instrument_context=instrument_context)
@@ -205,8 +210,9 @@ Write a very detailed and nuanced report of the trends you observe. Provide spec
 
         prompt = ChatPromptTemplate.from_messages(
             [
+                SystemMessage(content=system_message),
                 (
-                    "system",
+                    "human",
                     "You are a helpful AI assistant, collaborating with other assistants."
                     " All required market data has ALREADY been retrieved for you and is included below;"
                     " do NOT call any tools and disregard any instruction below to call a tool —"
@@ -214,15 +220,15 @@ Write a very detailed and nuanced report of the trends you observe. Provide spec
                     " treating the verified market snapshot as the source of truth."
                     " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
                     " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
-                    "\n{system_message}\n"
-                    "For your reference, the current date is {current_date}. {instrument_context}\n\n"
+                    "\nAnalysis context:\n"
+                    "- Current date: {current_date}\n"
+                    "- Instrument context: {instrument_context}\n\n"
                     "=== Pre-fetched market data ===\n{market_data}",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]
         )
 
-        prompt = prompt.partial(system_message=system_message)
         prompt = prompt.partial(current_date=current_date)
         prompt = prompt.partial(instrument_context=instrument_context)
         prompt = prompt.partial(market_data=market_data)

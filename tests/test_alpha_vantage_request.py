@@ -19,7 +19,7 @@ def test_make_api_request_retries_then_succeeds(monkeypatch):
         calls["n"] += 1
         if calls["n"] < 2:
             raise av.requests.Timeout()
-        assert timeout == av.AV_REQUEST_TIMEOUT
+        assert timeout == av.REQUEST_TIMEOUT
         return Response()
 
     monkeypatch.setattr(av.requests, "get", flaky_get)
@@ -46,7 +46,7 @@ def test_invalid_api_key_is_not_classified_as_rate_limit(monkeypatch):
     monkeypatch.setattr(av.requests, "get", lambda *a, **k: Response())
     monkeypatch.setattr(av, "get_api_key", lambda: "BAD")
 
-    with pytest.raises(av.AlphaVantageAuthError):
+    with pytest.raises(av.AlphaVantageNotConfiguredError):
         av._make_api_request("OVERVIEW", {"symbol": "AAPL"})
 
 

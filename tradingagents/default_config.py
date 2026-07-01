@@ -49,6 +49,12 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_OUTCOME_HOLDING_DAYS":        "outcome_holding_days",
     "TRADINGAGENTS_STATE_COMPRESSION_ENABLED":  "state_compression_enabled",
     "TRADINGAGENTS_TRADER_TOOLS_ENABLED":       "trader_tools_enabled",
+    # Provider-specific reasoning/thinking knobs (None = each provider's own
+    # default). Settable here for non-interactive runs; the CLI also offers an
+    # interactive choice, which is skipped when the matching var is set.
+    "TRADINGAGENTS_GOOGLE_THINKING_LEVEL":   "google_thinking_level",
+    "TRADINGAGENTS_OPENAI_REASONING_EFFORT": "openai_reasoning_effort",
+    "TRADINGAGENTS_ANTHROPIC_EFFORT":        "anthropic_effort",
 }
 
 _DATA_VENDOR_ENV_OVERRIDES = {
@@ -61,10 +67,26 @@ _DATA_VENDOR_ENV_OVERRIDES = {
 _TOOL_VENDOR_ENV_PREFIX = "TRADINGAGENTS_TOOL_VENDOR_"
 
 
+_BOOL_TRUE = ("true", "1", "yes", "on")
+_BOOL_FALSE = ("false", "0", "no", "off")
+
+
 def _coerce(value: str, reference):
-    """Coerce env-var string to the type of the existing default value."""
+    """Coerce env-var string to the type of the existing default value.
+
+    Invalid values raise ``ValueError`` rather than silently falling back to a
+    default — a misspelled boolean (e.g. ``treu``) or non-numeric int should fail
+    loudly at startup, not quietly misconfigure an unattended run.
+    """
     if isinstance(reference, bool):
-        return value.strip().lower() in ("true", "1", "yes", "on")
+        normalized = value.strip().lower()
+        if normalized in _BOOL_TRUE:
+            return True
+        if normalized in _BOOL_FALSE:
+            return False
+        raise ValueError(
+            f"expected a boolean ({'/'.join(_BOOL_TRUE + _BOOL_FALSE)}), got {value!r}"
+        )
     if isinstance(reference, int) and not isinstance(reference, bool):
         return int(value)
     if isinstance(reference, float):
@@ -78,7 +100,10 @@ def _apply_env_overrides(config: dict) -> dict:
         raw = os.environ.get(env_var)
         if raw is None or raw == "":
             continue
-        config[key] = _coerce(raw, config.get(key))
+        try:
+            config[key] = _coerce(raw, config.get(key))
+        except ValueError as exc:
+            raise ValueError(f"Invalid value for {env_var}: {exc}") from exc
 
     data_vendor = os.environ.get("TRADINGAGENTS_DATA_VENDOR")
     if data_vendor:
@@ -95,7 +120,6 @@ def _apply_env_overrides(config: dict) -> dict:
         if raw and env_var.startswith(_TOOL_VENDOR_ENV_PREFIX):
             method = env_var[len(_TOOL_VENDOR_ENV_PREFIX):].lower()
             tool_vendors[method] = raw
-
     return config
 
 
@@ -265,7 +289,6 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
-    "analyst_concurrency_limit": 5,
     # Risk constraints are copied into graph state at run start and re-injected
     # into each risk-agent prompt at invocation time, so message compression
     # cannot remove them from the active prompt context.
@@ -320,12 +343,17 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "agentkey_api_key": os.getenv("AGENTKEY_API_KEY", ""),
     "agentkey_base_url": os.getenv("AGENTKEY_BASE_URL", "https://api.agentkey.app"),
     # Data vendor configuration
-    # Category-level configuration (default for all tools in category)
+    # Category-level configuration (default for all tools in category).
+    # The configured value is the exact vendor chain — requests are NOT silently
+    # routed to vendors you didn't choose. For ordered fallback, list several,
+    # e.g. "yfinance,alpha_vantage". "default" uses all available vendors.
     "data_vendors": {
         "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance, b3
         "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance, b3
         "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance, b3
         "news_data": "google_news",          # Options: yfinance, google_news, alpha_vantage, searxng, b3
+        "macro_data": "fred",                # Options: fred (needs FRED_API_KEY)
+        "prediction_markets": "polymarket",  # Options: polymarket (keyless)
         "options_data": "yfinance",          # Options: yfinance (Polygon/Futu via Epic B fallback chain)
         "osint_social": "telegram",          # Options: telegram (Telegram); X tool routes to "x" vendor automatically
     },

@@ -33,9 +33,9 @@ class TestLoadOhlcvNoPoison(unittest.TestCase):
 
     def test_empty_download_raises_and_does_not_cache(self):
         empty = pd.DataFrame()
-        with mock.patch.object(stockstats_utils.yf, "download", return_value=empty):
-            with self.assertRaises(NoMarketDataError):
-                stockstats_utils.load_ohlcv("FAKE", "2026-01-01")
+        with mock.patch.object(stockstats_utils.yf, "download", return_value=empty), \
+                self.assertRaises(NoMarketDataError):
+            stockstats_utils.load_ohlcv("FAKE", "2026-01-01")
         # Nothing should have been written to the cache.
         self.assertEqual(os.listdir(self._tmp), [])
 
@@ -54,7 +54,7 @@ class TestLoadOhlcvNoPoison(unittest.TestCase):
                 "Close": [100.5],
                 "Volume": [1000],
             },
-            index=pd.DatetimeIndex(["2025-01-02"], name="Date"),
+            index=pd.DatetimeIndex(["2025-12-30"], name="Date"),
         )
 
         with (
@@ -67,7 +67,7 @@ class TestLoadOhlcvNoPoison(unittest.TestCase):
         start = pd.Timestamp(kwargs["start"])
         end = pd.Timestamp(kwargs["end"])
 
-        self.assertEqual(end, pd.Timestamp("2026-01-15"))
+        self.assertEqual(end, pd.Timestamp("2026-01-16"))
         self.assertGreaterEqual(
             (end - start).days,
             stockstats_utils.OHLCV_CACHE_YEARS * 365,

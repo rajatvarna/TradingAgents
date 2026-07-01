@@ -39,6 +39,9 @@ class _FakeLLM:
     def with_structured_output(self, schema):
         raise NotImplementedError("structured output not needed for graph compile")
 
+    def bind_tools(self, tools):
+        return self
+
 
 def test_esg_conditional_logic_and_graph_compile():
     logic = ConditionalLogic()

@@ -18,10 +18,28 @@ and the Sentiment Analyst so that:
 
 from __future__ import annotations
 
-from enum import StrEnum
+from enum import Enum
+
+try:
+    from enum import StrEnum
+except ImportError:
+    class StrEnum(str, Enum):
+        pass
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+# LLMs sometimes write a placeholder string ("None", "N/A", ...) into an optional
+# numeric field instead of omitting it. Coerce those to None so the structured
+# call validates instead of erroring (#1058). Pydantic still parses real numeric
+# strings ("189.5") to float.
+_NULLISH_FLOAT = {"", "none", "n/a", "na", "null", "nil", "-", "tbd", "unknown"}
+
+
+def _coerce_optional_float(value):
+    if isinstance(value, str) and value.strip().lower() in _NULLISH_FLOAT:
+        return None
+    return value
 
 # ---------------------------------------------------------------------------
 # Shared rating types
@@ -158,6 +176,11 @@ class TraderProposal(BaseModel):
         ),
     )
 
+    @field_validator("entry_price", "stop_loss", mode="before")
+    @classmethod
+    def _nullish_float_to_none(cls, v):
+        return _coerce_optional_float(v)
+
 
 def render_trader_proposal(proposal: TraderProposal) -> str:
     """Render a TraderProposal to markdown.
@@ -239,6 +262,11 @@ class PortfolioDecision(BaseModel):
         default=None,
         description="Optional recommended holding period, e.g. '3-6 months'.",
     )
+
+    @field_validator("price_target", mode="before")
+    @classmethod
+    def _nullish_float_to_none(cls, v):
+        return _coerce_optional_float(v)
 
 
 def render_pm_decision(decision: PortfolioDecision) -> str:
@@ -336,7 +364,9 @@ class SentimentReport(BaseModel):
             "(3) dominant narrative themes; "
             "(4) catalysts and risks surfaced by the data; "
             "(5) a markdown table summarising key sentiment signals, their "
-            "direction, source, and supporting evidence."
+            "direction, source, and supporting evidence. "
+            "Keep it informative and substantive: develop each section thoroughly "
+            "with concrete evidence so every point adds new signal for the trader."
         ),
     )
 

@@ -1,5 +1,5 @@
+import logging
 
-# Import from vendor-specific modules
 from .alpha_vantage import (
     get_balance_sheet as get_alpha_vantage_balance_sheet,
 )
@@ -55,7 +55,8 @@ from .b3 import (
 from .b3 import (
     get_stock_data as get_b3_stock,
 )
-from .fred_macro import get_macro_data as get_fred_macro_data
+from .fred import get_macro_data as get_fred_macro_data
+from .polymarket import get_prediction_markets as get_polymarket_prediction_markets
 from .futu import (
     get_options_chain as get_futu_options_chain,
 )
@@ -144,6 +145,7 @@ from .yfinance_options import (
 from .yfinance_options import (
     get_options_overview as get_yfinance_options_overview,
 )
+from .eastmoney_news import get_news_eastmoney, is_ashare
 
 try:
     from yfinance.exceptions import YFRateLimitError
@@ -157,7 +159,14 @@ except ImportError:
 
 # Configuration and routing logic
 from .config import get_config
-from .errors import DataVendorError
+from .errors import (
+    DataVendorError,
+    NoMarketDataError,
+    VendorNotConfiguredError,
+    VendorRateLimitError,
+)
+
+logger = logging.getLogger(__name__)
 
 # Tools organized by category
 TOOLS_CATEGORIES = {
@@ -191,8 +200,9 @@ TOOLS_CATEGORIES = {
         ]
     },
     "macro_data": {
-        "description": "Macroeconomic indicators",
+        "description": "Macroeconomic indicators (rates, inflation, labor, growth)",
         "tools": [
+            "get_macro_indicators",
             "get_macro_data"
         ]
     },
@@ -210,20 +220,35 @@ TOOLS_CATEGORIES = {
             "get_x_signals",
         ]
     },
+    "prediction_markets": {
+        "description": "Market-implied probabilities for forward-looking events",
+        "tools": [
+            "get_prediction_markets",
+        ]
+    }
 }
 
 VENDOR_LIST = [
     "yfinance",
+    "fred",
+    "polymarket",
     "google_news",
     "alpha_vantage",
-    "fred",
     "searxng",
     "b3",
     "twelve_data",
     "polygon",
     "futu",
     "ibkr",
+    "eastmoney",
 ]
+
+# Optional enrichment categories. These add macro/event context to the news
+# analyst but are not core to a decision, so a vendor failure here degrades to a
+# sentinel instead of aborting the run (a bad LLM-supplied indicator, a missing
+# key, or a network blip should not crash an analysis over flavour data). Core
+# categories (prices, fundamentals, news) still raise so a broken primary is loud.
+OPTIONAL_CATEGORIES = {"macro_data", "prediction_markets"}
 
 # Mapping of methods to their vendor-specific implementations
 VENDOR_METHODS = {
@@ -278,6 +303,7 @@ VENDOR_METHODS = {
         "b3": get_b3_news,
         "twelve_data": get_twelve_data_news,
         "polygon": get_polygon_news,
+        "eastmoney": get_news_eastmoney,
     },
     "get_global_news": {
         "yfinance": get_global_news_yfinance,
@@ -316,7 +342,16 @@ VENDOR_METHODS = {
     "get_x_signals": {
         "x": get_x_signals_impl,
     },
+    # macro_data
+    "get_macro_indicators": {
+        "fred": get_fred_macro_data,
+    },
+    # prediction_markets
+    "get_prediction_markets": {
+        "polymarket": get_polymarket_prediction_markets,
+    },
 }
+
 
 def get_category_for_method(method: str) -> str:
     """Get the category that contains the specified method."""
@@ -324,6 +359,7 @@ def get_category_for_method(method: str) -> str:
         if method in info["tools"]:
             return category
     raise ValueError(f"Method '{method}' not found in any category")
+
 
 def get_vendor(category: str, method: str = None) -> str:
     """Get the configured vendor for a data category or specific tool method.
@@ -340,10 +376,9 @@ def get_vendor(category: str, method: str = None) -> str:
     # Fall back to category-level configuration
     return config.get("data_vendors", {}).get(category, "default")
 
+
 def route_to_vendor(method: str, *args, **kwargs):
     """Route method calls to appropriate vendor implementation with fallback support."""
-    from tradingagents.dataflows.symbol_utils import NoMarketDataError
-
     category = get_category_for_method(method)
     vendor_config = get_vendor(category, method)
     primary_vendors = [v.strip() for v in vendor_config.split(',')]
@@ -351,39 +386,110 @@ def route_to_vendor(method: str, *args, **kwargs):
     if method not in VENDOR_METHODS:
         raise ValueError(f"Method '{method}' not supported")
 
-    # Build fallback chain: primary vendors first, then remaining available vendors
+    # Market-aware routing: the English-centric vendors return little or no
+    # news for Chinese A-shares (and yfinance returns an empty-but-successful
+    # string, so it would shadow any fallback). Prefer East Money for per-stock
+    # news on Shanghai/Shenzhen tickers, matching the framework's "resolve
+    # automatically per market" behaviour. Honoured only when not already
+    # overridden by an explicit vendor config.
+    if (
+        method == "get_news"
+        and args
+        and isinstance(args[0], str)
+        and is_ashare(args[0])
+        and vendor_config in ("default", "yfinance")
+    ):
+        primary_vendors = ["eastmoney"] + [
+            v for v in primary_vendors if v != "eastmoney"
+        ]
+
     all_available_vendors = list(VENDOR_METHODS[method].keys())
-    fallback_vendors = primary_vendors.copy()
-    for vendor in all_available_vendors:
-        if vendor not in fallback_vendors:
-            fallback_vendors.append(vendor)
 
-    first_no_data_err = None
+    # The configured vendor list IS the chain: we do NOT silently fall back to
+    # vendors the user did not choose (#988/#289) — that returned data from an
+    # unexpected source and caused cross-vendor inconsistencies. For multi-vendor
+    # fallback, list them in order, e.g. data_vendors="yfinance,alpha_vantage".
+    # The "default" sentinel (no explicit config) uses all available vendors.
+    explicit = [v for v in primary_vendors if v and v != "default"]
+    if explicit:
+        vendor_chain = [v for v in explicit if v in VENDOR_METHODS[method]]
+        if not vendor_chain:
+            raise ValueError(
+                f"Configured vendor(s) {explicit} not available for '{method}'. "
+                f"Available: {all_available_vendors}."
+            )
+    else:
+        vendor_chain = all_available_vendors
 
-    for vendor in fallback_vendors:
-        if vendor not in VENDOR_METHODS[method]:
-            continue
+    last_no_data: NoMarketDataError | None = None
+    first_error: Exception | None = None
 
+    for vendor in vendor_chain:
         vendor_impl = VENDOR_METHODS[method][vendor]
         impl_func = vendor_impl[0] if isinstance(vendor_impl, list) else vendor_impl
 
         try:
             return impl_func(*args, **kwargs)
-        except NoMarketDataError as exc:
-            if first_no_data_err is None:
-                first_no_data_err = exc
+        except VendorRateLimitError:
+            logger.warning("Vendor %r rate-limited for %s; trying next vendor.", vendor, method)
             continue
-        except (AlphaVantageRateLimitError, AlphaVantageUnsupportedIndicatorError, SearxngUnavailableError, YFRateLimitError, DataVendorError, ValueError):
-            continue  # Vendor-availability and rate limit failures trigger fallback
+        except VendorNotConfiguredError as e:
+            logger.warning("Vendor %r not configured for %s; trying next vendor.", vendor, method)
+            if first_error is None:
+                first_error = e  # Surface it if no other vendor can serve the call.
+            continue
+        except NoMarketDataError as e:
+            last_no_data = e  # No data here; another configured vendor may have it
+            continue
+        except (AlphaVantageRateLimitError, AlphaVantageUnsupportedIndicatorError, SearxngUnavailableError, YFRateLimitError, DataVendorError, ValueError) as e:
+            # Also catch the legacy/specific exceptions for custom vendor stubs, treating them as first_error
+            logger.warning("Vendor %r failed for %s: %s", vendor, method, e)
+            if first_error is None:
+                first_error = e
+            continue
+        except Exception as e:
+            # Don't let one vendor's failure crash the call when another can
+            # serve it, but never swallow silently: a broken primary must be
+            # visible in the logs (#989), not hidden behind a fallback's verdict.
+            logger.warning("Vendor %r failed for %s: %s", vendor, method, e)
+            if first_error is None:
+                first_error = e
+            continue
 
-    if first_no_data_err is not None:
-        symbol = first_no_data_err.symbol
-        canonical = first_no_data_err.canonical
-        detail = getattr(first_no_data_err, "detail", "")
+    # If any vendor reported "no data", the symbol is genuinely unavailable.
+    # Return one explicit, instructive sentinel rather than a vendor-specific
+    # empty string, so the agent reports "unavailable" instead of inventing a
+    # value. This takes precedence over incidental fallback errors.
+    if last_no_data is not None:
+        if first_error is not None:
+            # A vendor also hit a real error; surface it in logs so the no-data
+            # verdict can't hide a broken primary (network/auth/etc.).
+            logger.warning(
+                "Returning NO_DATA for %s, but a vendor errored earlier: %s",
+                method, first_error,
+            )
+        sym = last_no_data.symbol
+        canonical = last_no_data.canonical
+        resolved = "" if canonical == sym else f" (resolved to '{canonical}')"
+        reason = f" ({last_no_data.detail})" if last_no_data.detail else ""
         return (
-            f"NO_DATA_AVAILABLE: No market data for '{symbol}' "
-            f"(queried as '{canonical}'): {detail}. "
-            "Do not estimate, fake, or fabricate any indicators or reports."
+            f"NO_DATA_AVAILABLE: No usable market data for '{sym}'{resolved} from "
+            f"any configured vendor{reason}. The symbol may be invalid, delisted, "
+            f"not covered, or the vendor returned stale data. Do not estimate or "
+            f"fabricate values — report that data is unavailable for this symbol."
         )
+
+    # No vendor returned data and none reported clean "no data" — surface the
+    # first real error (e.g. the primary vendor's network failure). Optional
+    # enrichment categories degrade to a sentinel instead, so flavour data can't
+    # abort the run.
+    if first_error is not None:
+        if category in OPTIONAL_CATEGORIES:
+            logger.warning("Optional %s unavailable for %s: %s", category, method, first_error)
+            return (
+                f"DATA_UNAVAILABLE: optional {category} could not be retrieved "
+                f"({first_error}). Proceed without it; do not fabricate values."
+            )
+        raise first_error
 
     raise RuntimeError(f"No available vendor for '{method}'")

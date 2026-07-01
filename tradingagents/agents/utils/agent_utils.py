@@ -17,9 +17,8 @@ from tradingagents.agents.utils.fundamental_data_tools import (
     get_fundamentals,
     get_income_statement,
 )
-from tradingagents.agents.utils.market_data_validation_tools import (
-    get_verified_market_snapshot,
-)
+from tradingagents.agents.utils.macro_data_tools import get_macro_indicators
+from tradingagents.agents.utils.market_data_validation_tools import get_verified_market_snapshot
 from tradingagents.agents.utils.news_data_tools import (
     get_global_news,
     get_insider_transactions,
@@ -36,18 +35,7 @@ from tradingagents.agents.utils.technical_indicators_tools import get_indicators
 from tradingagents.agents.utils.trade_levels_tools import (
     suggest_trade_levels,
 )
-
-logger = logging.getLogger(__name__)
-
-DEBATE_EVIDENCE_GUARDRAIL = (
-    "\n\nEvidence discipline (REQUIRED):\n"
-    "- Cite at least 2 specific data points from the reports above — numbers, dates, "
-    "or exact phrases. Generic claims like \"the trend is strong\" do not count.\n"
-    "- Acknowledge at least ONE concrete piece of evidence that argues against your side. "
-    "If you cannot find one, your case is too one-sided to be useful.\n"
-    "- If a key input is unavailable (e.g. options chain missing for a historical date, "
-    "no usable volume_ratio), say so explicitly rather than substitute speculation.\n"
-)
+from tradingagents.agents.utils.prediction_markets_tools import get_prediction_markets
 
 __all__ = [
     "build_instrument_context",
@@ -59,6 +47,8 @@ __all__ = [
     "get_income_statement",
     "get_indicators",
     "get_insider_transactions",
+    "get_macro_indicators",
+    "get_prediction_markets",
     "get_language_instruction",
     "get_news",
     "get_stock_data",
@@ -77,8 +67,20 @@ __all__ = [
     "truncate_history",
     "format_risk_constraints",
     "get_verified_market_snapshot",
+    "create_force_finalize",
 ]
 
+logger = logging.getLogger(__name__)
+
+DEBATE_EVIDENCE_GUARDRAIL = (
+    "\n\nEvidence discipline (REQUIRED):\n"
+    "- Cite at least 2 specific data points from the reports above — numbers, dates, "
+    "or exact phrases. Generic claims like \"the trend is strong\" do not count.\n"
+    "- Acknowledge at least ONE concrete piece of evidence that argues against your side. "
+    "If you cannot find one, your case is too one-sided to be useful.\n"
+    "- If a key input is unavailable (e.g. options chain missing for a historical date, "
+    "no usable volume_ratio), say so explicitly rather than substitute speculation.\n"
+)
 
 RISK_CONSTRAINT_DEFAULTS: Mapping[str, Any] = {
     "max_position_size_pct": 10.0,
@@ -173,9 +175,14 @@ def resolve_instrument_identity(ticker: str) -> dict:
     recognise the ticker, we return ``{}`` and the caller falls back to
     ticker-only context rather than failing before analysis starts. Cached so
     the lookup happens at most once per ticker per process.
+
+    The symbol is normalized first (e.g. ``XAUUSD`` -> ``GC=F``) so identity
+    resolves for the same instrument the price path actually fetches (#983).
     """
+    from tradingagents.dataflows.symbol_utils import normalize_symbol
+
     try:
-        info = yf.Ticker(ticker.upper()).info or {}
+        info = yf.Ticker(normalize_symbol(ticker)).info or {}
     except Exception as exc:  # noqa: BLE001 — fail open, never block the run
         logger.debug("Could not resolve instrument identity for %s: %s", ticker, exc)
         return {}
@@ -287,7 +294,7 @@ def get_instrument_context_from_state(state: Mapping[str, Any]) -> str:
 def build_cacheable_system_content(text: str, llm: object, ttl: str = "5m"):
     """Return a cacheable Anthropic system block when the model supports it.
 
-    Non-Anthropic providers keep the plain string so the prompt shape stays
+    Non-Anthropic providers keep the plain string so the shape remains
     unchanged for OpenAI-compatible and Google models.
     """
     class_name = llm.__class__.__name__.lower()
@@ -353,7 +360,6 @@ def build_scope_guard(ticker: str) -> str:
     )
 
 
-
 def build_capital_context(holdings_info: dict | None) -> str:
     """Format portfolio NAV + ticker-level holdings for downstream prompts.
 
@@ -388,6 +394,7 @@ def build_capital_context(holdings_info: dict | None) -> str:
         + ". Size every entry / add / take-profit / stop in absolute share counts AND as a percent of NAV; "
         "do not propose orders whose dollar value exceeds available NAV."
     )
+
 
 def create_force_finalize(llm, report_key: str, analyst_label: str):
     """Build a node that forces an analyst to emit its final report without tools.

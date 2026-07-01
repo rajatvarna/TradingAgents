@@ -26,7 +26,14 @@ class Propagator:
         risk_constraints: dict[str, Any] | None = None,
         instrument_context: str = "",
     ) -> dict[str, Any]:
-        """Create the initial state for the agent graph."""
+        """Create the initial state for the agent graph.
+
+        ``instrument_context`` is the deterministic ticker-identity string
+        resolved once at run start (see
+        ``TradingAgentsGraph.resolve_instrument_context``). When empty, agents
+        fall back to ticker-only context via
+        ``get_instrument_context_from_state``.
+        """
         return {
             "messages": [("human", company_name)],
             "company_of_interest": company_name,

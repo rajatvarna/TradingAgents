@@ -1,8 +1,9 @@
-from enum import StrEnum
+from enum import Enum
 
 
-class AnalystType(StrEnum):
+class AnalystType(str, Enum):
     MARKET = "market"
+    SOCIAL = "social"
     SENTIMENT = "sentiment"
     NEWS = "news"
     FUNDAMENTALS = "fundamentals"
@@ -10,6 +11,6 @@ class AnalystType(StrEnum):
     DERIVATIVES = "derivatives"
 
 
-class AssetType(StrEnum):
+class AssetType(str, Enum):
     STOCK = "stock"
     CRYPTO = "crypto"

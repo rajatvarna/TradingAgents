@@ -10,6 +10,12 @@ from tradingagents.llm_clients.custom_provider_config import (
 ModelOption = tuple[str, str]
 ProviderModeOptions = dict[str, dict[str, list[ModelOption]]]
 
+# Providers that serve many / frequently-changing models: offer only "Custom
+# model ID" rather than a list that goes stale.
+_CUSTOM_ONLY: dict[str, list[ModelOption]] = {
+    "quick": [("Custom model ID", "custom")],
+    "deep": [("Custom model ID", "custom")],
+}
 
 # Shared model list for GLM via Z.AI (international) and BigModel (China).
 # Source: docs.z.ai (GLM Coding Plan supported models + LLM guides).
@@ -22,60 +28,49 @@ _GLM_MODELS: dict[str, list[ModelOption]] = {
         ("Custom model ID", "custom"),
     ],
     "deep": [
-        ("GLM-5.1 - Latest flagship, 204K ctx", "glm-5.1"),
+        ("GLM-5.2 - Latest flagship, 1M ctx", "glm-5.2"),
+        ("GLM-5.1 - 745B, 200K ctx", "glm-5.1"),
         ("GLM-5 - Flagship, 204K ctx", "glm-5"),
         ("GLM-4.7 - Previous-gen flagship", "glm-4.7"),
         ("Custom model ID", "custom"),
     ],
 }
 
-
 # Shared model list for Qwen's global (dashscope-intl) and CN (dashscope) endpoints.
 # Source: modelstudio.console.alibabacloud.com (Featured Models — Flagship + Cost-optimized).
-#
-# Only versioned IDs are exposed in the dropdown. The version-less aliases
-# (qwen-plus, qwen-flash) are documented by Alibaba as auto-upgrading
-# pointers ("backbone, latest, and snapshot ... have been upgraded to the
-# Qwen3 series"), which means their behavior shifts when Alibaba rotates
-# the backing model. Users who want a specific generation pick it
-# explicitly; users who really want auto-latest can enter the alias via
-# "Custom model ID".
 _QWEN_MODELS: dict[str, list[ModelOption]] = {
     "quick": [
-        ("Qwen 3.6 Flash - Latest fast, agentic coding + vision-language", "qwen3.6-flash"),
-        ("Qwen 3.5 Flash - Previous-gen fast", "qwen3.5-flash"),
+        ("Qwen 3.7 Plus - Latest, balanced speed/cost", "qwen3.7-plus"),
+        ("Qwen 3.6 Plus - Previous-gen balanced", "qwen3.6-plus"),
         ("Custom model ID", "custom"),
     ],
     "deep": [
-        ("Qwen 3.7 Max - Latest flagship reasoning agent, 1M ctx", "qwen3.7-max"),
-        ("Qwen 3.6 Plus - Vision-language, agentic coding", "qwen3.6-plus"),
-        ("Qwen 3.5 Plus - Previous-gen flagship", "qwen3.5-plus"),
+        ("Qwen 3.7 Max - Latest flagship, most intelligent, 1M ctx", "qwen3.7-max"),
+        ("Qwen 3.6 Max - Previous-gen flagship", "qwen3.6-max"),
+        ("Qwen 3.7 Plus - Balanced alternative", "qwen3.7-plus"),
         ("Custom model ID", "custom"),
     ],
 }
 
-
 # Shared model list for MiniMax's global and CN endpoints (same IDs).
-# Full official lineup per platform.minimax.io/docs/api-reference/text-openai-api.
-# M3: 512K context, 128K max output, image input support. M2.7 retains a
-# 204K context window; both endpoints share the same model IDs.
+# M3 carries a 1M-token context window; the M2.x line is 204,800 tokens.
 _MINIMAX_MODELS: dict[str, list[ModelOption]] = {
     "quick": [
-        ("MiniMax-M3 - Latest flagship, 512K ctx, image input (default)", "MiniMax-M3"),
-        ("MiniMax-M2.7-highspeed - Faster M2.7, 204K ctx, ~100 TPS", "MiniMax-M2.7-highspeed"),
+        ("MiniMax-M3 - Latest, 1M ctx, native multimodal", "MiniMax-M3"),
+        ("MiniMax-M2.7-highspeed - Fast M2.7, 204K ctx, ~100 TPS", "MiniMax-M2.7-highspeed"),
+        ("MiniMax-M2.5-highspeed - Previous-gen highspeed, 204K ctx", "MiniMax-M2.5-highspeed"),
         ("Custom model ID", "custom"),
     ],
     "deep": [
-        ("MiniMax-M3 - Latest flagship, 512K ctx, image input (default)", "MiniMax-M3"),
-        ("MiniMax-M2.7 - Previous-gen flagship, 204K ctx", "MiniMax-M2.7"),
+        ("MiniMax-M3 - Latest flagship, 1M ctx, multimodal coding/agent", "MiniMax-M3"),
+        ("MiniMax-M2.7 - Previous flagship, 204K ctx", "MiniMax-M2.7"),
         ("MiniMax-M2.7-highspeed - Same quality as M2.7, ~100 TPS", "MiniMax-M2.7-highspeed"),
+        ("MiniMax-M2.5 - Earlier flagship, 204K ctx", "MiniMax-M2.5"),
         ("Custom model ID", "custom"),
     ],
 }
 
 # Kimi (Moonshot AI) — single endpoint, excellent long-context + tool use.
-# kimi-k2.6 is the current flagship (256K context). Thinking is enabled by default
-# on K2 models and emits reasoning_content (must be round-tripped).
 _KIMI_MODELS: dict[str, list[ModelOption]] = {
     "quick": [
         ("Kimi K2.5 - Fast, strong agentic performance", "kimi-k2.5"),
@@ -87,9 +82,7 @@ _KIMI_MODELS: dict[str, list[ModelOption]] = {
     ],
 }
 
-# Tencent Cloud LKEAP Anthropic-compatible gateway. The platform's model
-# roster changes over time, so the built-ins are starting points and the
-# Custom model option remains important.
+# Tencent Cloud LKEAP Anthropic-compatible gateway.
 _TENCENT_MODELS: dict[str, list[ModelOption]] = {
     "quick": [
         ("GLM-5 - Tencent LKEAP compatible model", "glm-5"),
@@ -105,12 +98,7 @@ _TENCENT_MODELS: dict[str, list[ModelOption]] = {
     ],
 }
 
-
-
-# NVIDIA NIM exposes an OpenAI-compatible endpoint at
-# https://integrate.api.nvidia.com/v1. These are the suggested model IDs
-# from the provider request, while "Custom model ID" keeps the flow usable
-# for any other NIM-hosted model.
+# NVIDIA NIM exposes an OpenAI-compatible endpoint.
 _NVIDIA_NIM_MODELS: dict[str, list[ModelOption]] = {
     "quick": [
         ("DeepSeek V4 Flash Free", "z-ai/deepseek-v4-flash-free"),
@@ -130,14 +118,12 @@ _NVIDIA_NIM_MODELS: dict[str, list[ModelOption]] = {
     ],
 }
 
-
 MODEL_OPTIONS: ProviderModeOptions = {
     "openai": {
         "quick": [
             ("GPT-5.4 Mini - Fast, strong coding and tool use", "gpt-5.4-mini"),
             ("GPT-5.4 Nano - Cheapest, high-volume tasks", "gpt-5.4-nano"),
             ("GPT-5.5 - Latest frontier, 1M context", "gpt-5.5"),
-            ("GPT-4.1 - Smartest non-reasoning model", "gpt-4.1"),
         ],
         "deep": [
             ("GPT-5.5 - Latest frontier, 1M context", "gpt-5.5"),
@@ -146,12 +132,6 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("GPT-5.5 Pro - Most capable, expensive ($30/$180 per 1M tokens)", "gpt-5.5-pro"),
         ],
     },
-    # ChatGPT OAuth (backend Codex): SOLO i modelli del catalogo Codex sono
-    # accettati dal backend. Modelli generici (gpt-4.1, gpt-5, *-mini/*-nano
-    # non-codex) vengono rifiutati con HTTP 400 "Unsupported model", quindi
-    # questo elenco NON coincide con quello di "openai". Default deep =
-    # gpt-5.3-codex (Codex, non riservato a Pro). Verificato dal catalogo
-    # bundled di openai/codex (models.json, 2026-05-30) e da developers.openai.com/codex/models.
     "openai-oauth": {
         "quick": [
             ("GPT-5.4 Mini - Fast, broadly available (incl. free plan)", "gpt-5.4-mini"),
@@ -227,47 +207,30 @@ MODEL_OPTIONS: ProviderModeOptions = {
     "xai": {
         "quick": [
             ("Grok 4.3 - Latest flagship, fast with built-in reasoning", "grok-4.3"),
+            ("Grok 4.20 (Non-Reasoning) - Speed-optimized", "grok-4.20-0309-non-reasoning"),
             ("Grok Build 0.1 - Coding-specialized, 256K ctx", "grok-build-0.1"),
-            ("Grok 4 Fast (Non-Reasoning) - Speed optimized", "grok-4-fast-non-reasoning"),
         ],
         "deep": [
             ("Grok 4.3 - Latest flagship, built-in reasoning, 1M ctx", "grok-4.3"),
             ("Grok 4.20 (Reasoning) - Previous-gen reasoning", "grok-4.20-0309-reasoning"),
-            ("Grok 4 Fast (Reasoning) - High-performance", "grok-4-fast-reasoning"),
-            ("Grok 4 - Flagship (dated build)", "grok-4-0709"),
+            ("Grok 4.20 Multi-Agent - Multi-agent reasoning", "grok-4.20-multi-agent-0309"),
         ],
     },
     "deepseek": {
         "quick": [
-            ("DeepSeek V4 Flash - Latest V4 fast model", "deepseek-v4-flash"),
-            ("DeepSeek V3.2", "deepseek-chat"),
+            ("DeepSeek V4 Flash - Latest fast model, thinking + non-thinking", "deepseek-v4-flash"),
             ("Custom model ID", "custom"),
         ],
         "deep": [
-            ("DeepSeek V4 Pro - Latest V4 flagship model", "deepseek-v4-pro"),
-            ("DeepSeek V3.2 (thinking)", "deepseek-reasoner"),
-            ("DeepSeek V3.2", "deepseek-chat"),
+            ("DeepSeek V4 Pro - Latest flagship", "deepseek-v4-pro"),
+            ("DeepSeek V4 Flash - Fast, supports thinking", "deepseek-v4-flash"),
             ("Custom model ID", "custom"),
         ],
     },
-    "mistral": {
-        "quick": [
-            ("Mistral Small 4 - Powerful small hybrid model", "mistral-small-2603"),
-        ],
-        "deep": [
-            ("Mistral Large 3 - Large general-purpose multimodal model", "mistral-large-2512"),
-        ],
-    },
-    # Qwen: same model IDs across global (dashscope-intl) and China
-    # (dashscope) endpoints, so the two provider keys share one model list.
     "qwen": _QWEN_MODELS,
     "qwen-cn": _QWEN_MODELS,
-    # GLM: Z.AI (international) and BigModel (China) host the same model
-    # IDs; the two provider keys share one model list.
     "glm": _GLM_MODELS,
     "glm-cn": _GLM_MODELS,
-    # MiniMax: same model IDs across global (.io) and China (.com) regions,
-    # so the two provider keys share one model list.
     "minimax": _MINIMAX_MODELS,
     "minimax-cn": _MINIMAX_MODELS,
     "github_copilot": {
@@ -314,11 +277,6 @@ MODEL_OPTIONS: ProviderModeOptions = {
     },
     "kimi": _KIMI_MODELS,
     "nvidia_nim": _NVIDIA_NIM_MODELS,
-    # Codex: under ChatGPT-subscription auth the backend whitelists a
-    # small fixed set of GPT-5.x IDs; raw API model names like
-    # ``gpt-5``, ``o4-mini``, ``gpt-5.5-mini`` come back as
-    # ``invalid_request_error``. Users on ``OPENAI_API_KEY`` mode can
-    # enter anything via "Custom model ID".
     "codex": {
         "quick": [
             ("GPT-5.4 Mini - Subscription quick tier, fast", "gpt-5.4-mini"),
@@ -331,14 +289,6 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Custom model ID", "custom"),
         ],
     },
-    # OpenRouter: fetched dynamically. Azure: any deployed model name.
-    # Ollama display labels intentionally omit a "local" marker — the
-    # endpoint is now configurable via OLLAMA_BASE_URL, so the same labels
-    # apply whether the user runs ollama-serve on localhost or against a
-    # remote host. The actual resolved endpoint is surfaced separately by
-    # cli.utils.confirm_ollama_endpoint() right after provider selection.
-    # "Custom model ID" lets users pick any model they have pulled via
-    # `ollama pull` beyond the three suggested defaults.
     "ollama": {
         "quick": [
             ("Qwen3:latest (8B)", "qwen3:latest"),
@@ -384,11 +334,20 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Custom local model (default port 8001)", "custom"),
         ],
     },
-    # Opencode: generic OpenAI-compatible endpoint — any model ID accepted.
     "opencode": {
         "quick": [("Custom model ID", "custom")],
         "deep":  [("Custom model ID", "custom")],
     },
+    # Generic OpenAI-compatible endpoint: the model is whatever the user's
+    # server serves, so only "Custom model ID" is offered.
+    "openai_compatible": _CUSTOM_ONLY,
+    # Hosted OpenAI-compatible providers that serve many (and frequently
+    # changing) models — offer "Custom model ID" rather than a list that goes
+    # stale. The endpoint + key are wired by the provider; the user picks the
+    # model their account has access to.
+    "mistral": _CUSTOM_ONLY,
+    "groq": _CUSTOM_ONLY,
+    "nvidia": _CUSTOM_ONLY,
 }
 
 

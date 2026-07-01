@@ -1,4 +1,5 @@
-# Import functions from specialized modules
+# Aggregates the per-category Alpha Vantage implementations into one module the
+# vendor router imports from; the imports below are the public surface.
 from .alpha_vantage_fundamentals import (
     get_balance_sheet,
     get_cashflow,

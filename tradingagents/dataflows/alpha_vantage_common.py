@@ -7,24 +7,29 @@ from io import StringIO
 import pandas as pd
 import requests
 
+from .errors import VendorNotConfiguredError, VendorRateLimitError
+
 API_BASE_URL = "https://www.alphavantage.co/query"
-AV_REQUEST_TIMEOUT = 15
 AV_MAX_RETRIES = 3
 AV_BACKOFF_BASE = 1.5
 
+# Network timeout (seconds) so a stalled Alpha Vantage request can't hang the
+# CLI/agents indefinitely (#990).
+REQUEST_TIMEOUT = 30
 
-class AlphaVantageNotConfiguredError(ValueError):
+
+class AlphaVantageNotConfiguredError(VendorNotConfiguredError):
     """Raised when Alpha Vantage is selected but no API key is configured.
 
-    Subclasses ValueError for backward compatibility with callers that
-    already catch ValueError, while letting the routing layer distinguish a
-    "vendor unavailable" condition from a genuine data error.
+    A VendorNotConfiguredError (and thus still a ValueError), so the routing
+    layer's "vendor unavailable" handling and existing ValueError callers both
+    keep working.
     """
 
     pass
 
 
-class AlphaVantageRateLimitError(Exception):
+class AlphaVantageRateLimitError(VendorRateLimitError):
     """Raised when Alpha Vantage API rate limit is exceeded."""
 
     pass
@@ -67,8 +72,8 @@ def format_datetime_for_api(date_input) -> str:
                 dt = datetime.strptime(date_input, "%Y-%m-%d %H:%M")
                 return dt.strftime("%Y%m%dT%H%M")
             except ValueError:
-                raise ValueError(f"Unsupported date format: {date_input}")
-    if isinstance(date_input, datetime):
+                raise ValueError(f"Unsupported date format: {date_input}") from None
+    elif isinstance(date_input, datetime):
         return date_input.strftime("%Y%m%dT%H%M")
     raise ValueError(f"Date must be string or datetime object, got {type(date_input)}")
 
@@ -80,7 +85,7 @@ def _get_with_retry(params: dict) -> requests.Response:
             response = requests.get(
                 API_BASE_URL,
                 params=params,
-                timeout=AV_REQUEST_TIMEOUT,
+                timeout=REQUEST_TIMEOUT,
             )
             response.raise_for_status()
             return response
@@ -93,15 +98,6 @@ def _get_with_retry(params: dict) -> requests.Response:
     raise RuntimeError("Request failed without an exception")
 
 
-def _classify_information_message(info_message: str) -> None:
-    msg = info_message.lower()
-    if "rate limit" in msg or "frequency" in msg or "call frequency" in msg:
-        raise AlphaVantageRateLimitError(
-            f"Alpha Vantage rate limit exceeded: {info_message}"
-        )
-    if "api key" in msg or "apikey" in msg or "invalid key" in msg:
-        raise AlphaVantageAuthError(f"Alpha Vantage API key rejected: {info_message}")
-
 def _make_api_request(function_name: str, params: dict) -> dict | str:
     """Make an Alpha Vantage request with timeout, retry, and error typing.
 
@@ -112,17 +108,20 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
     """
     # Create a copy of params to avoid modifying the original
     api_params = params.copy()
-    api_params.update(
-        {
-            "function": function_name,
-            "apikey": get_api_key(),
-            "source": "trading_agents",
-        }
-    )
+    api_params.update({
+        "function": function_name,
+        "apikey": get_api_key(),
+        "source": "trading_agents",
+    })
 
-    # Keep entitlement explicit: callers may pass params["entitlement"], but
-    # there is no hidden global entitlement side channel.
-    if not api_params.get("entitlement"):
+    # Handle entitlement parameter if present in params or global variable
+    current_entitlement = globals().get('_current_entitlement')
+    entitlement = api_params.get("entitlement") or current_entitlement
+
+    if entitlement:
+        api_params["entitlement"] = entitlement
+    elif "entitlement" in api_params:
+        # Remove entitlement if it's None or empty
         api_params.pop("entitlement", None)
 
     response = _get_with_retry(api_params)
@@ -131,15 +130,27 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
     # Check if response is JSON (error responses are typically JSON)
     try:
         response_json = json.loads(response_text)
-        if "Information" in response_json:
-            _classify_information_message(response_json["Information"])
-        if "Error Message" in response_json:
-            message = response_json["Error Message"]
-            if "api key" in message.lower() or "apikey" in message.lower():
-                raise AlphaVantageAuthError(f"Alpha Vantage API key rejected: {message}")
     except json.JSONDecodeError:
-        # Response is not JSON (likely CSV data), which is normal
-        pass
+        return response_text
+
+    # Alpha Vantage reports problems via "Information" / "Note". Classify so a
+    # genuine rate limit and an invalid/missing key aren't conflated (#991):
+    # rate-limit phrasing is checked first because those notices also mention
+    # "API key" ("your API key ... 25 requests per day").
+    notice = response_json.get("Information") or response_json.get("Note")
+    if notice:
+        low = notice.lower()
+        if any(m in low for m in ("rate limit", "requests per day", "call frequency", "premium")):
+            raise AlphaVantageRateLimitError(f"Alpha Vantage rate limit exceeded: {notice}")
+        if "api key" in low or "apikey" in low:
+            # Reuse the existing "not configured" error so a bad key surfaces as
+            # a real, actionable failure rather than a mislabeled rate limit (#991).
+            raise AlphaVantageNotConfiguredError(f"Alpha Vantage API key invalid or missing: {notice}")
+
+    if "Error Message" in response_json:
+        message = response_json["Error Message"]
+        if "api key" in message.lower() or "apikey" in message.lower():
+            raise AlphaVantageAuthError(f"Alpha Vantage API key rejected: {message}")
 
     return response_text
 

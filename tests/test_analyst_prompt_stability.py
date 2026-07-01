@@ -23,6 +23,9 @@ class CapturingLlm:
     def __call__(self, messages):
         return self._invoke(messages)
 
+    def invoke(self, messages, *args, **kwargs):
+        return self._invoke(messages)
+
     def _invoke(self, messages):
         if hasattr(messages, "to_messages"):
             messages = messages.to_messages()

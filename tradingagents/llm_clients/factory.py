@@ -1,20 +1,11 @@
 import os
+from typing import Any
 
 from .api_key_env import get_api_key_env
 from .base_client import BaseLLMClient
 from .custom_provider_config import is_custom_openai_compatible_provider
 
 TENCENT_ANTHROPIC_BASE_URL = "https://api.lkeap.cloud.tencent.com/plan/anthropic"
-
-# Providers that use the OpenAI-compatible chat completions API.
-# "openai-oauth" is OpenAI's Responses API reached via the Codex ChatGPT
-# backend with an OAuth bearer (handled inside OpenAIClient).
-_OPENAI_COMPATIBLE = (
-    "openai", "openai-oauth", "xai", "deepseek", "qwen", "qwen-cn", "glm", "glm-cn", "minimax", "minimax-cn",
-    "ollama", "ollama_cloud", "openrouter", "deepinfra", "mimo", "custom_openai",
-    "lmstudio", "lm-studio", "llama-cpp", "kimi", "nvidia_nim", "opencode",
-    "custom", "mistral",
-)
 
 
 def create_llm_client(
@@ -43,11 +34,7 @@ def create_llm_client(
     """
     provider_lower = provider.lower()
 
-    if provider_lower in _OPENAI_COMPATIBLE or is_custom_openai_compatible_provider(provider_lower):
-        from .openai_client import OpenAIClient
-        return OpenAIClient(model, base_url, provider=provider_lower, **kwargs)
-
-    if provider_lower in ("anthropic", "tencent"):
+    if provider_lower == "anthropic" or provider_lower == "tencent":
         from .anthropic_client import AnthropicClient
         if provider_lower == "tencent":
             base_url = base_url or TENCENT_ANTHROPIC_BASE_URL
@@ -102,4 +89,9 @@ def create_llm_client(
     if provider_lower in ("openai-oauth", "openai_oauth"):
         from .openai_oauth_client import OpenAIOAuthClient
         return OpenAIOAuthClient(model, base_url, **kwargs)
+
+    from .openai_client import OpenAIClient, is_openai_compatible
+    if is_openai_compatible(provider_lower) or is_custom_openai_compatible_provider(provider_lower):
+        return OpenAIClient(model, base_url, provider=provider_lower, **kwargs)
+
     raise ValueError(f"Unsupported LLM provider: {provider}")

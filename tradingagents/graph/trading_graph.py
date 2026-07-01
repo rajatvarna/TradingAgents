@@ -269,6 +269,16 @@ class TradingAgentsGraph:
         self.graph = self.workflow.compile()
         self._checkpointer_ctx = None
 
+    def _checkpoint_run_signature(self, asset_type: str) -> str:
+        """Fingerprint graph-shaping choices for checkpoint resume identity."""
+        payload = {
+            "selected_analysts": list(self.selected_analysts),
+            "asset_type": asset_type,
+            "max_debate_rounds": self.config["max_debate_rounds"],
+            "max_risk_discuss_rounds": self.config["max_risk_discuss_rounds"],
+        }
+        return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
     def _get_provider_kwargs(self) -> dict[str, Any]:
         """Get provider-specific kwargs for LLM client creation."""
         kwargs = {}
@@ -447,14 +457,15 @@ class TradingAgentsGraph:
             end_str = end.strftime("%Y-%m-%d")
 
             # Normalize so the realized-return lookup hits the same instrument
-            # the analysis priced (e.g. XAUUSD -> GC=F) (#984). The benchmark is
-            # already a canonical Yahoo symbol from ``_resolve_benchmark``.
+            # the analysis priced (e.g. XAUUSD -> GC=F) (#984). Apply the same
+            # normalization to user-configured benchmarks such as SPX500.
             yahoo_symbol = normalize_symbol(ticker)
+            yahoo_benchmark = normalize_symbol(benchmark)
             stock = yf.Ticker(yahoo_symbol).history(start=trade_date, end=end_str)
-            if yahoo_symbol == benchmark:
+            if yahoo_symbol == yahoo_benchmark:
                 bench = stock
             else:
-                bench = yf.Ticker(benchmark).history(start=trade_date, end=end_str)
+                bench = yf.Ticker(yahoo_benchmark).history(start=trade_date, end=end_str)
 
             if len(stock) < 2 or len(bench) < 2:
                 return None, None, None
@@ -565,6 +576,7 @@ class TradingAgentsGraph:
 
         # Recompile with a checkpointer if the user opted in.
         if self.config.get("checkpoint_enabled"):
+            run_signature = self._checkpoint_run_signature(asset_type)
             self._checkpointer_ctx = get_checkpointer(
                 self.config["data_cache_dir"], company_name
             )
@@ -572,7 +584,7 @@ class TradingAgentsGraph:
             self.graph = self.workflow.compile(checkpointer=saver)
 
             step = checkpoint_step(
-                self.config["data_cache_dir"], company_name, str(trade_date)
+                self.config["data_cache_dir"], company_name, str(trade_date), run_signature
             )
             if step is not None:
                 logger.info(
@@ -691,9 +703,12 @@ class TradingAgentsGraph:
             started_ts=datetime.now(UTC).isoformat(),
         )
 
-        # Inject thread_id so same ticker+date resumes, different date starts fresh.
+        # Inject thread_id so same ticker+date+run-shape resumes, a different one starts fresh.
         if self.config.get("checkpoint_enabled"):
-            args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = thread_id(company_name, str(trade_date))
+            run_signature = self._checkpoint_run_signature(asset_type)
+            args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = thread_id(
+                company_name, str(trade_date), run_signature
+            )
 
         if self.debug or on_chunk is not None:
             trace = []
@@ -735,8 +750,9 @@ class TradingAgentsGraph:
 
         # Clear checkpoint on successful completion to avoid stale state.
         if self.config.get("checkpoint_enabled"):
+            run_signature = self._checkpoint_run_signature(asset_type)
             clear_checkpoint(
-                self.config["data_cache_dir"], company_name, str(trade_date)
+                self.config["data_cache_dir"], company_name, str(trade_date), run_signature
             )
 
         return final_state, self.process_signal(final_state["final_trade_decision"])
@@ -780,7 +796,7 @@ class TradingAgentsGraph:
 
         log_path = directory / f"full_states_log_{trade_date}.json"
         with open(log_path, "w", encoding="utf-8") as f:
-            json.dump(self.log_states_dict[str(trade_date)], f, indent=4)
+            json.dump(self.log_states_dict[str(trade_date)], f, indent=4, ensure_ascii=False)
 
     def process_signal(self, full_signal):
         """Process a signal to extract the core decision."""

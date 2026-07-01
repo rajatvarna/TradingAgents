@@ -17,6 +17,9 @@ Breaking changes within the 0.x line are called out explicitly.
 
 ### Fixed
 
+- **Checkpoint thread ID now includes a run-shape signature** (`tradingagents/graph/checkpointer.py`, `tradingagents/graph/trading_graph.py`): `thread_id`/`has_checkpoint`/`checkpoint_step`/`clear_checkpoint` accept an optional `run_signature`. A resumed run whose `selected_analysts`, `asset_type`, or debate/risk round config changed since the crashed run no longer silently resumes a checkpoint built for a different graph shape. (upstream #1106)
+- Realized-return lookup now normalizes user-configured `benchmark` symbols (e.g. `SPX500` → `^GSPC`) the same way it already normalizes the traded ticker, so a non-canonical benchmark symbol doesn't silently fail the alpha calculation. (`tradingagents/graph/trading_graph.py`, upstream #1075)
+- `full_states_log_*.json` is now written with `ensure_ascii=False` so non-ASCII characters (e.g. Chinese tickers/company names) are stored as readable UTF-8 instead of `\uXXXX` escapes. (`tradingagents/graph/trading_graph.py`, upstream #1081)
 - `TradingMemoryLog._row_to_dict`: `sqlite3.Row.__contains__` checks integer indexes, not column names, so `"meta" in row` always evaluated `False`, silently discarding every stored meta payload. Fixed to use `row.keys()` membership test.
 
 - **Portfolio-level risk budget** (`tradingagents/graph/risk_guardrails.py`): `GuardrailConfig` now accepts `max_portfolio_heat_pct` (default 20%) and `portfolio_positions` (list of existing open positions). When `risk_guardrails_enabled=True`, the guardrail checks total portfolio heat (sum of `position_pct × stop_loss_pct / 100` across all positions) and clamps new Buy/Overweight positions to keep aggregate heat within budget. `PortfolioPosition` dataclass added for type-safe position input. New config keys `max_portfolio_heat_pct` and `portfolio_positions` added to `DEFAULT_CONFIG`.

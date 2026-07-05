@@ -54,13 +54,16 @@ def _env_int(name: str, default: int) -> int:
     except ValueError:
         return default
 
-
 class BedrockClient(BaseLLMClient):
     """Client for AWS Bedrock chat models using the Converse API.
 
-    Credentials are resolved by boto3/langchain-aws, so values from
-    AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN, AWS_PROFILE,
-    AWS_REGION, and AWS_DEFAULT_REGION can be loaded from .env.enterprise.
+    Authentication is either a Bedrock API key (bearer token) via
+    ``AWS_BEARER_TOKEN_BEDROCK`` — no AWS access keys required — or the standard
+    AWS credential chain (env vars, ``~/.aws/credentials``, or an IAM role) with
+    optional ``AWS_PROFILE``. Set ``AWS_REGION`` / ``AWS_DEFAULT_REGION`` either
+    way (the token carries no region). Credentials can be loaded from
+    `.env.enterprise` or the environment. The model name is a Bedrock model ID or
+    cross-region inference profile ID, e.g. ``us.anthropic.claude-opus-4-8-v1:0``.
     """
 
     def __init__(self, model: str, base_url: str | None = None, **kwargs):
@@ -80,41 +83,49 @@ class BedrockClient(BaseLLMClient):
             or os.getenv("AWS_DEFAULT_REGION")
             or _DEFAULT_REGION
         )
-        profile = self.kwargs.get("credentials_profile_name") or os.getenv("AWS_PROFILE")
+        bearer_token = os.environ.get("AWS_BEARER_TOKEN_BEDROCK")
+        if bearer_token:
+            llm_kwargs = {
+                "model": self.model,
+                "region_name": region,
+                "api_key": bearer_token,
+            }
+        else:
+            profile = self.kwargs.get("credentials_profile_name") or os.getenv("AWS_PROFILE")
 
-        connect_timeout = int(
-            self.kwargs.get("connect_timeout")
-            or _env_int("TRADINGAGENTS_BEDROCK_CONNECT_TIMEOUT", 10)
-        )
-        read_timeout = int(
-            self.kwargs.get("read_timeout")
-            or _env_int("TRADINGAGENTS_BEDROCK_READ_TIMEOUT", 300)
-        )
-        max_attempts = int(
-            self.kwargs.get("max_attempts")
-            or _env_int("TRADINGAGENTS_BEDROCK_MAX_ATTEMPTS", 3)
-        )
+            connect_timeout = int(
+                self.kwargs.get("connect_timeout")
+                or _env_int("TRADINGAGENTS_BEDROCK_CONNECT_TIMEOUT", 10)
+            )
+            read_timeout = int(
+                self.kwargs.get("read_timeout")
+                or _env_int("TRADINGAGENTS_BEDROCK_READ_TIMEOUT", 300)
+            )
+            max_attempts = int(
+                self.kwargs.get("max_attempts")
+                or _env_int("TRADINGAGENTS_BEDROCK_MAX_ATTEMPTS", 3)
+            )
 
-        bedrock_config = Config(
-            connect_timeout=connect_timeout,
-            read_timeout=read_timeout,
-            retries={"max_attempts": max_attempts, "mode": "standard"},
-        )
-        if self.kwargs.get("config") is not None:
-            bedrock_config = self.kwargs["config"].merge(bedrock_config)
+            bedrock_config = Config(
+                connect_timeout=connect_timeout,
+                read_timeout=read_timeout,
+                retries={"max_attempts": max_attempts, "mode": "standard"},
+            )
+            if self.kwargs.get("config") is not None:
+                bedrock_config = self.kwargs["config"].merge(bedrock_config)
 
-        session = boto3.Session(profile_name=profile, region_name=region)
-        client = session.client(
-            "bedrock-runtime",
-            endpoint_url=self.base_url or os.getenv("AWS_BEDROCK_ENDPOINT"),
-            config=bedrock_config,
-        )
+            session = boto3.Session(profile_name=profile, region_name=region)
+            client = session.client(
+                "bedrock-runtime",
+                endpoint_url=self.base_url or os.getenv("AWS_BEDROCK_ENDPOINT"),
+                config=bedrock_config,
+            )
 
-        llm_kwargs = {
-            "model": self.model,
-            "region_name": region,
-            "client": client,
-        }
+            llm_kwargs = {
+                "model": self.model,
+                "region_name": region,
+                "client": client,
+            }
 
         # Passthrough kwargs
         for key in ("callbacks", "temperature", "max_tokens", "top_p", "stop_sequences", "timeout", "max_retries"):

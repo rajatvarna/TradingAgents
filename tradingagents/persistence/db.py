@@ -6,11 +6,13 @@ Loads sqlite-vec at connect time and registers the vec_index virtual table.
 from __future__ import annotations
 
 import sqlite3
+import threading
 from pathlib import Path
 
 import sqlite_vec
 
 _SCHEMA_PATH = Path(__file__).parent / "schema.sql"
+_db_lock = threading.Lock()
 
 
 def _split_sql_statements(script: str) -> list[str]:
@@ -59,42 +61,43 @@ def connect(db_path: str) -> sqlite3.Connection:
     sqlite_vec.load(conn)
     conn.enable_load_extension(False)
 
-    # Schema. CREATE TABLE/INDEX IF NOT EXISTS are idempotent; ALTER TABLE
-    # ADD COLUMN is NOT — sqlite raises "duplicate column name" on a re-run.
-    # We split on `;` and apply each statement, suppressing only that error.
-    with open(_SCHEMA_PATH, encoding="utf-8") as f:
-        script = f.read()
-    for stmt in _split_sql_statements(script):
-        stmt = stmt.strip()
-        if not stmt:
-            continue
-        try:
-            conn.execute(stmt)
-        except sqlite3.OperationalError as e:
-            msg = str(e).lower()
-            if "duplicate column name" in msg:
-                continue   # ALTER TABLE re-run — column already present
-            raise
-
-    # vec_index is a virtual table; CREATE VIRTUAL TABLE doesn't support
-    # IF NOT EXISTS in older SQLite, so guard manually. We also wrap the
-    # CREATE in a try/except because the SELECT→CREATE pair is NOT atomic:
-    # when multiple threads call connect() concurrently on the same DB
-    # (e.g. F1's deepdive launches three personas in parallel), two threads
-    # can both observe the table as missing and race to create it. The
-    # loser sees "table vec_index already exists" — which is harmless and
-    # exactly what we want either way.
-    existing = conn.execute(
-        "SELECT name FROM sqlite_master WHERE name='vec_index'"
-    ).fetchone()
-    if existing is None:
-        try:
-            conn.execute(
-                "CREATE VIRTUAL TABLE vec_index USING vec0(embedding float[384])"
-            )
-        except sqlite3.OperationalError as e:
-            if "already exists" not in str(e):
+    with _db_lock:
+        # Schema. CREATE TABLE/INDEX IF NOT EXISTS are idempotent; ALTER TABLE
+        # ADD COLUMN is NOT — sqlite raises "duplicate column name" on a re-run.
+        # We split on `;` and apply each statement, suppressing only that error.
+        with open(_SCHEMA_PATH, encoding="utf-8") as f:
+            script = f.read()
+        for stmt in _split_sql_statements(script):
+            stmt = stmt.strip()
+            if not stmt:
+                continue
+            try:
+                conn.execute(stmt)
+            except sqlite3.OperationalError as e:
+                msg = str(e).lower()
+                if "duplicate column name" in msg:
+                    continue   # ALTER TABLE re-run — column already present
                 raise
 
-    conn.commit()
+        # vec_index is a virtual table; CREATE VIRTUAL TABLE doesn't support
+        # IF NOT EXISTS in older SQLite, so guard manually. We also wrap the
+        # CREATE in a try/except because the SELECT→CREATE pair is NOT atomic:
+        # when multiple threads call connect() concurrently on the same DB
+        # (e.g. F1's deepdive launches three personas in parallel), two threads
+        # can both observe the table as missing and race to create it. The
+        # loser sees "table vec_index already exists" — which is harmless and
+        # exactly what we want either way.
+        existing = conn.execute(
+            "SELECT name FROM sqlite_master WHERE name='vec_index'"
+        ).fetchone()
+        if existing is None:
+            try:
+                conn.execute(
+                    "CREATE VIRTUAL TABLE vec_index USING vec0(embedding float[384])"
+                )
+            except sqlite3.OperationalError as e:
+                if "already exists" not in str(e):
+                    raise
+
+        conn.commit()
     return conn

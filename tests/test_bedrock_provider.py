@@ -54,6 +54,7 @@ def test_bearer_token_passed_as_api_key(monkeypatch):
     # #1103: a Bedrock API key authenticates without AWS access keys.
     captured = _capture_kwargs(monkeypatch)
     monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", "bt-secret")
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
     create_llm_client("bedrock", "us.anthropic.claude-opus-4-8-v1:0").get_llm()
     assert captured["api_key"] == "bt-secret"

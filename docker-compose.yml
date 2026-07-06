@@ -76,7 +76,11 @@ services:
     env_file:
       - .env
     environment:
+      # Config overrides are read from TRADINGAGENTS_* env vars (see
+      # default_config._ENV_OVERRIDES); a bare LLM_PROVIDER is ignored.
       - TRADINGAGENTS_LLM_PROVIDER=ollama
+      # Reach the sibling ollama container by service name, not localhost,
+      # which inside this container would resolve to itself.
       - TRADINGAGENTS_LLM_BACKEND_URL=http://ollama:11434/v1
       - OLLAMA_BASE_URL=http://ollama:11434/v1
     volumes:

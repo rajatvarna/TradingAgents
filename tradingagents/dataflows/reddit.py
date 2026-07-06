@@ -27,6 +27,7 @@ import xml.etree.ElementTree as ET
 from collections.abc import Iterable
 from datetime import datetime
 from urllib.error import HTTPError
+from typing import Optional
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 

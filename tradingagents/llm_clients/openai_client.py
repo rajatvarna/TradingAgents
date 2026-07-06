@@ -2,7 +2,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 from langchain_core.messages import AIMessage
@@ -375,6 +375,7 @@ def _is_native_openai_base_url(base_url: str | None) -> bool:
         base_url = "https://" + base_url
     host = urlparse(base_url).hostname or ""
     return host == "api.openai.com" or host.endswith(".openai.com")
+
 
 
 class OpenAIClient(BaseLLMClient):

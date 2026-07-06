@@ -47,19 +47,19 @@ def test_resolver_returns_default_when_env_unset(monkeypatch):
 def test_9router_resolver_returns_default_when_env_unset(monkeypatch):
     monkeypatch.delenv("NINEROUTER_URL", raising=False)
     mod = _reload_client()
-    assert mod._resolve_provider_base_url("9router") == "http://localhost:20128/v1"
+    assert mod.resolve_provider_base_url("9router") == "http://localhost:20128/v1"
 
 
 def test_9router_resolver_appends_v1(monkeypatch):
     monkeypatch.setenv("NINEROUTER_URL", "http://remote-9router:20128")
     mod = _reload_client()
-    assert mod._resolve_provider_base_url("9router") == "http://remote-9router:20128/v1"
+    assert mod.resolve_provider_base_url("9router") == "http://remote-9router:20128/v1"
 
 
 def test_9router_resolver_keeps_existing_v1(monkeypatch):
     monkeypatch.setenv("NINEROUTER_URL", "http://remote-9router:20128/v1")
     mod = _reload_client()
-    assert mod._resolve_provider_base_url("9router") == "http://remote-9router:20128/v1"
+    assert mod.resolve_provider_base_url("9router") == "http://remote-9router:20128/v1"
 
 
 def test_9router_client_uses_chat_completions_not_responses(monkeypatch):

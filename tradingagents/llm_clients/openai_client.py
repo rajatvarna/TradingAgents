@@ -393,7 +393,12 @@ def resolve_provider_base_url(provider: str) -> str | None:
         return None
     pref_env = f"TRADINGAGENTS_{key.upper()}_BASE_URL"
     env_override = os.environ.get(pref_env) or (os.environ.get(spec.base_url_env) if spec.base_url_env else None)
-    return env_override or spec.base_url
+    url = env_override or spec.base_url
+    if key == "9router" and url:
+        url = url.rstrip("/")
+        if not url.endswith("/v1"):
+            url += "/v1"
+    return url
 
 
 def _is_native_openai_base_url(base_url: str | None) -> bool:

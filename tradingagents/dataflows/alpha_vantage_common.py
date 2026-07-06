@@ -13,9 +13,9 @@ API_BASE_URL = "https://www.alphavantage.co/query"
 AV_MAX_RETRIES = 3
 AV_BACKOFF_BASE = 1.5
 
-# Network timeout (seconds) so a stalled Alpha Vantage request can't hang the
-# CLI/agents indefinitely (#990).
-REQUEST_TIMEOUT = 30
+# (connect, read) timeout in seconds for Alpha Vantage HTTP requests, so a
+# stalled network path can't block the whole analysis indefinitely (see #990).
+REQUEST_TIMEOUT = (5, 30)
 
 
 class AlphaVantageNotConfiguredError(VendorNotConfiguredError):
@@ -123,11 +123,9 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
     elif "entitlement" in api_params:
         # Remove entitlement if it's None or empty
         api_params.pop("entitlement", None)
-
     response = _get_with_retry(api_params)
     response_text = response.text
 
-    # Check if response is JSON (error responses are typically JSON)
     try:
         response_json = json.loads(response_text)
     except json.JSONDecodeError:

@@ -431,7 +431,12 @@ def route_to_vendor(method: str, *args, **kwargs):
         try:
             return impl_func(*args, **kwargs)
         except VendorRateLimitError:
-            logger.warning("Vendor %r rate-limited for %s; trying next vendor.", vendor, method)
+            logger.warning(
+                "Vendor %r rate-limited for %s%s; trying next vendor.",
+                vendor,
+                method,
+                " (configured primary)" if vendor in primary_vendors else "",
+            )
             continue
         except VendorNotConfiguredError as e:
             logger.warning("Vendor %r not configured for %s; trying next vendor.", vendor, method)
@@ -448,10 +453,19 @@ def route_to_vendor(method: str, *args, **kwargs):
                 first_error = e
             continue
         except Exception as e:
-            # Don't let one vendor's failure crash the call when another can
-            # serve it, but never swallow silently: a broken primary must be
-            # visible in the logs (#989), not hidden behind a fallback's verdict.
-            logger.warning("Vendor %r failed for %s: %s", vendor, method, e)
+            # A fallback vendor failing for an incidental reason (e.g. no API
+            # key configured) must not crash the call when another vendor
+            # already determined the symbol simply has no data. Remember the
+            # first error so a genuine primary-vendor failure still surfaces.
+            # Log it so a broken primary vendor isn't silently masked when a
+            # later fallback succeeds (see #989).
+            logger.warning(
+                "Vendor %r failed for %s%s",
+                vendor,
+                method,
+                " (configured primary)" if vendor in primary_vendors else "",
+                exc_info=True,
+            )
             if first_error is None:
                 first_error = e
             continue

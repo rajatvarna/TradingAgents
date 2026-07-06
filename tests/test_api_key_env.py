@@ -18,7 +18,7 @@ def test_every_select_llm_provider_choice_has_an_entry():
     # stay in lockstep. Region-specific keys (qwen-cn / minimax-cn / glm-cn)
     # are reached via the secondary region prompt, so they must also be present.
     expected = {
-        "openai", "google", "anthropic", "xai", "deepseek",
+        "openai", "google", "google_vertex", "anthropic", "xai", "deepseek",
         "tencent",
         "qwen", "qwen-cn",
         "glm", "glm-cn",
@@ -59,6 +59,10 @@ def test_ollama_has_no_key():
 
 def test_opencode_has_key():
     assert get_api_key_env("opencode") == "OPENCODE_API_KEY"
+
+
+def test_google_vertex_has_no_key():
+    assert get_api_key_env("google_vertex") is None
 
 
 def test_unknown_provider_returns_none():

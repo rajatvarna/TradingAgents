@@ -118,6 +118,24 @@ _NVIDIA_NIM_MODELS: dict[str, list[ModelOption]] = {
     ],
 }
 
+_GOOGLE_MODELS: dict[str, list[ModelOption]] = {
+    "quick": [
+        ("Gemini 3.5 Flash - Latest, frontier agentic + coding (GA)", "gemini-3.5-flash"),
+        ("Gemini 3.1 Flash Lite - Most cost-efficient (GA)", "gemini-3.1-flash-lite"),
+        ("Gemini 3 Flash (Preview) - Next-gen fast", "gemini-3-flash-preview"),
+        ("Gemini 2.5 Flash - Balanced, stable", "gemini-2.5-flash"),
+        ("Gemini 2.5 Flash Lite - Fast, low-cost", "gemini-2.5-flash-lite"),
+    ],
+    "deep": [
+        ("Gemini 3.5 Flash - Latest GA, strong agentic + coding", "gemini-3.5-flash"),
+        ("Gemini 3.1 Pro - Reasoning-first, complex workflows (preview)", "gemini-3.1-pro-preview"),
+        ("Gemini 3 Flash (Preview) - Next-gen fast", "gemini-3-flash-preview"),
+        ("Gemini 2.5 Pro - Stable pro model", "gemini-2.5-pro"),
+        ("Gemini 2.5 Flash - Balanced, stable", "gemini-2.5-flash"),
+    ],
+}
+
+
 MODEL_OPTIONS: ProviderModeOptions = {
     "openai": {
         "quick": [
@@ -158,24 +176,9 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Claude Opus 4.7 - Previous frontier, long-running agents", "claude-opus-4-7"),
         ],
     },
-
     "tencent": _TENCENT_MODELS,
-    "google": {
-        "quick": [
-            ("Gemini 3.5 Flash - Latest, frontier agentic + coding (GA)", "gemini-3.5-flash"),
-            ("Gemini 3.1 Flash Lite - Most cost-efficient (GA)", "gemini-3.1-flash-lite"),
-            ("Gemini 3 Flash (Preview) - Next-gen fast", "gemini-3-flash-preview"),
-            ("Gemini 2.5 Flash - Balanced, stable", "gemini-2.5-flash"),
-            ("Gemini 2.5 Flash Lite - Fast, low-cost", "gemini-2.5-flash-lite"),
-        ],
-        "deep": [
-            ("Gemini 3.5 Flash - Latest GA, strong agentic + coding", "gemini-3.5-flash"),
-            ("Gemini 3.1 Pro - Reasoning-first, complex workflows (preview)", "gemini-3.1-pro-preview"),
-            ("Gemini 3 Flash (Preview) - Next-gen fast", "gemini-3-flash-preview"),
-            ("Gemini 2.5 Pro - Stable pro model", "gemini-2.5-pro"),
-            ("Gemini 2.5 Flash - Balanced, stable", "gemini-2.5-flash"),
-        ],
-    },
+    "google": _GOOGLE_MODELS,
+    "google_vertex": _GOOGLE_MODELS,
     "bedrock": {
         "quick": [
             ("Claude Sonnet 4.6 (cross-region)", "us.anthropic.claude-sonnet-4-6-v1"),

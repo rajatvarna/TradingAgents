@@ -30,7 +30,7 @@
 
 ## News
 - [2026-07] **TradingAgents v0.3.1** released with correctness and stability fixes: Alpha Vantage look-ahead filtering, graph-router crash-safety, graph-shape-aware checkpoint resume, working crypto sentiment sources, a configurable LLM retry budget, Bedrock API-key auth, and Claude Sonnet 5 / Fable 5 support. See [CHANGELOG.md](CHANGELOG.md) for the full list.
-- [2026-06] **TradingAgents v0.3.0** released with a verified data-access contract, an expanded provider registry (NVIDIA, Kimi, Groq, Mistral, Bedrock, and any OpenAI-compatible endpoint), FRED and Polymarket data vendors, a current-generation model catalog, and a CI gate.
+- [2026-06] **TradingAgents v0.3.0** released with a verified data-access contract, an expanded provider registry (NVIDIA, Kimi, Groq, Mistral, Bedrock, and any OpenAI-compatible endpoint), FRED and Polymarket data vendors, a current-generation model catalog, and a CI gate. See [CHANGELOG.md](CHANGELOG.md) for the full list.
 - [2026-05] **TradingAgents v0.2.5** released with the grounded Sentiment Analyst, GPT-5.5 etc. model coverage, Qwen/GLM/MiniMax dual-region support, `TRADINGAGENTS_*` env-var configurability with API-key auto-detection, remote Ollama support, non-US alpha benchmarks, and ticker path-traversal hardening.
 - [2026-04] **TradingAgents v0.2.4** released with structured-output agents (Research Manager, Trader, Portfolio Manager), LangGraph checkpoint resume, persistent decision log, DeepSeek/Qwen/GLM/Azure provider support, Docker, and a Windows UTF-8 encoding fix.
 - [2026-03] **TradingAgents v0.2.3** released with multi-language support, GPT-5.4 family models, unified model catalog, backtesting date fidelity, and proxy support.
@@ -75,6 +75,7 @@ TradingAgents is a multi-agent trading framework that mirrors the dynamics of re
 Our framework decomposes complex trading tasks into specialized roles. This ensures the system achieves a robust, scalable approach to market analysis and decision-making.
 
 ### Analyst Team
+
 - Fundamentals Analyst: Evaluates company financials and performance metrics, identifying intrinsic values and potential red flags.
 - Sentiment Analyst: Analyzes social media and public sentiment using sentiment scoring algorithms to gauge short-term market mood.
 - News Analyst: Monitors global news and macroeconomic indicators, interpreting the impact of events on market conditions.
@@ -85,6 +86,7 @@ Our framework decomposes complex trading tasks into specialized roles. This ensu
 </p>
 
 ### Researcher Team
+
 - Comprises both bullish and bearish researchers who critically assess the insights provided by the Analyst Team. Through structured debates, they balance potential gains against inherent risks.
 
 <p align="center">
@@ -92,13 +94,14 @@ Our framework decomposes complex trading tasks into specialized roles. This ensu
 </p>
 
 ### Trader Agent
-- Composes reports from the analysts and researchers to make informed trading decisions. It determines the timing and magnitude of trades based on comprehensive market insights.
+- Composes reports from the analysts and researchers to make informed trading decisions, determining the timing and magnitude of trades.
 
 <p align="center">
   <img src="assets/trader.png" width="70%" style="display: inline-block; margin: 0 2%;">
 </p>
 
 ### Risk Management and Portfolio Manager
+
 - Continuously evaluates portfolio risk by assessing market volatility, liquidity, and other risk factors. The risk management team evaluates and adjusts trading strategies, providing assessment reports to the Portfolio Manager for final decision.
 - The Portfolio Manager approves/rejects the transaction proposal. If approved, the order will be sent to the simulated exchange and executed.
 
@@ -111,18 +114,21 @@ Our framework decomposes complex trading tasks into specialized roles. This ensu
 ### Installation
 
 Clone TradingAgents:
+
 ```bash
 git clone https://github.com/TauricResearch/TradingAgents.git
 cd TradingAgents
 ```
 
 Create a virtual environment in any of your favorite environment managers:
+
 ```bash
 conda create -n tradingagents python=3.12
 conda activate tradingagents
 ```
 
 Install the package and its dependencies:
+
 ```bash
 pip install .
 ```
@@ -138,12 +144,14 @@ source .venv/bin/activate
 ### Docker
 
 Alternatively, run with Docker:
+
 ```bash
 cp .env.example .env  # add your API keys
 docker compose run --rm tradingagents
 ```
 
 For local models with Ollama:
+
 ```bash
 docker compose --profile ollama run --rm tradingagents-ollama
 ```
@@ -279,7 +287,9 @@ For Azure OpenAI, copy `.env.enterprise.example` to `.env.enterprise` and fill i
 
 For AWS Bedrock, install the extra with `pip install ".[bedrock]"`, set `llm_provider: "bedrock"`, configure AWS credentials (environment variables, `~/.aws/credentials`, or an IAM role) and `AWS_DEFAULT_REGION`, and use a Bedrock model ID, e.g. `us.anthropic.claude-opus-4-8-v1:0`.
 
-For local models, configure Ollama with `llm_provider: "ollama"` in your config.
+For Google Vertex AI, install the extra with `pip install ".[vertex]"`, set `llm_provider: "google_vertex"`, authenticate with Google Application Default Credentials (`gcloud auth application-default login`, `GOOGLE_APPLICATION_CREDENTIALS`, or an attached service account), and optionally set `TRADINGAGENTS_VERTEX_PROJECT` plus `TRADINGAGENTS_VERTEX_LOCATION`. When no location is configured, TradingAgents defaults Vertex AI to `global`, the safest choice for the newest Gemini models. Vertex uses Gemini model IDs such as `gemini-3.5-flash` and does not require `GOOGLE_API_KEY`.
+
+For local models, configure Ollama with `llm_provider: "ollama"`. The default endpoint is `http://localhost:11434/v1`; set `OLLAMA_BASE_URL` to point at a remote `ollama-serve`. Pull models with `ollama pull <name>`, and pick "Custom model ID" in the CLI for any model not listed by default.
 
 For AWS Bedrock, set `llm_provider: "bedrock"` and ensure your AWS credentials are configured (via `~/.aws/credentials`, environment variables, or IAM role). Set `AWS_DEFAULT_REGION` and optionally `AWS_PROFILE`. Install the extra dependency with `pip install .[bedrock]`. Use cross-region inference profile IDs (e.g. `us.anthropic.claude-opus-4-6-v1`) as model names.
 
@@ -300,6 +310,7 @@ For Kimi (Moonshot AI), the provider defaults to `https://api.moonshot.ai/v1`. I
 For any other OpenAI-compatible server (vLLM, LM Studio, llama.cpp, or a custom relay), use `llm_provider: "openai_compatible"` and set the endpoint via `backend_url` (or `TRADINGAGENTS_LLM_BACKEND_URL`), e.g. `http://localhost:8000/v1` for vLLM or `http://localhost:1234/v1` for LM Studio. The model is whatever your server serves. No key is needed for local servers; set `OPENAI_COMPATIBLE_API_KEY` when the endpoint requires one.
 
 Alternatively, copy `.env.example` to `.env` and fill in your keys:
+
 ```bash
 cp .env.example .env
 ```
@@ -322,10 +333,12 @@ TRADINGAGENTS_TOOL_VENDOR_GET_STOCK_DATA=alpha_vantage
 ### CLI Usage
 
 Launch the interactive CLI:
+
 ```bash
 tradingagents          # installed command
 python -m cli.main     # alternative: run directly from source
 ```
+
 You will see a screen where you can select your desired tickers, analysis date, LLM provider, research depth, and more.
 
 <p align="center">
@@ -525,17 +538,17 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup, testing, and PR 
 
 ## Citation
 
-Please reference our work if you find *TradingAgents* provides you with some help :)
+Please reference our work if you find _TradingAgents_ provides you with some help :)
 
 ```
 @misc{xiao2025tradingagentsmultiagentsllmfinancial,
-      title={TradingAgents: Multi-Agents LLM Financial Trading Framework}, 
+      title={TradingAgents: Multi-Agents LLM Financial Trading Framework},
       author={Yijia Xiao and Edward Sun and Di Luo and Wei Wang},
       year={2025},
       eprint={2412.20138},
       archivePrefix={arXiv},
       primaryClass={q-fin.TR},
-      url={https://arxiv.org/abs/2412.20138}, 
+      url={https://arxiv.org/abs/2412.20138},
 }
 ```
 ## Beginner Note

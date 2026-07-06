@@ -103,6 +103,9 @@ docs = [
     "mkdocs-material>=9.5",
     "pymdown-extensions>=10.0",
 ]
+vertex = [
+    "langchain-google-vertexai>=3.0.0",
+]
 
 [project.scripts]
 tradingagents = "cli.main:app"

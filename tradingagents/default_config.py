@@ -54,6 +54,8 @@ _ENV_OVERRIDES = {
     # default). Settable here for non-interactive runs; the CLI also offers an
     # interactive choice, which is skipped when the matching var is set.
     "TRADINGAGENTS_GOOGLE_THINKING_LEVEL":   "google_thinking_level",
+    "TRADINGAGENTS_VERTEX_PROJECT":          "vertex_project",
+    "TRADINGAGENTS_VERTEX_LOCATION":         "vertex_location",
     "TRADINGAGENTS_OPENAI_REASONING_EFFORT": "openai_reasoning_effort",
     "TRADINGAGENTS_ANTHROPIC_EFFORT":        "anthropic_effort",
 }
@@ -211,6 +213,8 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "backend_url": None,
     # Provider-specific thinking configuration
     "google_thinking_level": None,      # "high", "minimal", etc.
+    "vertex_project": None,             # Google Cloud project for Vertex AI
+    "vertex_location": None,            # Vertex AI region, e.g. "us-central1"
     "openai_reasoning_effort": "max",    # "medium", "high", "low"
     "anthropic_effort": None,           # "high", "medium", "low"
     "llm_timeout": None,

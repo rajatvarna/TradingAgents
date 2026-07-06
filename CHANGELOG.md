@@ -9,6 +9,10 @@ Breaking changes within the 0.x line are called out explicitly.
 ## [Unreleased]
 ### Added
 
+- Google Vertex AI provider support via `llm_provider: "google_vertex"`, using
+  Application Default Credentials plus optional `TRADINGAGENTS_VERTEX_PROJECT`
+  and `TRADINGAGENTS_VERTEX_LOCATION` configuration.
+
 - **PDF export from dashboard**: A "📄 Export PDF" download button now appears in every history-browser entry (after the analysis tabs) and at the bottom of each completed live-run view in `webui.py`. Clicking it generates a formatted investment-memo PDF via `automation/pdf.py` (`write_investment_pdf`) and delivers it as a browser download. Generation is cached per ticker+date so repeated downloads within a session are instant.
 
 - **Confidence-Weighted Analyst Voting** (Item 6): Per-analyst directional signals are now extracted from report text after each run and stored in the memory log `meta` field (`analyst_signals` key). `TradingMemoryLog.get_analyst_weights()` computes beta-smoothed accuracy weights from resolved historical entries. Weights are injected into `AgentState["analyst_weights"]` before each run and rendered into the Research Manager's prompt so the LLM can give more weight to historically accurate analysts. New config key `analyst_weights_lookback` (default 20). (`tradingagents/agents/utils/memory.py`, `tradingagents/graph/trading_graph.py`, `tradingagents/agents/managers/research_manager.py`)

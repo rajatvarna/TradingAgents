@@ -531,6 +531,7 @@ def _llm_provider_table() -> list[tuple[str, str, str | None]]:
         ("OpenAI", "openai", "https://api.openai.com/v1"),
         ("OpenAI (ChatGPT OAuth)", "openai-oauth", None),
         ("Google", "google", None),
+        ("Google Vertex AI", "google_vertex", None),
         ("Anthropic", "anthropic", "https://api.anthropic.com/"),
         (
             "Tencent Cloud LKEAP",

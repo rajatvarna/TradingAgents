@@ -78,6 +78,7 @@ class TradingMemoryLog:
                     pending INTEGER NOT NULL DEFAULT 1,
                     meta TEXT,
                     outcome TEXT,
+                    expected_return REAL,
                     UNIQUE (ticker, trade_date, pending)
                 )
             """)
@@ -87,6 +88,8 @@ class TradingMemoryLog:
                 conn.execute("ALTER TABLE memory_log ADD COLUMN meta TEXT")
             with contextlib.suppress(sqlite3.OperationalError):
                 conn.execute("ALTER TABLE memory_log ADD COLUMN outcome TEXT")
+            with contextlib.suppress(sqlite3.OperationalError):
+                conn.execute("ALTER TABLE memory_log ADD COLUMN expected_return REAL")
 
             # Create index for fast lookups by ticker and pending status
             conn.execute("CREATE INDEX IF NOT EXISTS idx_ticker ON memory_log (ticker)")
@@ -101,6 +104,7 @@ class TradingMemoryLog:
         final_trade_decision: str,
         meta: dict[str, Any] | None = None,
         analyst_signals: dict[str, str] | None = None,
+        expected_return: float | None = None,
     ) -> None:
         """Insert a pending entry at end of propagate().
 
@@ -123,10 +127,10 @@ class TradingMemoryLog:
             # replacing the previous SELECT + conditional INSERT (two round-trips → one).
             conn.execute(
                 """
-                INSERT OR IGNORE INTO memory_log (ticker, trade_date, rating, decision, reflection, pending, meta, outcome)
-                VALUES (?, ?, ?, ?, "", 1, ?, "{}")
+                INSERT OR IGNORE INTO memory_log (ticker, trade_date, rating, decision, reflection, pending, meta, outcome, expected_return)
+                VALUES (?, ?, ?, ?, "", 1, ?, "{}", ?)
                 """,
-                (ticker, trade_date, rating, final_trade_decision, meta_json)
+                (ticker, trade_date, rating, final_trade_decision, meta_json, expected_return)
             )
 
     # --- Read path (Phase A) ---
@@ -156,6 +160,8 @@ class TradingMemoryLog:
             except (json.JSONDecodeError, ValueError) as exc:
                 logger.warning("Failed to parse outcome JSON for row %s: %s", dict(row).get("id"), exc)
 
+        expected_ret = row["expected_return"] if "expected_return" in _col_names else None
+
         return {
             "date": row["trade_date"],
             "ticker": row["ticker"],
@@ -168,6 +174,7 @@ class TradingMemoryLog:
             "reflection": row["reflection"] or "",
             "meta": meta_dict,
             "outcome": outcome_dict,
+            "expected_return": expected_ret,
         }
 
     def load_entries(self) -> list[dict]:

@@ -61,7 +61,7 @@ from tradingagents.reporting import write_report_tree
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
 from .conditional_logic import ConditionalLogic
 from .propagation import Propagator
-from .reflection import Reflector
+from .reflection import Reflector, extract_expected_return
 from .setup import GraphSetup
 from .signal_processing import SIGNAL_CONVICTION_WEIGHTS, SignalProcessor
 
@@ -533,6 +533,7 @@ class TradingAgentsGraph:
                 raw_return=raw,
                 alpha_return=alpha,
                 benchmark_name=benchmark,
+                expected_return=entry.get("expected_return"),
             )
             updates.append({
                 "ticker": ticker,
@@ -777,6 +778,10 @@ class TradingAgentsGraph:
             trade_date=trade_date,
             final_trade_decision=final_state["final_trade_decision"],
             analyst_signals=analyst_signals if analyst_signals else None,
+            expected_return=extract_expected_return(
+                final_state["final_trade_decision"],
+                final_state.get("trader_investment_plan", ""),
+            ),
         )
 
         # Clear checkpoint on successful completion to avoid stale state.

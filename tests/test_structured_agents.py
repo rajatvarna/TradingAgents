@@ -45,10 +45,20 @@ def _stub_sentiment_prefetchers(monkeypatch):
 @pytest.mark.unit
 class TestRenderTraderProposal:
     def test_minimal_required_fields(self):
-        p = TraderProposal(action=TraderAction.HOLD, reasoning="Balanced setup; no edge.")
+        p = TraderProposal(
+            action=TraderAction.HOLD,
+            reasoning="Balanced setup; no edge.",
+            bull_case="Margins resilient.",
+            bear_case="Cash flow deteriorating.",
+            win_probability=50,
+        )
         md = render_trader_proposal(p)
         assert "**Action**: Hold" in md
         assert "**Reasoning**: Balanced setup; no edge." in md
+        # Bull/bear cases and the probability review are always present.
+        assert "**Bull Case**: Margins resilient." in md
+        assert "**Bear Case**: Cash flow deteriorating." in md
+        assert "**Win Probability**: 50%" in md
         # The trailing FINAL TRANSACTION PROPOSAL line is preserved for the
         # analyst stop-signal text and any external code that greps for it.
         assert "FINAL TRANSACTION PROPOSAL: **HOLD**" in md
@@ -57,8 +67,12 @@ class TestRenderTraderProposal:
         p = TraderProposal(
             action=TraderAction.BUY,
             reasoning="Strong technicals + fundamentals.",
+            bull_case="Breakout on volume.",
+            bear_case="Valuation stretched.",
+            win_probability=62,
             entry_price=189.5,
             stop_loss=178.0,
+            target_price=212.5,
             position_sizing="6% of portfolio",
         )
         md = render_trader_proposal(p)
@@ -66,15 +80,62 @@ class TestRenderTraderProposal:
         assert "**Entry Price**: 189.5" in md
         assert "**Stop Loss**: 178.0" in md
         assert "**Position Sizing**: 6% of portfolio" in md
+        # Risk/reward is computed deterministically: reward 23.0 / risk 11.5 = 2.00.
+        assert "**Risk/Reward Ratio**: 2.00 : 1" in md
+        assert "**Expected Value**:" in md
         assert "FINAL TRANSACTION PROPOSAL: **BUY**" in md
 
     def test_optional_fields_omitted_when_absent(self):
-        p = TraderProposal(action=TraderAction.SELL, reasoning="Guidance cut.")
+        p = TraderProposal(
+            action=TraderAction.SELL,
+            reasoning="Guidance cut.",
+            bull_case="Oversold bounce possible.",
+            bear_case="Demand collapsing.",
+            win_probability=58,
+        )
         md = render_trader_proposal(p)
         assert "Entry Price" not in md
         assert "Stop Loss" not in md
         assert "Position Sizing" not in md
+        # Without price levels the R/R is reported as not-applicable.
+        assert "**Risk/Reward Ratio**: n/a" in md
         assert "FINAL TRANSACTION PROPOSAL: **SELL**" in md
+
+    def test_risk_reward_math_is_deterministic(self):
+        # entry 100, stop 90, target 130 -> reward 30 / risk 10 = 3.00 R/R.
+        # win prob 60% -> EV = 0.6*3 - 0.4 = 1.40R; breakeven = 100/(1+3) = 25%.
+        p = TraderProposal(
+            action=TraderAction.BUY,
+            reasoning="Clean breakout.",
+            bull_case="Trend + volume.",
+            bear_case="Thin liquidity.",
+            win_probability=60,
+            entry_price=100.0,
+            stop_loss=90.0,
+            target_price=130.0,
+        )
+        md = render_trader_proposal(p)
+        assert "**Risk/Reward Ratio**: 3.00 : 1" in md
+        assert "**Expected Value**: +1.40R (favorable)" in md
+        assert "**Breakeven Win-Rate**: 25%" in md
+        assert "above breakeven" in md
+
+    def test_negative_expected_value_flagged(self):
+        # Low win prob below breakeven -> unfavorable EV.
+        # entry 100, stop 90, target 110 -> R/R 1.00, breakeven 50%; prob 35% < 50%.
+        p = TraderProposal(
+            action=TraderAction.BUY,
+            reasoning="Marginal setup.",
+            bull_case="Possible bounce.",
+            bear_case="Downtrend intact.",
+            win_probability=35,
+            entry_price=100.0,
+            stop_loss=90.0,
+            target_price=110.0,
+        )
+        md = render_trader_proposal(p)
+        assert "(unfavorable)" in md
+        assert "below breakeven" in md
 
 
 @pytest.mark.unit
@@ -87,20 +148,31 @@ class TestNullishFloatCoercion:
             p = TraderProposal(
                 action=TraderAction.HOLD,
                 reasoning="x",
+                bull_case="b",
+                bear_case="c",
+                win_probability=50,
                 entry_price=sentinel,
                 stop_loss=sentinel,
+                target_price=sentinel,
             )
             assert p.entry_price is None
             assert p.stop_loss is None
+            assert p.target_price is None
 
     def test_trader_real_numeric_string_still_parses(self):
-        p = TraderProposal(action=TraderAction.BUY, reasoning="x", entry_price="189.5")
+        p = TraderProposal(
+            action=TraderAction.BUY,
+            reasoning="x",
+            bull_case="b",
+            bear_case="c",
+            win_probability=60,
+            entry_price="189.5",
+        )
         assert p.entry_price == 189.5
 
     def test_pm_nullish_price_target_coerces_to_none(self):
         d = PortfolioDecision(
             rating=PortfolioRating.OVERWEIGHT,
-            confidence=0.8,
             executive_summary="s",
             investment_thesis="t",
             price_target="N/A",
@@ -115,13 +187,11 @@ class TestRenderResearchPlan:
             recommendation=PortfolioRating.OVERWEIGHT,
             rationale="Bull case carried; tailwinds intact.",
             strategic_actions="Build position over two weeks; cap at 5%.",
-            bull_weight=0.8,
         )
         md = render_research_plan(p)
         assert "**Recommendation**: Overweight" in md
         assert "**Rationale**: Bull case carried" in md
         assert "**Strategic Actions**: Build position" in md
-        assert "**Bull Weight**: 0.8" in md
 
     def test_all_5_tier_ratings_render(self):
         for rating in PortfolioRating:
@@ -129,7 +199,6 @@ class TestRenderResearchPlan:
                 recommendation=rating,
                 rationale="r",
                 strategic_actions="s",
-                bull_weight=0.5,
             )
             md = render_research_plan(p)
             assert f"**Recommendation**: {rating.value}" in md
@@ -155,6 +224,9 @@ def _structured_trader_llm(captured: dict, proposal: TraderProposal | None = Non
         proposal = TraderProposal(
             action=TraderAction.BUY,
             reasoning="Strong setup.",
+            bull_case="Breakout on volume.",
+            bear_case="Valuation stretched.",
+            win_probability=62,
         )
     structured = MagicMock()
     structured.invoke.side_effect = lambda prompt, **kwargs: (
@@ -172,7 +244,6 @@ def _structured_portfolio_llm(
     if decision is None:
         decision = PortfolioDecision(
             rating=PortfolioRating.HOLD,
-            confidence=0.5,
             executive_summary="Keep exposure steady while setup matures.",
             investment_thesis="Balanced risk-reward.",
         )
@@ -210,8 +281,12 @@ class TestTraderAgent:
         proposal = TraderProposal(
             action=TraderAction.BUY,
             reasoning="AI capex cycle intact; institutional flows constructive.",
+            bull_case="Breakout on volume.",
+            bear_case="Valuation stretched.",
+            win_probability=62,
             entry_price=189.5,
             stop_loss=178.0,
+            target_price=212.5,
             position_sizing="6% of portfolio",
         )
         llm = _structured_trader_llm(captured, proposal)
@@ -283,7 +358,6 @@ def _structured_rm_llm(captured: dict, plan: ResearchPlan | None = None):
             recommendation=PortfolioRating.HOLD,
             rationale="Balanced view across both sides.",
             strategic_actions="Hold current position; reassess after earnings.",
-            bull_weight=0.5,
         )
     structured = MagicMock()
     structured.invoke.side_effect = lambda prompt, **kwargs: (
@@ -302,7 +376,6 @@ class TestResearchManagerAgent:
             recommendation=PortfolioRating.OVERWEIGHT,
             rationale="Bull case is stronger; AI tailwind intact.",
             strategic_actions="Build position gradually over two weeks.",
-            bull_weight=0.7,
         )
         llm = _structured_rm_llm(captured, plan)
         rm = create_research_manager(llm)
@@ -311,7 +384,6 @@ class TestResearchManagerAgent:
         assert "**Recommendation**: Overweight" in ip
         assert "**Rationale**: Bull case" in ip
         assert "**Strategic Actions**: Build position" in ip
-        assert "**Bull Weight**: 0.7" in ip
 
     def test_prompt_uses_5_tier_rating_scale(self):
         """The RM prompt must list all five tiers so the schema enum matches user expectations."""

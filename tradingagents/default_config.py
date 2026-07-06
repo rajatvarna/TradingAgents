@@ -267,7 +267,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
         "researchers/bear_researcher": "v2",
         "managers/research_manager": "v1",
         "managers/portfolio_manager": "v1",
-        "trader/trader_system": "v2",
+        "trader/trader_system": "v3",
         "trader/trader_user": "v1",
         "risk/aggressive": "v1",
         "risk/conservative": "v1",

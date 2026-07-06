@@ -9,7 +9,7 @@ from tradingagents.agents.managers.portfolio_manager import create_portfolio_man
 from tradingagents.agents.schemas import PortfolioDecision, PortfolioRating
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.graph.propagation import Propagator
-from tradingagents.graph.reflection import Reflector
+from tradingagents.graph.reflection import Reflector, extract_expected_return
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 
 _SEP = TradingMemoryLog._SEPARATOR  # available as a class attribute for callers
@@ -92,7 +92,6 @@ def _structured_pm_llm(captured: dict, decision: PortfolioDecision | None = None
     if decision is None:
         decision = PortfolioDecision(
             rating=PortfolioRating.HOLD,
-            confidence=0.50,
             executive_summary="Hold the position; await catalyst.",
             investment_thesis="Balanced view; neither side carried the debate.",
         )
@@ -131,6 +130,13 @@ class TestTradingMemoryLogCore:
         log.store_decision("NVDA", "2026-01-10", DECISION_BUY)
         log.store_decision("NVDA", "2026-01-10", DECISION_BUY)
         assert len(log.load_entries()) == 1
+
+    def test_store_persists_expected_return(self, tmp_path):
+        log = make_log(tmp_path)
+        log.store_decision("NVDA", "2026-01-10", DECISION_BUY, expected_return=0.075)
+        entries = log.load_entries()
+        assert len(entries) == 1
+        assert entries[0]["expected_return"] == pytest.approx(0.075)
 
     def test_batch_update_resolves_multiple_entries(self, tmp_path):
         """batch_update_with_outcomes resolves multiple pending entries in one write."""
@@ -543,6 +549,39 @@ class TestDeferredReflection:
         assert "Alpha vs ^NSEI:" in human_content
         assert "Alpha vs SPY:" not in human_content
 
+    def test_reflect_on_final_decision_includes_surprise_ratio(self):
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value.content = "Outcome was luckier than planned."
+        reflector = Reflector(mock_llm)
+        reflector.reflect_on_final_decision(
+            final_decision=DECISION_BUY,
+            raw_return=0.10,
+            alpha_return=0.04,
+            expected_return=0.02,
+        )
+        messages = mock_llm.invoke.call_args[0][0]
+        human_content = next(content for role, content in messages if role == "human")
+        assert "Expected return at entry: +2.0%" in human_content
+        assert "Surprise ratio: 4.00" in human_content
+
+    def test_extract_expected_return_from_price_target(self):
+        trader_plan = "**Action**: Buy\n\n**Entry Price**: 100.0"
+        final_decision = "**Rating**: Buy\n\n**Price Target**: 112.0"
+        assert extract_expected_return(final_decision, trader_plan) == pytest.approx(0.12)
+
+        trader_plan_alt = "**Action**: Buy\n\n**Entry Price:** 100.0"
+        final_decision_alt = "**Rating**: Buy\n\n**Price Target:** 112.0"
+        assert extract_expected_return(final_decision_alt, trader_plan_alt) == pytest.approx(0.12)
+
+    def test_extract_expected_return_from_explicit_percent(self):
+        final_decision = "**Rating**: Buy\n\nExpected return: +8.5%"
+        assert extract_expected_return(final_decision) == pytest.approx(0.085)
+
+    def test_extract_expected_return_rejects_non_positive_target(self):
+        trader_plan = "**Entry Price**: 100.0"
+        assert extract_expected_return("**Price Target**: 0.0", trader_plan) is None
+        assert extract_expected_return("**Price Target**: -10.0", trader_plan) is None
+
     # TradingAgentsGraph._resolve_benchmark
 
     def test_resolve_benchmark_default_us_ticker(self):
@@ -798,6 +837,20 @@ class TestDeferredReflection:
         for call in mock_graph._fetch_returns.call_args_list:
             assert call.kwargs.get("benchmark") == "SPY"
 
+    def test_resolve_passes_expected_return_to_reflector(self, tmp_path):
+        log = make_log(tmp_path)
+        log.store_decision("NVDA", "2026-01-05", DECISION_BUY, expected_return=0.03)
+        mock_reflector = MagicMock()
+        mock_reflector.reflect_on_final_decision.return_value = "Calibrated lesson."
+        mock_graph = MagicMock(spec=TradingAgentsGraph)
+        mock_graph.memory_log = log
+        mock_graph.reflector = mock_reflector
+        mock_graph._fetch_returns = MagicMock(return_value=(0.09, 0.04, 5))
+        TradingAgentsGraph._resolve_pending_entries(mock_graph, "NVDA")
+
+        call = mock_reflector.reflect_on_final_decision.call_args
+        assert call.kwargs["expected_return"] == pytest.approx(0.03)
+
 
 # ---------------------------------------------------------------------------
 # Portfolio Manager injection: past_context in state and prompt
@@ -845,7 +898,6 @@ class TestPortfolioManagerInjection:
         captured = {}
         decision = PortfolioDecision(
             rating=PortfolioRating.OVERWEIGHT,
-            confidence=0.85,
             executive_summary="Build position gradually over the next two weeks.",
             investment_thesis="AI capex cycle remains intact; institutional flows constructive.",
             price_target=215.0,

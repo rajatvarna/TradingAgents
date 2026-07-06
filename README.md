@@ -507,6 +507,14 @@ config["temperature"] = 0.0
 
 The service is designed for Flint ingestion workflows where the important output is a traceable evidence bundle, not an order.
 
+## Community Projects
+
+Projects built on TradingAgents by the community:
+
+| Project | Description |
+|---------|-------------|
+| [tradingagents-web-ui](https://github.com/ydhawesome/tradingagents-web-ui) | Streamlit web interface (Chinese/English UI) — fill in a ticker, watch agents run live, read rendered reports in-browser |
+
 ## Contributing
 
 We welcome contributions from the community! Whether it's fixing a bug, improving documentation, or suggesting a new feature, your input helps make this project better. If you are interested in this line of research, please consider joining our open-source financial AI research community [Tauric Research](https://tauric.ai/).

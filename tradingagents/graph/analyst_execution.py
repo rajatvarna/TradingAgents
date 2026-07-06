@@ -82,6 +82,27 @@ ANALYST_NODE_SPECS: dict[str, AnalystNodeSpec] = {
         tool_node="tools_valuation",
         report_key="valuation_report",
     ),
+    "technical": AnalystNodeSpec(
+        key="technical",
+        agent_node="Technical Analyst",
+        clear_node="Msg Clear Technical",
+        tool_node="tools_technical",
+        report_key="technical_report",
+    ),
+    "quant": AnalystNodeSpec(
+        key="quant",
+        agent_node="Quant Analyst",
+        clear_node="Msg Clear Quant",
+        tool_node="tools_quant",
+        report_key="quant_report",
+    ),
+    "alternative": AnalystNodeSpec(
+        key="alternative",
+        agent_node="Alternative Data Analyst",
+        clear_node="Msg Clear Alternative",
+        tool_node="tools_alternative",
+        report_key="alternative_report",
+    ),
 }
 
 

@@ -48,6 +48,9 @@ from tradingagents.agents.utils.esg_data_tools import (
     get_esg_scores,
 )
 from tradingagents.agents.utils.options_tools import get_options_data
+from tradingagents.agents.utils.technical_data_tools import get_technical_indicators
+from tradingagents.agents.utils.quant_data_tools import get_quantitative_metrics
+from tradingagents.agents.utils.alternative_data_tools import get_youtube_sentiment
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.dataflows.config import set_config
 from tradingagents.dataflows.run_cache import reset as reset_run_cache
@@ -78,6 +81,9 @@ _ANALYST_REPORT_KEYS = {
     "options": "options_report",
     "esg": "esg_report",
     "derivatives": "derivatives_report",
+    "technical": "technical_report",
+    "quant": "quant_report",
+    "alternative": "alternative_report",
 }
 
 
@@ -418,6 +424,21 @@ class TradingAgentsGraph:
                 [
                     get_options_overview,
                     get_options_chain,
+                ]
+            ),
+            "technical": ToolNode(
+                [
+                    get_technical_indicators,
+                ]
+            ),
+            "quant": ToolNode(
+                [
+                    get_quantitative_metrics,
+                ]
+            ),
+            "alternative": ToolNode(
+                [
+                    get_youtube_sentiment,
                 ]
             ),
         }
@@ -804,6 +825,12 @@ class TradingAgentsGraph:
             "sentiment_report": final_state.get("sentiment_report"),
             "news_report": final_state.get("news_report"),
             "fundamentals_report": final_state.get("fundamentals_report"),
+            "options_report": final_state.get("options_report"),
+            "esg_report": final_state.get("esg_report"),
+            "derivatives_report": final_state.get("derivatives_report"),
+            "technical_report": final_state.get("technical_report"),
+            "quant_report": final_state.get("quant_report"),
+            "alternative_report": final_state.get("alternative_report"),
             "risk_constraints": final_state.get("risk_constraints", {}),
             "investment_debate_state": {
                 "bull_history": ids.get("bull_history"),

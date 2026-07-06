@@ -91,6 +91,10 @@ class MessageBuffer:
         "social": "Sentiment Analyst",
         "news": "News Analyst",
         "fundamentals": "Fundamentals Analyst",
+        "technical": "Technical Analyst",
+        "quant": "Quant Analyst",
+        "options": "Options Analyst",
+        "alternative": "Alternative Data Analyst",
     }
 
     # Report section mapping: section -> (analyst_key for filtering, finalizing_agent)
@@ -101,6 +105,10 @@ class MessageBuffer:
         "sentiment_report": ("social", "Sentiment Analyst"),
         "news_report": ("news", "News Analyst"),
         "fundamentals_report": ("fundamentals", "Fundamentals Analyst"),
+        "technical_report": ("technical", "Technical Analyst"),
+        "quant_report": ("quant", "Quant Analyst"),
+        "options_report": ("options", "Options Analyst"),
+        "alternative_report": ("alternative", "Alternative Data Analyst"),
         "investment_plan": (None, "Research Manager"),
         "trader_investment_plan": (None, "Trader"),
         "final_trade_decision": (None, "Portfolio Manager"),
@@ -231,7 +239,16 @@ class MessageBuffer:
         report_parts = []
 
         # Analyst Team Reports - use .get() to handle missing sections
-        analyst_sections = ["market_report", "sentiment_report", "news_report", "fundamentals_report"]
+        analyst_sections = [
+            "market_report",
+            "sentiment_report",
+            "news_report",
+            "fundamentals_report",
+            "technical_report",
+            "quant_report",
+            "options_report",
+            "alternative_report",
+        ]
         if any(self.report_sections.get(section) for section in analyst_sections):
             report_parts.append("## Analyst Team Reports")
             if self.report_sections.get("market_report"):
@@ -249,6 +266,22 @@ class MessageBuffer:
             if self.report_sections.get("fundamentals_report"):
                 report_parts.append(
                     f"### Fundamentals Analysis\n{self.report_sections['fundamentals_report']}"
+                )
+            if self.report_sections.get("technical_report"):
+                report_parts.append(
+                    f"### Technical Analysis\n{self.report_sections['technical_report']}"
+                )
+            if self.report_sections.get("quant_report"):
+                report_parts.append(
+                    f"### Quantitative Analysis\n{self.report_sections['quant_report']}"
+                )
+            if self.report_sections.get("options_report"):
+                report_parts.append(
+                    f"### Options Analysis\n{self.report_sections['options_report']}"
+                )
+            if self.report_sections.get("alternative_report"):
+                report_parts.append(
+                    f"### Alternative Data Analysis\n{self.report_sections['alternative_report']}"
                 )
 
         # Research Team Reports
@@ -331,6 +364,10 @@ def update_display(layout, spinner_text=None, stats_handler=None, start_time=Non
             "Sentiment Analyst",
             "News Analyst",
             "Fundamentals Analyst",
+            "Technical Analyst",
+            "Quant Analyst",
+            "Options Analyst",
+            "Alternative Data Analyst",
         ],
         "Research Team": ["Bull Researcher", "Bear Researcher", "Research Manager"],
         "Trading Team": ["Trader"],

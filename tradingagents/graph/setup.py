@@ -8,6 +8,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
 from tradingagents.agents import (
+    create_alternative_data_analyst,
     create_aggressive_debator,
     create_bear_researcher,
     create_bull_researcher,
@@ -22,8 +23,10 @@ from tradingagents.agents import (
     create_news_analyst,
     create_options_analyst,
     create_portfolio_manager,
+    create_quant_analyst,
     create_research_manager,
     create_sentiment_analyst,
+    create_technical_analyst,
     create_trader,
     create_valuation_analyst,
 )
@@ -51,6 +54,9 @@ _ANALYST_FACTORIES = {
     "esg": create_esg_analyst,
     "derivatives": create_derivative_analyst,
     "valuation": create_valuation_analyst,
+    "technical": create_technical_analyst,
+    "quant": create_quant_analyst,
+    "alternative": create_alternative_data_analyst,
 }
 
 _DEFAULT_ANALYSTS = ("market", "sentiment", "news", "fundamentals")

@@ -22,7 +22,7 @@ def _make_setup(analysts=None):
         analysts = list(VALID_ANALYSTS)
 
     # Build a mock ToolNode for every analyst + "social" and "esg" bucket
-    tool_node_keys = {"market", "social", "news", "fundamentals", "options", "esg"}
+    tool_node_keys = {"market", "social", "news", "fundamentals", "options", "esg", "technical", "quant", "alternative"}
     tool_nodes = {k: MagicMock() for k in tool_node_keys}
 
     cond = ConditionalLogic(max_debate_rounds=1, max_risk_discuss_rounds=1)
@@ -35,6 +35,9 @@ def _make_setup(analysts=None):
         "tradingagents.graph.setup.create_fundamentals_analyst",
         "tradingagents.graph.setup.create_options_analyst",
         "tradingagents.graph.setup.create_esg_analyst",
+        "tradingagents.graph.setup.create_technical_analyst",
+        "tradingagents.graph.setup.create_quant_analyst",
+        "tradingagents.graph.setup.create_alternative_data_analyst",
         "tradingagents.graph.setup.create_bull_researcher",
         "tradingagents.graph.setup.create_bear_researcher",
         "tradingagents.graph.setup.create_research_manager",
@@ -68,7 +71,7 @@ def _apply_patches(names):
 def _build_graph(selected_analysts):
     quick_llm = MagicMock()
     deep_llm = MagicMock()
-    tool_nodes = {k: MagicMock() for k in {"market", "social", "news", "fundamentals", "options", "esg", "derivatives", "valuation"}}
+    tool_nodes = {k: MagicMock() for k in {"market", "social", "news", "fundamentals", "options", "esg", "derivatives", "valuation", "technical", "quant", "alternative"}}
     cond = ConditionalLogic()
     gs = GraphSetup(quick_llm, deep_llm, tool_nodes, cond)
 
@@ -79,6 +82,9 @@ def _build_graph(selected_analysts):
         "tradingagents.graph.setup.create_fundamentals_analyst",
         "tradingagents.graph.setup.create_options_analyst",
         "tradingagents.graph.setup.create_esg_analyst",
+        "tradingagents.graph.setup.create_technical_analyst",
+        "tradingagents.graph.setup.create_quant_analyst",
+        "tradingagents.graph.setup.create_alternative_data_analyst",
         "tradingagents.graph.setup.create_bull_researcher",
         "tradingagents.graph.setup.create_bear_researcher",
         "tradingagents.graph.setup.create_research_manager",
@@ -201,6 +207,8 @@ class TestConstants:
             expected = "ESG Analyst"
         elif analyst == "social":
             expected = "Sentiment Analyst"
+        elif analyst == "alternative":
+            expected = "Alternative Data Analyst"
         else:
             expected = f"{analyst.capitalize()} Analyst"
         assert analyst_node_name(analyst) == expected
@@ -211,6 +219,8 @@ class TestConstants:
             expected = "Msg Clear ESG"
         elif analyst == "social":
             expected = "Msg Clear Sentiment"
+        elif analyst == "alternative":
+            expected = "Msg Clear Alternative"
         else:
             expected = f"Msg Clear {analyst.capitalize()}"
         assert clear_node_name(analyst) == expected

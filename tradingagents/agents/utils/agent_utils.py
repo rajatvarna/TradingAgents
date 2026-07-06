@@ -68,6 +68,8 @@ __all__ = [
     "format_risk_constraints",
     "get_verified_market_snapshot",
     "create_force_finalize",
+    "strip_think_tags",
+    "get_strict_data_instruction",
 ]
 
 logger = logging.getLogger(__name__)
@@ -531,3 +533,29 @@ def create_msg_delete(concurrency_limit: int = 1):
 def invoke_with_retry(chain, prompt):
     """Invoke a LangChain model/chain with exponential backoff for transient errors."""
     return chain.invoke(prompt)
+
+
+import re
+
+def strip_think_tags(text: str) -> str:
+    """Strip <think>...</think> blocks and any stray </think> tags from model output."""
+    if not isinstance(text, str):
+        return text
+    cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    cleaned = re.sub(r'</?think>', '', cleaned)
+    # Also strip out raw tool call tags that local models sometimes hallucinate in text
+    cleaned = re.sub(r'<tool_call>.*?</tool_call>', '', cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r'<tool_response>.*?</tool_call>', '', cleaned, flags=re.DOTALL)
+    return cleaned.strip()
+
+
+def get_strict_data_instruction() -> str:
+    """Return an instruction to prevent data hallucination when tools fail."""
+    return (
+        " IMPORTANT: DO NOT HALLUCINATE OR FABRICATE DATA. If all tool calls return "
+        "<unavailable>, <no data found>, or errors, you MUST output exactly "
+        "[DATA UNAVAILABLE — SKIPPED] for that section and nothing else. Do not invent analysis. "
+        "Also, NEVER hallucinate dates when calling tools. You MUST use exactly the current_date "
+        "provided in your prompt for any tool argument requesting a current or end date."
+    )
+

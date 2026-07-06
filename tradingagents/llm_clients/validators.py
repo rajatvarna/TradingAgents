@@ -23,6 +23,7 @@ _ANY_MODEL_PROVIDERS = (
     "nvidia",
     "bedrock",
     "custom",
+    "9router",
 )
 
 VALID_MODELS = {

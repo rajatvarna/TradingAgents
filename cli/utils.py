@@ -526,10 +526,14 @@ def _llm_provider_table() -> list[tuple[str, str, str | None]]:
     from tradingagents.llm_clients.openai_client import resolve_provider_base_url
     ollama_url = resolve_provider_base_url("ollama")
     lmstudio_url = resolve_provider_base_url("lmstudio")
+    ninerouter_url = os.environ.get("NINEROUTER_URL", "http://localhost:20128").rstrip("/")
+    if not ninerouter_url.endswith("/v1"):
+        ninerouter_url += "/v1"
     # (display_name, provider_key, base_url)
     PROVIDERS = [
         ("OpenAI", "openai", "https://api.openai.com/v1"),
         ("OpenAI (ChatGPT OAuth)", "openai-oauth", None),
+        ("9Router", "9router", ninerouter_url),
         ("Google", "google", None),
         ("Google Vertex AI", "google_vertex", None),
         ("Anthropic", "anthropic", "https://api.anthropic.com/"),
@@ -886,6 +890,12 @@ def ensure_api_key(provider: str) -> str | None:
     existing = os.environ.get(env_var)
     if existing:
         return existing
+
+    if provider.lower() == "9router":
+        console.print(
+            "\n[yellow]NINEROUTER_KEY is not set; continuing because 9Router can run with auth disabled.[/yellow]"
+        )
+        return None
 
     console.print(
         f"\n[yellow]{env_var} is not set in your environment.[/yellow]"

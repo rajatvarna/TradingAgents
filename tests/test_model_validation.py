@@ -47,8 +47,8 @@ class ModelValidationTests(unittest.TestCase):
                 self.assertIn(f"not-a-real-{provider}-model", str(caught[0].message))
                 self.assertIn(provider, str(caught[0].message))
 
-    def test_openrouter_ollama_ollama_cloud_deepinfra_and_custom_accept_custom_models_without_warning(self):
-        for provider in ("openrouter", "ollama", "ollama_cloud", "deepinfra", "custom"):
+    def test_openrouter_ollama_ollama_cloud_deepinfra_9router_and_custom_accept_custom_models_without_warning(self):
+        for provider in ("openrouter", "ollama", "ollama_cloud", "deepinfra", "9router", "custom"):
             client = DummyLLMClient(provider, "custom-model-name")
 
             with self.subTest(provider=provider):

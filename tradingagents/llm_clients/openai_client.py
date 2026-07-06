@@ -263,6 +263,35 @@ class CodexChatOpenAI(NormalizedChatOpenAI):
         return apply_codex_payload_constraints(payload)
 
 
+class NinerouterChatOpenAI(NormalizedChatOpenAI):
+    """9Router-specific response normalization.
+
+    Some 9Router responses wrap the upstream OpenAI-compatible payload in a
+    top-level ``data`` object while leaving top-level ``choices`` as ``null``.
+    LangChain validates ``choices`` before looking anywhere else, so unwrap the
+    nested payload first.
+    """
+
+    def _create_chat_result(self, response, generation_info=None):
+        response_dict = (
+            response
+            if isinstance(response, dict)
+            else response.model_dump(
+                exclude={"choices": {"__all__": {"message": {"parsed"}}}}
+            )
+        )
+        if response_dict.get("choices") is None and isinstance(response_dict.get("data"), dict):
+            nested = dict(response_dict["data"])
+            for key in (
+                "id", "created", "model", "object", "usage",
+                "service_tier", "system_fingerprint",
+            ):
+                if key not in nested and key in response_dict:
+                    nested[key] = response_dict[key]
+            response = nested
+        return super()._create_chat_result(response, generation_info)
+
+
 # Kwargs forwarded from user config to ChatOpenAI
 _PASSTHROUGH_KWARGS = (
     "timeout", "max_retries", "reasoning_effort", "temperature",
@@ -336,6 +365,13 @@ OPENAI_COMPATIBLE_PROVIDERS: dict[str, ProviderSpec] = {
     "lm-studio":  ProviderSpec(base_url="http://localhost:8000/v1", key_optional=True, placeholder_key="lm-studio"),
     "llama-cpp":  ProviderSpec(base_url="http://localhost:8001/v1", key_optional=True, placeholder_key="llama-cpp"),
     "opencode":   ProviderSpec(base_url="https://opencode.ai/zen/go/v1", base_url_env="OPENCODE_BASE_URL"),
+    "9router":    ProviderSpec(
+        base_url="http://localhost:20128/v1",
+        base_url_env="NINEROUTER_URL",
+        key_optional=True,
+        placeholder_key="ninerouter",
+        chat_class=NinerouterChatOpenAI,
+    ),
     "ollama":     ProviderSpec(base_url="http://localhost:11434/v1", base_url_env="OLLAMA_BASE_URL",
                                key_optional=True, placeholder_key="ollama"),
     # Generic endpoint: user supplies base_url; key optional (keyless local).
@@ -348,7 +384,6 @@ OPENAI_COMPATIBLE_PROVIDERS: dict[str, ProviderSpec] = {
 def is_openai_compatible(provider: str) -> bool:
     """Whether ``provider`` is served by the OpenAI-compatible registry."""
     return provider.lower() in OPENAI_COMPATIBLE_PROVIDERS
-
 
 def resolve_provider_base_url(provider: str) -> str | None:
     """Resolve the default or env-overridden base URL for a provider key."""
@@ -375,7 +410,6 @@ def _is_native_openai_base_url(base_url: str | None) -> bool:
         base_url = "https://" + base_url
     host = urlparse(base_url).hostname or ""
     return host == "api.openai.com" or host.endswith(".openai.com")
-
 
 
 class OpenAIClient(BaseLLMClient):

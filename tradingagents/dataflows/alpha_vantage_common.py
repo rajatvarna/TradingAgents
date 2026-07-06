@@ -131,12 +131,15 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
     except json.JSONDecodeError:
         return response_text
 
+    if not isinstance(response_json, dict):
+        return response_text
+
     # Alpha Vantage reports problems via "Information" / "Note". Classify so a
     # genuine rate limit and an invalid/missing key aren't conflated (#991):
     # rate-limit phrasing is checked first because those notices also mention
     # "API key" ("your API key ... 25 requests per day").
     notice = response_json.get("Information") or response_json.get("Note")
-    if notice:
+    if notice and isinstance(notice, str):
         low = notice.lower()
         if any(m in low for m in ("rate limit", "requests per day", "call frequency", "premium")):
             raise AlphaVantageRateLimitError(f"Alpha Vantage rate limit exceeded: {notice}")
@@ -147,7 +150,7 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
 
     if "Error Message" in response_json:
         message = response_json["Error Message"]
-        if "api key" in message.lower() or "apikey" in message.lower():
+        if isinstance(message, str) and ("api key" in message.lower() or "apikey" in message.lower()):
             raise AlphaVantageAuthError(f"Alpha Vantage API key rejected: {message}")
 
     return response_text

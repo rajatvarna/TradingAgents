@@ -169,6 +169,8 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
                 "- If error_count >= 5: output Hold.\n"
             )
 
+        evidence_context = _format_evidence_context(state)
+
         version = state.get("prompt_versions", {}).get("managers/portfolio_manager", "v1")
         prompt, prompt_hash = registry.render(
             "managers/portfolio_manager",
@@ -178,6 +180,7 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
             research_plan=research_plan,
             trader_plan=trader_plan,
             lessons_line=lessons_line,
+            evidence_context=evidence_context,
             history=history,
             sources=render_sources_for_prompt(source_objects),
             source_registry=source_registry,
@@ -491,3 +494,32 @@ def _enforce_strategy_rules(strategy: dict, anchors: dict | None, constraints: d
         _append_rule_note(strategy, "missing stop_loss was filled from support/ATR anchor.")
 
     return PortfolioStrategy.model_validate(strategy).model_dump()
+
+
+def _format_evidence_context(state) -> str:
+    evidence_summary = (state.get("evidence_summary") or "").strip()
+    evidence_ids = _evidence_ids_from_state(state)
+    if not evidence_summary and not evidence_ids:
+        return ""
+
+    lines = ["**Evidence Audit Context:**"]
+    if evidence_summary:
+        lines.append(f"- Evidence summary: {evidence_summary}")
+    if evidence_ids:
+        lines.append(f"- Available evidence IDs: {', '.join(evidence_ids)}")
+        lines.append("- Include relevant IDs in the structured supporting_evidence_ids field.")
+    return "\n".join(lines) + "\n"
+
+
+def _evidence_ids_from_state(state) -> list[str]:
+    ledger = state.get("evidence_ledger") or {}
+    items = ledger.get("items", []) if isinstance(ledger, dict) else []
+    evidence_ids: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        evidence_id = item.get("evidence_id")
+        if isinstance(evidence_id, str) and evidence_id:
+            evidence_ids.append(evidence_id)
+    return evidence_ids
+

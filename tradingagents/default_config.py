@@ -266,7 +266,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
         "researchers/bull_researcher": "v2",
         "researchers/bear_researcher": "v2",
         "managers/research_manager": "v1",
-        "managers/portfolio_manager": "v1",
+        "managers/portfolio_manager": "v2",
         "trader/trader_system": "v3",
         "trader/trader_user": "v1",
         "risk/aggressive": "v1",
@@ -497,6 +497,14 @@ MONSTER_STOCK_METHODOLOGY_CONFIG: dict = {
         "distribution_day_cash":    6,   # Boik: 6+ → move to cash
         "automatic_mmss_activation": True,
     },
+
+    # ── EVIDENCE AUDITING & GUARDRAILS (PR #1105) ─────────────────────────────
+    "evidence_enabled": True,
+    "quant_anchor_enabled": True,
+    "citation_verification_enabled": True,
+    "evidence_strict_mode": "warn",
+    "price_target_warn_multiple": 3.0,
+    "price_target_block_multiple": 5.0,
 
     # ── PER-REGIME EXECUTION PARAMETERS ──────────────────────────────────────
     "market_regime_execution": {

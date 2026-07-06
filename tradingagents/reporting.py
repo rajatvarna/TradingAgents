@@ -119,6 +119,19 @@ def write_report_tree(final_state: dict, ticker: str, save_path) -> Path:
             (portfolio_dir / "decision.md").write_text(risk["judge_decision"], encoding="utf-8")
             sections.append(f"## V. Portfolio Manager Decision\n\n### Portfolio Manager\n{risk['judge_decision']}")
 
+    # 6. Evidence Audit (PR #1105)
+    evidence_audit = build_evidence_audit(final_state)
+    if evidence_audit["has_content"]:
+        import json as _json
+        evidence_dir = save_path / "6_evidence"
+        evidence_dir.mkdir(exist_ok=True)
+        (evidence_dir / "audit.md").write_text(evidence_audit["markdown"], encoding="utf-8")
+        (evidence_dir / "evidence_audit.json").write_text(
+            _json.dumps(evidence_audit["data"], indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        sections.append(f"## VI. Evidence Audit\n\n{evidence_audit['markdown']}")
+
     # Write consolidated report
     header = f"# Trading Analysis Report: {ticker}\n\nGenerated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
     report_text = header + "\n\n".join(sections)
@@ -129,3 +142,93 @@ def write_report_tree(final_state: dict, ticker: str, save_path) -> Path:
         pass
     (save_path / "complete_report.md").write_text(report_text, encoding="utf-8")
     return save_path / "complete_report.md"
+
+
+def build_evidence_audit(final_state: dict) -> dict:
+    """Compile evidence audit information from final_state into structured data.
+
+    Returns a dict with:
+    - ``has_content``: True if there is any evidence audit data worth writing.
+    - ``markdown``: A markdown-formatted audit summary string.
+    - ``data``: A JSON-serialisable dict of all audit fields.
+    """
+    decision_status = final_state.get("evidence_decision_status", "actionable")
+    evidence_actionable = final_state.get("evidence_actionable", True)
+    evidence_summary = final_state.get("evidence_summary", "")
+    evidence_warnings = final_state.get("evidence_warnings") or []
+    blocking_reasons = final_state.get("evidence_blocking_reasons") or []
+    math_events = final_state.get("math_guardrail_events") or []
+    citation_result = final_state.get("citation_verification") or {}
+    ledger = final_state.get("evidence_ledger") or {}
+    anchors = final_state.get("quantitative_anchors") or []
+
+    has_content = bool(
+        evidence_summary
+        or evidence_warnings
+        or blocking_reasons
+        or math_events
+        or citation_result
+        or (ledger.get("items") if isinstance(ledger, dict) else False)
+    )
+
+    lines = [
+        f"**Evidence Decision Status**: {decision_status}",
+        f"**Actionable**: {evidence_actionable}",
+    ]
+
+    if evidence_summary:
+        lines += ["", "**Evidence Summary:**", evidence_summary]
+
+    if anchors:
+        lines += ["", "**Quantitative Anchors:**"]
+        for anchor in anchors:
+            if isinstance(anchor, dict):
+                sym = anchor.get("symbol", "?")
+                price = anchor.get("current_price", "?")
+                ev_id = anchor.get("evidence_id", "")
+                lines.append(f"- {sym}: current_price={price}  [{ev_id}]")
+
+    if math_events:
+        lines += ["", "**Math Guardrail Events:**"]
+        for evt in math_events:
+            if isinstance(evt, dict):
+                action = evt.get("action", "?")
+                reason = evt.get("reason", "?")
+                lines.append(f"- [{action.upper()}] {reason}")
+
+    if citation_result:
+        verified = citation_result.get("verified_ids", [])
+        missing = citation_result.get("missing_ids", [])
+        lines += ["", "**Citation Verification:**"]
+        if verified:
+            lines.append(f"- Verified IDs: {', '.join(verified)}")
+        if missing:
+            lines.append(f"- Unresolved IDs: {', '.join(missing)}")
+
+    if blocking_reasons:
+        lines += ["", "**Blocking Reasons:**"]
+        for reason in blocking_reasons:
+            lines.append(f"- {reason}")
+
+    if evidence_warnings:
+        lines += ["", "**Warnings:**"]
+        for w in evidence_warnings:
+            lines.append(f"- {w}")
+
+    data = {
+        "evidence_decision_status": decision_status,
+        "evidence_actionable": evidence_actionable,
+        "evidence_summary": evidence_summary,
+        "evidence_warnings": evidence_warnings,
+        "blocking_reasons": blocking_reasons,
+        "math_guardrail_events": math_events,
+        "citation_verification": citation_result,
+        "quantitative_anchors": anchors,
+        "evidence_ledger": ledger,
+    }
+
+    return {
+        "has_content": has_content,
+        "markdown": "\n".join(lines),
+        "data": data,
+    }

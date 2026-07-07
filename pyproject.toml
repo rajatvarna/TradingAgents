@@ -64,6 +64,13 @@ news = [
 bedrock = [
     "langchain-aws>=1.5.0",
 ]
+# Scheduled-runner support: headless daily driver + Telegram delivery.
+# ``pyyaml`` is the watchlist parser; ``fpdf2`` renders the Portfolio
+# Manager ``decision.md`` to a PDF that Telegram can render inline.
+scheduled = [
+    "pyyaml>=6.0",
+    "fpdf2>=2.7",
+]
 # Optional vendors enabled via IIC-FORGE-02. Install with:
 #   pip install -e .[polygon,futu,osint]
 # Each vendor's module raises DataVendorError on missing creds/deps so the

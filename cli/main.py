@@ -64,7 +64,7 @@ from tradingagents.graph.analyst_execution import (
     get_initial_analyst_node,
     sync_analyst_tracker_from_chunk,
 )
-from tradingagents.reporting import write_report_tree
+from tradingagents.reports.exporter import save_report_to_disk
 
 console = Console()
 
@@ -342,9 +342,6 @@ def get_user_selections():
 
 
 
-def save_report_to_disk(final_state, ticker: str, save_path: Path):
-    """Save the complete analysis report to disk (shared CLI/API writer)."""
-    return write_report_tree(final_state, ticker, save_path)
 
 
 def display_complete_report(final_state):

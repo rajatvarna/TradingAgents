@@ -1,4 +1,6 @@
 import logging
+import time
+from typing import Any
 
 from .alpha_vantage import (
     get_balance_sheet as get_alpha_vantage_balance_sheet,
@@ -167,6 +169,68 @@ from .errors import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class CircuitBreaker:
+    """Tracks vendor failures and temporarily skips repeatedly failing vendors.
+
+    After *failure_threshold* consecutive failures, the circuit "opens" and
+    the vendor is skipped for *reset_timeout* seconds. After the timeout, one
+    probe request is allowed (half-open state); if it succeeds the circuit
+    resets, if it fails the circuit re-opens.
+
+    Only transient errors (rate limits, network failures) should trip the
+    breaker — permanent conditions like misconfiguration or missing data do
+    not affect vendor health.
+    """
+
+    def __init__(self, failure_threshold: int = 3, reset_timeout: float = 300.0):
+        self._threshold = failure_threshold
+        self._timeout = reset_timeout
+        self._failures: dict[str, int] = {}
+        self._open_since: dict[str, float] = {}
+
+    def is_open(self, vendor: str) -> bool:
+        """Return True if *vendor* is currently circuit-broken (skipped)."""
+        failures = self._failures.get(vendor, 0)
+        if failures < self._threshold:
+            return False
+        elapsed = time.monotonic() - self._open_since.get(vendor, 0.0)
+        if elapsed >= self._timeout:
+            # Half-open: allow one probe request through
+            return False
+        return True
+
+    def record_failure(self, vendor: str) -> None:
+        """Record a transient failure and open the circuit if threshold reached."""
+        self._failures[vendor] = self._failures.get(vendor, 0) + 1
+        if self._failures[vendor] >= self._threshold:
+            self._open_since.setdefault(vendor, time.monotonic())
+
+    def record_success(self, vendor: str) -> None:
+        """Reset the failure count after a successful request."""
+        self._failures.pop(vendor, None)
+        self._open_since.pop(vendor, None)
+
+    def reset(self, vendor: str | None = None) -> None:
+        """Manually reset the breaker for *vendor*, or all vendors if omitted."""
+        if vendor is None:
+            self._failures.clear()
+            self._open_since.clear()
+        else:
+            self._failures.pop(vendor, None)
+            self._open_since.pop(vendor, None)
+
+
+# Module-level circuit breaker shared across all route_to_vendor calls.
+# Reset between tests via reset_circuit_breaker().
+_circuit_breaker: CircuitBreaker = CircuitBreaker()
+
+
+def reset_circuit_breaker() -> None:
+    """Reset the circuit breaker (primarily for test isolation)."""
+    global _circuit_breaker
+    _circuit_breaker = CircuitBreaker()
 
 # Tools organized by category
 TOOLS_CATEGORIES = {
@@ -376,15 +440,18 @@ def get_vendor(category: str, method: str = None) -> str:
     # Fall back to category-level configuration
     return config.get("data_vendors", {}).get(category, "default")
 
+def _resolve_vendor_chain(method: str, category: str, *args) -> list[str]:
+    """Resolve the ordered vendor chain for *method* from the user's config.
 
-def route_to_vendor(method: str, *args, **kwargs):
-    """Route method calls to appropriate vendor implementation with fallback support."""
-    category = get_category_for_method(method)
-    vendor_config = get_vendor(category, method)
-    primary_vendors = [v.strip() for v in vendor_config.split(',')]
-
+    The configured vendor list IS the chain: we do NOT silently fall back to
+    vendors the user did not choose (#988/#289).  The "default" sentinel (no
+    explicit config) uses all available vendors.
+    """
     if method not in VENDOR_METHODS:
         raise ValueError(f"Method '{method}' not supported")
+
+    vendor_config = get_vendor(category, method)
+    primary_vendors = [v.strip() for v in vendor_config.split(",")]
 
     # Market-aware routing: the English-centric vendors return little or no
     # news for Chinese A-shares (and yfinance returns an empty-but-successful
@@ -405,11 +472,6 @@ def route_to_vendor(method: str, *args, **kwargs):
 
     all_available_vendors = list(VENDOR_METHODS[method].keys())
 
-    # The configured vendor list IS the chain: we do NOT silently fall back to
-    # vendors the user did not choose (#988/#289) — that returned data from an
-    # unexpected source and caused cross-vendor inconsistencies. For multi-vendor
-    # fallback, list them in order, e.g. data_vendors="yfinance,alpha_vantage".
-    # The "default" sentinel (no explicit config) uses all available vendors.
     explicit = [v for v in primary_vendors if v and v != "default"]
     if explicit:
         vendor_chain = [v for v in explicit if v in VENDOR_METHODS[method]]
@@ -418,92 +480,117 @@ def route_to_vendor(method: str, *args, **kwargs):
                 f"Configured vendor(s) {explicit} not available for '{method}'. "
                 f"Available: {all_available_vendors}."
             )
-    else:
-        vendor_chain = all_available_vendors
+        return vendor_chain
+    return all_available_vendors
+
+
+def _build_no_data_message(
+    last_no_data: NoMarketDataError,
+    first_error: Exception | None,
+    method: str,
+) -> str:
+    """Build the ``NO_DATA_AVAILABLE`` sentinel when no vendor could return data."""
+    if first_error is not None:
+        logger.warning(
+            "Returning NO_DATA for %s, but a vendor errored earlier: %s",
+            method, first_error,
+        )
+    sym = last_no_data.symbol
+    canonical = last_no_data.canonical
+    resolved = "" if canonical == sym else f" (resolved to '{canonical}')"
+    reason = f" ({last_no_data.detail})" if last_no_data.detail else ""
+    return (
+        f"NO_DATA_AVAILABLE: No usable market data for '{sym}'{resolved} from "
+        f"any configured vendor{reason}. The symbol may be invalid, delisted, "
+        f"not covered, or the vendor returned stale data. Do not estimate or "
+        f"fabricate values — report that data is unavailable for this symbol."
+    )
+
+
+def _build_unavailable_message(
+    first_error: Exception,
+    category: str,
+    method: str,
+) -> str:
+    """Build the ``DATA_UNAVAILABLE`` sentinel for optional enrichment categories."""
+    logger.warning("Optional %s unavailable for %s: %s", category, method, first_error)
+    return (
+        f"DATA_UNAVAILABLE: optional {category} could not be retrieved "
+        f"({first_error}). Proceed without it; do not fabricate values."
+    )
+
+
+def _try_vendor(
+    vendor: str,
+    method: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> Any:
+    """Call the vendor implementation, returning data or raising on failure."""
+    vendor_impl = VENDOR_METHODS[method][vendor]
+    impl_func = vendor_impl[0] if isinstance(vendor_impl, list) else vendor_impl
+    return impl_func(*args, **kwargs)
+
+
+def route_to_vendor(method: str, *args, **kwargs):
+    """Route method calls to appropriate vendor implementation with fallback support."""
+    category = get_category_for_method(method)
+    vendor_chain = _resolve_vendor_chain(method, category, *args)
 
     last_no_data: NoMarketDataError | None = None
     first_error: Exception | None = None
 
     for vendor in vendor_chain:
-        vendor_impl = VENDOR_METHODS[method][vendor]
-        impl_func = vendor_impl[0] if isinstance(vendor_impl, list) else vendor_impl
+        if _circuit_breaker.is_open(vendor):
+            logger.info("Circuit-breaker open for %r; skipping.", vendor)
+            continue
 
         try:
-            return impl_func(*args, **kwargs)
+            result = _try_vendor(vendor, method, args, kwargs)
+            _circuit_breaker.record_success(vendor)
+            return result
         except VendorRateLimitError:
+            vendor_config = get_vendor(category, method)
+            primary_vendors = [v.strip() for v in vendor_config.split(",")]
             logger.warning(
-                "Vendor %r rate-limited for %s%s; trying next vendor.",
+                "Vendor %r rate-limited for %s%s; trying next.",
                 vendor,
                 method,
                 " (configured primary)" if vendor in primary_vendors else "",
             )
+            _circuit_breaker.record_failure(vendor)
             continue
         except VendorNotConfiguredError as e:
-            logger.warning("Vendor %r not configured for %s; trying next vendor.", vendor, method)
-            if first_error is None:
-                first_error = e  # Surface it if no other vendor can serve the call.
-            continue
-        except NoMarketDataError as e:
-            last_no_data = e  # No data here; another configured vendor may have it
-            continue
-        except (AlphaVantageRateLimitError, AlphaVantageUnsupportedIndicatorError, SearxngUnavailableError, YFRateLimitError, DataVendorError, ValueError) as e:
-            # Also catch the legacy/specific exceptions for custom vendor stubs, treating them as first_error
-            logger.warning("Vendor %r failed for %s: %s", vendor, method, e)
+            logger.warning("Vendor %r not configured for %s; trying next.", vendor, method)
             if first_error is None:
                 first_error = e
             continue
+        except NoMarketDataError as e:
+            last_no_data = e
+            continue
         except Exception as e:
-            # A fallback vendor failing for an incidental reason (e.g. no API
-            # key configured) must not crash the call when another vendor
-            # already determined the symbol simply has no data. Remember the
-            # first error so a genuine primary-vendor failure still surfaces.
-            # Log it so a broken primary vendor isn't silently masked when a
-            # later fallback succeeds (see #989).
+            vendor_config = get_vendor(category, method)
+            primary_vendors = [v.strip() for v in vendor_config.split(",")]
             logger.warning(
-                "Vendor %r failed for %s%s",
+                "Vendor %r failed for %s%s: %s",
                 vendor,
                 method,
                 " (configured primary)" if vendor in primary_vendors else "",
+                e,
                 exc_info=True,
             )
+            _circuit_breaker.record_failure(vendor)
             if first_error is None:
                 first_error = e
             continue
 
-    # If any vendor reported "no data", the symbol is genuinely unavailable.
-    # Return one explicit, instructive sentinel rather than a vendor-specific
-    # empty string, so the agent reports "unavailable" instead of inventing a
-    # value. This takes precedence over incidental fallback errors.
+    # All vendors exhausted — surface the best diagnostic available.
     if last_no_data is not None:
-        if first_error is not None:
-            # A vendor also hit a real error; surface it in logs so the no-data
-            # verdict can't hide a broken primary (network/auth/etc.).
-            logger.warning(
-                "Returning NO_DATA for %s, but a vendor errored earlier: %s",
-                method, first_error,
-            )
-        sym = last_no_data.symbol
-        canonical = last_no_data.canonical
-        resolved = "" if canonical == sym else f" (resolved to '{canonical}')"
-        reason = f" ({last_no_data.detail})" if last_no_data.detail else ""
-        return (
-            f"NO_DATA_AVAILABLE: No usable market data for '{sym}'{resolved} from "
-            f"any configured vendor{reason}. The symbol may be invalid, delisted, "
-            f"not covered, or the vendor returned stale data. Do not estimate or "
-            f"fabricate values — report that data is unavailable for this symbol."
-        )
+        return _build_no_data_message(last_no_data, first_error, method)
 
-    # No vendor returned data and none reported clean "no data" — surface the
-    # first real error (e.g. the primary vendor's network failure). Optional
-    # enrichment categories degrade to a sentinel instead, so flavour data can't
-    # abort the run.
     if first_error is not None:
         if category in OPTIONAL_CATEGORIES:
-            logger.warning("Optional %s unavailable for %s: %s", category, method, first_error)
-            return (
-                f"DATA_UNAVAILABLE: optional {category} could not be retrieved "
-                f"({first_error}). Proceed without it; do not fabricate values."
-            )
+            return _build_unavailable_message(first_error, category, method)
         raise first_error
 
     raise RuntimeError(f"No available vendor for '{method}'")

@@ -71,6 +71,10 @@ scheduled = [
     "pyyaml>=6.0",
     "fpdf2>=2.7",
 ]
+# Web UI support. Install with: pip install "tradingagents[webui]"
+webui = [
+    "streamlit>=1.45.0",
+]
 # Optional vendors enabled via IIC-FORGE-02. Install with:
 #   pip install -e .[polygon,futu,osint]
 # Each vendor's module raises DataVendorError on missing creds/deps so the
@@ -123,9 +127,10 @@ portfolio-advisor = "portfolio_advisor.main:main"  # requires: pip install -e ".
 tradingagents-api = "tradingagents_service.api.app:main"
 tradingagents-worker = "tradingagents_service.worker.main:main"
 tradingagents-mcp = "mcp_server.tradingagents_mcp_server:main"
+tradingagents-webui = "webui:main"
 
 [tool.setuptools.packages.find]
-include = ["tradingagents*", "tradingagents_service*", "cli*", "portfolio_advisor*", "automation*", "mcp_server*", "back_test*"]
+include = ["tradingagents*", "tradingagents_service*", "cli*", "portfolio_advisor*", "automation*", "mcp_server*", "back_test*", "webui*"]
 
 [tool.setuptools.package-data]
 cli = ["static/*", "*.tcss"]

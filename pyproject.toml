@@ -35,7 +35,6 @@ dependencies = [
     "psycopg[binary]>=3.2.0",
     "sqlalchemy>=2.0.0",
     "typer>=0.21.0",
-    "setuptools>=80.9.0",
     "sqlite-vec>=0.1.6",
     "stockstats>=0.6.5",
     "tenacity>=9.0.0",

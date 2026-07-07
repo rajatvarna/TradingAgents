@@ -13,6 +13,7 @@ from langchain_openai import ChatOpenAI
 from .api_key_env import get_api_key_env
 from .base_client import BaseLLMClient, apply_determinism_kwargs, normalize_content
 from .capabilities import get_capabilities
+from .llm_cache import check_cache, store_cache
 from .retry import llm_retry
 from .url_validation import validate_custom_provider_base_url
 from .validators import validate_model
@@ -47,12 +48,33 @@ class NormalizedChatOpenAI(ChatOpenAI):
     # object (#1057). Declared as a field so langchain treats it as a known
     # init kwarg, not an extra model param forwarded to the API.
     suppress_tool_choice: bool = False
+    provider_name: str = ""
 
     def invoke(self, input, config=None, **kwargs):
+        # ── Check cache before making the real API call ────────────────
+        if self.provider_name:
+            try:
+                # Resolve the effective temperature: per‑call override
+                # wins, otherwise fall back to the instance's default.
+                temp = kwargs.get("temperature") if "temperature" in kwargs else getattr(self, "temperature", 0.0)
+                if temp is None:
+                    temp = 0.0
+                # Forward all kwargs so tools/tool_choice/response_format
+                # are part of the cache key.
+                cache_kwargs = {**kwargs, "temperature": temp}
+                cached = check_cache(self.provider_name, self.model_name, input, **cache_kwargs)
+                if cached is not None:
+                    return cached
+            except Exception:
+                # Cache failures must never crash the invocation.
+                pass
+
         attempts = max(self.max_retries or 0, 0) + 1
+        result = None
         for attempt in range(attempts):
             try:
-                return normalize_content(llm_retry(super().invoke, input, config, **kwargs))
+                result = normalize_content(llm_retry(super().invoke, input, config, **kwargs))
+                break
             except json.JSONDecodeError as exc:
                 if attempt + 1 >= attempts:
                     raise
@@ -62,6 +84,19 @@ class NormalizedChatOpenAI(ChatOpenAI):
                     type(exc).__name__, attempt + 1, attempts, delay,
                 )
                 time.sleep(delay)
+
+        # ── Store in cache on the way out ──────────────────────────────
+        if self.provider_name and result is not None:
+            try:
+                temp = kwargs.get("temperature") if "temperature" in kwargs else getattr(self, "temperature", 0.0)
+                if temp is None:
+                    temp = 0.0
+                cache_kwargs = {**kwargs, "temperature": temp}
+                store_cache(self.provider_name, self.model_name, input, result, **cache_kwargs)
+            except Exception:
+                pass
+
+        return result
 
     def with_structured_output(self, schema, *, method=None, **kwargs):
         caps = get_capabilities(self.model_name)
@@ -598,7 +633,12 @@ class OpenAIClient(BaseLLMClient):
         if hasattr(chat_cls, "__name__") and chat_cls.__name__ in globals():
             chat_cls = globals()[chat_cls.__name__]
 
-        return chat_cls(**llm_kwargs)
+        llm = chat_cls(**llm_kwargs)
+        # Tag the LLM with the provider name so the cache layer can filter
+        # by provider (e.g. cache DeepSeek but skip Ollama).
+        if hasattr(llm, "provider_name"):
+            llm.provider_name = self.provider
+        return llm
 
     def _build_oauth_llm(self, llm_kwargs: dict) -> Any:
         """Build a ChatOpenAI bound to the Codex ChatGPT backend via OAuth.

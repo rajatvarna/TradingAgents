@@ -58,6 +58,10 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_VERTEX_LOCATION":         "vertex_location",
     "TRADINGAGENTS_OPENAI_REASONING_EFFORT": "openai_reasoning_effort",
     "TRADINGAGENTS_ANTHROPIC_EFFORT":        "anthropic_effort",
+    # LLM response cache
+    "TRADINGAGENTS_LLM_CACHE_ENABLED":    "llm_cache_enabled",
+    "TRADINGAGENTS_LLM_CACHE_TTL_HOURS":  "llm_cache_ttl_hours",
+    "TRADINGAGENTS_LLM_CACHE_PROVIDERS":  "llm_cache_providers",
 }
 
 _DATA_VENDOR_ENV_OVERRIDES = {
@@ -94,6 +98,10 @@ def _coerce(value: str, reference):
         return int(value)
     if isinstance(reference, float):
         return float(value)
+    if isinstance(reference, list):
+        if not value.strip():
+            return []
+        return [item.strip() for item in value.split(",")]
     return value
 
 
@@ -228,6 +236,15 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # provider/SDK at its own default (usually 2). Raise it to ride out bursty
     # 429 throttling on rate-limited deployments instead of aborting a run (#1091).
     "llm_max_retries": None,
+    # LLM response cache — local file-based cache of LLM API responses.
+    # Enabled by default; set TRADINGAGENTS_LLM_CACHE_ENABLED=false to disable.
+    "llm_cache_enabled": True,
+    # Cache TTL in hours. After this, entries are lazily expired on read.
+    "llm_cache_ttl_hours": 24,
+    # List of providers to cache. Empty list = cache all providers.
+    # Set via TRADINGAGENTS_LLM_CACHE_PROVIDERS as comma-separated values,
+    # e.g. "deepseek,openai". Non-listed providers skip the cache entirely.
+    "llm_cache_providers": [],
     # Checkpoint/resume: when True, LangGraph saves state after each node
     # so a crashed run can resume from the last successful step.
     "checkpoint_enabled": True,

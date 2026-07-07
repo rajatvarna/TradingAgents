@@ -150,6 +150,37 @@ from .yfinance_options import (
 from .eastmoney_news import get_news_eastmoney, is_ashare
 
 try:
+    from .akshare_stock import (
+        get_balance_sheet as _ak_balance_sheet,
+        get_cashflow as _ak_cashflow,
+        get_fundamentals as _ak_fundamentals,
+        get_income_statement as _ak_income,
+        get_stock_data as _ak_stock_data,
+    )
+    _akshare_available = True
+except ImportError:
+    _akshare_available = False
+
+
+def _akshare_stub(method_name: str):
+    """Return a stub that raises VendorNotConfiguredError when akshare is not installed."""
+
+    def stub(*args, **kwargs):
+        raise VendorNotConfiguredError(
+            f"akshare vendor selected for '{method_name}' but akshare is not "
+            f"installed. Run: pip install akshare"
+        )
+
+    return stub
+
+
+get_akshare_stock_data = _ak_stock_data if _akshare_available else _akshare_stub("get_stock_data")
+get_akshare_fundamentals = _ak_fundamentals if _akshare_available else _akshare_stub("get_fundamentals")
+get_akshare_balance_sheet = _ak_balance_sheet if _akshare_available else _akshare_stub("get_balance_sheet")
+get_akshare_cashflow = _ak_cashflow if _akshare_available else _akshare_stub("get_cashflow")
+get_akshare_income_statement = _ak_income if _akshare_available else _akshare_stub("get_income_statement")
+
+try:
     from yfinance.exceptions import YFRateLimitError
 except ImportError:
     # Older yfinance versions don't expose YFRateLimitError as a clean
@@ -305,6 +336,7 @@ VENDOR_LIST = [
     "futu",
     "ibkr",
     "eastmoney",
+    "akshare",
 ]
 
 # Optional enrichment categories. These add macro/event context to the news
@@ -312,6 +344,8 @@ VENDOR_LIST = [
 # sentinel instead of aborting the run (a bad LLM-supplied indicator, a missing
 # key, or a network blip should not crash an analysis over flavour data). Core
 # categories (prices, fundamentals, news) still raise so a broken primary is loud.
+#
+# Note: "akshare" is a primary data source for A-shares, so it is kept out of optional.
 OPTIONAL_CATEGORIES = {"macro_data", "prediction_markets"}
 
 # Mapping of methods to their vendor-specific implementations
@@ -325,6 +359,7 @@ VENDOR_METHODS = {
         "polygon": get_polygon_stock,
         "futu": get_futu_stock,
         "ibkr": get_ibkr_stock,
+        "akshare": get_akshare_stock_data,
     },
     # technical_indicators
     "get_indicators": {
@@ -339,24 +374,28 @@ VENDOR_METHODS = {
         "yfinance": get_yfinance_fundamentals,
         "b3": get_b3_fundamentals,
         "twelve_data": get_twelve_data_fundamentals,
+        "akshare": get_akshare_fundamentals,
     },
     "get_balance_sheet": {
         "alpha_vantage": get_alpha_vantage_balance_sheet,
         "yfinance": get_yfinance_balance_sheet,
         "b3": get_b3_balance_sheet,
         "twelve_data": get_twelve_data_balance_sheet,
+        "akshare": get_akshare_balance_sheet,
     },
     "get_cashflow": {
         "alpha_vantage": get_alpha_vantage_cashflow,
         "yfinance": get_yfinance_cashflow,
         "b3": get_b3_cashflow,
         "twelve_data": get_twelve_data_cashflow,
+        "akshare": get_akshare_cashflow,
     },
     "get_income_statement": {
         "alpha_vantage": get_alpha_vantage_income_statement,
         "yfinance": get_yfinance_income_statement,
         "b3": get_b3_income_statement,
         "twelve_data": get_twelve_data_income_statement,
+        "akshare": get_akshare_income_statement,
     },
     # news_data
     "get_news": {

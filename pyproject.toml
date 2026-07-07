@@ -75,6 +75,9 @@ scheduled = [
 webui = [
     "streamlit>=1.45.0",
 ]
+akshare = [
+    "akshare>=1.15.0",
+]
 # Optional vendors enabled via IIC-FORGE-02. Install with:
 #   pip install -e .[polygon,futu,osint]
 # Each vendor's module raises DataVendorError on missing creds/deps so the

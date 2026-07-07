@@ -34,8 +34,10 @@ def test_run_analysis_routes_through_propagate(monkeypatch, tmp_path):
 
     monkeypatch.setattr(m, "TradingAgentsGraph", lambda *a, **k: fake_graph)
     monkeypatch.setattr(m, "Live", _DummyLive)
-    monkeypatch.setattr(m, "create_layout", lambda: object())
-    monkeypatch.setattr(m, "update_display", lambda *a, **k: None)
+    fake_display_mgr = MagicMock()
+    fake_display_mgr.create_layout.return_value = object()
+    fake_display_mgr.update_all = MagicMock()
+    monkeypatch.setattr(m, "DisplayManager", lambda *a, **k: fake_display_mgr)
     monkeypatch.setattr(m.typer, "prompt", lambda *a, **k: "N")
     monkeypatch.setitem(m.DEFAULT_CONFIG, "results_dir", str(tmp_path / "results"))
     monkeypatch.setitem(m.DEFAULT_CONFIG, "data_cache_dir", str(tmp_path / "cache"))

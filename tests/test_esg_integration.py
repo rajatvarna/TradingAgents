@@ -17,48 +17,65 @@ from tradingagents.graph.propagation import Propagator
 from tradingagents.graph.setup import GraphSetup
 
 
-def test_esg_is_selectable_in_cli():
+def test_esg_is_selectable_in_cli_and_execution_plan():
     assert AnalystType.ESG.value == "esg"
     assert ("ESG Analyst", AnalystType.ESG) in CLI_ANALYST_ORDER
     assert "esg" in ANALYST_ORDER
     assert ANALYST_AGENT_NAMES["esg"] == "ESG Analyst"
     assert ANALYST_REPORT_MAP["esg"] == "esg_report"
 
+    spec = ANALYST_NODE_SPECS["esg"]
+    assert spec.agent_node == "ESG Analyst"
+    assert spec.clear_node == "Msg Clear ESG"
+    assert spec.tool_node == "tools_esg"
+    assert spec.report_key == "esg_report"
 
-def test_esg_initial_state_and_graph_names_are_consistent():
+
+def test_esg_initial_state_and_graph_compile():
     init_state = Propagator().create_initial_state("AAPL", "2025-01-01")
     assert init_state["esg_report"] == ""
-    assert ANALYST_NODE_SPECS["esg"].agent_node == "ESG Analyst"
-
-
-
-class _FakeLLM:
-    def invoke(self, prompt):
-        return AIMessage(content="fake response")
-
-    def with_structured_output(self, schema):
-        raise NotImplementedError("structured output not needed for graph compile")
-
-    def bind_tools(self, tools):
-        return self
-
-
-def test_esg_conditional_logic_and_graph_compile():
-    logic = ConditionalLogic()
-    tool_state = {"messages": [AIMessage(content="", tool_calls=[{"name": "get_esg_scores", "args": {"ticker": "AAPL", "curr_date": "2025-01-01"}, "id": "call-1"}])]}
-    final_state = {"messages": [AIMessage(content="done", tool_calls=[])]}
-
-    assert logic.should_continue_esg(tool_state) == "tools_esg"
-    assert logic.should_continue_esg(final_state) == "Msg Clear ESG"
 
     llm = _FakeLLM()
     setup = GraphSetup(
         quick_thinking_llm=llm,
         deep_thinking_llm=llm,
         tool_nodes={"esg": ToolNode([get_esg_scores, get_esg_news])},
-        conditional_logic=logic,
+        conditional_logic=ConditionalLogic(),
     )
     setup.setup_graph(["esg"]).compile()
+
+
+class _FakeLLM:
+    def invoke(self, prompt):
+        return AIMessage(content="fake response")
+
+    def bind_tools(self, tools):
+        return self
+
+    def with_structured_output(self, schema):
+        raise NotImplementedError("structured output not needed for graph compile")
+
+
+def test_esg_conditional_logic():
+    logic = ConditionalLogic()
+    tool_state = {
+        "messages": [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "get_esg_scores",
+                        "args": {"ticker": "AAPL", "curr_date": "2025-01-01"},
+                        "id": "call-1",
+                    }
+                ],
+            )
+        ]
+    }
+    final_state = {"messages": [AIMessage(content="done", tool_calls=[])]}
+
+    assert logic.should_continue_esg(tool_state) == "tools_esg"
+    assert logic.should_continue_esg(final_state) == "Msg Clear ESG"
 
 
 class _PromptCaptureLLM:
@@ -81,6 +98,7 @@ def test_esg_analyst_system_message_is_rendered_as_string():
         {
             "messages": [("human", "AAPL")],
             "company_of_interest": "AAPL",
+            "asset_type": "stock",
             "trade_date": "2025-01-01",
         }
     )
@@ -89,6 +107,7 @@ def test_esg_analyst_system_message_is_rendered_as_string():
     assert "You are an ESG" in llm.system_content
     assert "('You are an ESG" not in llm.system_content
     assert "',)" not in llm.system_content
+
 
 def test_esg_news_parses_nested_yfinance_articles():
     nested_article = {
@@ -101,10 +120,11 @@ def test_esg_news_parses_nested_yfinance_articles():
         }
     }
     ticker = Mock()
-    ticker.get_news.return_value = [nested_article]
+    ticker.news = [nested_article]
 
     with patch("tradingagents.agents.utils.esg_data_tools.yf.Ticker", return_value=ticker), patch(
-        "tradingagents.agents.utils.esg_data_tools.yf_retry", side_effect=lambda call: call()
+        "tradingagents.agents.utils.esg_data_tools.yf_retry",
+        side_effect=lambda call: call(),
     ):
         result = get_esg_news.invoke({"ticker": "AAPL", "curr_date": "2025-01-01"})
 
@@ -133,16 +153,40 @@ def test_esg_news_filters_articles_after_analysis_date():
         }
     }
     ticker = Mock()
-    ticker.get_news.return_value = [past_article, future_article]
+    ticker.news = [past_article, future_article]
 
     with patch("tradingagents.agents.utils.esg_data_tools.yf.Ticker", return_value=ticker), patch(
-        "tradingagents.agents.utils.esg_data_tools.yf_retry", side_effect=lambda call: call()
+        "tradingagents.agents.utils.esg_data_tools.yf_retry",
+        side_effect=lambda call: call(),
     ):
         result = get_esg_news.invoke({"ticker": "AAPL", "curr_date": "2025-01-01"})
 
     assert "Company publishes sustainability plan" in result
     assert "Company faces climate investigation" not in result
     assert "Filtered out 1 future-dated" in result
+
+
+def test_esg_news_handles_missing_summary():
+    article = {
+        "content": {
+            "title": "Company board approves governance reforms",
+            "summary": None,
+            "provider": {"displayName": "Governance News"},
+            "canonicalUrl": {"url": "https://example.com/governance"},
+            "pubDate": "2025-01-01T12:00:00Z",
+        }
+    }
+    ticker = Mock()
+    ticker.news = [article]
+
+    with patch("tradingagents.agents.utils.esg_data_tools.yf.Ticker", return_value=ticker), patch(
+        "tradingagents.agents.utils.esg_data_tools.yf_retry",
+        side_effect=lambda call: call(),
+    ):
+        result = get_esg_news.invoke({"ticker": "AAPL", "curr_date": "2025-01-01"})
+
+    assert "Company board approves governance reforms" in result
+    assert "No summary available" in result
 
 
 def test_esg_scores_skip_current_scores_for_historical_dates():
@@ -163,7 +207,8 @@ def test_esg_scores_extracts_scalar_values_from_dataframe_rows():
     ticker.sustainability = sustainability
 
     with patch("tradingagents.agents.utils.esg_data_tools.date") as date_cls, patch(
-        "tradingagents.agents.utils.esg_data_tools.yf.Ticker", return_value=ticker
+        "tradingagents.agents.utils.esg_data_tools.yf.Ticker",
+        return_value=ticker,
     ):
         date_cls.today.return_value = date(2025, 1, 1)
         result = get_esg_scores.invoke({"ticker": "AAPL", "curr_date": "2025-01-01"})

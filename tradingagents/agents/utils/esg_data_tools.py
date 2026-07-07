@@ -1,4 +1,4 @@
-"""ESG (Environmental, Social, Governance) data tools for analyst agents."""
+"""ESG data tools for analyst agents."""
 
 from datetime import date, datetime, timedelta
 from typing import Annotated, Any
@@ -27,10 +27,10 @@ def _scalar_esg_value(value: Any) -> Any:
     """Convert yfinance ESG row/cell values into a concise scalar when possible."""
     if isinstance(value, pd.Series):
         non_empty = value.dropna()
-        if len(non_empty) == 1:
-            return non_empty.iloc[0]
         if "Value" in value.index and pd.notna(value["Value"]):
             return value["Value"]
+        if len(non_empty) == 1:
+            return non_empty.iloc[0]
         if len(non_empty) > 1:
             return non_empty.to_dict()
         return "N/A"
@@ -62,7 +62,11 @@ def get_esg_scores(
         sustainability = stock.sustainability
 
         if sustainability is None or sustainability.empty:
-            return f"No ESG sustainability data available for {ticker}. This may indicate the company is not covered by Yahoo Finance ESG ratings, or the data provider (Sustainalytics) has not assessed this company."
+            return (
+                f"No ESG sustainability data available for {ticker}. This may indicate "
+                "the company is not covered by Yahoo Finance ESG ratings, or the data "
+                "provider has not assessed this company."
+            )
 
         report = f"ESG Sustainability Scores for {ticker}:\n"
         report += "=" * 50 + "\n\n"
@@ -89,11 +93,13 @@ def get_esg_scores(
             report += sustainability.to_string()
 
         report += "\n" + "=" * 50 + "\n"
-        report += "Note: Lower ESG scores indicate lower ESG risk. Scores are based on Sustainalytics methodology."
+        report += (
+            "Note: Lower ESG scores generally indicate lower ESG risk under "
+            "Sustainalytics-style scoring."
+        )
         return report
-
     except Exception as e:
-        return f"Error fetching ESG data for {ticker}: {str(e)}"
+        return f"Error fetching ESG data for {ticker}: {e}"
 
 
 @tool
@@ -109,20 +115,41 @@ def get_esg_news(
     """
     try:
         stock = yf.Ticker(ticker)
-        news = yf_retry(lambda: stock.get_news(count=20))
+        news = yf_retry(lambda: stock.news)
 
-        if news is None or len(news) == 0:
+        if not news:
             return f"No recent news available for {ticker}."
 
         trade_date = _parse_trade_date(curr_date)
-        cutoff = datetime.combine(trade_date + timedelta(days=1), datetime.min.time()) if trade_date else None
+        cutoff = (
+            datetime.combine(trade_date + timedelta(days=1), datetime.min.time())
+            if trade_date
+            else None
+        )
         historical = _is_historical_date(curr_date)
 
         esg_keywords = [
-            'esg', 'environment', 'sustainability', 'carbon', 'climate',
-            'green', 'emissions', 'social', 'diversity', 'governance',
-            'board', 'ethics', 'compliance', 'labor', 'worker', 'employee',
-            'community', 'controversy', 'scandal', 'investigation', 'regulation'
+            "esg",
+            "environment",
+            "sustainability",
+            "carbon",
+            "climate",
+            "green",
+            "emissions",
+            "social",
+            "diversity",
+            "governance",
+            "board",
+            "ethics",
+            "compliance",
+            "labor",
+            "worker",
+            "employee",
+            "community",
+            "controversy",
+            "scandal",
+            "investigation",
+            "regulation",
         ]
 
         esg_news_items = []
@@ -140,23 +167,35 @@ def get_esg_news(
                 skipped_undated += 1
                 continue
 
-            title = article["title"].lower()
-            summary = article["summary"].lower()
+            title = (article.get("title") or "").lower()
+            summary = (article.get("summary") or "").lower()
 
             if any(keyword in title or keyword in summary for keyword in esg_keywords):
                 article_summary = article["summary"] or "No summary available"
-                esg_news_items.append({
-                    'title': article["title"],
-                    'publisher': article["publisher"],
-                    'link': article["link"],
-                    'summary': article_summary[:200] + '...' if len(article_summary) > 200 else article_summary,
-                })
+                esg_news_items.append(
+                    {
+                        "title": article["title"],
+                        "publisher": article["publisher"],
+                        "link": article["link"],
+                        "summary": (
+                            article_summary[:200] + "..."
+                            if len(article_summary) > 200
+                            else article_summary
+                        ),
+                    }
+                )
 
-        if len(esg_news_items) == 0:
+        if not esg_news_items:
             suffix = ""
             if skipped_future or skipped_undated:
-                suffix = f" Filtered out {skipped_future} future-dated and {skipped_undated} undated article(s) for point-in-time safety."
-            return f"No ESG-specific news found for {ticker} up to {curr_date}. General market news may still contain relevant information.{suffix}"
+                suffix = (
+                    f" Filtered out {skipped_future} future-dated and "
+                    f"{skipped_undated} undated article(s) for point-in-time safety."
+                )
+            return (
+                f"No ESG-specific news found for {ticker} up to {curr_date}. "
+                f"General market news may still contain relevant information.{suffix}"
+            )
 
         report = f"ESG-Related News for {ticker} up to {curr_date}:\n"
         report += "=" * 50 + "\n\n"
@@ -165,16 +204,18 @@ def get_esg_news(
             report += f"{i}. {item['title']}\n"
             report += f"   Source: {item['publisher']}\n"
             report += f"   Summary: {item['summary']}\n"
-            if item['link']:
+            if item["link"]:
                 report += f"   Link: {item['link']}\n"
             report += "\n"
 
         report += "=" * 50 + "\n"
         report += f"Total ESG-related articles found: {len(esg_news_items)}\n"
         if skipped_future or skipped_undated:
-            report += f"Filtered out {skipped_future} future-dated and {skipped_undated} undated article(s) for point-in-time safety.\n"
+            report += (
+                f"Filtered out {skipped_future} future-dated and "
+                f"{skipped_undated} undated article(s) for point-in-time safety.\n"
+            )
 
         return report
-
     except Exception as e:
-        return f"Error fetching ESG news for {ticker}: {str(e)}"
+        return f"Error fetching ESG news for {ticker}: {e}"

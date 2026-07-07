@@ -1,6 +1,8 @@
 import logging
 import os
 import re
+import json
+import time
 from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import urlparse
@@ -38,7 +40,19 @@ class NormalizedChatOpenAI(ChatOpenAI):
     """
 
     def invoke(self, input, config=None, **kwargs):
-        return normalize_content(llm_retry(super().invoke, input, config, **kwargs))
+        attempts = max(self.max_retries or 0, 0) + 1
+        for attempt in range(attempts):
+            try:
+                return normalize_content(llm_retry(super().invoke, input, config, **kwargs))
+            except json.JSONDecodeError as exc:
+                if attempt + 1 >= attempts:
+                    raise
+                delay = min(2.0 ** attempt, 8.0)
+                logger.warning(
+                    "transient %s on attempt %d/%d; retrying in %.0fs",
+                    type(exc).__name__, attempt + 1, attempts, delay,
+                )
+                time.sleep(delay)
 
     def with_structured_output(self, schema, *, method=None, **kwargs):
         caps = get_capabilities(self.model_name)

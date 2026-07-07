@@ -1,0 +1,46 @@
+{
+  "holdings": [
+    {
+      "id": 1,
+      "symbol": "AAPL",
+      "company_name": "Apple Inc.",
+      "quantity": 100,
+      "purchase_price": 150.25,
+      "current_price": 312.42999267578125,
+      "purchase_date": "2024-01-15",
+      "sector": "Technology",
+      "status": "active"
+    },
+    {
+      "id": 2,
+      "symbol": "MSFT",
+      "company_name": "Microsoft Corporation",
+      "quantity": 50,
+      "purchase_price": 310.0,
+      "current_price": 386.385009765625,
+      "purchase_date": "2024-02-01",
+      "sector": "Technology",
+      "status": "active"
+    },
+    {
+      "id": 3,
+      "symbol": "GOOGL",
+      "company_name": "Alphabet Inc.",
+      "quantity": 75,
+      "purchase_price": 120.5,
+      "current_price": 367.45001220703125,
+      "purchase_date": "2024-03-01",
+      "sector": "Technology",
+      "status": "active"
+    }
+  ],
+  "portfolio_summary": {
+    "total_holdings": 3,
+    "total_quantity": 225,
+    "total_invested": 39562.5,
+    "total_current_value": 78121.0,
+    "total_gain_loss": 38558.5,
+    "gain_loss_percentage": 97.46,
+    "last_updated": "2026-07-06T19:57:04Z"
+  }
+}

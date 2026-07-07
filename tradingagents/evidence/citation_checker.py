@@ -44,6 +44,8 @@ def verify_citations(
         passed=not unknown_ids and not missing_required,
         cited_ids=cited_ids,
         unknown_ids=unknown_ids,
+        missing_ids=unknown_ids,
         missing_required=missing_required,
         warnings=warnings,
     )
+

@@ -549,13 +549,23 @@ class TradingAgentsGraph:
             )
             if raw is None:
                 continue  # price not available yet — try again next run
-            reflection = self.reflector.reflect_on_final_decision(
-                final_decision=entry.get("decision", ""),
-                raw_return=raw,
-                alpha_return=alpha,
-                benchmark_name=benchmark,
-                expected_return=entry.get("expected_return"),
-            )
+            try:
+                reflection = self.reflector.reflect_on_final_decision(
+                    final_decision=entry.get("decision", ""),
+                    raw_return=raw,
+                    alpha_return=alpha,
+                    benchmark_name=benchmark,
+                    expected_return=entry.get("expected_return"),
+                )
+            except Exception:  # noqa: BLE001
+                # One transient reflection (LLM) failure must not abort the caller —
+                # this also runs at the start of propagate()/stream_run(), so a blip
+                # here would otherwise kill a brand-new analysis. Leave the entry
+                # pending and retry it next run.
+                logger.warning(
+                    "Reflection failed for %s %s; leaving pending", ticker, entry["date"], exc_info=True
+                )
+                continue
             updates.append({
                 "ticker": ticker,
                 "trade_date": entry["date"],
@@ -567,6 +577,124 @@ class TradingAgentsGraph:
 
         if updates:
             self.memory_log.batch_update_with_outcomes(updates)
+
+    def resolve_pending_entries(self, ticker: str) -> None:
+        """Public entry point to realize pending decisions for ``ticker``.
+
+        Fetches realized returns + alpha and writes reflections for any pending
+        memory-log entries on ``ticker`` without running a full analysis. Hosts
+        (e.g. a UI's periodic "refresh outcomes" action) call this on a schedule
+        so decisions that were too recent to score at analysis time get resolved
+        later. Thin wrapper over :meth:`_resolve_pending_entries`.
+        """
+        self._resolve_pending_entries(ticker)
+
+    def resolve_all_pending(self) -> list[str]:
+        """Resolve pending entries for every ticker that has any.
+
+        Returns the sorted list of tickers that were successfully resolved. One
+        ticker's failure (e.g. a transient LLM error) does not abort the batch —
+        the rest are still processed and the failed ticker is retried next run.
+        """
+        tickers = sorted({e["ticker"] for e in self.memory_log.get_pending_entries()})
+        resolved = []
+        for ticker in tickers:
+            try:
+                self._resolve_pending_entries(ticker)
+                resolved.append(ticker)
+            except Exception:  # noqa: BLE001 - one ticker must not poison the batch
+                logger.warning("Could not resolve pending for %s; will retry next run", ticker, exc_info=True)
+        return resolved
+
+    def stream_run(self, company_name, trade_date, asset_type: str = "stock"):
+        """Streaming sibling of :meth:`propagate` for live host UIs.
+
+        Yields each whole-state snapshot from ``graph.stream(stream_mode="values")``
+        as it is produced, while preserving the same side effects ``_run_graph``
+        performs: it resolves prior pending outcomes before the run and writes the
+        state log + decision entry after the final snapshot. ``propagate`` remains
+        the blocking one-shot path; this one exists so a host can render progress
+        as the graph advances.
+
+        Checkpoint/resume is intentionally not enabled on this path in v1 (the
+        SqliteSaver recompile flow is owned by ``propagate``); callers needing
+        resume should use ``propagate``.
+        """
+        self.ticker = company_name
+
+        # Realize prior pending outcomes first (parity with propagate()).
+        self._resolve_pending_entries(company_name)
+
+        past_context = self.memory_log.get_past_context(company_name)
+        instrument_context = self.resolve_instrument_context(company_name, asset_type)
+        risk_constraints = self._risk_constraints_from_config()
+
+        monster_score = _precompute_monster_score(company_name, str(trade_date), self.config)
+        evidence_pack = self._build_evidence_pack(company_name, str(trade_date))
+
+        init_agent_state = self.propagator.create_initial_state(
+            company_name,
+            trade_date,
+            asset_type=asset_type,
+            past_context=past_context,
+            instrument_context=instrument_context,
+            risk_constraints=risk_constraints,
+            **evidence_pack,
+        )
+        if monster_score:
+            init_agent_state["monster_stock_score"] = monster_score
+
+        from tradingagents.dataflows.earnings_calendar import get_earnings_warning
+        earnings_warning = get_earnings_warning(
+            company_name,
+            str(trade_date),
+            lookahead_days=self.config.get("earnings_lookahead_days", 7),
+        )
+        init_agent_state["earnings_warning"] = earnings_warning
+
+        try:
+            analyst_weights = self.memory_log.get_analyst_weights(
+                n_entries=self.config.get("analyst_weights_lookback", 20)
+            )
+            init_agent_state["analyst_weights"] = analyst_weights
+        except Exception:
+            init_agent_state["analyst_weights"] = {}
+
+        try:
+            from tradingagents.graph.macro_regime_classifier import classify_macro_regime
+            macro_regime_info = classify_macro_regime(str(trade_date))
+            init_agent_state["macro_regime"] = macro_regime_info
+        except Exception:
+            init_agent_state["macro_regime"] = {"regime": "unknown"}
+
+        init_agent_state["event_context_text"] = self.config.get("event_context", "") or ""
+
+        args = self.propagator.get_graph_args(callbacks=self.callbacks or None)
+
+        self.run_recorder.start(
+            ticker=init_agent_state.get("company_of_interest", "UNKNOWN"),
+            started_ts=datetime.now(UTC).isoformat(),
+        )
+
+        final_state: dict[str, Any] = {}
+        for chunk in self.graph.stream(init_agent_state, **args):
+            final_state = chunk
+            yield chunk
+
+        self.curr_state = final_state
+
+        # Merge evidence defaults & run post-run audits (parity with _run_graph).
+        self._merge_evidence_defaults(final_state, evidence_pack)
+        self._audit_final_state(final_state)
+
+        # Side effects the raw stream path would otherwise skip (see _run_graph).
+        self._log_state(trade_date, final_state)
+        self.memory_log.store_decision(
+            ticker=company_name,
+            trade_date=trade_date,
+            final_trade_decision=final_state["final_trade_decision"],
+        )
+
 
     def resolve_instrument_context(self, ticker: str, asset_type: str = "stock") -> str:
         """Resolve ticker identity once and return the full instrument context.
@@ -697,13 +825,15 @@ class TradingAgentsGraph:
 
                 ledger = EvidenceLedger.from_dict(ledger_dict)
                 citation_result = verify_citations(decision_text, ledger)
-                final_state["citation_verification"] = citation_result
-                if citation_result.get("missing_ids"):
+                citation_dict = citation_result.model_dump()
+                final_state["citation_verification"] = citation_dict
+                if citation_dict.get("missing_ids"):
                     logger.warning(
                         "Citation check: %d unresolved citation(s) in final decision: %s",
-                        len(citation_result["missing_ids"]),
-                        citation_result["missing_ids"],
+                        len(citation_dict["missing_ids"]),
+                        citation_dict["missing_ids"],
                     )
+
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Citation verification failed (non-blocking): %s", exc)
 

@@ -21,7 +21,13 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-def save_report_to_disk(final_state: dict[str, Any], ticker: str, save_path: Path) -> Path:
+def save_report_to_disk(
+    final_state: dict[str, Any],
+    ticker: str,
+    save_path: Path,
+    selections: dict | None = None,
+    config: dict | None = None,
+) -> Path:
     """Write the canonical reports folder for one run.
 
     Layout::
@@ -42,18 +48,23 @@ def save_report_to_disk(final_state: dict[str, Any], ticker: str, save_path: Pat
     save_path.mkdir(parents=True, exist_ok=True)
     sections: list[str] = []
 
+    from tradingagents.metrics_config import DEFAULT_METRICS_CONFIG, is_metric_enabled
+    mc = config.get("metrics_config") if config else None
+    if mc is None:
+        mc = DEFAULT_METRICS_CONFIG
+
     # 1. Analysts
     analyst_parts: list[tuple[str, str]] = []
-    if final_state.get("market_report"):
+    if final_state.get("market_report") and is_metric_enabled(mc, "analysts", "market_report"):
         _write_section(save_path / "1_analysts", "market.md", final_state["market_report"])
         analyst_parts.append(("Market Analyst", final_state["market_report"]))
-    if final_state.get("sentiment_report"):
+    if final_state.get("sentiment_report") and is_metric_enabled(mc, "analysts", "sentiment_report"):
         _write_section(save_path / "1_analysts", "sentiment.md", final_state["sentiment_report"])
         analyst_parts.append(("Sentiment Analyst", final_state["sentiment_report"]))
-    if final_state.get("news_report"):
+    if final_state.get("news_report") and is_metric_enabled(mc, "analysts", "news_report"):
         _write_section(save_path / "1_analysts", "news.md", final_state["news_report"])
         analyst_parts.append(("News Analyst", final_state["news_report"]))
-    if final_state.get("fundamentals_report"):
+    if final_state.get("fundamentals_report") and is_metric_enabled(mc, "analysts", "fundamentals_report"):
         _write_section(save_path / "1_analysts", "fundamentals.md", final_state["fundamentals_report"])
         analyst_parts.append(("Fundamentals Analyst", final_state["fundamentals_report"]))
     if analyst_parts:
@@ -64,13 +75,13 @@ def save_report_to_disk(final_state: dict[str, Any], ticker: str, save_path: Pat
     if final_state.get("investment_debate_state"):
         debate = final_state["investment_debate_state"]
         research_parts: list[tuple[str, str]] = []
-        if debate.get("bull_history"):
+        if debate.get("bull_history") and is_metric_enabled(mc, "research", "bull_history"):
             _write_section(save_path / "2_research", "bull.md", debate["bull_history"])
             research_parts.append(("Bull Researcher", debate["bull_history"]))
-        if debate.get("bear_history"):
+        if debate.get("bear_history") and is_metric_enabled(mc, "research", "bear_history"):
             _write_section(save_path / "2_research", "bear.md", debate["bear_history"])
             research_parts.append(("Bear Researcher", debate["bear_history"]))
-        if debate.get("judge_decision"):
+        if debate.get("judge_decision") and is_metric_enabled(mc, "research", "judge_decision"):
             _write_section(save_path / "2_research", "manager.md", debate["judge_decision"])
             research_parts.append(("Research Manager", debate["judge_decision"]))
         if research_parts:
@@ -78,7 +89,7 @@ def save_report_to_disk(final_state: dict[str, Any], ticker: str, save_path: Pat
             sections.append(f"## II. Research Team Decision\n\n{content}")
 
     # 3. Trading
-    if final_state.get("trader_investment_plan"):
+    if final_state.get("trader_investment_plan") and is_metric_enabled(mc, "trading", "trader_investment_plan"):
         _write_section(save_path / "3_trading", "trader.md", final_state["trader_investment_plan"])
         sections.append(
             f"## III. Trading Team Plan\n\n### Trader\n{final_state['trader_investment_plan']}"
@@ -88,13 +99,13 @@ def save_report_to_disk(final_state: dict[str, Any], ticker: str, save_path: Pat
     if final_state.get("risk_debate_state"):
         risk = final_state["risk_debate_state"]
         risk_parts: list[tuple[str, str]] = []
-        if risk.get("aggressive_history"):
+        if risk.get("aggressive_history") and is_metric_enabled(mc, "risk", "aggressive_history"):
             _write_section(save_path / "4_risk", "aggressive.md", risk["aggressive_history"])
             risk_parts.append(("Aggressive Analyst", risk["aggressive_history"]))
-        if risk.get("conservative_history"):
+        if risk.get("conservative_history") and is_metric_enabled(mc, "risk", "conservative_history"):
             _write_section(save_path / "4_risk", "conservative.md", risk["conservative_history"])
             risk_parts.append(("Conservative Analyst", risk["conservative_history"]))
-        if risk.get("neutral_history"):
+        if risk.get("neutral_history") and is_metric_enabled(mc, "risk", "neutral_history"):
             _write_section(save_path / "4_risk", "neutral.md", risk["neutral_history"])
             risk_parts.append(("Neutral Analyst", risk["neutral_history"]))
         if risk_parts:
@@ -103,7 +114,7 @@ def save_report_to_disk(final_state: dict[str, Any], ticker: str, save_path: Pat
 
         # 5. Portfolio Manager — last section, also written standalone for the
         # scheduled runner to pick up directly.
-        if risk.get("judge_decision"):
+        if risk.get("judge_decision") and is_metric_enabled(mc, "portfolio", "final_trade_decision"):
             _write_section(save_path / "5_portfolio", "decision.md", risk["judge_decision"])
             sections.append(
                 f"## V. Portfolio Manager Decision\n\n### Portfolio Manager\n{risk['judge_decision']}"
@@ -115,6 +126,19 @@ def save_report_to_disk(final_state: dict[str, Any], ticker: str, save_path: Pat
     )
     complete = save_path / "complete_report.md"
     complete.write_text(header + "\n\n".join(sections), encoding="utf-8")
+
+    # Run configuration report (Issue #752)
+    if selections is not None and config is not None:
+        from tradingagents import __version__ as _ta_version
+        from cli.run_config_report import build_run_config_markdown
+
+        run_config_md = build_run_config_markdown(
+            selections=selections,
+            config=config,
+            version=_ta_version,
+        )
+        (save_path / "run_config.md").write_text(run_config_md, encoding="utf-8")
+
     return complete
 
 

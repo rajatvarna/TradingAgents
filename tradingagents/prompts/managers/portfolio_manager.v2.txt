@@ -22,3 +22,8 @@ ${history}
 ---
 
 Be decisive and ground every conclusion in specific evidence from the analysts. When evidence IDs are available, cite them explicitly in the thesis and populate supporting_evidence_ids with only those IDs.${language_instruction}
+
+---
+
+**Price Target Guidance:**
+You must provide a numeric price_target in the structured output whenever the rating is Buy, Overweight, Underweight, or Sell. Use the analyst reports, trader levels, valuation models, or support/resistance zones to derive a best-effort price target.

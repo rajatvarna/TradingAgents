@@ -52,6 +52,14 @@ def get_YFin_data_online(
     if data.index.tz is not None:
         data.index = data.index.tz_localize(None)
 
+    # Filter to end_date to prevent look-ahead bias
+    data = data[data.index <= end_dt]
+
+    if data.empty:
+        raise NoMarketDataError(
+            symbol, canonical, f"no rows on or before {end_date} (all rows filtered as future)"
+        )
+
     # Reject a stale frame (e.g. a year-old partial response) before it is
     # formatted into the report. Raises NoMarketDataError, which the router
     # turns into one clear unavailable signal (#1021).

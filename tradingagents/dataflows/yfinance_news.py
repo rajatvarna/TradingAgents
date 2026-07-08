@@ -12,7 +12,7 @@ from .stockstats_utils import yf_retry
 from .symbol_utils import normalize_symbol
 
 
-def _extract_article_data(article: dict) -> dict:
+def _extract_article_data(article: dict, max_summary_chars: int = 500) -> dict:
     """Extract article data from yfinance news format (handles nested 'content' structure)."""
     # Handle nested content structure
     if "content" in article:
@@ -33,6 +33,13 @@ def _extract_article_data(article: dict) -> dict:
             with contextlib.suppress(ValueError, AttributeError):
                 pub_date = datetime.fromisoformat(pub_date_str.replace("Z", "+00:00"))
 
+        if max_summary_chars > 0 and summary and len(summary) > max_summary_chars:
+            first_para = summary.split('\n\n')[0]
+            if len(first_para) <= max_summary_chars:
+                summary = first_para
+            else:
+                summary = summary[:max_summary_chars].rsplit(' ', 1)[0] + "..."
+
         return {
             "title": title,
             "summary": summary,
@@ -49,9 +56,18 @@ def _extract_article_data(article: dict) -> dict:
         if ts:
             with contextlib.suppress(ValueError, OSError, TypeError):
                 pub_date = datetime.fromtimestamp(ts)
+        
+        summary = article.get("summary", "")
+        if max_summary_chars > 0 and summary and len(summary) > max_summary_chars:
+            first_para = summary.split('\n\n')[0]
+            if len(first_para) <= max_summary_chars:
+                summary = first_para
+            else:
+                summary = summary[:max_summary_chars].rsplit(' ', 1)[0] + "..."
+
         return {
             "title": article.get("title", "No title"),
-            "summary": article.get("summary", ""),
+            "summary": summary,
             "publisher": article.get("publisher", "Unknown"),
             "link": article.get("link", ""),
             "pub_date": pub_date,
@@ -76,6 +92,7 @@ def get_news_yfinance(
     ticker: str,
     start_date: str,
     end_date: str,
+    max_summary_chars: int = 500,
 ) -> str:
     """
     Retrieve news for a specific stock ticker using yfinance.
@@ -119,7 +136,7 @@ def get_news_yfinance(
         filtered_count = 0
 
         for article in news:
-            data = _extract_article_data(article)
+            data = _extract_article_data(article, max_summary_chars=max_summary_chars)
 
             # Keep only articles within the requested window (look-ahead safe).
             if not _in_news_window(data["pub_date"], start_dt, end_dt):
@@ -155,6 +172,7 @@ def get_global_news_yfinance(
     curr_date: str,
     look_back_days: int | None = None,
     limit: int | None = None,
+    max_summary_chars: int = 500,
 ) -> str:
     """Retrieve global/macro news with date-scoped cache."""
     cached, hit = replay_formatted(
@@ -186,7 +204,7 @@ def get_global_news_yfinance(
                 for article in search.news:
                     # Handle both flat and nested structures
                     if "content" in article:
-                        data = _extract_article_data(article)
+                        data = _extract_article_data(article, max_summary_chars=max_summary_chars)
                         title = data["title"]
                     else:
                         title = article.get("title", "")
@@ -221,7 +239,7 @@ def get_global_news_yfinance(
         for article in all_news[:limit]:
             # Extract uniformly (flat + nested) and apply the same look-ahead-safe
             # window filter, so flat articles can't leak future news (#1007).
-            data = _extract_article_data(article)
+            data = _extract_article_data(article, max_summary_chars=max_summary_chars)
             if not _in_news_window(data["pub_date"], start_dt, curr_dt):
                 continue
             news_str += f"### {data['title']} (source: {data['publisher']})\n"

@@ -989,6 +989,11 @@ class TradingAgentsGraph:
         target_profile=None,
     ):
         """Execute the graph and write the resulting state to disk and memory log."""
+        from tradingagents.spend_tracker import BudgetExceededError, SpendTracker
+        for cb in self.callbacks or []:
+            if isinstance(cb, SpendTracker):
+                cb.begin_ticker(company_name)
+
         # Initialize state — inject memory log context for PM and the
         # deterministically resolved instrument identity for all agents.
         past_context = self.memory_log.get_past_context(company_name)
@@ -1068,27 +1073,36 @@ class TradingAgentsGraph:
             tid = thread_id(company_name, str(trade_date), self._run_signature(asset_type))
             args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = tid
 
-        if self.debug or on_chunk is not None:
-            trace = []
-            last_printed = None
-            for chunk in self.graph.stream(init_agent_state, **args):
-                if on_chunk is not None:
-                    on_chunk(chunk)
-                elif chunk.get("messages"):
-                    msg = chunk["messages"][-1]
-                    # Nodes after the trader don't append to messages, so the
-                    # same trailing message repeats across chunks. Print it only
-                    # when it changes (#1027); the trace/state merge is unchanged.
-                    signature = (type(msg).__name__, getattr(msg, "content", None))
-                    if signature != last_printed:
-                        msg.pretty_print()
-                        last_printed = signature
-                trace.append(chunk)
-            final_state = {}
-            for chunk in trace:
-                final_state.update(chunk)
-        else:
-            final_state = self.graph.invoke(init_agent_state, **args)
+        budget_aborted = False
+        trace = []
+        try:
+            if self.debug or on_chunk is not None:
+                last_printed = None
+                for chunk in self.graph.stream(init_agent_state, **args):
+                    if on_chunk is not None:
+                        on_chunk(chunk)
+                    elif chunk.get("messages"):
+                        msg = chunk["messages"][-1]
+                        # Nodes after the trader don't append to messages, so the
+                        # same trailing message repeats across chunks. Print it only
+                        # when it changes (#1027); the trace/state merge is unchanged.
+                        signature = (type(msg).__name__, getattr(msg, "content", None))
+                        if signature != last_printed:
+                            msg.pretty_print()
+                            last_printed = signature
+                    trace.append(chunk)
+                final_state = {}
+                for chunk in trace:
+                    final_state.update(chunk)
+            else:
+                final_state = self.graph.invoke(init_agent_state, **args)
+        except BudgetExceededError:
+            budget_aborted = True
+            final_state = dict(init_agent_state)
+            if trace:
+                for chunk in trace:
+                    final_state.update(chunk)
+            final_state.setdefault("final_trade_decision", "BUDGET_EXCEEDED")
 
         # Store current state for reflection.
         self.curr_state = final_state
@@ -1106,22 +1120,28 @@ class TradingAgentsGraph:
         self.memory_log.store_decision(
             ticker=company_name,
             trade_date=trade_date,
-            final_trade_decision=final_state["final_trade_decision"],
+            final_trade_decision=final_state.get("final_trade_decision", "BUDGET_EXCEEDED"),
             analyst_signals=analyst_signals if analyst_signals else None,
             expected_return=extract_expected_return(
-                final_state["final_trade_decision"],
+                final_state.get("final_trade_decision", "BUDGET_EXCEEDED"),
                 final_state.get("trader_investment_plan", ""),
             ),
         )
 
         # Clear checkpoint on successful completion to avoid stale state.
-        if self.config.get("checkpoint_enabled"):
+        if self.config.get("checkpoint_enabled") and not budget_aborted:
             clear_checkpoint(
                 self.config["data_cache_dir"], company_name, str(trade_date),
                 self._run_signature(asset_type),
             )
 
-        return final_state, self.process_signal(final_state["final_trade_decision"])
+        # Log spend and audit trail to stderr.
+        for cb in self.callbacks or []:
+            if isinstance(cb, SpendTracker):
+                cb.log_ticker_spend(company_name)
+                cb.log_audit_trail()
+
+        return final_state, self.process_signal(final_state.get("final_trade_decision", "BUDGET_EXCEEDED"))
 
     def _log_state(self, trade_date, final_state):
         """Log the final state to a JSON file."""

@@ -371,11 +371,18 @@ class GraphSetup:
         workflow.add_edge("Trader", "Aggressive Analyst")
 
         # All three risk edges share the complete RISK_ANALYSIS_PATH_MAP (#1088).
+        risk_path_map = dict(RISK_ANALYSIS_PATH_MAP)
+        if self.config.get("use_market_gate", True):
+            from tradingagents.agents.risk_mgmt.market_gate import create_market_gate
+            workflow.add_node("Market Gate", create_market_gate())
+            workflow.add_edge("Market Gate", "Portfolio Manager")
+            risk_path_map["Portfolio Manager"] = "Market Gate"
+
         for risk_node in ("Aggressive Analyst", "Conservative Analyst", "Neutral Analyst"):
             workflow.add_conditional_edges(
                 risk_node,
                 self.conditional_logic.should_continue_risk_analysis,
-                RISK_ANALYSIS_PATH_MAP,
+                risk_path_map,
             )
 
         if run_recorder_node is not None:

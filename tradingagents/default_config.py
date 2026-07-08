@@ -1,4 +1,5 @@
 import os
+from tradingagents.metrics_config import DEFAULT_METRICS_CONFIG
 
 INVESTMENT_HORIZONS = {
     "1_day":        "Day trading / Intraday",
@@ -248,6 +249,10 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # Checkpoint/resume: when True, LangGraph saves state after each node
     # so a crashed run can resume from the last successful step.
     "checkpoint_enabled": True,
+    # Market state verification gate (pre-trade safety check)
+    "use_market_gate": True,
+    # Spend limit: maximum estimated USD cost per run (None = unlimited)
+    "max_cost": None,
     # T0.4 — audit archive of checkpoint rows. When True (default), on a
     # successful run the thread's checkpoint state is copied to
     # ``audit_dir/checkpoints/{TICKER}/{date}.db`` BEFORE the rows are
@@ -566,4 +571,5 @@ MONSTER_STOCK_METHODOLOGY_CONFIG: dict = {
         "ep_examples_path": os.path.join(_TRADINGAGENTS_HOME, "kk_stream_kb", "ep_examples.json"),
         "minimum_setup_rating": 3.5,
     },
+    "metrics_config": DEFAULT_METRICS_CONFIG,
 }

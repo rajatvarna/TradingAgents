@@ -22,10 +22,25 @@ shadow-analysis comparator.
 
 ## Setup
 
+Ensure you have `uv` installed. If you do not have it, install it using:
+```bash
+pip install uv
+```
+Or use the standard `venv` + `pip` fallback.
+
+Using `uv` (recommended):
 ```bash
 cd /Users/sydneymilton/dev/_sandbox/tradingagents-flint-shadow
 uv venv .venv
 uv pip install -e .
+cp flint-shadow.env.example .env.flint-shadow
+```
+
+Using standard `venv` (fallback):
+```bash
+cd /Users/sydneymilton/dev/_sandbox/tradingagents-flint-shadow
+python -m venv .venv
+.venv/bin/pip install -e .
 cp flint-shadow.env.example .env.flint-shadow
 ```
 

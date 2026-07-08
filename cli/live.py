@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """CLI live display components for the TradingAgents analysis dashboard.
 
 Extracted from cli/main.py to separate concerns:
@@ -21,6 +23,10 @@ from rich.table import Table
 from rich.text import Text
 
 from tradingagents.graph.analyst_execution import sync_analyst_tracker_from_chunk
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from tradingagents.metrics_config import MetricsConfig
 
 
 # ---------------------------------------------------------------------------
@@ -250,10 +256,14 @@ class ReportBuilder:
         self.current_report: str | None = None
         self.final_report: str | None = None
         self.selected_analysts: list[str] = []
+        from tradingagents.metrics_config import DEFAULT_METRICS_CONFIG, MetricsConfig
+        self.metrics_config: MetricsConfig = DEFAULT_METRICS_CONFIG
 
-    def init_for_analysis(self, selected_analysts: list[str]):
+    def init_for_analysis(self, selected_analysts: list[str], metrics_config: MetricsConfig | None = None):
         """Reset sections for a new analysis run."""
         self.selected_analysts = [a.lower() for a in selected_analysts]
+        from tradingagents.metrics_config import DEFAULT_METRICS_CONFIG
+        self.metrics_config = metrics_config or DEFAULT_METRICS_CONFIG
         self.report_sections = {}
         for section, (analyst_key, _) in self.REPORT_SECTIONS.items():
             if analyst_key is None or analyst_key in self.selected_analysts:
@@ -286,30 +296,33 @@ class ReportBuilder:
 
     def _rebuild_final_report(self):
         """Assemble the complete multi-section final report markdown."""
+        from tradingagents.metrics_config import is_metric_enabled
+        mc = self.metrics_config
         parts = []
 
         # I. Analyst Team
         analyst_keys = ["market_report", "sentiment_report",
                         "news_report", "fundamentals_report"]
-        if any(self.report_sections.get(s) for s in analyst_keys):
+        visible_analysts = [s for s in analyst_keys if self.report_sections.get(s) and is_metric_enabled(mc, "analysts", s)]
+        if visible_analysts:
             parts.append("## Analyst Team Reports")
             for key in analyst_keys:
                 content = self.report_sections.get(key)
-                if content:
+                if content and is_metric_enabled(mc, "analysts", key):
                     parts.append(f"### {self.SECTION_TITLES[key]}\n{content}")
 
         # II. Research Team
-        if self.report_sections.get("investment_plan"):
+        if self.report_sections.get("investment_plan") and is_metric_enabled(mc, "research", "judge_decision"):
             parts.append("## Research Team Decision")
             parts.append(str(self.report_sections["investment_plan"]))
 
         # III. Trading Team
-        if self.report_sections.get("trader_investment_plan"):
+        if self.report_sections.get("trader_investment_plan") and is_metric_enabled(mc, "trading", "trader_investment_plan"):
             parts.append("## Trading Team Plan")
             parts.append(str(self.report_sections["trader_investment_plan"]))
 
         # IV. Portfolio Management
-        if self.report_sections.get("final_trade_decision"):
+        if self.report_sections.get("final_trade_decision") and is_metric_enabled(mc, "portfolio", "final_trade_decision"):
             parts.append("## Portfolio Management Decision")
             parts.append(str(self.report_sections["final_trade_decision"]))
 
@@ -462,7 +475,8 @@ class DisplayManager:
 
     def _build_footer(self, agent_tracker: AgentStatusTracker,
                       report_builder: ReportBuilder,
-                      stats_handler=None, start_time: float | None = None) -> Panel:
+                      stats_handler=None, start_time: float | None = None,
+                      spend_tracker=None) -> Panel:
         parts = [f"Agents: {agent_tracker.completed_count}/{agent_tracker.total_count}"]
 
         if stats_handler:
@@ -476,6 +490,14 @@ class DisplayManager:
                 )
             else:
                 parts.append("Tokens: --")
+
+        if spend_tracker:
+            cost_str = f"${spend_tracker.total_cost_usd:.4f}"
+            if spend_tracker.max_cost is not None:
+                cost_str += f"/${spend_tracker.max_cost:.2f}"
+            if spend_tracker.budget_exceeded:
+                cost_str = f"[red]{cost_str} OVER BUDGET[/red]"
+            parts.append(f"Cost: {cost_str}")
 
         reports_c = report_builder.get_completed_count(agent_tracker)
         reports_t = len(report_builder.report_sections)
@@ -495,7 +517,8 @@ class DisplayManager:
     def update_all(self, agent_tracker: AgentStatusTracker,
                    message_store: MessageStore,
                    report_builder: ReportBuilder,
-                   stats_handler=None, start_time: float | None = None):
+                   stats_handler=None, start_time: float | None = None,
+                   spend_tracker=None):
         """Refresh every panel in the layout from current component state."""
         if self.layout is None:
             self.create_layout()
@@ -508,4 +531,4 @@ class DisplayManager:
             self._build_analysis_panel(report_builder.current_report))
         self.layout["footer"].update(
             self._build_footer(agent_tracker, report_builder,
-                               stats_handler, start_time))
+                               stats_handler, start_time, spend_tracker))

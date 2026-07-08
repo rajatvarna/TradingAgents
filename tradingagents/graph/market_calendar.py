@@ -45,6 +45,41 @@ def _try_mcal(exchange: str, d: date) -> bool | None:
         return None
 
 
+def _get_exchange_today(exchange: str) -> date:
+    """Return the current date in the exchange's timezone, falling back to UTC if unknown/invalid."""
+    import zoneinfo
+    tz_map = {
+        "NYSE": "America/New_York",
+        "NASDAQ": "America/New_York",
+        "B3": "America/Sao_Paulo",
+        "HKEX": "Asia/Hong_Kong",
+        "SSE": "Asia/Shanghai",
+        "SZSE": "Asia/Shanghai",
+        "LSE": "Europe/London",
+        "JPX": "Asia/Tokyo",
+    }
+    tz_name = tz_map.get(exchange.upper(), "America/New_York")
+    try:
+        from datetime import datetime
+        # Try timezone lookup
+        tz = zoneinfo.ZoneInfo(tz_name)
+        return datetime.now(tz).date()
+    except Exception:
+        # Fallback using crude offsets if zoneinfo database is absent/invalid (e.g. Windows without tzdata)
+        from datetime import datetime, timezone, timedelta
+        now_utc = datetime.now(timezone.utc)
+        exc_upper = exchange.upper()
+        if exc_upper in ("NYSE", "NASDAQ"):
+            return (now_utc - timedelta(hours=5)).date()
+        elif exc_upper == "B3":
+            return (now_utc - timedelta(hours=3)).date()
+        elif exc_upper in ("HKEX", "SSE", "SZSE", "JPX"):
+            return (now_utc + timedelta(hours=8)).date()
+        elif exc_upper == "LSE":
+            return now_utc.date()
+        return now_utc.date()
+
+
 def nearest_trading_day(
     trade_date_str: str,
     exchange: str = "NYSE",
@@ -64,16 +99,28 @@ def nearest_trading_day(
     except ValueError as exc:
         raise ValueError(f"Invalid trade_date format: {trade_date_str!r}") from exc
 
+    # Prevent future date lookup
+    exchange_today = _get_exchange_today(exchange)
+    if d > exchange_today:
+        logger.warning(
+            "trade_date %s is in the future relative to %s time (%s) — shifted to %s",
+            trade_date_str,
+            exchange,
+            exchange_today.isoformat(),
+            exchange_today.isoformat(),
+        )
+        d = exchange_today
+
     original = d
 
     for _ in range(max_lookback_days):
         valid = _check_day(exchange, d)
         if valid:
-            was_adjusted = d != original
+            was_adjusted = d != date.fromisoformat(trade_date_str)
             if was_adjusted:
                 logger.warning(
                     "trade_date %s is not a valid %s trading day — shifted to %s",
-                    original.isoformat(),
+                    trade_date_str,
                     exchange,
                     d.isoformat(),
                 )

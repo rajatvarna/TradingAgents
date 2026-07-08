@@ -14,6 +14,7 @@ def get_news(
     ticker: Annotated[str, "Ticker symbol"],
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
     end_date: Annotated[str, "End date in yyyy-mm-dd format"],
+    max_summary_chars: Annotated[int, "Max characters per article summary (default 500, 0=full)"] = 500,
 ) -> str:
     """
     Retrieve news data for a given ticker symbol.
@@ -22,11 +23,13 @@ def get_news(
         ticker (str): Ticker symbol
         start_date (str): Start date in yyyy-mm-dd format
         end_date (str): End date in yyyy-mm-dd format
+        max_summary_chars (int): Maximum characters per article summary (default 500).
+                                 Set to 0 for full text. Reduces token usage significantly.
     Returns:
         str: A formatted string containing news data
     """
     try:
-        return route_to_vendor("get_news", ticker, start_date, end_date)
+        return route_to_vendor("get_news", ticker, start_date, end_date, max_summary_chars=max_summary_chars)
     except Exception as exc:
         return tool_error_text(tool="get_news", error=exc)
 
@@ -36,6 +39,7 @@ def get_global_news(
     curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
     look_back_days: Annotated[int | None, "Days to look back; omit to use the configured default"] = None,
     limit: Annotated[int | None, "Max articles to return; omit to use the configured default"] = None,
+    max_summary_chars: Annotated[int, "Max characters per article summary (default 500, 0=full)"] = 500,
 ) -> str:
     """
     Retrieve global news data.
@@ -47,12 +51,14 @@ def get_global_news(
         curr_date (str): Current date in yyyy-mm-dd format
         look_back_days (int): Number of days to look back; omit to inherit config
         limit (int): Maximum number of articles to return; omit to inherit config
+        max_summary_chars (int): Maximum characters per article summary (default 500).
+                                 Set to 0 for full text. Reduces token usage significantly.
 
     Returns:
         str: A formatted string containing global news data
     """
     try:
-        return route_to_vendor("get_global_news", curr_date, look_back_days, limit)
+        return route_to_vendor("get_global_news", curr_date, look_back_days, limit, max_summary_chars=max_summary_chars)
     except Exception as exc:
         return tool_error_text(tool="get_global_news", error=exc)
 

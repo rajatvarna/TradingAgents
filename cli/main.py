@@ -1,4 +1,5 @@
 import datetime
+from typing import Optional
 import logging
 import os
 import socket
@@ -21,6 +22,13 @@ from rich.table import Table
 from rich.text import Text
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.metrics_config import (
+    DEFAULT_METRICS_CONFIG,
+    MetricsConfig,
+    is_metric_enabled,
+    list_all_metrics,
+    parse_metrics_flag,
+)
 
 
 def _port_open(port: int) -> bool:
@@ -344,20 +352,21 @@ def get_user_selections():
 
 
 
-def display_complete_report(final_state):
+def display_complete_report(final_state, metrics_config: MetricsConfig | None = None):
     """Display the complete analysis report sequentially (avoids truncation)."""
+    mc = metrics_config or DEFAULT_METRICS_CONFIG
     console.print()
     console.print(Rule("Complete Analysis Report", style="bold green"))
 
     # I. Analyst Team Reports
     analysts = []
-    if final_state.get("market_report"):
+    if final_state.get("market_report") and is_metric_enabled(mc, "analysts", "market_report"):
         analysts.append(("Market Analyst", final_state["market_report"]))
-    if final_state.get("sentiment_report"):
+    if final_state.get("sentiment_report") and is_metric_enabled(mc, "analysts", "sentiment_report"):
         analysts.append(("Sentiment Analyst", final_state["sentiment_report"]))
-    if final_state.get("news_report"):
+    if final_state.get("news_report") and is_metric_enabled(mc, "analysts", "news_report"):
         analysts.append(("News Analyst", final_state["news_report"]))
-    if final_state.get("fundamentals_report"):
+    if final_state.get("fundamentals_report") and is_metric_enabled(mc, "analysts", "fundamentals_report"):
         analysts.append(("Fundamentals Analyst", final_state["fundamentals_report"]))
     if analysts:
         console.print(Panel("[bold]I. Analyst Team Reports[/bold]", border_style="cyan"))
@@ -368,11 +377,11 @@ def display_complete_report(final_state):
     if final_state.get("investment_debate_state"):
         debate = final_state["investment_debate_state"]
         research = []
-        if debate.get("bull_history"):
+        if debate.get("bull_history") and is_metric_enabled(mc, "research", "bull_history"):
             research.append(("Bull Researcher", debate["bull_history"]))
-        if debate.get("bear_history"):
+        if debate.get("bear_history") and is_metric_enabled(mc, "research", "bear_history"):
             research.append(("Bear Researcher", debate["bear_history"]))
-        if debate.get("judge_decision"):
+        if debate.get("judge_decision") and is_metric_enabled(mc, "research", "judge_decision"):
             research.append(("Research Manager", debate["judge_decision"]))
         if research:
             console.print(Panel("[bold]II. Research Team Decision[/bold]", border_style="magenta"))
@@ -380,7 +389,7 @@ def display_complete_report(final_state):
                 console.print(Panel(Markdown(content), title=title, border_style="blue", padding=(1, 2)))
 
     # III. Trading Team
-    if final_state.get("trader_investment_plan"):
+    if final_state.get("trader_investment_plan") and is_metric_enabled(mc, "trading", "trader_investment_plan"):
         console.print(Panel("[bold]III. Trading Team Plan[/bold]", border_style="yellow"))
         console.print(Panel(Markdown(final_state["trader_investment_plan"]), title="Trader", border_style="blue", padding=(1, 2)))
 
@@ -388,11 +397,11 @@ def display_complete_report(final_state):
     if final_state.get("risk_debate_state"):
         risk = final_state["risk_debate_state"]
         risk_reports = []
-        if risk.get("aggressive_history"):
+        if risk.get("aggressive_history") and is_metric_enabled(mc, "risk", "aggressive_history"):
             risk_reports.append(("Aggressive Analyst", risk["aggressive_history"]))
-        if risk.get("conservative_history"):
+        if risk.get("conservative_history") and is_metric_enabled(mc, "risk", "conservative_history"):
             risk_reports.append(("Conservative Analyst", risk["conservative_history"]))
-        if risk.get("neutral_history"):
+        if risk.get("neutral_history") and is_metric_enabled(mc, "risk", "neutral_history"):
             risk_reports.append(("Neutral Analyst", risk["neutral_history"]))
         if risk_reports:
             console.print(Panel("[bold]IV. Risk Management Team Decision[/bold]", border_style="red"))
@@ -400,7 +409,7 @@ def display_complete_report(final_state):
                 console.print(Panel(Markdown(content), title=title, border_style="blue", padding=(1, 2)))
 
         # V. Portfolio Manager Decision
-        if risk.get("judge_decision"):
+        if risk.get("judge_decision") and is_metric_enabled(mc, "portfolio", "final_trade_decision"):
             console.print(Panel("[bold]V. Portfolio Manager Decision[/bold]", border_style="green"))
             console.print(Panel(Markdown(risk["judge_decision"]), title="Portfolio Manager", border_style="blue", padding=(1, 2)))
 
@@ -668,7 +677,11 @@ def _build_run_config(selections: dict, checkpoint: bool | None) -> dict:
     return config
 
 
-def run_analysis(checkpoint: bool | None = None):
+def run_analysis(
+    checkpoint: bool | None = None,
+    metrics_config: MetricsConfig | None = None,
+    max_cost: float | None = None,
+):
     """Gather user selections, run the trading analysis graph, and display results."""
     # Send library logs to a file so they don't corrupt the Rich Live display.
     _configure_file_logging()
@@ -677,6 +690,10 @@ def run_analysis(checkpoint: bool | None = None):
     selections = get_user_selections()
 
     config = _build_run_config(selections, checkpoint)
+    if metrics_config is not None:
+        config["metrics_config"] = metrics_config
+    if max_cost is not None:
+        config["max_cost"] = max_cost
 
     # Create stats callback handler for tracking LLM/tool calls
     stats_handler = StatsCallbackHandler()
@@ -687,12 +704,16 @@ def run_analysis(checkpoint: bool | None = None):
     analyst_execution_plan = build_analyst_execution_plan(selected_analyst_keys)
     analyst_wall_time_tracker = AnalystWallTimeTracker(analyst_execution_plan)
 
+    # Create spend tracker with optional budget limit
+    from tradingagents import SpendTracker
+    spend_tracker = SpendTracker(max_cost=config.get("max_cost"))
+
     # Initialize the graph with callbacks bound to LLMs
     graph = TradingAgentsGraph(
         selected_analyst_keys,
         config=config,
         debug=True,
-        callbacks=[stats_handler],
+        callbacks=[stats_handler, spend_tracker],
     )
 
     # Live display components (extracted from the former MessageBuffer / update_display)
@@ -702,7 +723,7 @@ def run_analysis(checkpoint: bool | None = None):
     display_mgr = DisplayManager()
 
     agent_tracker.init_for_analysis(selected_analyst_keys)
-    report_builder.init_for_analysis(selected_analyst_keys)
+    report_builder.init_for_analysis(selected_analyst_keys, config.get("metrics_config"))
 
     # Track start time for elapsed display
     start_time = time.time()
@@ -761,7 +782,8 @@ def run_analysis(checkpoint: bool | None = None):
     with Live(layout, refresh_per_second=4, screen=True):
         # Initial display
         display_mgr.update_all(agent_tracker, message_store, report_builder,
-                               stats_handler=stats_handler, start_time=start_time)
+                               stats_handler=stats_handler, start_time=start_time,
+                               spend_tracker=spend_tracker)
 
         # Add initial messages
         message_store.add_message("System", f"Selected ticker: {selections['ticker']}")
@@ -775,14 +797,16 @@ def run_analysis(checkpoint: bool | None = None):
             f"Selected analysts: {', '.join(analyst.value for analyst in selections['analysts'])}",
         )
         display_mgr.update_all(agent_tracker, message_store, report_builder,
-                               stats_handler=stats_handler, start_time=start_time)
+                               stats_handler=stats_handler, start_time=start_time,
+                               spend_tracker=spend_tracker)
 
         # Update agent status to in_progress for the first analyst
         first_analyst = get_initial_analyst_node(analyst_execution_plan)
         agent_tracker.update_status(first_analyst, "in_progress")
         analyst_wall_time_tracker.mark_started(selected_analyst_keys[0])
         display_mgr.update_all(agent_tracker, message_store, report_builder,
-                               stats_handler=stats_handler, start_time=start_time)
+                               stats_handler=stats_handler, start_time=start_time,
+                               spend_tracker=spend_tracker)
 
         # Stream through propagate() so checkpoint/resume and memory/reflection
         # stay on the same path as programmatic callers. The on_chunk hook keeps
@@ -878,7 +902,8 @@ def run_analysis(checkpoint: bool | None = None):
 
             # Refresh display
             display_mgr.update_all(agent_tracker, message_store, report_builder,
-                                   stats_handler=stats_handler, start_time=start_time)
+                                   stats_handler=stats_handler, start_time=start_time,
+                                   spend_tracker=spend_tracker)
 
         final_state, decision = graph.propagate(
             selections["ticker"],
@@ -889,7 +914,13 @@ def run_analysis(checkpoint: bool | None = None):
 
         agent_tracker.set_all_completed()
 
-        message_store.add_message("System", f"Completed analysis for {selections['analysis_date']}")
+        if spend_tracker.budget_exceeded:
+            message_store.add_message(
+                "System",
+                f"[red]Budget exceeded (${spend_tracker.total_cost_usd:.4f} / ${spend_tracker.max_cost:.2f}). Saving partial results.[/red]",
+            )
+        else:
+            message_store.add_message("System", f"Completed analysis for {selections['analysis_date']}")
         message_store.add_message("System", analyst_wall_time_tracker.format_summary())
 
         for section in report_builder.report_sections:
@@ -897,10 +928,14 @@ def run_analysis(checkpoint: bool | None = None):
                 report_builder.update_section(section, final_state[section])
 
         display_mgr.update_all(agent_tracker, message_store, report_builder,
-                               stats_handler=stats_handler, start_time=start_time)
+                               stats_handler=stats_handler, start_time=start_time,
+                               spend_tracker=spend_tracker)
 
     # Post-analysis prompts (outside Live context for clean interaction)
-    console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
+    if spend_tracker.budget_exceeded:
+        console.print("\n[bold red]Analysis aborted — budget exceeded. Partial results saved.[/bold red]\n")
+    else:
+        console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
     console.print(f"[dim]{analyst_wall_time_tracker.format_summary()}[/dim]")
 
     # Prompt to save report
@@ -914,16 +949,28 @@ def run_analysis(checkpoint: bool | None = None):
         ).strip()
         save_path = Path(save_path_str)
         try:
-            report_file = save_report_to_disk(final_state, selections["ticker"], save_path)
+            report_file = save_report_to_disk(
+                final_state,
+                selections["ticker"],
+                save_path,
+                selections=selections,
+                config=config,
+            )
             console.print(f"\n[green]✓ Report saved to:[/green] {save_path.resolve()}")
             console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
+            console.print(f"  [dim]Run config:[/dim] run_config.md")
+
+            from tradingagents.reports.exporter import markdown_to_pdf
+            pdf_path = save_path / "complete_report.pdf"
+            if markdown_to_pdf(report_file, pdf_path):
+                console.print(f"  [dim]PDF report:[/dim] {pdf_path.name}")
         except Exception as e:
             console.print(f"[red]Error saving report: {e}[/red]")
 
     # Prompt to display full report
     display_choice = typer.prompt("\nDisplay full report on screen?", default="Y").strip().upper()
     if display_choice in ("Y", "YES", ""):
-        display_complete_report(final_state)
+        display_complete_report(final_state, config.get("metrics_config"))
 
 
 @app.command()
@@ -939,13 +986,44 @@ def analyze(
         "--clear-checkpoints",
         help="Delete all saved checkpoints before running (force fresh start).",
     ),
+    metrics: Optional[str] = typer.Option(
+        None,
+        "--metrics",
+        help="Comma-separated list of section.metric keys to include in reports. "
+        "Omitted metrics are hidden. Example: 'analysts.market_report,risk.aggressive_history'. "
+        "Use --list-metrics to see all available keys.",
+    ),
+    list_metrics: bool = typer.Option(
+        False,
+        "--list-metrics",
+        help="List all available metric keys and exit.",
+    ),
+    max_cost: Optional[float] = typer.Option(
+        None,
+        "--max-cost",
+        help="Maximum estimated USD spend for this run. Aborts when exceeded.",
+    ),
 ):
-    """Run an interactive stock analysis session with optional checkpoint support."""
+    """Run an interactive stock analysis session with optional checkpoint support and metrics selection."""
+    if list_metrics:
+        console.print("[bold]Available metrics:[/bold]")
+        for key in list_all_metrics():
+            console.print(f"  {key}")
+        raise typer.Exit()
+
+    metrics_config = None
+    if metrics:
+        try:
+            metrics_config = parse_metrics_flag(metrics)
+        except ValueError as e:
+            console.print(f"[red]Error: {e}[/red]")
+            raise typer.Exit(code=1)
+
     if clear_checkpoints:
         from tradingagents.graph.checkpointer import clear_all_checkpoints
         n = clear_all_checkpoints(DEFAULT_CONFIG["data_cache_dir"])
         console.print(f"[yellow]Cleared {n} checkpoint(s).[/yellow]")
-    run_analysis(checkpoint=checkpoint)
+    run_analysis(checkpoint=checkpoint, metrics_config=metrics_config, max_cost=max_cost)
 
 
 @app.command()

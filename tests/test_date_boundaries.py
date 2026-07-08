@@ -60,3 +60,28 @@ def test_load_ohlcv_requests_inclusive_end(monkeypatch, tmp_path):
 
     expected_end = (pd.Timestamp.today() + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
     assert captured["end"] == expected_end  # tomorrow -> today's row included (#986)
+
+
+@pytest.mark.unit
+def test_get_yfin_filters_future_rows(monkeypatch):
+    set_config({"news_snapshot_enabled": False})
+
+    class FakeTicker:
+        def __init__(self, symbol):
+            pass
+
+        def history(self, start, end):
+            # Return rows up to tomorrow to simulate tomorrow being returned
+            idx = pd.to_datetime(["2025-05-08", "2025-05-09", "2025-05-10"])
+            return pd.DataFrame(
+                {"Open": [1.0, 2.0, 3.0], "High": [1.0, 2.0, 3.0], "Low": [1.0, 2.0, 3.0],
+                 "Close": [1.0, 2.0, 3.0], "Volume": [1, 2, 3]},
+                index=idx,
+            )
+
+    monkeypatch.setattr(yfin.yf, "Ticker", FakeTicker)
+    out = yfin.get_YFin_data_online("AAPL", "2025-05-01", "2025-05-09")
+
+    # The returned CSV should NOT contain 2025-05-10, as it is in the future relative to requested end_date 2025-05-09
+    assert "2025-05-09" in out
+    assert "2025-05-10" not in out

@@ -24,6 +24,7 @@ from .researchers.bull_researcher import create_bull_researcher
 from .risk_mgmt.aggressive_debator import create_aggressive_debator
 from .risk_mgmt.conservative_debator import create_conservative_debator
 from .risk_mgmt.neutral_debator import create_neutral_debator
+from .risk_mgmt.market_gate import create_market_gate
 from .trader.trader import create_trader
 from .utils.agent_states import AgentState, InvestDebateState, RiskDebateState
 from .utils.agent_utils import create_force_finalize, create_msg_delete
@@ -59,4 +60,5 @@ __all__ = [
     "create_trader",
     "create_esg_analyst",
     "create_valuation_analyst",
+    "create_market_gate",
 ]

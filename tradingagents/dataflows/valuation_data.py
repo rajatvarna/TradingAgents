@@ -150,6 +150,47 @@ def get_valuation_inputs(ticker: str) -> dict[str, Any]:
 
     equity_risk_premium: float = 0.055  # 5.5% Damodaran long-run ERP
 
+    # ── Cash flow fields (for detailed financial model) ──────────────────
+    free_cash_flow: float | None = _get("freeCashflow")
+    operating_cash_flow: float | None = _get("operatingCashflow")
+    capital_expenditures_raw: float | None = _get("capitalExpenditures")
+    capital_expenditures: float | None = (
+        abs(capital_expenditures_raw) if capital_expenditures_raw is not None else None
+    )
+
+    # D&A: derive from EBITDA − EBIT if both are available
+    ebitda_raw: float | None = _get("ebitda")
+    depreciation_amortization: float | None = None
+    if ebitda_raw is not None and ebit is not None:
+        da = ebitda_raw - ebit
+        if da >= 0:
+            depreciation_amortization = da
+
+    # ── Revenue growth history (3-year CAGR) ─────────────────────────────
+    revenue_growth_3y: float | None = None
+    try:
+        financials = tk.financials
+        if financials is not None and not financials.empty:
+            rev_row = None
+            for name in ("Total Revenue", "Revenue"):
+                if name in financials.index:
+                    rev_row = financials.loc[name]
+                    break
+            if rev_row is not None:
+                # Columns are most-recent first; we want oldest→newest for CAGR
+                rev_values = [float(v) for v in rev_row.dropna().values if float(v) > 0]
+                if len(rev_values) >= 2:
+                    newest = rev_values[0]
+                    oldest = rev_values[-1]
+                    years = len(rev_values) - 1
+                    if oldest > 0 and years > 0:
+                        revenue_growth_3y = (newest / oldest) ** (1.0 / years) - 1.0
+    except Exception:
+        pass
+
+    # ── Forward revenue estimate (analyst consensus) ─────────────────────
+    forward_revenue_estimate: float | None = _get("revenueGrowth")
+
     return {
         "ebit": ebit,
         "tax_rate": tax_rate,
@@ -167,4 +208,11 @@ def get_valuation_inputs(ticker: str) -> dict[str, Any]:
         "dividend_history": dividend_history,
         "risk_free_rate": risk_free_rate,
         "equity_risk_premium": equity_risk_premium,
+        "free_cash_flow": free_cash_flow,
+        "operating_cash_flow": operating_cash_flow,
+        "capital_expenditures": capital_expenditures,
+        "depreciation_amortization": depreciation_amortization,
+        "revenue_growth_3y": revenue_growth_3y,
+        "forward_revenue_estimate": forward_revenue_estimate,
     }
+

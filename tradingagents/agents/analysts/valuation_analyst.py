@@ -31,6 +31,14 @@ def _make_tools():
         is_dividend_payer,
         multi_stage_ddm,
     )
+    from tradingagents.valuation.financial_model import (
+        build_financial_model,
+        format_financial_model,
+    )
+    from tradingagents.valuation.reverse_dcf import (
+        assess_implied_growth,
+        reverse_dcf_growth,
+    )
     from tradingagents.valuation.roic import (
         invested_capital as calc_invested_capital,
     )
@@ -44,6 +52,10 @@ def _make_tools():
         default_scenario_set,
         run_revenue_scenarios,
         run_roic_scenarios,
+    )
+    from tradingagents.valuation.sensitivity import (
+        format_sensitivity_table,
+        sensitivity_matrix,
     )
     from tradingagents.valuation.wacc import (
         after_tax_cost_of_debt,
@@ -443,12 +455,215 @@ def _make_tools():
         lines.append("=== END SCENARIO ANALYSIS ===")
         return "\n".join(lines)
 
+    @tool
+    def get_sensitivity_analysis(ticker: str) -> str:
+        """Run a 2D sensitivity analysis showing how intrinsic value changes across revenue growth rates and WACC values.
+
+        Args:
+            ticker: Stock ticker symbol.
+
+        Returns:
+            Formatted Markdown sensitivity table with the current price highlighted.
+        """
+        try:
+            inputs = get_valuation_inputs(ticker)
+        except Exception as exc:
+            return f"Error fetching valuation inputs for {ticker}: {exc}"
+
+        revenue = inputs.get("revenue")
+        shares = inputs.get("shares_outstanding")
+        if revenue is None or shares is None or shares <= 0:
+            return f"Revenue or shares outstanding unavailable for {ticker} — cannot run sensitivity analysis."
+
+        ebit = inputs.get("ebit")
+        current_price = inputs.get("current_price") or 0.0
+        total_debt = inputs.get("total_debt") or 0.0
+        interest_expense = inputs.get("interest_expense") or 0.0
+        net_debt = inputs.get("net_debt") or 0.0
+        tax_rate = inputs["tax_rate"]
+        rf = inputs["risk_free_rate"]
+        beta = inputs["beta"]
+        erp = inputs["equity_risk_premium"]
+
+        ke = cost_of_equity(rf, beta, erp)
+        kd = after_tax_cost_of_debt(interest_expense, total_debt, tax_rate)
+        equity_value = current_price * shares
+
+        try:
+            wacc_val = calc_wacc(equity_value, total_debt, ke, kd)
+        except ValueError:
+            wacc_val = ke
+
+        ebit_margin = ebit / revenue if ebit is not None and revenue != 0 else 0.10
+        base_growth = 0.08
+
+        grid = sensitivity_matrix(
+            revenue=revenue,
+            ebit_margin=ebit_margin,
+            tax_rate=tax_rate,
+            terminal_growth=0.025,
+            shares_outstanding=shares,
+            net_debt=net_debt,
+            base_growth=base_growth,
+            base_wacc=wacc_val,
+        )
+
+        table = format_sensitivity_table(grid, current_price=current_price)
+
+        lines = [
+            f"=== Sensitivity Analysis for {ticker.upper()} ===",
+            f"Current Price: ${current_price:.2f}  |  Base WACC: {wacc_val*100:.2f}%",
+            f"Base Growth: {base_growth*100:.1f}%  |  EBIT Margin: {ebit_margin*100:.1f}%",
+            "",
+            "Intrinsic Value per Share (Revenue Growth × WACC):",
+            "",
+            table,
+            "",
+            "=== END SENSITIVITY ANALYSIS ===",
+        ]
+        return "\n".join(lines)
+
+    @tool
+    def get_reverse_dcf(ticker: str) -> str:
+        """Run a reverse DCF to determine what revenue growth rate is priced into the current stock price.
+
+        Args:
+            ticker: Stock ticker symbol.
+
+        Returns:
+            Formatted string with the implied growth rate and comparison to historical and analyst estimates.
+        """
+        try:
+            inputs = get_valuation_inputs(ticker)
+        except Exception as exc:
+            return f"Error fetching valuation inputs for {ticker}: {exc}"
+
+        revenue = inputs.get("revenue")
+        shares = inputs.get("shares_outstanding")
+        current_price = inputs.get("current_price")
+        if revenue is None or shares is None or shares <= 0:
+            return f"Revenue or shares outstanding unavailable for {ticker} — cannot run reverse DCF."
+        if current_price is None or current_price <= 0:
+            return f"Current price unavailable for {ticker} — cannot run reverse DCF."
+
+        ebit = inputs.get("ebit")
+        total_debt = inputs.get("total_debt") or 0.0
+        interest_expense = inputs.get("interest_expense") or 0.0
+        net_debt = inputs.get("net_debt") or 0.0
+        tax_rate = inputs["tax_rate"]
+        rf = inputs["risk_free_rate"]
+        beta = inputs["beta"]
+        erp = inputs["equity_risk_premium"]
+
+        ke = cost_of_equity(rf, beta, erp)
+        kd = after_tax_cost_of_debt(interest_expense, total_debt, tax_rate)
+        equity_value = current_price * shares
+
+        try:
+            wacc_val = calc_wacc(equity_value, total_debt, ke, kd)
+        except ValueError:
+            wacc_val = ke
+
+        ebit_margin = ebit / revenue if ebit is not None and revenue != 0 else 0.10
+
+        result = reverse_dcf_growth(
+            current_price=current_price,
+            revenue=revenue,
+            ebit_margin=ebit_margin,
+            tax_rate=tax_rate,
+            wacc_val=wacc_val,
+            terminal_growth=0.025,
+            shares_outstanding=shares,
+            net_debt=net_debt,
+        )
+
+        assessment = assess_implied_growth(
+            implied_growth=result.implied_growth_rate,
+            historical_cagr=inputs.get("revenue_growth_3y"),
+            forward_estimate=inputs.get("forward_revenue_estimate"),
+        )
+
+        lines = [
+            f"=== Reverse DCF for {ticker.upper()} ===",
+            f"Current Price: ${current_price:.2f}  |  WACC: {wacc_val*100:.2f}%",
+            f"EBIT Margin: {ebit_margin*100:.1f}%  |  Terminal Growth: 2.5%",
+            "",
+            f"Implied Revenue Growth Rate: {result.implied_growth_rate*100:.1f}%",
+            f"Convergence: {result.convergence_status} ({result.iterations_used} iterations)",
+            "",
+            assessment,
+            "",
+            "=== END REVERSE DCF ===",
+        ]
+        return "\n".join(lines)
+
+    @tool
+    def get_financial_model(ticker: str) -> str:
+        """Build a detailed 5-year financial model projecting revenue, EBITDA, EBIT, NOPAT, and unlevered free cash flow.
+
+        Computes enterprise value, equity value, and intrinsic value per share.
+
+        Args:
+            ticker: Stock ticker symbol.
+
+        Returns:
+            Formatted Markdown financial model with year-by-year projections and valuation summary.
+        """
+        try:
+            inputs = get_valuation_inputs(ticker)
+        except Exception as exc:
+            return f"Error fetching valuation inputs for {ticker}: {exc}"
+
+        revenue = inputs.get("revenue")
+        shares = inputs.get("shares_outstanding")
+        if revenue is None or revenue <= 0 or shares is None or shares <= 0:
+            return f"Revenue or shares outstanding unavailable for {ticker} — cannot build financial model."
+
+        ebit = inputs.get("ebit")
+        current_price = inputs.get("current_price") or 0.0
+        total_debt = inputs.get("total_debt") or 0.0
+        interest_expense = inputs.get("interest_expense") or 0.0
+        net_debt = inputs.get("net_debt") or 0.0
+        tax_rate = inputs["tax_rate"]
+        rf = inputs["risk_free_rate"]
+        beta = inputs["beta"]
+        erp = inputs["equity_risk_premium"]
+        da = inputs.get("depreciation_amortization")
+        capex = inputs.get("capital_expenditures")
+
+        ke = cost_of_equity(rf, beta, erp)
+        kd = after_tax_cost_of_debt(interest_expense, total_debt, tax_rate)
+        equity_value = current_price * shares
+
+        try:
+            wacc_val = calc_wacc(equity_value, total_debt, ke, kd)
+        except ValueError:
+            wacc_val = ke
+
+        model = build_financial_model(
+            ticker=ticker,
+            revenue=revenue,
+            ebit=ebit,
+            tax_rate=tax_rate,
+            wacc_val=wacc_val,
+            terminal_growth=0.025,
+            shares_outstanding=shares,
+            net_debt=net_debt,
+            depreciation_amortization=da,
+            capex=capex,
+        )
+
+        return format_financial_model(model, current_price=current_price)
+
     return [
         get_wacc_components,
         get_roic_analysis,
         get_dcf_valuation,
         get_ddm_valuation,
         get_scenario_analysis,
+        get_sensitivity_analysis,
+        get_reverse_dcf,
+        get_financial_model,
     ]
 
 
@@ -459,6 +674,9 @@ def _make_tools():
     get_dcf_valuation,
     get_ddm_valuation,
     get_scenario_analysis,
+    get_sensitivity_analysis,
+    get_reverse_dcf,
+    get_financial_model,
 ) = _make_tools()
 
 
@@ -475,6 +693,9 @@ def _prefetch_valuation_data(ticker: str) -> str:
         get_dcf_valuation,
         get_ddm_valuation,
         get_scenario_analysis,
+        get_sensitivity_analysis,
+        get_reverse_dcf,
+        get_financial_model,
     ]
     tool_map = {t.name: t for t in tools}
 
@@ -485,6 +706,9 @@ def _prefetch_valuation_data(ticker: str) -> str:
         "get_dcf_valuation",
         "get_ddm_valuation",
         "get_scenario_analysis",
+        "get_sensitivity_analysis",
+        "get_reverse_dcf",
+        "get_financial_model",
     ):
         result = safe_tool_text(
             tool_name,
@@ -526,6 +750,9 @@ def create_valuation_analyst(llm, toolkit=None):
             get_dcf_valuation,
             get_ddm_valuation,
             get_scenario_analysis,
+            get_sensitivity_analysis,
+            get_reverse_dcf,
+            get_financial_model,
         ]
 
         system_message = (
@@ -539,9 +766,15 @@ def create_valuation_analyst(llm, toolkit=None):
             f"ROIC-DCF and Revenue-DCF perspectives, "
             f"(3) call get_ddm_valuation to assess dividend-based value if applicable, "
             f"(4) call get_scenario_analysis for a bear / base / bull valuation range, "
-            f"(5) synthesize into a valuation memo covering: value spread verdict, intrinsic "
-            f"value triangulation across methods, margin of safety, scenario range, and the "
-            f"key sensitivities that most affect the valuation. "
+            f"(5) call get_financial_model to build a detailed 5-year financial projection "
+            f"showing year-by-year revenue, EBITDA, EBIT, NOPAT, and unlevered free cash flow, "
+            f"(6) call get_sensitivity_analysis to show how the intrinsic value changes "
+            f"across different revenue growth rate and WACC assumptions, "
+            f"(7) call get_reverse_dcf to determine what revenue growth rate is priced into "
+            f"the current stock price — this answers the key question: what does the market expect? "
+            f"(8) synthesize into a valuation memo covering: value spread verdict, intrinsic "
+            f"value triangulation across methods, margin of safety, scenario range, detailed "
+            f"financial projection, sensitivity to key drivers, and the implied growth analysis. "
             f"Conclude with an OVERVALUED / FAIRLY VALUED / UNDERVALUED verdict and the "
             f"primary driver of that verdict. "
             f"Include as much detail as possible. Provide specific, actionable insights "

@@ -179,7 +179,9 @@ class TestNewsDataTools:
             "end_date": "2026-01-15",
         })
         assert result == "News data"
-        mock_route.assert_called_once_with("get_news", "NVDA", "2026-01-01", "2026-01-15")
+        mock_route.assert_called_once_with(
+            "get_news", "NVDA", "2026-01-01", "2026-01-15", max_summary_chars=500
+        )
 
     @patch("tradingagents.agents.utils.news_data_tools.route_to_vendor")
     def test_get_insider_transactions(self, mock_route):
@@ -188,7 +190,7 @@ class TestNewsDataTools:
 
         result = get_insider_transactions.invoke({"ticker": "AAPL"})
         assert result == "Insider data"
-        mock_route.assert_called_once_with("get_insider_transactions", "AAPL")
+        mock_route.assert_called_once_with("get_insider_transactions", "AAPL", None)
 
     @patch("tradingagents.agents.utils.news_data_tools.route_to_vendor")
     def test_get_global_news(self, mock_route):

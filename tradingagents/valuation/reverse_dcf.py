@@ -31,6 +31,26 @@ class ReverseDCFResult:
     """Number of bisection iterations performed."""
 
 
+def _uniform_growth_path(g: float, projection_years: int, terminal_growth: float) -> list[float]:
+    """Flat growth path: the same rate ``g`` for every projection year."""
+    return [g] * projection_years
+
+
+def _fading_growth_path(g: float, projection_years: int, terminal_growth: float) -> list[float]:
+    """Linear fade from ``g`` in year 1 down to ``terminal_growth`` in the final year.
+
+    More realistic than a uniform path for reverse-solving implied near-term
+    growth, since it avoids assuming the market prices a single flat rate
+    all the way to the terminal year.
+    """
+    if projection_years <= 1:
+        return [g]
+    return [
+        g + (terminal_growth - g) * (i / (projection_years - 1))
+        for i in range(projection_years)
+    ]
+
+
 def reverse_dcf_growth(
     current_price: float,
     revenue: float,
@@ -45,12 +65,19 @@ def reverse_dcf_growth(
     growth_hi: float = 0.60,
     max_iterations: int = 100,
     tolerance: float = 0.01,
+    fade_to_terminal: bool = False,
 ) -> ReverseDCFResult:
     """Solve for the implied revenue growth rate priced into a stock.
 
-    Finds the uniform annual revenue growth rate ``g`` such that::
+    By default finds the uniform annual revenue growth rate ``g`` such that::
 
         revenue_dcf(revenue, [g]*projection_years, ...) ≈ current_price
+
+    When ``fade_to_terminal=True``, instead solves for the year-1 growth rate
+    ``g`` of a linear path that fades down to ``terminal_growth`` by the final
+    projection year — a more realistic "market prices near-term growth,
+    fading to steady state" assumption than a flat rate held for the whole
+    explicit period.
 
     Uses bisection between ``growth_lo`` and ``growth_hi``.
 
@@ -68,6 +95,9 @@ def reverse_dcf_growth(
         growth_hi: Upper bound for growth search (default +60%).
         max_iterations: Maximum bisection iterations.
         tolerance: Convergence tolerance in $/share (default $0.01).
+        fade_to_terminal: If True, solve for the year-1 rate of a growth
+            path that linearly fades to ``terminal_growth`` by the last
+            projection year, instead of a single flat rate.
 
     Returns:
         :class:`ReverseDCFResult` with the implied growth rate and diagnostics.
@@ -80,12 +110,14 @@ def reverse_dcf_growth(
     if current_price <= 0:
         raise ValueError("current_price must be positive for reverse DCF.")
 
+    build_path = _fading_growth_path if fade_to_terminal else _uniform_growth_path
+
     def _iv_at_growth(g: float) -> float | None:
-        """Return IV per share for uniform growth rate g, or None on error."""
+        """Return IV per share for growth path anchored at rate g, or None on error."""
         try:
             return revenue_dcf(
                 revenue=revenue,
-                growth_rates=[g] * projection_years,
+                growth_rates=build_path(g, projection_years, terminal_growth),
                 ebit_margin=ebit_margin,
                 tax_rate=tax_rate,
                 wacc_val=wacc_val,

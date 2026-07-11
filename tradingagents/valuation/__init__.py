@@ -13,6 +13,12 @@ from tradingagents.valuation.financial_model import (
     build_financial_model,
     format_financial_model,
 )
+from tradingagents.valuation.football_field import (
+    FootballField,
+    MethodRange,
+    build_football_field,
+    format_football_field,
+)
 from tradingagents.valuation.reverse_dcf import (
     ReverseDCFResult,
     assess_implied_growth,
@@ -33,8 +39,11 @@ from tradingagents.valuation.scenarios import (
     run_roic_scenarios,
 )
 from tradingagents.valuation.sensitivity import (
+    TornadoRow,
     format_sensitivity_table,
+    format_tornado_table,
     sensitivity_matrix,
+    tornado_sensitivity,
 )
 from tradingagents.valuation.wacc import (
     after_tax_cost_of_debt,
@@ -72,6 +81,9 @@ __all__ = [
     # sensitivity
     "sensitivity_matrix",
     "format_sensitivity_table",
+    "tornado_sensitivity",
+    "format_tornado_table",
+    "TornadoRow",
     # reverse dcf
     "reverse_dcf_growth",
     "ReverseDCFResult",
@@ -81,4 +93,9 @@ __all__ = [
     "FinancialModel",
     "ProjectionYear",
     "format_financial_model",
+    # football field
+    "build_football_field",
+    "format_football_field",
+    "FootballField",
+    "MethodRange",
 ]

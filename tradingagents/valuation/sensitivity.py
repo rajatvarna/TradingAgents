@@ -9,6 +9,8 @@ Pure math — no external dependencies, no LLM, no I/O.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from tradingagents.valuation.dcf import revenue_dcf
 
 
@@ -152,4 +154,142 @@ def format_sensitivity_table(
         lines.append("")
         lines.append(f"*\\* = closest to current price ${current_price:,.2f}*")
 
+    return "\n".join(lines)
+
+
+@dataclass
+class TornadoRow:
+    """Intrinsic-value swing from varying a single assumption, base held fixed."""
+
+    variable: str
+    low_value: float
+    high_value: float
+    low_iv: float
+    high_iv: float
+    base_iv: float
+    swing: float
+    """Absolute IV range (high_iv - low_iv), used to rank rows widest-first."""
+
+
+def tornado_sensitivity(
+    revenue: float,
+    ebit_margin: float,
+    tax_rate: float,
+    terminal_growth: float,
+    shares_outstanding: float,
+    net_debt: float,
+    base_growth: float,
+    base_wacc: float,
+    projection_years: int = 10,
+    growth_range: tuple[float, float] = (-0.04, 0.04),
+    wacc_range: tuple[float, float] = (-0.02, 0.02),
+    ebit_margin_range: tuple[float, float] = (-0.03, 0.03),
+    terminal_growth_range: tuple[float, float] = (-0.01, 0.01),
+) -> list[TornadoRow]:
+    """Vary one assumption at a time (others held at base) to rank IV sensitivity.
+
+    Unlike :func:`sensitivity_matrix`, which grids two variables together,
+    this isolates each variable's individual contribution to IV swing —
+    the classic "tornado chart" input, sorted widest-swing-first.
+
+    Args:
+        revenue, ebit_margin, tax_rate, terminal_growth, shares_outstanding,
+            net_debt, projection_years: Base-case inputs, same as
+            :func:`sensitivity_matrix`.
+        base_growth: Base-case annual revenue growth rate.
+        base_wacc: Base-case WACC.
+        growth_range: (low_delta, high_delta) applied to base_growth.
+        wacc_range: (low_delta, high_delta) applied to base_wacc.
+        ebit_margin_range: (low_delta, high_delta) applied to ebit_margin.
+        terminal_growth_range: (low_delta, high_delta) applied to terminal_growth.
+
+    Returns:
+        List of :class:`TornadoRow`, sorted by swing descending (widest first).
+        Variables whose low/high combination cannot be computed (e.g. WACC ≤
+        terminal growth) are omitted.
+    """
+    def _iv(growth: float, wacc_val: float, margin: float, tg: float) -> float | None:
+        try:
+            return revenue_dcf(
+                revenue=revenue,
+                growth_rates=[growth] * projection_years,
+                ebit_margin=margin,
+                tax_rate=tax_rate,
+                wacc_val=wacc_val,
+                terminal_growth=tg,
+                shares_outstanding=shares_outstanding,
+                net_debt=net_debt,
+            )
+        except ValueError:
+            return None
+
+    base_iv = _iv(base_growth, base_wacc, ebit_margin, terminal_growth)
+    if base_iv is None:
+        return []
+
+    candidates = {
+        "Revenue Growth": (
+            base_growth + growth_range[0],
+            base_growth + growth_range[1],
+            lambda v: _iv(v, base_wacc, ebit_margin, terminal_growth),
+        ),
+        "WACC": (
+            base_wacc + wacc_range[0],
+            base_wacc + wacc_range[1],
+            lambda v: _iv(base_growth, v, ebit_margin, terminal_growth),
+        ),
+        "EBIT Margin": (
+            ebit_margin + ebit_margin_range[0],
+            ebit_margin + ebit_margin_range[1],
+            lambda v: _iv(base_growth, base_wacc, v, terminal_growth),
+        ),
+        "Terminal Growth": (
+            terminal_growth + terminal_growth_range[0],
+            terminal_growth + terminal_growth_range[1],
+            lambda v: _iv(base_growth, base_wacc, ebit_margin, v),
+        ),
+    }
+
+    rows: list[TornadoRow] = []
+    for name, (low_val, high_val, fn) in candidates.items():
+        iv_low = fn(low_val)
+        iv_high = fn(high_val)
+        if iv_low is None or iv_high is None:
+            continue
+        lo, hi = min(iv_low, iv_high), max(iv_low, iv_high)
+        rows.append(TornadoRow(
+            variable=name,
+            low_value=round(low_val, 4),
+            high_value=round(high_val, 4),
+            low_iv=round(lo, 2),
+            high_iv=round(hi, 2),
+            base_iv=round(base_iv, 2),
+            swing=round(hi - lo, 2),
+        ))
+
+    rows.sort(key=lambda r: r.swing, reverse=True)
+    return rows
+
+
+def format_tornado_table(rows: list[TornadoRow]) -> str:
+    """Render tornado sensitivity rows as a Markdown table, widest swing first.
+
+    Args:
+        rows: Output of :func:`tornado_sensitivity`.
+
+    Returns:
+        Multi-line Markdown table string.
+    """
+    if not rows:
+        return "(no tornado sensitivity data)"
+
+    lines = [
+        "| Variable | Low IV | Base IV | High IV | Swing |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for r in rows:
+        lines.append(
+            f"| {r.variable} | ${r.low_iv:,.2f} | ${r.base_iv:,.2f} "
+            f"| ${r.high_iv:,.2f} | ${r.swing:,.2f} |"
+        )
     return "\n".join(lines)

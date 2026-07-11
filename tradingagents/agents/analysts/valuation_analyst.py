@@ -35,17 +35,17 @@ def _make_tools():
         build_financial_model,
         format_financial_model,
     )
+    from tradingagents.valuation.football_field import (
+        build_football_field,
+        format_football_field,
+    )
     from tradingagents.valuation.reverse_dcf import (
         assess_implied_growth,
         reverse_dcf_growth,
     )
     from tradingagents.valuation.roic import (
         invested_capital as calc_invested_capital,
-    )
-    from tradingagents.valuation.roic import (
         nopat as calc_nopat,
-    )
-    from tradingagents.valuation.roic import (
         roic as calc_roic,
     )
     from tradingagents.valuation.scenarios import (
@@ -55,14 +55,14 @@ def _make_tools():
     )
     from tradingagents.valuation.sensitivity import (
         format_sensitivity_table,
+        format_tornado_table,
         sensitivity_matrix,
+        tornado_sensitivity,
     )
     from tradingagents.valuation.wacc import (
         after_tax_cost_of_debt,
         cost_of_equity,
         value_spread,
-    )
-    from tradingagents.valuation.wacc import (
         wacc as calc_wacc,
     )
 
@@ -510,6 +510,18 @@ def _make_tools():
 
         table = format_sensitivity_table(grid, current_price=current_price)
 
+        tornado_rows = tornado_sensitivity(
+            revenue=revenue,
+            ebit_margin=ebit_margin,
+            tax_rate=tax_rate,
+            terminal_growth=0.025,
+            shares_outstanding=shares,
+            net_debt=net_debt,
+            base_growth=base_growth,
+            base_wacc=wacc_val,
+        )
+        tornado_table = format_tornado_table(tornado_rows)
+
         lines = [
             f"=== Sensitivity Analysis for {ticker.upper()} ===",
             f"Current Price: ${current_price:.2f}  |  Base WACC: {wacc_val*100:.2f}%",
@@ -518,6 +530,10 @@ def _make_tools():
             "Intrinsic Value per Share (Revenue Growth × WACC):",
             "",
             table,
+            "",
+            "Tornado Chart (single-variable IV swing, widest first):",
+            "",
+            tornado_table,
             "",
             "=== END SENSITIVITY ANALYSIS ===",
         ]
@@ -655,6 +671,108 @@ def _make_tools():
 
         return format_financial_model(model, current_price=current_price)
 
+    @tool
+    def get_football_field(ticker: str) -> str:
+        """Build a football-field valuation summary combining ROIC-DCF, Revenue-DCF, the detailed financial model, and the sensitivity range into one low/high range.
+
+        Args:
+            ticker: Stock ticker symbol.
+
+        Returns:
+            Formatted Markdown summary with a per-method valuation range and an
+            overall range, plus where the current price falls relative to it.
+        """
+        try:
+            inputs = get_valuation_inputs(ticker)
+        except Exception as exc:
+            return f"Error fetching valuation inputs for {ticker}: {exc}"
+
+        revenue = inputs.get("revenue")
+        shares = inputs.get("shares_outstanding")
+        if revenue is None or revenue <= 0 or shares is None or shares <= 0:
+            return f"Revenue or shares outstanding unavailable for {ticker} — cannot build football field."
+
+        ebit = inputs.get("ebit")
+        current_price = inputs.get("current_price") or 0.0
+        total_debt = inputs.get("total_debt") or 0.0
+        interest_expense = inputs.get("interest_expense") or 0.0
+        net_debt = inputs.get("net_debt") or 0.0
+        tax_rate = inputs["tax_rate"]
+        rf = inputs["risk_free_rate"]
+        beta = inputs["beta"]
+        erp = inputs["equity_risk_premium"]
+        da = inputs.get("depreciation_amortization")
+        capex = inputs.get("capital_expenditures")
+
+        ke = cost_of_equity(rf, beta, erp)
+        kd = after_tax_cost_of_debt(interest_expense, total_debt, tax_rate)
+        equity_value = current_price * shares
+
+        try:
+            wacc_val = calc_wacc(equity_value, total_debt, ke, kd)
+        except ValueError:
+            wacc_val = ke
+
+        ebit_margin = ebit / revenue if ebit is not None and revenue != 0 else 0.10
+        base_growth = inputs.get("revenue_growth_3y") or 0.08
+        terminal_growth = 0.025
+
+        method_values: dict[str, float | tuple[float, float]] = {}
+
+        try:
+            method_values["Revenue-DCF"] = revenue_dcf(
+                revenue=revenue,
+                growth_rates=[base_growth] * 10,
+                ebit_margin=ebit_margin,
+                tax_rate=tax_rate,
+                wacc_val=wacc_val,
+                terminal_growth=terminal_growth,
+                shares_outstanding=shares,
+                net_debt=net_debt,
+            )
+        except ValueError:
+            pass
+
+        try:
+            model = build_financial_model(
+                ticker=ticker,
+                revenue=revenue,
+                ebit=ebit,
+                tax_rate=tax_rate,
+                wacc_val=wacc_val,
+                terminal_growth=terminal_growth,
+                shares_outstanding=shares,
+                net_debt=net_debt,
+                depreciation_amortization=da,
+                capex=capex,
+            )
+            method_values["Financial Model"] = model.intrinsic_value_per_share
+        except ValueError:
+            pass
+
+        try:
+            grid = sensitivity_matrix(
+                revenue=revenue,
+                ebit_margin=ebit_margin,
+                tax_rate=tax_rate,
+                terminal_growth=terminal_growth,
+                shares_outstanding=shares,
+                net_debt=net_debt,
+                base_growth=base_growth,
+                base_wacc=wacc_val,
+            )
+            finite_values = [v for row in grid.values() for v in row.values() if v != float("inf")]
+            if finite_values:
+                method_values["Sensitivity Range"] = (min(finite_values), max(finite_values))
+        except Exception:
+            pass
+
+        if not method_values:
+            return f"Could not compute any valuation method for {ticker} — insufficient data."
+
+        field = build_football_field(ticker, method_values, current_price=current_price)
+        return format_football_field(field)
+
     return [
         get_wacc_components,
         get_roic_analysis,
@@ -664,6 +782,7 @@ def _make_tools():
         get_sensitivity_analysis,
         get_reverse_dcf,
         get_financial_model,
+        get_football_field,
     ]
 
 
@@ -677,6 +796,7 @@ def _make_tools():
     get_sensitivity_analysis,
     get_reverse_dcf,
     get_financial_model,
+    get_football_field,
 ) = _make_tools()
 
 
@@ -696,6 +816,7 @@ def _prefetch_valuation_data(ticker: str) -> str:
         get_sensitivity_analysis,
         get_reverse_dcf,
         get_financial_model,
+        get_football_field,
     ]
     tool_map = {t.name: t for t in tools}
 
@@ -709,6 +830,7 @@ def _prefetch_valuation_data(ticker: str) -> str:
         "get_sensitivity_analysis",
         "get_reverse_dcf",
         "get_financial_model",
+        "get_football_field",
     ):
         result = safe_tool_text(
             tool_name,
@@ -753,6 +875,7 @@ def create_valuation_analyst(llm, toolkit=None):
             get_sensitivity_analysis,
             get_reverse_dcf,
             get_financial_model,
+            get_football_field,
         ]
 
         system_message = (
@@ -772,9 +895,12 @@ def create_valuation_analyst(llm, toolkit=None):
             f"across different revenue growth rate and WACC assumptions, "
             f"(7) call get_reverse_dcf to determine what revenue growth rate is priced into "
             f"the current stock price — this answers the key question: what does the market expect? "
-            f"(8) synthesize into a valuation memo covering: value spread verdict, intrinsic "
+            f"(8) call get_football_field to combine the methods above into one low/high "
+            f"valuation range and see where the current price falls within it, "
+            f"(9) synthesize into a valuation memo covering: value spread verdict, intrinsic "
             f"value triangulation across methods, margin of safety, scenario range, detailed "
-            f"financial projection, sensitivity to key drivers, and the implied growth analysis. "
+            f"financial projection, sensitivity to key drivers, the implied growth analysis, "
+            f"and the overall football-field range. "
             f"Conclude with an OVERVALUED / FAIRLY VALUED / UNDERVALUED verdict and the "
             f"primary driver of that verdict. "
             f"Include as much detail as possible. Provide specific, actionable insights "

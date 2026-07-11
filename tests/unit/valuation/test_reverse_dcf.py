@@ -106,6 +106,79 @@ class TestReverseDcfGrowth:
 
 
 @pytest.mark.unit
+class TestReverseDcfGrowthFadeToTerminal:
+    """Tests for the fade_to_terminal multi-stage growth path option."""
+
+    _BASE_KWARGS = dict(
+        revenue=1_000_000.0,
+        ebit_margin=0.20,
+        tax_rate=0.21,
+        wacc_val=0.10,
+        terminal_growth=0.025,
+        shares_outstanding=100.0,
+        net_debt=50_000.0,
+    )
+
+    def test_fade_roundtrip_recovers_year1_growth(self):
+        """Compute IV via a known fading path, then reverse DCF (fade mode)
+        should recover the year-1 growth rate that generated it."""
+        from tradingagents.valuation.reverse_dcf import _fading_growth_path
+
+        target_g = 0.15
+        path = _fading_growth_path(target_g, 10, self._BASE_KWARGS["terminal_growth"])
+        iv = revenue_dcf(
+            revenue=self._BASE_KWARGS["revenue"],
+            growth_rates=path,
+            ebit_margin=self._BASE_KWARGS["ebit_margin"],
+            tax_rate=self._BASE_KWARGS["tax_rate"],
+            wacc_val=self._BASE_KWARGS["wacc_val"],
+            terminal_growth=self._BASE_KWARGS["terminal_growth"],
+            shares_outstanding=self._BASE_KWARGS["shares_outstanding"],
+            net_debt=self._BASE_KWARGS["net_debt"],
+        )
+
+        result = reverse_dcf_growth(
+            current_price=iv, fade_to_terminal=True, **self._BASE_KWARGS,
+        )
+        assert result.convergence_status == "converged"
+        assert result.implied_growth_rate == pytest.approx(target_g, abs=0.005)
+
+    def test_fade_requires_higher_year1_growth_than_flat_for_same_price(self):
+        """A fading path front-loads less cumulative growth than a flat path
+        held at the same year-1 rate, so matching the same target price
+        requires a higher year-1 rate under the fade assumption."""
+        target_price = revenue_dcf(
+            revenue=self._BASE_KWARGS["revenue"],
+            growth_rates=[0.15] * 10,
+            ebit_margin=self._BASE_KWARGS["ebit_margin"],
+            tax_rate=self._BASE_KWARGS["tax_rate"],
+            wacc_val=self._BASE_KWARGS["wacc_val"],
+            terminal_growth=self._BASE_KWARGS["terminal_growth"],
+            shares_outstanding=self._BASE_KWARGS["shares_outstanding"],
+            net_debt=self._BASE_KWARGS["net_debt"],
+        )
+        flat_result = reverse_dcf_growth(
+            current_price=target_price, fade_to_terminal=False, **self._BASE_KWARGS,
+        )
+        fade_result = reverse_dcf_growth(
+            current_price=target_price, fade_to_terminal=True, **self._BASE_KWARGS,
+        )
+        assert flat_result.convergence_status == "converged"
+        assert fade_result.convergence_status == "converged"
+        assert fade_result.implied_growth_rate >= flat_result.implied_growth_rate
+
+    def test_fade_path_ends_near_terminal_growth(self):
+        """Sanity check: a fading path evaluated at its own solved rate should
+        produce a final-year growth rate close to terminal_growth."""
+        from tradingagents.valuation.reverse_dcf import _fading_growth_path
+
+        path = _fading_growth_path(0.20, 10, 0.025)
+        assert path[0] == pytest.approx(0.20)
+        assert path[-1] == pytest.approx(0.025)
+        assert len(path) == 10
+
+
+@pytest.mark.unit
 class TestAssessImpliedGrowth:
     """Tests for the qualitative growth assessment helper."""
 

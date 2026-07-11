@@ -28,6 +28,7 @@ Breaking changes within the 0.x line are called out explicitly.
 - `macro_regime` field added to `AgentState` (typed `dict[str, Any]`).
 - 18 unit tests covering portfolio heat budget enforcement and macro regime classification logic.
 
+- **Detailed financial model, reverse DCF, and sensitivity analysis** (`tradingagents/valuation/financial_model.py`, `reverse_dcf.py`, `sensitivity.py`): year-by-year 5-year projections (revenue → EBITDA → EBIT → NOPAT → unlevered FCF), bisection-based solve for the growth rate implied by the current market price, and a 2D intrinsic-value grid across revenue growth × WACC. Exposed to the Valuation Analyst as `get_financial_model`, `get_reverse_dcf`, and `get_sensitivity_analysis` tools.
 - Valuation Analyst agent with ROIC-driven DCF, Revenue DCF, DDM, and bear/base/bull scenario analysis (`tradingagents/agents/analysts/valuation_analyst.py`).
 - Pure-Python valuation engine (`tradingagents/valuation/`) with ROIC, WACC, DCF, DDM, and scenario modules.
 - Valuation data adapter (`tradingagents/dataflows/valuation_data.py`) using yfinance with lazy imports per repo convention.

@@ -65,6 +65,8 @@ def build_financial_model(
     capex: float | None = None,
     growth_rates: list[float] | None = None,
     ebit_margin_override: float | None = None,
+    target_ebit_margin: float | None = None,
+    margin_fade_years: int | None = None,
     capex_pct_revenue: float | None = None,
     da_pct_revenue: float | None = None,
     working_capital_pct_revenue: float = 0.02,
@@ -93,6 +95,14 @@ def build_financial_model(
             ``num_years``, the last rate is repeated.  Defaults to [0.08]*num_years.
         ebit_margin_override: Fixed EBIT margin for all projection years.
             If None, derived from base-year ebit/revenue.
+        target_ebit_margin: If provided (together with ``margin_fade_years``),
+            the EBIT margin linearly fades from the base-year margin toward
+            this target over ``margin_fade_years``, then holds flat for any
+            remaining projection years. Models margin expansion/compression
+            for scaling or maturing businesses instead of a flat margin.
+        margin_fade_years: Number of years over which the margin fades to
+            ``target_ebit_margin``. Ignored if ``target_ebit_margin`` is None.
+            Values beyond ``num_years`` are clamped to ``num_years``.
         capex_pct_revenue: CapEx as a fraction of revenue (applied uniformly).
             If None, derived from base-year capex/revenue.
         da_pct_revenue: D&A as a fraction of revenue.  If None, derived from
@@ -121,7 +131,20 @@ def build_financial_model(
     if ebit is None:
         ebit = revenue * 0.10
 
-    ebit_margin = ebit_margin_override if ebit_margin_override is not None else (ebit / revenue)
+    base_ebit_margin = ebit_margin_override if ebit_margin_override is not None else (ebit / revenue)
+
+    if target_ebit_margin is not None and margin_fade_years:
+        fade_years = min(margin_fade_years, num_years)
+        margin_path = []
+        for i in range(num_years):
+            year_num = i + 1
+            if year_num >= fade_years:
+                margin_path.append(target_ebit_margin)
+            else:
+                frac = year_num / fade_years
+                margin_path.append(base_ebit_margin + (target_ebit_margin - base_ebit_margin) * frac)
+    else:
+        margin_path = [base_ebit_margin] * num_years
 
     if depreciation_amortization is None:
         da = revenue * 0.03  # 3% of revenue as proxy
@@ -154,7 +177,8 @@ def build_financial_model(
         prev_revenue = current_revenue
         current_revenue = current_revenue * (1.0 + growth)
 
-        year_ebit = current_revenue * ebit_margin
+        year_ebit_margin = margin_path[i]
+        year_ebit = current_revenue * year_ebit_margin
         year_da = current_revenue * da_ratio
         year_ebitda = year_ebit + year_da
         ebitda_margin = year_ebitda / current_revenue if current_revenue != 0 else 0.0
@@ -177,7 +201,7 @@ def build_financial_model(
             ebitda=round(year_ebitda, 2),
             ebitda_margin=round(ebitda_margin, 4),
             ebit=round(year_ebit, 2),
-            ebit_margin=round(ebit_margin, 4),
+            ebit_margin=round(year_ebit_margin, 4),
             nopat=round(year_nopat, 2),
             depreciation_amortization=round(year_da, 2),
             capex=round(year_capex, 2),
@@ -214,6 +238,22 @@ def build_financial_model(
     )
 
 
+def _fmt_scaled(value: float) -> str:
+    """Format a dollar amount with an adaptive B/M/K suffix.
+
+    Avoids misleading output like "$0.05B" for small-cap figures by picking
+    the largest scale that keeps the magnitude >= 1.
+    """
+    abs_value = abs(value)
+    if abs_value >= 1e9:
+        return f"${value/1e9:,.2f}B"
+    if abs_value >= 1e6:
+        return f"${value/1e6:,.2f}M"
+    if abs_value >= 1e3:
+        return f"${value/1e3:,.2f}K"
+    return f"${value:,.2f}"
+
+
 def format_financial_model(model: FinancialModel, current_price: float | None = None) -> str:
     """Render a :class:`FinancialModel` as a Markdown report with tables.
 
@@ -227,7 +267,7 @@ def format_financial_model(model: FinancialModel, current_price: float | None = 
     lines = [
         f"## Detailed Financial Model — {model.ticker}",
         "",
-        f"**Base-Year Revenue:** ${model.base_year_revenue/1e9:,.2f}B",
+        f"**Base-Year Revenue:** {_fmt_scaled(model.base_year_revenue)}",
         f"**WACC:** {model.wacc*100:.2f}%  |  **Terminal Growth:** {model.terminal_growth*100:.1f}%",
         "",
         "### Year-by-Year Projections",
@@ -239,32 +279,32 @@ def format_financial_model(model: FinancialModel, current_price: float | None = 
     for p in model.projection_years:
         lines.append(
             f"| {p.year} "
-            f"| ${p.revenue/1e9:,.2f}B "
+            f"| {_fmt_scaled(p.revenue)} "
             f"| {p.revenue_growth*100:.1f}% "
-            f"| ${p.ebitda/1e9:,.2f}B "
+            f"| {_fmt_scaled(p.ebitda)} "
             f"| {p.ebitda_margin*100:.1f}% "
-            f"| ${p.ebit/1e9:,.2f}B "
-            f"| ${p.nopat/1e9:,.2f}B "
-            f"| ${p.depreciation_amortization/1e9:,.2f}B "
-            f"| ${p.capex/1e9:,.2f}B "
-            f"| ${p.change_in_working_capital/1e9:,.2f}B "
-            f"| ${p.unlevered_fcf/1e9:,.2f}B "
-            f"| ${p.discounted_fcf/1e9:,.2f}B |"
+            f"| {_fmt_scaled(p.ebit)} "
+            f"| {_fmt_scaled(p.nopat)} "
+            f"| {_fmt_scaled(p.depreciation_amortization)} "
+            f"| {_fmt_scaled(p.capex)} "
+            f"| {_fmt_scaled(p.change_in_working_capital)} "
+            f"| {_fmt_scaled(p.unlevered_fcf)} "
+            f"| {_fmt_scaled(p.discounted_fcf)} |"
         )
 
     lines.extend([
         "",
         "### Valuation Summary",
         "",
-        f"| Metric | Value |",
-        f"|---|---:|",
-        f"| Sum of Discounted FCF | ${model.sum_discounted_fcf/1e9:,.2f}B |",
-        f"| Terminal Value | ${model.terminal_value/1e9:,.2f}B |",
-        f"| PV of Terminal Value | ${model.pv_terminal_value/1e9:,.2f}B |",
-        f"| Enterprise Value | ${model.enterprise_value/1e9:,.2f}B |",
-        f"| Less: Net Debt | ${model.net_debt/1e9:,.2f}B |",
-        f"| Equity Value | ${model.equity_value/1e9:,.2f}B |",
-        f"| Shares Outstanding | {model.shares_outstanding/1e9:,.2f}B |",
+        "| Metric | Value |",
+        "|---|---:|",
+        f"| Sum of Discounted FCF | {_fmt_scaled(model.sum_discounted_fcf)} |",
+        f"| Terminal Value | {_fmt_scaled(model.terminal_value)} |",
+        f"| PV of Terminal Value | {_fmt_scaled(model.pv_terminal_value)} |",
+        f"| Enterprise Value | {_fmt_scaled(model.enterprise_value)} |",
+        f"| Less: Net Debt | {_fmt_scaled(model.net_debt)} |",
+        f"| Equity Value | {_fmt_scaled(model.equity_value)} |",
+        f"| Shares Outstanding | {model.shares_outstanding:,.0f} |",
         f"| **Intrinsic Value / Share** | **${model.intrinsic_value_per_share:,.2f}** |",
     ])
 

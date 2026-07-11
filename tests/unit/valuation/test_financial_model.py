@@ -54,6 +54,37 @@ class TestBuildFinancialModel:
             expected = expected * (1.0 + growth_rates[i])
             assert p.revenue == pytest.approx(expected, rel=0.001)
 
+    def test_margin_fades_linearly_to_target(self):
+        """With target_ebit_margin + margin_fade_years, margin ramps then holds flat."""
+        model = build_financial_model(
+            **self._BASE_KWARGS,
+            target_ebit_margin=0.30,
+            margin_fade_years=4,
+        )
+        base_margin = self._BASE_KWARGS["ebit"] / self._BASE_KWARGS["revenue"]
+        margins = [p.ebit_margin for p in model.projection_years]
+        # Year 1 partway between base and target, monotonically increasing.
+        assert base_margin < margins[0] < margins[1] < margins[2]
+        # From fade_years onward, margin holds flat at the target.
+        assert margins[3] == pytest.approx(0.30, abs=0.001)
+        assert margins[4] == pytest.approx(0.30, abs=0.001)
+
+    def test_margin_fade_years_clamped_to_num_years(self):
+        """margin_fade_years longer than num_years shouldn't error or overshoot."""
+        model = build_financial_model(
+            **self._BASE_KWARGS,
+            target_ebit_margin=0.25,
+            margin_fade_years=10,
+            num_years=5,
+        )
+        assert model.projection_years[-1].ebit_margin == pytest.approx(0.25, abs=0.001)
+
+    def test_no_fade_without_target_margin(self):
+        """Without target_ebit_margin, margin stays flat at base (existing behaviour)."""
+        model = build_financial_model(**self._BASE_KWARGS)
+        margins = {p.ebit_margin for p in model.projection_years}
+        assert len(margins) == 1
+
     def test_growth_rates_extended_if_short(self):
         """If growth_rates has fewer entries than num_years, last rate repeats."""
         model = build_financial_model(

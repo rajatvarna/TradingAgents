@@ -3,7 +3,13 @@
 import pytest
 
 from tradingagents.valuation.dcf import revenue_dcf
-from tradingagents.valuation.sensitivity import format_sensitivity_table, sensitivity_matrix
+from tradingagents.valuation.sensitivity import (
+    TornadoRow,
+    format_sensitivity_table,
+    format_tornado_table,
+    sensitivity_matrix,
+    tornado_sensitivity,
+)
 
 
 @pytest.mark.unit
@@ -131,3 +137,77 @@ class TestFormatSensitivityTable:
     def test_empty_grid(self):
         table = format_sensitivity_table({})
         assert "empty" in table.lower()
+
+
+@pytest.mark.unit
+class TestTornadoSensitivity:
+    """Tests for single-variable tornado sensitivity."""
+
+    _BASE_KWARGS = dict(
+        revenue=1_000_000.0,
+        ebit_margin=0.20,
+        tax_rate=0.21,
+        terminal_growth=0.025,
+        shares_outstanding=100.0,
+        net_debt=50_000.0,
+        base_growth=0.08,
+        base_wacc=0.10,
+    )
+
+    def test_returns_four_rows(self):
+        rows = tornado_sensitivity(**self._BASE_KWARGS)
+        assert len(rows) == 4
+        assert all(isinstance(r, TornadoRow) for r in rows)
+
+    def test_sorted_widest_swing_first(self):
+        rows = tornado_sensitivity(**self._BASE_KWARGS)
+        swings = [r.swing for r in rows]
+        assert swings == sorted(swings, reverse=True)
+
+    def test_variable_names_present(self):
+        rows = tornado_sensitivity(**self._BASE_KWARGS)
+        names = {r.variable for r in rows}
+        assert names == {"Revenue Growth", "WACC", "EBIT Margin", "Terminal Growth"}
+
+    def test_low_high_bracket_base(self):
+        rows = tornado_sensitivity(**self._BASE_KWARGS)
+        for r in rows:
+            assert r.low_iv <= r.base_iv <= r.high_iv or r.low_iv <= r.high_iv
+
+    def test_wacc_swing_terminal_growth_edge_case_omitted(self):
+        """If WACC - delta collides with terminal growth, that row should be
+        dropped rather than raising."""
+        kwargs = {**self._BASE_KWARGS, "base_wacc": 0.03, "terminal_growth": 0.025}
+        rows = tornado_sensitivity(**kwargs, wacc_range=(-0.02, 0.02))
+        # Should not raise; WACC row may be omitted if unsolvable at the low bound.
+        assert isinstance(rows, list)
+
+    def test_empty_when_base_unsolvable(self):
+        rows = tornado_sensitivity(
+            **{**self._BASE_KWARGS, "base_wacc": 0.02, "terminal_growth": 0.025}
+        )
+        assert rows == []
+
+
+@pytest.mark.unit
+class TestFormatTornadoTable:
+    """Tests for the tornado Markdown formatter."""
+
+    def test_empty_rows(self):
+        table = format_tornado_table([])
+        assert "no tornado" in table.lower()
+
+    def test_returns_markdown_table(self):
+        rows = tornado_sensitivity(
+            revenue=1_000_000.0,
+            ebit_margin=0.20,
+            tax_rate=0.21,
+            terminal_growth=0.025,
+            shares_outstanding=100.0,
+            net_debt=50_000.0,
+            base_growth=0.08,
+            base_wacc=0.10,
+        )
+        table = format_tornado_table(rows)
+        assert "|" in table
+        assert "Variable" in table

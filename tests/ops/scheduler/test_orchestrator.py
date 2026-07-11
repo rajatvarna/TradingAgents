@@ -54,18 +54,18 @@ def _make_journal():
 
 def _make_orchestrator(**overrides):
     from ops.config import OpsConfig
-    defaults = dict(
-        broker=_fake_broker(),
-        universe_builder=_fake_universe([]),
-        strategy=_fake_strategy([]),
-        pipeline_adapter=_fake_pipeline(),
-        calendar=_fake_calendar(is_open=True),
-        journal=_make_journal(),
-        config=OpsConfig(),
-        members_loader=lambda: [],
-        momentum_finder=lambda members, asof_date: [],
-        closes_fetch=lambda s: None,
-    )
+    defaults = {
+        "broker": _fake_broker(),
+        "universe_builder": _fake_universe([]),
+        "strategy": _fake_strategy([]),
+        "pipeline_adapter": _fake_pipeline(),
+        "calendar": _fake_calendar(is_open=True),
+        "journal": _make_journal(),
+        "config": OpsConfig(),
+        "members_loader": lambda: [],
+        "momentum_finder": lambda members, asof_date: [],
+        "closes_fetch": lambda s: None,
+    }
     defaults.update(overrides)
     return Orchestrator(**defaults)
 

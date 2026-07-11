@@ -12,7 +12,7 @@ from ops import (
     build_guarded_paper_broker,
     build_guarded_robinhood_broker,
 )
-from ops.broker.base import OrderRejected
+from ops.broker.base import NoSuchPosition, OrderRejected
 from ops.broker.guarded import GuardedBroker
 from ops.broker.types import Order, OrderType, Side
 from ops.config import OpsConfig
@@ -140,7 +140,7 @@ def test_broker_layer_exception_is_journaled(tmp_path):
         client_order_id="cS", symbol="AAPL", side=Side.SELL,
         notional_dollars=Decimal("20"), order_type=OrderType.MARKET,
     )
-    with pytest.raises(Exception):
+    with pytest.raises(NoSuchPosition):
         guarded.place_order(sell)
     broker_rejections = [
         e for e in journal.read_events()

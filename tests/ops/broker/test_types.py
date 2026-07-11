@@ -1,3 +1,4 @@
+from dataclasses import FrozenInstanceError
 from decimal import Decimal
 
 import pytest
@@ -11,7 +12,7 @@ def test_order_is_frozen():
         notional_dollars=Decimal("25"), order_type=OrderType.MARKET,
         stop_pct=Decimal("-0.08"),
     )
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         o.symbol = "MSFT"
 
 

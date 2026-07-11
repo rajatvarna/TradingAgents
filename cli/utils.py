@@ -619,7 +619,7 @@ def select_llm_provider() -> tuple[str, str | None]:
     ]
     default_choice = None
     if saved_provider:
-        for display, provider_key, url in PROVIDERS:
+        for _display, provider_key, url in PROVIDERS:
             if provider_key == saved_provider:
                 default_choice = (provider_key, url)
                 break

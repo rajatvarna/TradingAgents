@@ -76,6 +76,9 @@ def test_load_sp500_members_writes_under_xdg_cache_dir_not_package_dir(monkeypat
     # our symbols only landed under the XDG cache path.
     written = json.loads(expected_path.read_text())
     assert written["members"] == ["AAPL", "MSFT"]
+    if package_dir_cache.exists():
+        package_written = json.loads(package_dir_cache.read_text())
+        assert package_written.get("members") != ["AAPL", "MSFT"]
 
 
 def test_returns_only_unique_uppercase_symbols(tmp_path):

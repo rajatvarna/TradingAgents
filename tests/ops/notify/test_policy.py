@@ -105,63 +105,63 @@ _TS = datetime(2026, 7, 3, 14, 30, tzinfo=timezone.utc)
 # One sample builder call per POLICY kind. Values are realistic, non-None
 # arguments; the render assertions below run against exactly these.
 SAMPLE_BUILDER_ARGS: dict[str, dict] = {
-    events.KIND_FILL: dict(
-        client_order_id="cid-1", order_id="oid-1", symbol="AAPL",
-        side="BUY", quantity=Decimal("0.125"), price=Decimal("200.40"),
-        filled_at=_TS, context="place", broker_mode="paper",
-    ),
-    events.KIND_KILL_SWITCH: dict(
-        mode="paper", equity_now=Decimal("212.50"),
-        equity_open_week=Decimal("250.00"),
-        pct=Decimal("-0.15"), threshold=Decimal("-0.15"),
-    ),
-    events.KIND_STOP_HIT: dict(
-        symbol="AAPL", entry=Decimal("200"), current=Decimal("180"),
-        pct=Decimal("-0.10"), mode="pct", threshold_repr="pct -0.08",
-    ),
-    events.KIND_STOP_FAILED: dict(
-        symbol="AAPL", entry=Decimal("200"), current=Decimal("180"),
-        pct=Decimal("-0.10"), mode="pct", threshold_repr="pct -0.08",
-        error="BrokerError: mcp unavailable",
-    ),
-    events.KIND_KILL_SWITCH_CLOSE_FAILED: dict(
-        symbol="AAPL", error="BrokerError: mcp unavailable",
-    ),
-    events.KIND_INCONSISTENCY: dict(
-        diffs=[{"symbol": "AAPL", "journal_qty": "1", "broker_qty": "2",
+    events.KIND_FILL: {
+        "client_order_id": "cid-1", "order_id": "oid-1", "symbol": "AAPL",
+        "side": "BUY", "quantity": Decimal("0.125"), "price": Decimal("200.40"),
+        "filled_at": _TS, "context": "place", "broker_mode": "paper",
+    },
+    events.KIND_KILL_SWITCH: {
+        "mode": "paper", "equity_now": Decimal("212.50"),
+        "equity_open_week": Decimal("250.00"),
+        "pct": Decimal("-0.15"), "threshold": Decimal("-0.15"),
+    },
+    events.KIND_STOP_HIT: {
+        "symbol": "AAPL", "entry": Decimal("200"), "current": Decimal("180"),
+        "pct": Decimal("-0.10"), "mode": "pct", "threshold_repr": "pct -0.08",
+    },
+    events.KIND_STOP_FAILED: {
+        "symbol": "AAPL", "entry": Decimal("200"), "current": Decimal("180"),
+        "pct": Decimal("-0.10"), "mode": "pct", "threshold_repr": "pct -0.08",
+        "error": "BrokerError: mcp unavailable",
+    },
+    events.KIND_KILL_SWITCH_CLOSE_FAILED: {
+        "symbol": "AAPL", "error": "BrokerError: mcp unavailable",
+    },
+    events.KIND_INCONSISTENCY: {
+        "diffs": [{"symbol": "AAPL", "journal_qty": "1", "broker_qty": "2",
                 "kind": "qty_mismatch"}],
-        cash_journal=Decimal("100.00"), cash_broker=Decimal("90.00"),
-        cash_diff=Decimal("-10.00"),
-    ),
-    events.KIND_STARTUP_HALTED: dict(reason="reconciliation"),
-    events.KIND_POSITIONS_RECOVERED_WITHOUT_STOPS: dict(symbols=["AAPL"]),
-    events.KIND_GUARDIAN_BLIND: dict(consecutive_failed_passes=5),
-    events.KIND_ORDER_NOT_FILLED: dict(
-        order_id="oid-1", client_order_id="cid-1", symbol="AAPL",
-        side="BUY", status="queued", quantity=Decimal("0.125"),
-        fill_price=Decimal("200.40"),
-    ),
-    events.KIND_DAILY_HALT: dict(
-        mode="paper", equity_now=Decimal("230.00"),
-        equity_open_day=Decimal("250.00"),
-        pct=Decimal("-0.08"), threshold=Decimal("-0.07"),
-    ),
-    events.KIND_BROKER_UNREACHABLE: dict(error_type="MCPUnavailable"),
-    events.KIND_ORCHESTRATOR_TICK_ERROR: dict(error="ValueError: boom"),
-    events.KIND_GUARDIAN_CHECK_ERROR: dict(error="ValueError: boom"),
-    events.KIND_EXIT_CHECK_ERROR: dict(error="ValueError: boom"),
-    events.KIND_QUOTE_UNAVAILABLE: dict(
-        symbol="AAPL", context="guardian_stop_check",
-        error="no data for AAPL",
-    ),
-    events.KIND_HEARTBEAT_ERROR: dict(error_type="ConnectionError"),
-    events.KIND_DAILY_SUMMARY: dict(
-        headline="2026-07-03: equity $250, P&L $5, 2 fill(s)",
-        body="2026-07-03: equity $250, P&L $5, 2 fill(s)\n\nOpen positions:",
-        equity=Decimal("250.00"), n_fills_today=2,
-    ),
-    events.KIND_EXIT_UNKNOWN_PROVENANCE: dict(symbol="AAPL"),
-    events.KIND_DAILY_CYCLE_RUN: dict(asof_date=date(2026, 7, 3)),
+        "cash_journal": Decimal("100.00"), "cash_broker": Decimal("90.00"),
+        "cash_diff": Decimal("-10.00"),
+    },
+    events.KIND_STARTUP_HALTED: {"reason": "reconciliation"},
+    events.KIND_POSITIONS_RECOVERED_WITHOUT_STOPS: {"symbols": ["AAPL"]},
+    events.KIND_GUARDIAN_BLIND: {"consecutive_failed_passes": 5},
+    events.KIND_ORDER_NOT_FILLED: {
+        "order_id": "oid-1", "client_order_id": "cid-1", "symbol": "AAPL",
+        "side": "BUY", "status": "queued", "quantity": Decimal("0.125"),
+        "fill_price": Decimal("200.40"),
+    },
+    events.KIND_DAILY_HALT: {
+        "mode": "paper", "equity_now": Decimal("230.00"),
+        "equity_open_day": Decimal("250.00"),
+        "pct": Decimal("-0.08"), "threshold": Decimal("-0.07"),
+    },
+    events.KIND_BROKER_UNREACHABLE: {"error_type": "MCPUnavailable"},
+    events.KIND_ORCHESTRATOR_TICK_ERROR: {"error": "ValueError: boom"},
+    events.KIND_GUARDIAN_CHECK_ERROR: {"error": "ValueError: boom"},
+    events.KIND_EXIT_CHECK_ERROR: {"error": "ValueError: boom"},
+    events.KIND_QUOTE_UNAVAILABLE: {
+        "symbol": "AAPL", "context": "guardian_stop_check",
+        "error": "no data for AAPL",
+    },
+    events.KIND_HEARTBEAT_ERROR: {"error_type": "ConnectionError"},
+    events.KIND_DAILY_SUMMARY: {
+        "headline": "2026-07-03: equity $250, P&L $5, 2 fill(s)",
+        "body": "2026-07-03: equity $250, P&L $5, 2 fill(s)\n\nOpen positions:",
+        "equity": Decimal("250.00"), "n_fills_today": 2,
+    },
+    events.KIND_EXIT_UNKNOWN_PROVENANCE: {"symbol": "AAPL"},
+    events.KIND_DAILY_CYCLE_RUN: {"asof_date": date(2026, 7, 3)},
 }
 
 

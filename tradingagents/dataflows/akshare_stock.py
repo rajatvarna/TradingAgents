@@ -167,9 +167,9 @@ def get_fundamentals(
             # but some pandas versions cause column mismatch — handle defensively
             if len(info_df.columns) >= 2:
                 col_0, col_1 = info_df.columns[0], info_df.columns[1]
-                info = dict(zip(info_df[col_0], info_df[col_1]))
+                info = dict(zip(info_df[col_0], info_df[col_1], strict=True))
             elif "item" in info_df.columns and "value" in info_df.columns:
-                info = dict(zip(info_df["item"], info_df["value"]))
+                info = dict(zip(info_df["item"], info_df["value"], strict=True))
             else:
                 raise NoMarketDataError(ticker, code, "unexpected column format")
 

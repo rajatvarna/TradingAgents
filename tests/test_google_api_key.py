@@ -62,7 +62,7 @@ class TestGoogleApiKeyStandardization(unittest.TestCase):
         client = GoogleClient("gemini-2.5-flash", api_key="test-key")
         llm = client.get_llm()
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(Exception):  # noqa: B017 - mock raises a plain Exception by design
             llm.invoke("hello")
 
         mock_sleep.assert_not_called()

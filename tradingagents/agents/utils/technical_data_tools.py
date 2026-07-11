@@ -16,7 +16,7 @@ def get_technical_indicators(
     curr_date: Annotated[str, "current trading date, yyyy-mm-dd"]
 ) -> str:
     """
-    Computes a comprehensive suite of Technical Analysis indicators (Momentum, Volatility, Trend, Volume) 
+    Computes a comprehensive suite of Technical Analysis indicators (Momentum, Volatility, Trend, Volume)
     using the 'ta' library. Returns the latest values for RSI, MACD, Bollinger Bands, ATR, ADX, CCI, and OBV.
     """
     try:

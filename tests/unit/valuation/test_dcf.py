@@ -70,10 +70,10 @@ class TestRoicDcf:
 
     def test_deterministic(self):
         """Same inputs produce same output."""
-        kwargs = dict(
-            nopat=200.0, roic_val=0.18, wacc_val=0.09, reinvestment_rate=0.35,
-            projection_years=10, terminal_growth=0.025, shares_outstanding=50.0,
-        )
+        kwargs = {
+            "nopat": 200.0, "roic_val": 0.18, "wacc_val": 0.09, "reinvestment_rate": 0.35,
+            "projection_years": 10, "terminal_growth": 0.025, "shares_outstanding": 50.0,
+        }
         assert roic_dcf(**kwargs) == roic_dcf(**kwargs)
 
 
@@ -121,11 +121,11 @@ class TestRevenueDcf:
         assert iv_low_debt > iv_high_debt
 
     def test_deterministic(self):
-        kwargs = dict(
-            revenue=2000.0, growth_rates=[0.12, 0.10, 0.09, 0.08, 0.07],
-            ebit_margin=0.18, tax_rate=0.21, wacc_val=0.09,
-            terminal_growth=0.025, shares_outstanding=20.0, net_debt=100.0,
-        )
+        kwargs = {
+            "revenue": 2000.0, "growth_rates": [0.12, 0.10, 0.09, 0.08, 0.07],
+            "ebit_margin": 0.18, "tax_rate": 0.21, "wacc_val": 0.09,
+            "terminal_growth": 0.025, "shares_outstanding": 20.0, "net_debt": 100.0,
+        }
         assert revenue_dcf(**kwargs) == revenue_dcf(**kwargs)
 
 

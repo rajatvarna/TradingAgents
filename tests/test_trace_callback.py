@@ -210,7 +210,7 @@ class TestNodeAttribution:
 @pytest.mark.unit
 class TestPersistence:
     def test_records_persist_in_order(self, cb):
-        for i in range(5):
+        for _i in range(5):
             cb.on_chat_model_start({}, [[]], run_id=uuid.uuid4())
         lines = _lines(cb.jsonl_path)
         assert len(lines) == 5

@@ -117,7 +117,7 @@ def discover_available_models(
         return []
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         flags = list(ex.map(lambda m: probe_model(tokens, m), candidates))
-    return [m for m, ok in zip(candidates, flags) if ok]
+    return [m for m, ok in zip(candidates, flags, strict=True) if ok]
 
 
 class ModelAvailabilityCache:

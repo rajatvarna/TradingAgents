@@ -18,13 +18,13 @@ from tradingagents.dataflows import stocktwits
 
 def _raise(exc):
     class _Resp:
-        def __enter__(self_inner):
-            return self_inner
+        def __enter__(self):
+            return self
 
-        def __exit__(self_inner, *a):
+        def __exit__(self, *a):
             return False
 
-        def read(self_inner):
+        def read(self):
             raise exc
     return _Resp()
 

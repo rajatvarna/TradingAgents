@@ -2,7 +2,7 @@
 
 The whole design rests on "journal replay + reconciliation recovers any
 crash". This module proves it systematically: one deterministic scenario is
-driven through a `CrashingJournal` that raises `SimulatedCrash` on the Nth
+driven through a `CrashingJournal` that raises `SimulatedCrashError` on the Nth
 journal write, for every N in 1..W (W = total writes of the uncrashed run).
 After each crashed run, the journal file is reopened cold and the full
 production recovery path must succeed.
@@ -12,7 +12,7 @@ Crash semantics ("the process died at write N"):
 - The Nth write attempt raises BEFORE committing, so the on-disk journal
   contains exactly writes 1..N-1 (plus, see below, at most the handful of
   error-report writes production itself would emit before dying).
-- `SimulatedCrash` derives from `Exception` directly — deliberately NOT from
+- `SimulatedCrashError` derives from `Exception` directly — deliberately NOT from
   `BrokerError`/`QuoteUnavailable` — so the narrow production handlers
   (guardian per-position quote/close handling, GuardedBroker's
   `except BrokerError`) do NOT swallow it. Only the broad catch-alls that
@@ -26,7 +26,7 @@ Crash semantics ("the process died at write N"):
   the same journal, and production would only be able to write that report
   if the underlying store recovered. The scenario driver then STOPS at the
   first crash: direct journal writes and broker-path writes propagate
-  `SimulatedCrash` to the driver (caught there), and for the
+  `SimulatedCrashError` to the driver (caught there), and for the
   guardian-swallowed cases the driver checks `CrashingJournal.crashed`
   after every step and aborts. The point is state-at-crash recovery, not
   multi-crash behavior.
@@ -72,7 +72,7 @@ from ops.reconcile import reconcile
 from ops.trading_time import trading_day_start, trading_week_start
 
 
-class SimulatedCrash(Exception):
+class SimulatedCrashError(Exception):
     """Injected 'process died here' marker.
 
     Derives from Exception directly (never BrokerError/QuoteUnavailable) so
@@ -93,7 +93,7 @@ _WRITE_METHODS = frozenset({
 
 class CrashingJournal:
     """Wraps a real Journal; delegates everything; counts write calls and
-    raises SimulatedCrash on the crash_at-th write (one-shot, pre-commit)."""
+    raises SimulatedCrashError on the crash_at-th write (one-shot, pre-commit)."""
 
     def __init__(self, inner: Journal, *, crash_at: int | None = None):
         self._inner = inner
@@ -114,7 +114,7 @@ class CrashingJournal:
                 and self.write_count == self._crash_at
             ):
                 self.crashed = True
-                raise SimulatedCrash(
+                raise SimulatedCrashError(
                     f"simulated crash at write #{self.write_count} ({name})"
                 )
             return attr(*args, **kwargs)
@@ -168,7 +168,7 @@ def _build_broker(journal, quotes: _MutableQuotes, cfg: OpsConfig):
 def _run_scenario(journal: CrashingJournal, quotes: _MutableQuotes) -> None:
     """Drive the scenario to completion, or abort at the first simulated
     crash. Crashes on direct journal writes and broker-path writes propagate
-    here as SimulatedCrash; crashes inside guardian passes are swallowed by
+    here as SimulatedCrashError; crashes inside guardian passes are swallowed by
     production's catch-alls, so the `crashed` flag is checked after each
     guardian step."""
     cfg = OpsConfig()
@@ -215,7 +215,7 @@ def _run_scenario(journal: CrashingJournal, quotes: _MutableQuotes) -> None:
         guardian.check_stops_once()
         if journal.crashed:
             return
-    except SimulatedCrash:
+    except SimulatedCrashError:
         return
 
 

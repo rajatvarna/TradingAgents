@@ -81,7 +81,6 @@ from cli.live import (
     DisplayManager,
     MessageStore,
     ReportBuilder,
-    format_tool_args,
 )
 
 
@@ -543,13 +542,6 @@ def classify_message_type(message) -> tuple[str, str | None]:
     return ("System", content)
 
 
-def format_tool_args(args, max_length=80) -> str:
-    """Format tool arguments for terminal display."""
-    result = str(args)
-    if len(result) > max_length:
-        return result[:max_length - 3] + "..."
-    return result
-
 def should_save_report(value: str | None) -> bool:
     """Return True when the user wants to save the report."""
     if value is None:
@@ -993,7 +985,7 @@ def analyze(
             metrics_config = parse_metrics_flag(metrics)
         except ValueError as e:
             console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from e
 
     if clear_checkpoints:
         from tradingagents.graph.checkpointer import clear_all_checkpoints
@@ -1056,7 +1048,7 @@ def stats(
         conn.close()
     except Exception as exc:
         console.print(f"[red]Failed to read database: {exc}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
     if not rows:
         console.print(f"[yellow]No run data found in the last {days} days.[/yellow]")

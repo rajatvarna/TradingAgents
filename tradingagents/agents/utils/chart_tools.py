@@ -96,7 +96,7 @@ def generate_chart(
             style=style,
             title=f"\n{symbol} — {look_back_days}d",
             figsize=(12, 7),
-            savefig=dict(fname=buf, dpi=120, bbox_inches="tight"),
+            savefig={"fname": buf, "dpi": 120, "bbox_inches": "tight"},
             warn_too_much_data=9999,
         )
     except Exception as e:

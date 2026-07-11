@@ -118,7 +118,7 @@ def suggest_trade_levels(
         df = pd.read_csv(StringIO(csv), index_col=0, parse_dates=True)
         needed = {"High", "Low", "Close"}
         if not needed.issubset(set(df.columns)):
-            raise ValueError(f"missing OHLCV columns: {sorted(list(needed - set(df.columns)))}")
+            raise ValueError(f"missing OHLCV columns: {sorted(needed - set(df.columns))}")
         if len(df) < max(atr_period + 2, swing_window + 2, 210):
             df_sorted = df.sort_index()
         else:

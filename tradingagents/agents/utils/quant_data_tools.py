@@ -17,7 +17,7 @@ def get_quantitative_metrics(
     curr_date: Annotated[str, "current trading date, yyyy-mm-dd"]
 ) -> str:
     """
-    Computes quantitative and statistical risk metrics including Value at Risk (VaR), 
+    Computes quantitative and statistical risk metrics including Value at Risk (VaR),
     Expected Shortfall (ES), Annualized Volatility, and Sharpe Ratio over the past year.
     """
     try:

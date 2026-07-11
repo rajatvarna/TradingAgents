@@ -152,10 +152,8 @@ class CircuitBreaker:
         if failures < self._threshold:
             return False
         elapsed = time.monotonic() - self._open_since.get(vendor, 0.0)
-        if elapsed >= self._timeout:
-            # Half-open: allow one probe request through
-            return False
-        return True
+        # Half-open: allow one probe request through once the timeout elapses
+        return not elapsed >= self._timeout
 
     def record_failure(self, vendor: str) -> None:
         """Record a transient failure and open the circuit if threshold reached."""

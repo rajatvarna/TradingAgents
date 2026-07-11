@@ -18,7 +18,7 @@ def embed_text(text: str, dimensions: int = 96) -> list[float]:
 
 
 def cosine_similarity(left: Iterable[float], right: Iterable[float]) -> float:
-    return sum(a * b for a, b in zip(left, right))
+    return sum(a * b for a, b in zip(left, right, strict=True))
 
 
 class SemanticMemory:

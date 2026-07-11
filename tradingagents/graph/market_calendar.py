@@ -111,8 +111,6 @@ def nearest_trading_day(
         )
         d = exchange_today
 
-    original = d
-
     for _ in range(max_lookback_days):
         valid = _check_day(exchange, d)
         if valid:

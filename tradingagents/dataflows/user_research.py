@@ -204,7 +204,7 @@ def _summarize(text: str, ticker: str | None, summarize_fn) -> str:
     ticker_clause = f" for ticker {ticker}" if ticker else ""
     prompt = SUMMARY_PROMPT_TMPL.format(ticker_clause=ticker_clause, text=text)
     last_err: Exception | None = None
-    for attempt in range(2):
+    for _attempt in range(2):
         try:
             response = summarize_fn.invoke(prompt)
             content = getattr(response, "content", None) or str(response)

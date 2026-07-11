@@ -71,6 +71,42 @@ def _format_fundamental_monster_context(mss: dict) -> str:
     return "\n".join(lines)
 
 
+def _format_forensic_context(fs: dict) -> str:
+    """Format the forensic accounting (earnings-quality) score for prompt injection."""
+    if not fs or fs.get("composite_score") is None:
+        return ""
+
+    def _cs(key: str) -> str:
+        cs = fs.get(key) or {}
+        score = cs.get("score")
+        score_str = f"{score:.1f}/10" if score is not None else "N/A"
+        return f"{score_str} [{cs.get('pass_fail', '?')}] — {cs.get('rationale', '')}"
+
+    blockers = fs.get("hard_blockers") or []
+
+    lines = [
+        "=== FORENSIC ACCOUNTING SCORE — EARNINGS QUALITY RED FLAGS ===",
+        f"COMPOSITE: {fs.get('composite_score', 0):.0f}/100  Grade: {fs.get('composite_grade', '?')}",
+    ]
+    if blockers:
+        lines.append(f"HARD BLOCKERS: {'; '.join(blockers)}")
+    lines += [
+        "",
+        f"  Cash Flow / Net Income Divergence: {_cs('cf_ni_divergence_score')}",
+        f"  Accruals Quality (Sloan 1996):      {_cs('accruals_quality_score')}",
+        f"  Receivables Quality (DSO trend):    {_cs('receivables_quality_score')}",
+        f"  SG&A Discipline vs Revenue:         {_cs('sga_discipline_score')}",
+        "",
+        "METHODOLOGY NOTES:",
+        "  - Operating cash flow persistently below net income (OCF/NI < 0.8) means earnings are not converting to cash — a classic earnings-quality warning.",
+        "  - Rising days-sales-outstanding alongside revenue growth can indicate channel stuffing or premature revenue recognition.",
+        "  - Use the pre-computed scores above as a structured starting point for the forensic red-flag section of your report.",
+        "=== END FORENSIC ACCOUNTING SCORE ===",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def _prefetch_fundamentals_data(ticker: str, current_date: str) -> str:
     """Gather the fundamentals the tools would return, for tool-less providers."""
     fundamentals = safe_tool_text(
@@ -110,6 +146,7 @@ def create_fundamentals_analyst(llm):
         ticker = str(state["company_of_interest"])
         instrument_context = get_instrument_context_from_state(state)
         monster_context = _format_fundamental_monster_context(state.get("monster_stock_score") or {})
+        forensic_context = _format_forensic_context(state.get("forensic_score") or {})
 
         tools = [
             get_fundamentals,
@@ -120,13 +157,17 @@ def create_fundamentals_analyst(llm):
 
         system_message = build_cacheable_system_content(
             monster_context
+            + forensic_context
             + f"You are a Fundamentals Analyst trained on the TraderLion / Boik Monster Stock methodology. "
             f"Analyze fundamental information about this {subject_label} against the scored criteria shown above. "
             f"Your report must: (1) confirm or challenge each scored criterion with additional context, "
             f"(2) identify the PRIMARY fundamental story (EPS story, revenue story, or theme story), "
             f"(3) flag any deceleration in the most recent quarter — this is a critical red flag, "
             f"(4) assess whether analysts expect growth to continue or slow in the next two fiscal years, "
-            f"(5) conclude with a PASS / WARN / FAIL verdict on the fundamental case. "
+            f"(5) if a forensic accounting score is shown above, address it explicitly: flag any cash-flow/net-income "
+            f"divergence, aggressive accruals, rising days-sales-outstanding, or SG&A growth outpacing revenue as "
+            f"earnings-quality red flags, "
+            f"(6) conclude with a PASS / WARN / FAIL verdict on the fundamental case. "
             f"Include as much detail as possible. Provide specific, actionable insights with supporting evidence."
             + " Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."
             + " Use the available tools: `get_fundamentals` for comprehensive company analysis, `get_balance_sheet`, `get_cashflow`, and `get_income_statement` for specific financial statements."

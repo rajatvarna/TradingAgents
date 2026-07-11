@@ -137,6 +137,28 @@ def _precompute_monster_score(ticker: str, trade_date: str, config: dict) -> dic
         return {}
 
 
+def _precompute_forensic_score(ticker: str, config: dict) -> dict:
+    """Pre-compute the forensic accounting score before the graph runs.
+
+    Returns a serialised dict (via dataclasses.asdict) or {} on any failure so
+    the graph is never blocked by a scoring error.
+    """
+    if not config.get("forensic_accounting_mode", True):
+        return {}
+    try:
+        import dataclasses
+
+        from tradingagents.dataflows.forensic_fundamentals import fetch_forensic_fundamentals
+        from tradingagents.scoring.forensic_scorer import score_forensics
+
+        history = fetch_forensic_fundamentals(ticker)
+        score = score_forensics(ticker, history)
+        return dataclasses.asdict(score)
+    except Exception as exc:
+        logger.warning("Forensic accounting pre-score failed for %s: %s", ticker, exc)
+        return {}
+
+
 def _coerce_max_retries(value):
     """Validate an ``llm_max_retries`` value to a non-negative int.
 
@@ -631,6 +653,7 @@ class TradingAgentsGraph:
         risk_constraints = self._risk_constraints_from_config()
 
         monster_score = _precompute_monster_score(company_name, str(trade_date), self.config)
+        forensic_score = _precompute_forensic_score(company_name, self.config)
         evidence_pack = self._build_evidence_pack(company_name, str(trade_date))
 
         init_agent_state = self.propagator.create_initial_state(
@@ -644,6 +667,8 @@ class TradingAgentsGraph:
         )
         if monster_score:
             init_agent_state["monster_stock_score"] = monster_score
+        if forensic_score:
+            init_agent_state["forensic_score"] = forensic_score
 
         from tradingagents.dataflows.earnings_calendar import get_earnings_warning
         earnings_warning = get_earnings_warning(
@@ -1001,6 +1026,7 @@ class TradingAgentsGraph:
         risk_constraints = self._risk_constraints_from_config()
 
         monster_score = _precompute_monster_score(company_name, str(trade_date), self.config)
+        forensic_score = _precompute_forensic_score(company_name, self.config)
 
         # Build pre-run evidence pack (ledger + quant anchors). Fail-open.
         evidence_pack = self._build_evidence_pack(company_name, str(trade_date))
@@ -1017,6 +1043,8 @@ class TradingAgentsGraph:
         )
         if monster_score:
             init_agent_state["monster_stock_score"] = monster_score
+        if forensic_score:
+            init_agent_state["forensic_score"] = forensic_score
 
         # Earnings calendar awareness — warn before analysis if earnings are near.
         from tradingagents.dataflows.earnings_calendar import get_earnings_warning

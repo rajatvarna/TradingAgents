@@ -38,6 +38,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_TEMPERATURE":          "temperature",
     # Monster Stock / TraderLion framework
     "TRADINGAGENTS_MONSTER_STOCK_MODE":          "monster_stock_mode",
+    "TRADINGAGENTS_FORENSIC_ACCOUNTING_MODE":    "forensic_accounting_mode",
     "TRADINGAGENTS_MIN_COMPOSITE_SCORE_FOR_BUY": "min_composite_score_for_buy",
     "TRADINGAGENTS_SELL_DISCIPLINE":             "sell_discipline",
     "TRADINGAGENTS_SCREENER_UNIVERSE":           "screener_universe",
@@ -414,6 +415,9 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # ── Monster Stock / TraderLion framework ──────────────────────────────────
     # Enable the scoring engine and inject MonsterStockScore into agent prompts.
     "monster_stock_mode": False,
+    # Enable the forensic accounting scorer (CF/NI divergence, accruals, etc.)
+    # and inject its ForensicScore into the Fundamentals Analyst prompt.
+    "forensic_accounting_mode": False,
     # Minimum composite score (0-100) to recommend a buy action.
     "min_composite_score_for_buy": 65.0,
     # Sell discipline: "standard" uses 21d MA trigger; "mmss" uses 10d MA trigger.

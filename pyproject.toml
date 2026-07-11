@@ -103,6 +103,8 @@ dev = [
     "mypy>=1.10",                      # type checker
     "pytest>=8.0",
     "pytest-subtests>=0.13",
+    "apscheduler>=3.10.0",             # collected by tests/ops/* (scheduled runner)
+    "pandas-market-calendars>=4.4.0",  # collected by tests/ops/scheduler/test_market_calendar.py
 ]
 portfolio = [
     "apscheduler>=3.10.0",

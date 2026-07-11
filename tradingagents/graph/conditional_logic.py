@@ -148,35 +148,6 @@ class ConditionalLogic:
             return "Neutral Analyst"
         return "Aggressive Analyst"
 
-    def should_continue_debate(self, state: AgentState) -> str:
-        """Single-router variant of the bull/bear debate edges.
-
-        Returns "Research Manager" when the debate is complete, otherwise
-        routes to whichever side did not just speak (inferred from
-        ``current_response``).
-        """
-        if self._investment_debate_is_complete(state):
-            return "Research Manager"
-        current = (state["investment_debate_state"].get("current_response") or "").strip().lower()
-        if current.startswith("bear"):
-            return "Bull Researcher"
-        return "Bear Researcher"
-
-    def should_continue_risk_analysis(self, state: AgentState) -> str:
-        """Single-router variant of the aggressive/conservative/neutral risk edges.
-
-        Returns "Portfolio Manager" when the risk debate is complete,
-        otherwise rotates to the next analyst based on ``latest_speaker``.
-        """
-        if self._risk_analysis_is_complete(state):
-            return "Portfolio Manager"
-        latest = (state["risk_debate_state"].get("latest_speaker") or "").strip().lower()
-        if latest.startswith("aggressive"):
-            return "Conservative Analyst"
-        if latest.startswith("conservative"):
-            return "Neutral Analyst"
-        return "Aggressive Analyst"
-
     def should_continue_after_aggressive_analyst(self, state: AgentState) -> str:
         """Determine the next node after the Aggressive Analyst."""
         if self._risk_analysis_is_complete(state):

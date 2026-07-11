@@ -33,4 +33,9 @@ WEIGHTS: dict = {
     "margin_of_safety":         1.0,
     "roic_trend":               0.8,
     "earnings_yield_vs_rf":     0.7,
+    # Forensic accounting criteria (optional; included when forensic block is active)
+    "forensic_cf_ni_divergence":    2.0,   # weakest link: cash not backing earnings is a hard flag
+    "forensic_accruals_quality":    1.5,
+    "forensic_receivables_quality": 1.2,
+    "forensic_sga_discipline":      0.8,
 }

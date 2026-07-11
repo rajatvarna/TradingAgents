@@ -121,6 +121,7 @@ class Propagator:
             "target_profile": target_profile or {},
             # Monster Stock / TraderLion framework — pre-computed before graph runs
             "monster_stock_score": {},
+            "forensic_score": {},
             "group_sector_report": "",
             "market_phase_report": "",
             "postmortem_report": "",

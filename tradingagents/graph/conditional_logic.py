@@ -94,6 +94,19 @@ class ConditionalLogic:
             return "Research Manager"
         return "Bull Researcher"
 
+    def should_continue_debate(self, state: AgentState) -> str:
+        """Determine the next node in the investment debate.
+
+        Routes to ``Research Manager`` once the debate is complete, otherwise
+        alternates between Bull and Bear Researcher based on who spoke last.
+        """
+        if self._investment_debate_is_complete(state):
+            return "Research Manager"
+        current_response = state["investment_debate_state"].get("current_response") or ""
+        if current_response.strip().lower().startswith("bear"):
+            return "Bull Researcher"
+        return "Bear Researcher"
+
     def _investment_debate_is_complete(self, state: AgentState) -> bool:
         inv = state["investment_debate_state"]
         high_uncertainty = bool(state.get("high_uncertainty", False))
@@ -121,6 +134,28 @@ class ConditionalLogic:
             return True
 
         return False
+
+    def should_continue_risk_analysis(self, state: AgentState) -> str:
+        """Determine the next node in the risk debate.
+
+        Routes to ``Portfolio Manager`` once the round limit is reached,
+        otherwise alternates Aggressive -> Conservative -> Neutral based on
+        who spoke last. An unrecognized or empty speaker label (e.g. from
+        prompt/i18n/refactor drift) ends the debate rather than crashing on
+        a missing path_map entry.
+        """
+        risk = state["risk_debate_state"]
+        if risk.get("count", 0) >= 3 * self.max_risk_discuss_rounds:
+            return "Portfolio Manager"
+
+        speaker = (risk.get("latest_speaker") or "").strip().lower()
+        if speaker.startswith("aggressive"):
+            return "Conservative Analyst"
+        if speaker.startswith("conservative"):
+            return "Neutral Analyst"
+        if speaker.startswith("neutral"):
+            return "Aggressive Analyst"
+        return "Portfolio Manager"
 
     def should_continue_after_aggressive_analyst(self, state: AgentState) -> str:
         """Determine the next node after the Aggressive Analyst."""

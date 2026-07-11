@@ -7,8 +7,8 @@ import pytest
 from tradingagents.llm_clients.openai_client import (
     OPENAI_COMPATIBLE_PROVIDERS,
     DeepSeekChatOpenAI,
-    MinimaxChatOpenAI,
     KimiChatOpenAI,
+    MinimaxChatOpenAI,
     NormalizedChatOpenAI,
     is_openai_compatible,
 )

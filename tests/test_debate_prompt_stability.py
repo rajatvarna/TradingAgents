@@ -7,7 +7,7 @@ shape needed for better prefix cache reuse.
 
 import unittest
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage
 
 from tradingagents.agents.researchers.bear_researcher import create_bear_researcher
 from tradingagents.agents.researchers.bull_researcher import create_bull_researcher

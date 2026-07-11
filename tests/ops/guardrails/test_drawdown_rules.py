@@ -1,7 +1,7 @@
 from decimal import Decimal
 from unittest.mock import MagicMock
-import pytest
-from ops.broker.types import Order, Side, OrderType
+
+from ops.broker.types import Order, OrderType, Side
 from ops.config import OpsConfig
 from ops.guardrails.base import RuleContext
 from ops.guardrails.drawdown_rules import DailyDrawdownRule, WeeklyDrawdownRule

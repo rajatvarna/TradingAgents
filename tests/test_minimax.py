@@ -18,7 +18,7 @@ from tradingagents.llm_clients.capabilities import (
     get_capabilities,
 )
 from tradingagents.llm_clients.factory import create_llm_client
-from tradingagents.llm_clients.openai_client import MinimaxChatOpenAI, NormalizedChatOpenAI
+from tradingagents.llm_clients.openai_client import MinimaxChatOpenAI
 
 
 def _client(model: str = "MiniMax-M3"):

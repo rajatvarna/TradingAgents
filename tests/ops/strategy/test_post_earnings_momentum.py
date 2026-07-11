@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from ops.broker.types import Side, OrderType
+from ops.broker.types import OrderType, Side
 from ops.config import OpsConfig
 from ops.pipeline_adapter import PipelineDecision, StubPipelineAdapter
 from ops.strategy.post_earnings_momentum import PostEarningsMomentumStrategy

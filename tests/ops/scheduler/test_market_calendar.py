@@ -1,6 +1,6 @@
 """Uses explicit `at=` params instead of freezegun — no new test dep."""
 from datetime import date, datetime, timezone
-import pytest
+
 from ops.scheduler.market_calendar import MarketCalendar
 
 # Fixed reference points chosen from a real NYSE calendar:

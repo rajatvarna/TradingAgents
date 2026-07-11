@@ -1,21 +1,30 @@
 """End-to-end test of the default guarded paper-broker stack."""
 from decimal import Decimal
+
 import pytest
+
 from ops.broker.base import OrderRejected
 from ops.broker.guarded import GuardedBroker
 from ops.broker.paper import PaperBroker
-from ops.broker.types import Order, Side, OrderType, Position
+from ops.broker.types import Order, OrderType, Side
 from ops.config import OpsConfig
-from ops.guardrails.engine import RuleEngine
-from ops.guardrails.static_rules import (
-    DenyListRule, NoMarginRule, NoOptionsRule, NoCryptoRule,
-    LongOnlyRule, StopAttachedRule, FractionalSharesOnlyRule,
-)
-from ops.guardrails.sizing_rules import (
-    PerPositionCapRule, PerTradeDollarFloorRule,
-    MaxOpenPositionsRule, CashReserveRule,
-)
 from ops.guardrails.drawdown_rules import DailyDrawdownRule, WeeklyDrawdownRule
+from ops.guardrails.engine import RuleEngine
+from ops.guardrails.sizing_rules import (
+    CashReserveRule,
+    MaxOpenPositionsRule,
+    PerPositionCapRule,
+    PerTradeDollarFloorRule,
+)
+from ops.guardrails.static_rules import (
+    DenyListRule,
+    FractionalSharesOnlyRule,
+    LongOnlyRule,
+    NoCryptoRule,
+    NoMarginRule,
+    NoOptionsRule,
+    StopAttachedRule,
+)
 from ops.journal import Journal
 
 

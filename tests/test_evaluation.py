@@ -4,10 +4,8 @@ These tests validate the metrics computation (consistency, directional
 accuracy, score distribution) without making LLM calls.
 """
 
-import pytest
 
 from tradingagents.evaluation.benchmark import (
-    RATINGS_5_TIER,
     _compute_consistency,
     _compute_directional_metrics,
     _score_distribution,

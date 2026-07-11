@@ -1,11 +1,13 @@
 import re
 from decimal import Decimal
+
 import pytest
+
 from ops import build_guarded_robinhood_broker
-from ops.broker.base import BrokerError, NoSuchPosition, OrderRejected
+from ops.broker.base import OrderRejected
 from ops.broker.guarded import GuardedBroker
 from ops.broker.paper import PaperBroker
-from ops.broker.types import Order, Side, OrderType, Position
+from ops.broker.types import Order, OrderType, Position, Side
 from ops.config import OpsConfig
 from ops.guardrails.base import Rule, RuleContext, RuleResult
 from ops.guardrails.engine import RuleEngine

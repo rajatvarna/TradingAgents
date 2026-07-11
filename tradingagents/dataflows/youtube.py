@@ -34,17 +34,17 @@ def fetch_youtube_sentiment(
             except json.JSONDecodeError:
                 logger.warning("opencli youtube search returned invalid JSON: %s", res.stdout)
                 return f"<no YouTube data found for {ticker.upper()} (invalid JSON)>"
-                
+
             if not videos:
                 return f"<no YouTube data found for {ticker.upper()}>"
-            
+
             blocks = []
             blocks.append(f"YouTube — {len(videos)} recent videos mentioning {ticker.upper()}:")
             for v in videos:
                 title = (v.get("title") or "").strip()
                 desc = (v.get("description") or "").replace("\n", " ").strip()
                 views = v.get("viewCount") or 0
-                
+
                 blocks.append(f"Title: {title}")
                 blocks.append(f"Views: {views}")
                 if desc:

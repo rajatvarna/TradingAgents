@@ -1,10 +1,8 @@
 """Tests for the pre-trade market state verification gate."""
 
 import json
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 from io import BytesIO
-import pytest
+from unittest.mock import MagicMock, patch
 
 from tradingagents.agents.risk_mgmt.market_gate import (
     _ticker_to_mic,

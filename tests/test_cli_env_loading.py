@@ -18,11 +18,11 @@ def test_cli_dotenv_searches_from_current_working_directory(monkeypatch):
 
     monkeypatch.setattr(dotenv, "find_dotenv", fake_find_dotenv)
     monkeypatch.setattr(dotenv, "load_dotenv", fake_load_dotenv)
-    
+
     graph_package = types.ModuleType("tradingagents.graph")
     graph_module = types.ModuleType("tradingagents.graph.trading_graph")
     graph_module.TradingAgentsGraph = object
-    
+
     analyst_execution = types.ModuleType("tradingagents.graph.analyst_execution")
     analyst_execution.AnalystWallTimeTracker = object
     analyst_execution.build_analyst_execution_plan = object

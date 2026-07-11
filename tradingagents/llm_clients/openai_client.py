@@ -1,10 +1,10 @@
+import json
 import logging
 import os
 import re
-import json
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 from langchain_core.messages import AIMessage

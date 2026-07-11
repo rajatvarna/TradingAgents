@@ -12,6 +12,7 @@ prompts for it automatically instead of failing on first API call.
 from __future__ import annotations
 
 from tradingagents.llm_clients.custom_provider_config import get_custom_api_key_env
+
 PROVIDER_API_KEY_ENV: dict[str, str | None] = {
     "openai":     "OPENAI_API_KEY",
     # ChatGPT OAuth: nessuna env key; l'auth passa per il token store OAuth.

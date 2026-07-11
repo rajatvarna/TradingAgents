@@ -2,10 +2,9 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-import pytest
-from ops.scheduler.orchestrator import Orchestrator
+from ops.broker.base import BrokerError, OrderRejected
 from ops.broker.types import Order, OrderType, Side
-from ops.broker.base import OrderRejected, BrokerError
+from ops.scheduler.orchestrator import Orchestrator
 from ops.strategy.base import StrategyOrder
 
 
@@ -108,8 +107,8 @@ def test_tick_market_closed_noop(tmp_path):
 
 def test_tick_journals_orchestrator_tick_error_on_unexpected_exception(tmp_path):
     """Any unexpected exception from a collaborator is swallowed and journaled."""
-    from ops.journal import Journal
     from ops.config import OpsConfig
+    from ops.journal import Journal
     j = Journal(str(tmp_path / "j.sqlite"))
     broker = _fake_broker()
     universe = _fake_universe(["AAPL"])
@@ -132,8 +131,8 @@ def test_tick_journals_orchestrator_tick_error_on_unexpected_exception(tmp_path)
 
 
 def test_tick_places_buy_when_strategy_proposes_order(tmp_path):
-    from ops.journal import Journal
     from ops.config import OpsConfig
+    from ops.journal import Journal
     j = Journal(str(tmp_path / "j.sqlite"))
     broker = _fake_broker()
     orch = Orchestrator(
@@ -156,8 +155,8 @@ def test_tick_places_buy_when_strategy_proposes_order(tmp_path):
 def test_tick_skips_when_strategy_proposes_nothing(tmp_path):
     """Real Strategy filters non-BUY decisions internally via pipeline.propagate;
     the orchestrator just sees an empty proposal list."""
-    from ops.journal import Journal
     from ops.config import OpsConfig
+    from ops.journal import Journal
     j = Journal(str(tmp_path / "j.sqlite"))
     broker = _fake_broker()
     orch = Orchestrator(
@@ -177,8 +176,8 @@ def test_tick_skips_when_strategy_proposes_nothing(tmp_path):
 
 def test_tick_continues_after_rule_reject(tmp_path):
     """OrderRejected on one candidate → next candidate still tried."""
-    from ops.journal import Journal
     from ops.config import OpsConfig
+    from ops.journal import Journal
     j = Journal(str(tmp_path / "j.sqlite"))
     broker = _fake_broker()
     broker.place_order.side_effect = [OrderRejected("Some", "reason"), MagicMock()]
@@ -198,8 +197,8 @@ def test_tick_continues_after_rule_reject(tmp_path):
 
 
 def test_tick_breaks_on_broker_error(tmp_path):
-    from ops.journal import Journal
     from ops.config import OpsConfig
+    from ops.journal import Journal
     j = Journal(str(tmp_path / "j.sqlite"))
     broker = _fake_broker()
     broker.place_order.side_effect = BrokerError("mcp died")
@@ -219,8 +218,8 @@ def test_tick_breaks_on_broker_error(tmp_path):
 
 
 def test_maybe_snapshot_equity_writes_open_day_once(tmp_path):
-    from ops.journal import Journal
     from ops.config import OpsConfig
+    from ops.journal import Journal
     j = Journal(str(tmp_path / "j.sqlite"))
     broker = _fake_broker(equity=Decimal("1000"), cash=Decimal("500"))
     orch = Orchestrator(
@@ -243,8 +242,8 @@ def test_maybe_snapshot_equity_writes_open_day_once(tmp_path):
 
 
 def test_tick_shortcircuits_on_daily_halt(tmp_path):
-    from ops.journal import Journal
     from ops.config import OpsConfig
+    from ops.journal import Journal
     j = Journal(str(tmp_path / "j.sqlite"))
     j.record_event("daily_halt", {"reason": "drawdown"})
     broker = _fake_broker()
@@ -268,8 +267,8 @@ def test_tick_passes_held_and_free_slots_to_builder(tmp_path):
     """Orchestrator computes held symbols + remaining slots and hands them
     to the universe builder (belt-and-suspenders: fresh_candidates filter
     still applies afterward)."""
-    from ops.journal import Journal
     from ops.config import OpsConfig
+    from ops.journal import Journal
     j = Journal(str(tmp_path / "j.sqlite"))
     broker = _fake_broker(
         positions=[MagicMock(symbol="AAPL"), MagicMock(symbol="MSFT")]
@@ -291,8 +290,8 @@ def test_tick_passes_held_and_free_slots_to_builder(tmp_path):
 
 
 def test_tick_shortcircuits_on_weekly_kill_switch(tmp_path):
-    from ops.journal import Journal
     from ops.config import OpsConfig
+    from ops.journal import Journal
     j = Journal(str(tmp_path / "j.sqlite"))
     j.record_event("kill_switch", {"reason": "weekly"})
     broker = _fake_broker()
@@ -342,8 +341,8 @@ def _strategy_order_for_candidate(candidate):
 
 
 def test_tick_journals_position_opened_on_successful_buy(tmp_path):
-    from ops.journal import Journal
     from ops.config import OpsConfig
+    from ops.journal import Journal
     j = Journal(str(tmp_path / "j.sqlite"))
     broker = _fake_broker()
     candidate = _momentum_candidate("NVDA", rank=3)
@@ -369,8 +368,8 @@ def test_tick_journals_position_opened_on_successful_buy(tmp_path):
 
 
 def test_tick_rejected_order_does_not_journal_position_opened(tmp_path):
-    from ops.journal import Journal
     from ops.config import OpsConfig
+    from ops.journal import Journal
     j = Journal(str(tmp_path / "j.sqlite"))
     broker = _fake_broker()
     broker.place_order.side_effect = OrderRejected("Some", "reason")
@@ -407,6 +406,7 @@ def _uptrend_closes():
 def _broker_holding_momentum(sym):
     """Fake broker holding one position; close_position removes it."""
     from datetime import datetime, timezone
+
     from ops.broker.types import Fill, Position, Side
     broker = MagicMock()
     state = {"positions": [Position(symbol=sym, quantity=Decimal("1"),
@@ -426,6 +426,7 @@ def _broker_holding_momentum(sym):
 
 def _journal_position_opened(journal, sym, source):
     from datetime import datetime, timezone
+
     from ops import events
     journal.record_event(events.KIND_POSITION_OPENED, events.position_opened_payload(
         symbol=sym, source=source,
@@ -590,6 +591,7 @@ def test_cooldown_boundary_uses_et_trading_day_start_not_utc_midnight():
     old UTC-midnight boundary (2026-07-07T00:00:00Z) would have wrongly
     included it."""
     import json
+
     from ops.config import OpsConfig
 
     journal = _make_journal()

@@ -17,7 +17,6 @@ already used for cloud models that reject tool_choice — so structured output
 keeps working, just without the rejected parameter.
 """
 
-import os
 
 import pytest
 from pydantic import BaseModel

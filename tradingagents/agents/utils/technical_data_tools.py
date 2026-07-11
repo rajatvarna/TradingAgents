@@ -48,9 +48,9 @@ def get_technical_indicators(
         df = add_all_ta_features(
             df, open="Open", high="High", low="Low", close="Close", volume="Volume", fillna=True
         )
-        
+
         last_row = df.iloc[-1]
-        
+
         report = f"### Technical Indicators for {ticker} as of {curr_date}\n\n"
         report += f"- **Close Price**: {last_row['Close']:.2f}\n"
         report += f"- **RSI (14)**: {last_row['momentum_rsi']:.2f} (Over 70 is overbought, under 30 is oversold)\n"
@@ -60,7 +60,7 @@ def get_technical_indicators(
         report += f"- **ADX (Trend Strength)**: {last_row['trend_adx']:.2f}\n"
         report += f"- **CCI (Commodity Channel Index)**: {last_row['trend_cci']:.2f}\n"
         report += f"- **OBV (On-Balance Volume)**: {last_row['volume_obv']:.0f}\n"
-        
+
         return report
     except Exception as e:
         logger.error(f"Error computing technical indicators: {e}")

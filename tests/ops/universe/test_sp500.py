@@ -2,8 +2,6 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import pytest
-
 from ops.universe.sp500 import _default_cache_path, load_sp500_members
 
 

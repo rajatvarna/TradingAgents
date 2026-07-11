@@ -1,9 +1,7 @@
-import json
 from datetime import date
 from decimal import Decimal
 from unittest.mock import patch
 
-import pytest
 from click.testing import CliRunner
 
 from ops.cli import cli

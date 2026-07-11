@@ -1,6 +1,8 @@
 from decimal import Decimal
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pytest
+
 from ops.quotes import make_yfinance_quote_source
 
 

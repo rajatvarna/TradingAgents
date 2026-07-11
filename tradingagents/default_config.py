@@ -1,4 +1,5 @@
 import os
+
 from tradingagents.metrics_config import DEFAULT_METRICS_CONFIG
 
 INVESTMENT_HORIZONS = {
@@ -51,7 +52,6 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_OUTCOME_HOLDING_DAYS":        "outcome_holding_days",
     "TRADINGAGENTS_STATE_COMPRESSION_ENABLED":  "state_compression_enabled",
     "TRADINGAGENTS_TRADER_TOOLS_ENABLED":       "trader_tools_enabled",
-    "TRADINGAGENTS_LLM_MAX_RETRIES":             "llm_max_retries",
     # Provider-specific reasoning/thinking knobs (None = each provider's own
     # default). Settable here for non-interactive runs; the CLI also offers an
     # interactive choice, which is skipped when the matching var is set.
@@ -197,7 +197,6 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # Supported llm_provider values (see also CLI and factory):
     # openai, google, anthropic, xai, deepseek, kimi, qwen, qwen-cn, glm, glm-cn,
     # minimax, minimax-cn, openrouter, deepinfra, github_copilot, ollama, bedrock, azure
-    "llm_max_retries": None,
     "llm_provider": "google",
     "deep_think_llm": "gemini-2.5-pro",
     "quick_think_llm": "gemini-2.5-flash-lite",
@@ -215,7 +214,6 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # base_client.apply_determinism_kwargs.
     "llm_temperature": 0.0,
     "llm_seed": 42,
-    "temperature": None,
     # When None, each provider's client falls back to its own default endpoint
     # (api.openai.com for OpenAI, generativelanguage.googleapis.com for Gemini, ...).
     # The CLI overrides this per provider when the user picks one. Keeping a

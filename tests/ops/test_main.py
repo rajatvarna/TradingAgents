@@ -402,6 +402,7 @@ def test_daily_summary_job_callable_does_not_name_error(tmp_path):
     registered job callable must be invokable with only the arguments the
     scheduler gives it (none)."""
     from unittest.mock import MagicMock
+
     from ops.main import _start_full_scheduler
 
     orchestrator = MagicMock()

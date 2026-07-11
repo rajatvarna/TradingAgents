@@ -1,9 +1,10 @@
 import pytest
+
 from tradingagents.graph.analyst_execution import (
     AnalystWallTimeTracker,
     build_analyst_execution_plan,
-    sync_analyst_tracker_from_chunk,
     get_initial_analyst_node,
+    sync_analyst_tracker_from_chunk,
 )
 
 

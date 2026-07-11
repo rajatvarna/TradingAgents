@@ -37,10 +37,10 @@ def fetch_twitter_posts(
             except json.JSONDecodeError:
                 logger.warning("opencli twitter search returned invalid JSON: %s", res.stdout)
                 return f"<no Twitter posts found mentioning {ticker.upper()} (invalid JSON)>"
-                
+
             if not posts:
                 return f"<no Twitter posts found mentioning {ticker.upper()}>"
-            
+
             blocks = []
             blocks.append(f"Twitter — {len(posts)} recent posts mentioning {ticker.upper()}:")
             for p in posts:
@@ -49,7 +49,7 @@ def fetch_twitter_posts(
                 retweets = p.get("retweets") or 0
                 views = p.get("views") or 0
                 created = p.get("created_at")
-                
+
                 meta = str(created)
                 if score is not None:
                     meta += f" · {score:>4}♥"
@@ -57,12 +57,12 @@ def fetch_twitter_posts(
                     meta += f" · {retweets:>3}RT"
                 if views:
                     meta += f" · {views}👁"
-                    
+
                 if len(text) > 240:
                     text = text[:240] + "…"
                 author = p.get("author") or "user"
                 blocks.append(f"  [{meta}] {author}: {text}")
-                
+
             return "\n".join(blocks)
         else:
             logger.warning("opencli twitter search failed: %s", res.stderr)

@@ -94,7 +94,7 @@ def _build_quarterly_history(tk) -> list:  # noqa: ANN001
     for i, col in enumerate(dates):
         period_end = col.strftime("%Y-%m-%d") if hasattr(col, "strftime") else str(col)
 
-        def _row(df, *names):
+        def _row(df, *names, col=col):
             for n in names:
                 try:
                     v = df.loc[n, col]
@@ -164,7 +164,7 @@ def _build_annual_history(tk) -> list:
     for i, col in enumerate(dates):
         fy = col.year if hasattr(col, "year") else int(str(col)[:4])
 
-        def _row(*names):
+        def _row(*names, col=col):
             for n in names:
                 try:
                     v = float(af.loc[n, col])

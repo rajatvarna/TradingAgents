@@ -12,6 +12,7 @@ the event-loop isolation in _call_tool vs. the SDK's transport lifecycle.
 """
 import os
 from decimal import Decimal
+
 import pytest
 
 from ops.broker.mcp_client import RealRobinhoodMCPClient

@@ -1,6 +1,9 @@
 from decimal import Decimal
+
 import pytest
-from ops.broker.types import Order, Side, OrderType, Position
+
+from ops.broker.types import Order, OrderType, Position, Side
+
 
 def test_order_is_frozen():
     o = Order(

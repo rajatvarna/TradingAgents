@@ -1,8 +1,8 @@
 from datetime import date
 from decimal import Decimal
 
-from ops.config import OpsConfig
 from ops.broker.types import Position
+from ops.config import OpsConfig
 from ops.exits import evaluate_exits
 from ops.universe.momentum import SMA_WINDOW, MomentumHit
 

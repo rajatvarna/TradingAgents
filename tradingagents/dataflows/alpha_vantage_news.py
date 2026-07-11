@@ -9,7 +9,6 @@ from .alpha_vantage_common import _make_api_request, format_datetime_for_api
 from .snapshots import GLOBAL_SCOPE, snapshot
 
 
-
 def _format_score(value: Any) -> str:
     try:
         return f"{float(value):.3f}"

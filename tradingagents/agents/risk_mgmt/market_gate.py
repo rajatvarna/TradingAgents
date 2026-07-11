@@ -9,8 +9,8 @@ Resolves: https://github.com/TauricResearch/TradingAgents/issues/514
 
 import json
 import logging
-from urllib.request import urlopen, Request
 from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 logger = logging.getLogger(__name__)
 

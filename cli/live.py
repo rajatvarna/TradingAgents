@@ -13,6 +13,7 @@ Extracted from cli/main.py to separate concerns:
 import time
 from collections import deque
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from rich import box
 from rich.layout import Layout
@@ -24,7 +25,6 @@ from rich.text import Text
 
 from tradingagents.graph.analyst_execution import sync_analyst_tracker_from_chunk
 
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from tradingagents.metrics_config import MetricsConfig
 
@@ -143,7 +143,7 @@ class AgentStatusTracker:
 
     # ---- Stream-driven analyst state machine ----
 
-    def update_from_analyst_stream(self, chunk: dict, report_builder: "ReportBuilder",
+    def update_from_analyst_stream(self, chunk: dict, report_builder: ReportBuilder,
                                    wall_time_tracker=None):
         """Advance analyst statuses based on a new stream chunk.
 
@@ -258,7 +258,7 @@ class ReportBuilder:
         self.current_report: str | None = None
         self.final_report: str | None = None
         self.selected_analysts: list[str] = []
-        from tradingagents.metrics_config import DEFAULT_METRICS_CONFIG, MetricsConfig
+        from tradingagents.metrics_config import DEFAULT_METRICS_CONFIG
         self.metrics_config: MetricsConfig = DEFAULT_METRICS_CONFIG
 
     def init_for_analysis(self, selected_analysts: list[str], metrics_config: MetricsConfig | None = None):

@@ -12,8 +12,7 @@ import logging
 import signal
 import sqlite3
 import time
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FuturesTimeout
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
 from tradingagents.orchestrator import queue_store
 from tradingagents.orchestrator.dispatch import dispatch

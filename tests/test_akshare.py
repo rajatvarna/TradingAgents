@@ -1,17 +1,16 @@
 # tests/test_akshare.py
 import unittest
 from unittest import mock
+
 import pandas as pd
 import pytest
 
 from tradingagents.dataflows.akshare_stock import (
     _normalize_a_share,
-    get_stock_data,
-    get_fundamentals,
     get_balance_sheet,
-    get_cashflow,
-    get_income_statement,
+    get_fundamentals,
     get_insider_transactions,
+    get_stock_data,
 )
 from tradingagents.dataflows.errors import NoMarketDataError
 

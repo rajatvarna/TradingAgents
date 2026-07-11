@@ -4,7 +4,6 @@ import pytest
 
 from tradingagents.valuation.financial_model import (
     FinancialModel,
-    ProjectionYear,
     build_financial_model,
     format_financial_model,
 )

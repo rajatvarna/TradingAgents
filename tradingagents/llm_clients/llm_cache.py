@@ -56,7 +56,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.messages import AIMessage
 
@@ -235,7 +235,7 @@ class LLMResponseCache:
 
     # -- public API ---------------------------------------------------------
 
-    def get(self, key: str) -> Optional[AIMessage]:
+    def get(self, key: str) -> AIMessage | None:
         """Look up *key*.
 
         Returns the cached ``AIMessage`` or ``None`` on miss/expiry/corruption
@@ -359,10 +359,10 @@ class LLMResponseCache:
 # respects the standard ``TRADINGAGENTS_*`` env‑var override chain.
 # ---------------------------------------------------------------------------
 
-_cache: Optional[LLMResponseCache] = None
+_cache: LLMResponseCache | None = None
 """Module‑level singleton. Initialised lazily on first use."""
 
-_config: Optional[dict] = None
+_config: dict | None = None
 """Module‑level config cache. Initialised lazily to avoid circular imports."""
 
 
@@ -374,7 +374,7 @@ def _get_config() -> dict[str, Any]:
     return _config
 
 
-def _get_cache() -> Optional[LLMResponseCache]:
+def _get_cache() -> LLMResponseCache | None:
     """Return the singleton cache instance, or ``None`` if caching is disabled."""
     global _cache
     cfg = _get_config()
@@ -405,7 +405,7 @@ def check_cache(
     model: str,
     messages: Any,
     **kwargs: Any,
-) -> Optional[AIMessage]:
+) -> AIMessage | None:
     """Look up a cached response.
 
     *messages* is the raw ``invoke`` input (list, string, PromptValue, …).

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import pytest
+
 from tradingagents.dataflows.yfinance_news import _extract_article_data
+
 
 @pytest.mark.unit
 def test_extract_article_data_no_truncation():

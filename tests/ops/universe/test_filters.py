@@ -1,9 +1,6 @@
-import sys
 import types
 from decimal import Decimal
 from unittest.mock import MagicMock
-
-import pytest
 
 from ops.universe.filters import apply_deny_list, apply_liquidity_filter
 
@@ -71,6 +68,7 @@ def test_fetch_normalises_nan_values_via_safe_decimal(monkeypatch):
     """NaN values in the historical data must NOT produce Decimal('NaN')
     (which would silently pass any comparison in the liquidity filter)."""
     import math
+
     from ops.universe.filters import fetch_price_and_adv_from_yfinance
     _fake_yf_module(monkeypatch, {
         "Close":  [100.0, math.nan, 120.0],

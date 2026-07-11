@@ -10,7 +10,7 @@ Before starting any work, ask: *"Would the upstream maintainers accept this?"* I
 
 ## Environment
 
-- **Python:** 3.10+ (`.venv/` at project root; this repo runs on 3.13 locally)
+- **Python:** 3.11+ (`.venv/` at project root; this repo runs on 3.13 locally)
 - **Activate:** `source .venv/bin/activate`
 - **Install (editable):** `pip install -e .`
 - **Test runner:** `python -m pytest` (pytest not in `pyproject.toml`; install separately)
@@ -57,7 +57,7 @@ One branch = one PR. Keep branches small and focused — upstream reviewers pref
 - [ ] Branch is up to date with `upstream/main`
 - [ ] All unit tests pass: `python -m pytest -m unit -v`
 - [ ] New behaviour is covered by a unit test marked `@pytest.mark.unit`
-- [ ] Python 3.10 compatibility maintained (no 3.11+ syntax)
+- [ ] Python 3.11 compatibility maintained (no 3.12+ syntax)
 - [ ] No secrets or `.env` values committed
 - [ ] `CHANGELOG.md` updated under the `[Unreleased]` section (Added / Changed / Fixed / Removed)
 - [ ] Commit messages follow Conventional Commits (see below)
@@ -150,5 +150,5 @@ Keep the PR description focused on *why* the change is needed, not just what it 
 - Changes that add personal/organisation-specific workflows without broader use
 - New LLM providers without tests and documentation
 - Large refactors without prior discussion in a GitHub issue
-- Code that breaks Python 3.10 compatibility
+- Code that breaks Python 3.11 compatibility
 - Hardcoded paths, credentials, or non-`~/.tradingagents/` cache locations

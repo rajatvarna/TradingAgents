@@ -7,7 +7,6 @@ from tradingagents.dataflows.interface import route_to_vendor
 from tradingagents.dataflows.run_cache import cached
 
 
-
 @tool
 @cached
 def get_news(

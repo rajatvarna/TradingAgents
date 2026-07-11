@@ -214,7 +214,6 @@ def _compute_base_pattern(df: pd.DataFrame, avg_vol_50: float) -> BasePattern:
     # Breakout = close within 5% above the consolidation high on volume
     pivot = round(high, 2)
     near_pivot = price >= pivot * 0.97 and price <= pivot * 1.10
-    price > pivot * 1.02
 
     # Detect breakout date: last time price crossed above the window high on heavy volume
     breakout_date = None

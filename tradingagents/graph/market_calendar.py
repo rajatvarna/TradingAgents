@@ -66,7 +66,7 @@ def _get_exchange_today(exchange: str) -> date:
         return datetime.now(tz).date()
     except Exception:
         # Fallback using crude offsets if zoneinfo database is absent/invalid (e.g. Windows without tzdata)
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
         now_utc = datetime.now(timezone.utc)
         exc_upper = exchange.upper()
         if exc_upper in ("NYSE", "NASDAQ"):
@@ -110,8 +110,6 @@ def nearest_trading_day(
             exchange_today.isoformat(),
         )
         d = exchange_today
-
-    original = d
 
     for _ in range(max_lookback_days):
         valid = _check_day(exchange, d)

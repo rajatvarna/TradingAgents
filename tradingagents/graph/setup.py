@@ -8,8 +8,8 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
 from tradingagents.agents import (
-    create_alternative_data_analyst,
     create_aggressive_debator,
+    create_alternative_data_analyst,
     create_bear_researcher,
     create_bull_researcher,
     create_conflict_detector,

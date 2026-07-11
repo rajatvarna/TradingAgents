@@ -1,25 +1,19 @@
 import datetime
-from typing import Optional
 import logging
 import os
 import socket
 import time
-from collections import deque
 from functools import wraps
 from pathlib import Path
 
 import typer
-from rich import box
 from rich.align import Align
 from rich.console import Console
-from rich.layout import Layout
 from rich.live import Live
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.rule import Rule
-from rich.spinner import Spinner
 from rich.table import Table
-from rich.text import Text
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.metrics_config import (
@@ -38,10 +32,9 @@ def _port_open(port: int) -> bool:
             return True
     except OSError:
         return False
-from cli.report_headings import transform as _prune_report_headings
 from cli.announcements import display_announcements, fetch_announcements
-from cli.stats_handler import StatsCallbackHandler
 from cli.chunk_ingest import ingest_chunk_messages
+from cli.stats_handler import StatsCallbackHandler
 from cli.utils import (
     ask_anthropic_effort,
     ask_gemini_thinking_config,
@@ -57,7 +50,6 @@ from cli.utils import (
     get_analysis_date,
     get_ticker,
     prompt_openai_compatible_url,
-    provider_default_url,
     resolve_backend_url,
     select_analysts,
     select_deep_thinking_agent,
@@ -89,7 +81,6 @@ from cli.live import (
     DisplayManager,
     MessageStore,
     ReportBuilder,
-    format_tool_args,
 )
 
 
@@ -415,7 +406,7 @@ def display_complete_report(final_state, metrics_config: MetricsConfig | None = 
             console.print(Panel(Markdown(risk["judge_decision"]), title="Portfolio Manager", border_style="blue", padding=(1, 2)))
 
 
-def update_research_team_status(status):
+def update_research_team_status(message_buffer, status):
     """Update status for research team members (not Trader)."""
     research_team = ["Bull Researcher", "Bear Researcher", "Research Manager"]
     for agent in research_team:
@@ -550,13 +541,6 @@ def classify_message_type(message) -> tuple[str, str | None]:
     # Fallback for unknown types
     return ("System", content)
 
-
-def format_tool_args(args, max_length=80) -> str:
-    """Format tool arguments for terminal display."""
-    result = str(args)
-    if len(result) > max_length:
-        return result[:max_length - 3] + "..."
-    return result
 
 def should_save_report(value: str | None) -> bool:
     """Return True when the user wants to save the report."""
@@ -942,7 +926,7 @@ def run_analysis(
             )
             console.print(f"\n[green]✓ Report saved to:[/green] {save_path.resolve()}")
             console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
-            console.print(f"  [dim]Run config:[/dim] run_config.md")
+            console.print("  [dim]Run config:[/dim] run_config.md")
 
             from tradingagents.reports.exporter import markdown_to_pdf
             pdf_path = save_path / "complete_report.pdf"
@@ -970,7 +954,7 @@ def analyze(
         "--clear-checkpoints",
         help="Delete all saved checkpoints before running (force fresh start).",
     ),
-    metrics: Optional[str] = typer.Option(
+    metrics: str | None = typer.Option(
         None,
         "--metrics",
         help="Comma-separated list of section.metric keys to include in reports. "
@@ -982,7 +966,7 @@ def analyze(
         "--list-metrics",
         help="List all available metric keys and exit.",
     ),
-    max_cost: Optional[float] = typer.Option(
+    max_cost: float | None = typer.Option(
         None,
         "--max-cost",
         help="Maximum estimated USD spend for this run. Aborts when exceeded.",
@@ -1001,7 +985,7 @@ def analyze(
             metrics_config = parse_metrics_flag(metrics)
         except ValueError as e:
             console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from e
 
     if clear_checkpoints:
         from tradingagents.graph.checkpointer import clear_all_checkpoints
@@ -1021,7 +1005,6 @@ def stats(
     from pathlib import Path
 
     from rich.console import Console
-    from rich.table import Table
 
     console = Console()
 
@@ -1065,7 +1048,7 @@ def stats(
         conn.close()
     except Exception as exc:
         console.print(f"[red]Failed to read database: {exc}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
     if not rows:
         console.print(f"[yellow]No run data found in the last {days} days.[/yellow]")

@@ -765,8 +765,8 @@ def _detect_classical_chart_patterns(
         last_lows = lows[-3:] if len(lows) >= 3 else lows[-2:]
         flat_resistance = _clustered([point.price for point in last_highs], 0.02)
         flat_support = _clustered([point.price for point in last_lows], 0.02)
-        rising_lows = all(b.price > a.price for a, b in zip(last_lows, last_lows[1:]))
-        falling_highs = all(b.price < a.price for a, b in zip(last_highs, last_highs[1:]))
+        rising_lows = all(b.price > a.price for a, b in zip(last_lows, last_lows[1:], strict=False))
+        falling_highs = all(b.price < a.price for a, b in zip(last_highs, last_highs[1:], strict=False))
 
         if flat_resistance and rising_lows:
             patterns.append(_pattern(
@@ -799,11 +799,11 @@ def _detect_classical_chart_patterns(
                 60,
             ))
         same_direction = (
-            all(b.price > a.price for a, b in zip(last_highs, last_highs[1:]))
+            all(b.price > a.price for a, b in zip(last_highs, last_highs[1:], strict=False))
             and rising_lows
         ) or (
             falling_highs
-            and all(b.price < a.price for a, b in zip(last_lows, last_lows[1:]))
+            and all(b.price < a.price for a, b in zip(last_lows, last_lows[1:], strict=False))
         )
         range_now = max(p.price for p in last_highs) - min(p.price for p in last_lows)
         range_prev = float(df["High"].tail(60).max() - df["Low"].tail(60).min())

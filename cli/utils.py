@@ -12,12 +12,8 @@ from tradingagents.llm_clients.oauth import (
     OAuthError,
     OAuthNotLoggedIn,
     OAuthTokenStore,
-    ensure_token,
-)
-from tradingagents.llm_clients.oauth import (
     available_models as oauth_available_models,
-)
-from tradingagents.llm_clients.oauth import (
+    ensure_token,
     login as oauth_login,
 )
 from tradingagents.llm_clients.url_validation import validate_custom_provider_base_url
@@ -623,7 +619,7 @@ def select_llm_provider() -> tuple[str, str | None]:
     ]
     default_choice = None
     if saved_provider:
-        for display, provider_key, url in PROVIDERS:
+        for _display, provider_key, url in PROVIDERS:
             if provider_key == saved_provider:
                 default_choice = (provider_key, url)
                 break
@@ -870,7 +866,6 @@ def ensure_api_key(provider: str) -> str | None:
     Returns None for providers that do not require a key (e.g. ollama)
     and for providers not found in the canonical mapping.
     """
-    from pathlib import Path
 
     from dotenv import find_dotenv, set_key
 

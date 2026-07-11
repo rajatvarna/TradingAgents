@@ -117,10 +117,7 @@ class ConditionalLogic:
                 )
             return True
 
-        if self._early_stop_investment_debate(state):
-            return True
-
-        return False
+        return bool(self._early_stop_investment_debate(state))
 
     def should_continue_after_aggressive_analyst(self, state: AgentState) -> str:
         """Determine the next node after the Aggressive Analyst."""
@@ -158,10 +155,7 @@ class ConditionalLogic:
         ):  # 3 * max_risk_discuss_rounds turns total (default 1 -> one per risk agent)
             return True
 
-        if self._early_stop_risk_debate(state):
-            return True
-
-        return False
+        return bool(self._early_stop_risk_debate(state))
 
     def _detect_consensus(self, text_a: str, text_b: str) -> bool:
         """Return True if both debate sides appear to have converged.

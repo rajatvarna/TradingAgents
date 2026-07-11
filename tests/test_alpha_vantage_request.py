@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 from unittest import mock
+
 import pytest
 
 from tradingagents.dataflows import alpha_vantage_common as av

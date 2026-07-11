@@ -3,8 +3,8 @@ API interface for querying and analyzing stock holdings.
 Provides the HoldingsAPI class and get_api_instance helper.
 """
 
-import os
 import json
+import os
 
 
 class HoldingsAPI:
@@ -19,7 +19,7 @@ class HoldingsAPI:
         """Load data from the JSON file."""
         if os.path.exists(self.filepath):
             try:
-                with open(self.filepath, "r", encoding="utf-8") as f:
+                with open(self.filepath, encoding="utf-8") as f:
                     self.data = json.load(f)
             except Exception:
                 self.data = {"holdings": [], "portfolio_summary": {}}

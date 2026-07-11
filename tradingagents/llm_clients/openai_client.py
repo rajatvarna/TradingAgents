@@ -1,10 +1,10 @@
+import json
 import logging
 import os
 import re
-import json
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 from langchain_core.messages import AIMessage
@@ -248,7 +248,7 @@ class KimiChatOpenAI(NormalizedChatOpenAI):
     def _get_request_payload(self, input_, *, stop=None, **kwargs):
         payload = super()._get_request_payload(input_, stop=stop, **kwargs)
         outgoing = payload.get("messages", [])
-        for message_dict, message in zip(outgoing, _input_to_messages(input_)):
+        for message_dict, message in zip(outgoing, _input_to_messages(input_), strict=False):
             if not isinstance(message, AIMessage):
                 continue
             reasoning = message.additional_kwargs.get("reasoning_content")
@@ -266,7 +266,7 @@ class KimiChatOpenAI(NormalizedChatOpenAI):
             )
         )
         for generation, choice in zip(
-            chat_result.generations, response_dict.get("choices", [])
+            chat_result.generations, response_dict.get("choices", []), strict=False
         ):
             reasoning = choice.get("message", {}).get("reasoning_content")
             if reasoning is not None:

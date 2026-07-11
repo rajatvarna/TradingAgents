@@ -28,6 +28,7 @@ from tradingagents.agents.utils.options_tools import (
     calculate_put_call_ratio,
     get_options_chain,
 )
+from tradingagents.agents.utils.prediction_markets_tools import get_prediction_markets
 from tradingagents.agents.utils.range_stats_tool import (
     get_range_stats,
 )
@@ -35,7 +36,6 @@ from tradingagents.agents.utils.technical_indicators_tools import get_indicators
 from tradingagents.agents.utils.trade_levels_tools import (
     suggest_trade_levels,
 )
-from tradingagents.agents.utils.prediction_markets_tools import get_prediction_markets
 
 __all__ = [
     "build_instrument_context",
@@ -536,6 +536,7 @@ def invoke_with_retry(chain, prompt):
 
 
 import re
+
 
 def strip_think_tags(text: str) -> str:
     """Strip <think>...</think> blocks and any stray </think> tags from model output."""

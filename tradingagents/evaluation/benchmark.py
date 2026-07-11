@@ -12,8 +12,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from statistics import mean, stdev
@@ -130,7 +128,7 @@ def _compute_consistency(runs: list[dict[str, Any]]) -> dict[str, Any]:
         "stdev": stdev(scores),
         "mean_absolute_deviation": mean(deviations),
         "all_ratings": ratings,
-        "all_same_rating": len(set(r.lower() for r in ratings if r)) <= 1,
+        "all_same_rating": len({r.lower() for r in ratings if r}) <= 1,
     }
 
 
@@ -257,7 +255,7 @@ def run_benchmark(
             "fraction_consistent": (consistent_keys / total_keys if total_keys > 0 else None),
             "total_keys": total_keys,
             "consistent_keys": consistent_keys,
-            "per_key": {k: v for k, v in consistency_by_key.items()},
+            "per_key": dict(consistency_by_key.items()),
         },
         "direction": directional,
         "score_distribution": _score_distribution(all_runs),

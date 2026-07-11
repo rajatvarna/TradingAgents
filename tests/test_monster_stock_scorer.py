@@ -52,7 +52,7 @@ def _make_deep_fundamentals(
     rev_growths=(40, 35, 30, 25),
     avg_dollar_vol=50_000_000,
 ) -> DeepFundamentals:
-    quarterly = [_make_quarterly(eg, rg) for eg, rg in zip(eps_growths, rev_growths)]
+    quarterly = [_make_quarterly(eg, rg) for eg, rg in zip(eps_growths, rev_growths, strict=True)]
     annual = [
         AnnualSnapshot(2024, 8.0, 25.0, 4e9, 20.0, None),
         AnnualSnapshot(2023, 6.4, 15.0, 3.3e9, 18.0, None),

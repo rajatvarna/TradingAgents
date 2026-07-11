@@ -56,7 +56,7 @@ def _extract_article_data(article: dict, max_summary_chars: int = 500) -> dict:
         if ts:
             with contextlib.suppress(ValueError, OSError, TypeError):
                 pub_date = datetime.fromtimestamp(ts)
-        
+
         summary = article.get("summary", "")
         if max_summary_chars > 0 and summary and len(summary) > max_summary_chars:
             first_para = summary.split('\n\n')[0]

@@ -1,12 +1,15 @@
 from decimal import Decimal
 from unittest.mock import MagicMock
-import pytest
-from ops.broker.types import Order, Side, OrderType, Position
+
+from ops.broker.types import Order, OrderType, Position, Side
 from ops.config import OpsConfig
 from ops.guardrails.base import RuleContext
 from ops.guardrails.sizing_rules import (
-    PerPositionCapRule, PerTradeDollarFloorRule,
-    MaxOpenPositionsRule, CashReserveRule, LiveMaxPositionRule,
+    CashReserveRule,
+    LiveMaxPositionRule,
+    MaxOpenPositionsRule,
+    PerPositionCapRule,
+    PerTradeDollarFloorRule,
 )
 
 

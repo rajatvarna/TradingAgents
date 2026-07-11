@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
+import socket
 import time
 import urllib.request
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
-import socket
 import pytest
 
 BASE_URL = "http://localhost:9000"

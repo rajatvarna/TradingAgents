@@ -54,7 +54,7 @@ try:
 except PackageNotFoundError:  # pragma: no cover - fallback when not installed
     __version__ = "0.0.0+unknown"
 
-from .spend_tracker import SpendTracker, BudgetExceededError, MODEL_PRICING, AuditEntry
+from .spend_tracker import MODEL_PRICING, AuditEntry, BudgetExceededError, SpendTracker
 
 __all__ = ["__version__", "SpendTracker", "BudgetExceededError", "MODEL_PRICING", "AuditEntry"]
 

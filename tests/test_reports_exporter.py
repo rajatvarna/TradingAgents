@@ -201,7 +201,6 @@ class TestMarkdownToPdf:
         old (broken) code were still in place, the segments would all
         land on a single line and the PDF would be 1 page regardless of
         input length."""
-        from fpdf import FPDF
 
         long_value = (
             "Manteniamo posizione rialzista su azienda con target di prezzo a 62.000, "

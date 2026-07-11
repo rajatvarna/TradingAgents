@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,7 @@ from tradingagents.agents.utils.agent_utils import (
     resolve_instrument_identity,
     resolve_risk_constraints,
 )
+from tradingagents.agents.utils.alternative_data_tools import get_youtube_sentiment
 from tradingagents.agents.utils.core_stock_tools import (
     get_atr_stop_suggestion,
     get_peer_performance,
@@ -47,14 +49,12 @@ from tradingagents.agents.utils.esg_data_tools import (
     get_esg_news,
     get_esg_scores,
 )
-from tradingagents.agents.utils.options_tools import get_options_data
-from tradingagents.agents.utils.technical_data_tools import get_technical_indicators
-from tradingagents.agents.utils.quant_data_tools import get_quantitative_metrics
-from tradingagents.agents.utils.alternative_data_tools import get_youtube_sentiment
 from tradingagents.agents.utils.memory import TradingMemoryLog
+from tradingagents.agents.utils.options_tools import get_options_data
+from tradingagents.agents.utils.quant_data_tools import get_quantitative_metrics
+from tradingagents.agents.utils.technical_data_tools import get_technical_indicators
 from tradingagents.dataflows.config import set_config
-from tradingagents.dataflows.run_cache import reset as reset_run_cache
-from tradingagents.dataflows.run_cache import stats as run_cache_stats
+from tradingagents.dataflows.run_cache import reset as reset_run_cache, stats as run_cache_stats
 from tradingagents.dataflows.symbol_utils import normalize_symbol
 from tradingagents.dataflows.utils import safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
@@ -182,6 +182,7 @@ class TradingAgentsGraph:
         user_callbacks = list(callbacks) if callbacks else []
         if self.config.get("audit_full_trace_enabled", True):
             import uuid
+
             from tradingagents.audit import TraceCallback
             audit_root = Path(
                 self.config.get("audit_dir") or Path.home() / ".tradingagents" / "audit"
@@ -484,7 +485,6 @@ class TradingAgentsGraph:
         actual_holding_days)`` or ``(None, None, None)`` if price data is
         unavailable (too recent, delisted, or network error).
         """
-        from tradingagents.dataflows.symbol_utils import normalize_symbol
         if benchmark is None:
             benchmark = self._resolve_benchmark(ticker)
         if holding_days is None:

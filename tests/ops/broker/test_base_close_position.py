@@ -1,5 +1,6 @@
 """Contract: Broker.close_position is abstract; concrete subclasses must implement."""
 from decimal import Decimal
+
 from ops.broker.base import Broker
 
 

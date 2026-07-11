@@ -1,13 +1,11 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
-import pytest
-
-from ops.reconcile import PositionDiff, ReconcileResult, reconcile, emit_reconcile_events
-from ops.journal import Journal
-from ops.broker.types import Order, OrderType, Side
 from ops import build_guarded_paper_broker
+from ops.broker.types import Order, OrderType, Side
 from ops.config import OpsConfig
+from ops.journal import Journal
+from ops.reconcile import PositionDiff, ReconcileResult, emit_reconcile_events, reconcile
 
 
 def _quote_source(prices):
@@ -62,8 +60,8 @@ def test_reconcile_paper_after_buy_no_diffs(tmp_path):
 
 def test_reconcile_live_diff_when_rh_has_extra_symbol(tmp_path):
     """Live broker reports an unjournaled position → PositionDiff kind extra_in_broker."""
-    from tests.ops.broker.fakes import FakeMCPClient
     from ops import build_guarded_robinhood_broker
+    from tests.ops.broker.fakes import FakeMCPClient
     j = Journal(str(tmp_path / "j.sqlite"))
     client = FakeMCPClient(cash=Decimal("500"))
     client.seed_position("NVDA", Decimal("1"), Decimal("500"))
@@ -82,8 +80,8 @@ def test_reconcile_live_diff_when_rh_has_extra_symbol(tmp_path):
 
 def test_reconcile_live_diff_when_journal_has_extra_symbol(tmp_path):
     """Journal says a position exists that RH doesn't → extra_in_journal."""
-    from tests.ops.broker.fakes import FakeMCPClient
     from ops import build_guarded_robinhood_broker
+    from tests.ops.broker.fakes import FakeMCPClient
     j = Journal(str(tmp_path / "j.sqlite"))
     ts = datetime(2026, 7, 2, tzinfo=timezone.utc)
     j.record_order(client_order_id="b-1", symbol="AAPL", side="BUY",
@@ -120,8 +118,8 @@ def test_reconcile_populates_positions_recovered_without_stops(tmp_path):
     """A live position with no matching journal BUY comes back with
     stop_loss_price=None from RobinhoodBroker.get_positions(); reconcile()
     must surface that symbol in positions_recovered_without_stops."""
-    from tests.ops.broker.fakes import FakeMCPClient
     from ops import build_guarded_robinhood_broker
+    from tests.ops.broker.fakes import FakeMCPClient
     j = Journal(str(tmp_path / "j.sqlite"))
     client = FakeMCPClient(cash=Decimal("500"))
     client.seed_position("NVDA", Decimal("1"), Decimal("500"))
@@ -153,8 +151,8 @@ def test_emit_reconcile_events_writes_positions_recovered_without_stops(tmp_path
 def test_reconcile_live_cash_drift_produces_diff(tmp_path):
     """Live mode: material cash drift (Robinhood withdrawal between sessions,
     say) surfaces as a __CASH__ PositionDiff so main.run's halt gate catches it."""
-    from tests.ops.broker.fakes import FakeMCPClient
     from ops import build_guarded_robinhood_broker
+    from tests.ops.broker.fakes import FakeMCPClient
 
     j = Journal(str(tmp_path / "j.sqlite"))
     # Journal is empty → replay cash = 0. FakeMCPClient reports live cash of $500.

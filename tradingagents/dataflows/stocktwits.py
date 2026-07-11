@@ -17,7 +17,6 @@ from __future__ import annotations
 import http.client
 import json
 import logging
-
 from urllib.request import Request, urlopen
 
 from .symbol_utils import crypto_base

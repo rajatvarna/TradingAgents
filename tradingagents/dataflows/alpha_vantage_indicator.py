@@ -2,7 +2,6 @@ from ._indicator_descriptions import INDICATOR_DESCRIPTIONS
 from .alpha_vantage_common import (
     AlphaVantageRateLimitError,
     AlphaVantageUnsupportedIndicatorError,
-    AlphaVantageNotConfiguredError,
     _make_api_request,
 )
 

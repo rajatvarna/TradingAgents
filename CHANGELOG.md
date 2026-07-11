@@ -21,6 +21,8 @@ Breaking changes within the 0.x line are called out explicitly.
 
 ### Fixed
 
+- Resolved all 295 pre-existing `ruff` lint violations (#23), including three real bugs: an undefined `message_buffer` reference in `cli/main.py`'s `update_research_team_status` (never called, so never triggered — now takes the buffer as a parameter), a dead comparison expression with no effect in `_compute_base_pattern` (`tradingagents/dataflows/technicals_deep.py`), and duplicate dict keys in `tradingagents/default_config.py` that silently shadowed earlier `_ENV_OVERRIDES` and `DEFAULT_CONFIG` entries. The rest were auto-fixed import/whitespace cleanup plus manual triage of `zip()` `strict=` parameters, a mutable default argument, missing `raise ... from`, and other style rules.
+
 - `TradingMemoryLog._row_to_dict`: `sqlite3.Row.__contains__` checks integer indexes, not column names, so `"meta" in row` always evaluated `False`, silently discarding every stored meta payload. Fixed to use `row.keys()` membership test.
 
 - **Portfolio-level risk budget** (`tradingagents/graph/risk_guardrails.py`): `GuardrailConfig` now accepts `max_portfolio_heat_pct` (default 20%) and `portfolio_positions` (list of existing open positions). When `risk_guardrails_enabled=True`, the guardrail checks total portfolio heat (sum of `position_pct × stop_loss_pct / 100` across all positions) and clamps new Buy/Overweight positions to keep aggregate heat within budget. `PortfolioPosition` dataclass added for type-safe position input. New config keys `max_portfolio_heat_pct` and `portfolio_positions` added to `DEFAULT_CONFIG`.

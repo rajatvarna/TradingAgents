@@ -1,7 +1,9 @@
-from datetime import datetime, timezone
 from ops.journal import Journal
 from ops.live_gate import (
-    record_flip_marker, flip_epoch, count_live_buy_fills, MARKER_KIND,
+    MARKER_KIND,
+    count_live_buy_fills,
+    flip_epoch,
+    record_flip_marker,
 )
 
 

@@ -9,7 +9,8 @@ Issue: https://github.com/TauricResearch/TradingAgents/issues/752
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 # Provider-specific reasoning keys: only render when set to avoid noise on
 # providers that don't expose the field (e.g. Ollama has no "thinking level").

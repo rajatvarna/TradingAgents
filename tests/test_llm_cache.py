@@ -27,7 +27,6 @@ from tradingagents.llm_clients.llm_cache import (
     _serialise_messages,
 )
 
-
 # ---------------------------------------------------------------------------
 # Unit tests — serialisation helpers
 # ---------------------------------------------------------------------------
@@ -397,6 +396,7 @@ class TestCacheEnvOverrides:
 
     def test_cache_enabled_default(self, monkeypatch) -> None:
         import importlib
+
         import tradingagents.default_config as dc_mod
         dc = importlib.reload(dc_mod)
         assert dc.DEFAULT_CONFIG["llm_cache_enabled"] is True
@@ -405,6 +405,7 @@ class TestCacheEnvOverrides:
 
     def test_cache_disabled_via_env(self, monkeypatch) -> None:
         import importlib
+
         import tradingagents.default_config as dc_mod
         for key in list(dc_mod._ENV_OVERRIDES):
             monkeypatch.delenv(key, raising=False)
@@ -414,6 +415,7 @@ class TestCacheEnvOverrides:
 
     def test_cache_ttl_via_env(self, monkeypatch) -> None:
         import importlib
+
         import tradingagents.default_config as dc_mod
         for key in list(dc_mod._ENV_OVERRIDES):
             monkeypatch.delenv(key, raising=False)
@@ -423,6 +425,7 @@ class TestCacheEnvOverrides:
 
     def test_cache_providers_via_env(self, monkeypatch) -> None:
         import importlib
+
         import tradingagents.default_config as dc_mod
         for key in list(dc_mod._ENV_OVERRIDES):
             monkeypatch.delenv(key, raising=False)

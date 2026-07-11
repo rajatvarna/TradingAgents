@@ -3,19 +3,15 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import MagicMock
 from uuid import uuid4
 
-import pytest
 from langchain_core.outputs import Generation, LLMResult
 
 from tradingagents.spend_tracker import (
-    MODEL_PRICING,
     _DEFAULT_PRICING,
-    AuditEntry,
+    MODEL_PRICING,
     BudgetExceededError,
     SpendTracker,
-    TokenRecord,
     _get_pricing,
 )
 

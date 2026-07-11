@@ -5,8 +5,7 @@ from unittest.mock import patch
 import pytest
 import requests
 
-from tradingagents.dataflows import config as config_module
-from tradingagents.dataflows import searxng
+from tradingagents.dataflows import config as config_module, searxng
 from tradingagents.dataflows.interface import route_to_vendor
 
 pytestmark = pytest.mark.unit

@@ -14,15 +14,15 @@ from tradingagents.valuation.reverse_dcf import (
 class TestReverseDcfGrowth:
     """Tests for the bisection-based reverse DCF solver."""
 
-    _BASE_KWARGS = dict(
-        revenue=1_000_000.0,
-        ebit_margin=0.20,
-        tax_rate=0.21,
-        wacc_val=0.10,
-        terminal_growth=0.025,
-        shares_outstanding=100.0,
-        net_debt=50_000.0,
-    )
+    _BASE_KWARGS = {
+        "revenue": 1_000_000.0,
+        "ebit_margin": 0.20,
+        "tax_rate": 0.21,
+        "wacc_val": 0.10,
+        "terminal_growth": 0.025,
+        "shares_outstanding": 100.0,
+        "net_debt": 50_000.0,
+    }
 
     def test_known_answer_roundtrip(self):
         """Compute IV at g=0.10, then reverse DCF should recover g≈0.10."""
@@ -109,15 +109,15 @@ class TestReverseDcfGrowth:
 class TestReverseDcfGrowthFadeToTerminal:
     """Tests for the fade_to_terminal multi-stage growth path option."""
 
-    _BASE_KWARGS = dict(
-        revenue=1_000_000.0,
-        ebit_margin=0.20,
-        tax_rate=0.21,
-        wacc_val=0.10,
-        terminal_growth=0.025,
-        shares_outstanding=100.0,
-        net_debt=50_000.0,
-    )
+    _BASE_KWARGS = {
+        "revenue": 1_000_000.0,
+        "ebit_margin": 0.20,
+        "tax_rate": 0.21,
+        "wacc_val": 0.10,
+        "terminal_growth": 0.025,
+        "shares_outstanding": 100.0,
+        "net_debt": 50_000.0,
+    }
 
     def test_fade_roundtrip_recovers_year1_growth(self):
         """Compute IV via a known fading path, then reverse DCF (fade mode)

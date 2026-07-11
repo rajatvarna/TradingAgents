@@ -1,12 +1,17 @@
 from decimal import Decimal
-import pytest
+
 from ops.broker.base import Broker
-from ops.broker.types import Order, Position, Side, OrderType
+from ops.broker.types import Order, OrderType, Position, Side
 from ops.config import OpsConfig
 from ops.guardrails.base import RuleContext
 from ops.guardrails.static_rules import (
-    DenyListRule, NoMarginRule, NoOptionsRule, NoCryptoRule,
-    LongOnlyRule, StopAttachedRule, FractionalSharesOnlyRule,
+    DenyListRule,
+    FractionalSharesOnlyRule,
+    LongOnlyRule,
+    NoCryptoRule,
+    NoMarginRule,
+    NoOptionsRule,
+    StopAttachedRule,
 )
 
 
@@ -44,20 +49,20 @@ def _ctx(order: Order, cfg: OpsConfig | None = None, broker: Broker | None = Non
 
 
 def _sell(symbol: str = "AAPL", **kwargs) -> Order:
-    defaults = dict(
-        client_order_id="c", symbol=symbol, side=Side.SELL,
-        notional_dollars=Decimal("50"), order_type=OrderType.MARKET,
-    )
+    defaults = {
+        "client_order_id": "c", "symbol": symbol, "side": Side.SELL,
+        "notional_dollars": Decimal("50"), "order_type": OrderType.MARKET,
+    }
     defaults.update(kwargs)
     return Order(**defaults)
 
 
 def _buy(symbol: str = "AAPL", **kwargs) -> Order:
-    defaults = dict(
-        client_order_id="c", symbol=symbol, side=Side.BUY,
-        notional_dollars=Decimal("25"), order_type=OrderType.MARKET,
-        stop_pct=Decimal("-0.08"),
-    )
+    defaults = {
+        "client_order_id": "c", "symbol": symbol, "side": Side.BUY,
+        "notional_dollars": Decimal("25"), "order_type": OrderType.MARKET,
+        "stop_pct": Decimal("-0.08"),
+    }
     defaults.update(kwargs)
     return Order(**defaults)
 

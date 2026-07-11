@@ -16,16 +16,16 @@ from tradingagents.valuation.sensitivity import (
 class TestSensitivityMatrix:
     """Tests for the 2D intrinsic-value grid."""
 
-    _BASE_KWARGS = dict(
-        revenue=1_000_000.0,
-        ebit_margin=0.20,
-        tax_rate=0.21,
-        terminal_growth=0.025,
-        shares_outstanding=100.0,
-        net_debt=50_000.0,
-        base_growth=0.08,
-        base_wacc=0.10,
-    )
+    _BASE_KWARGS = {
+        "revenue": 1_000_000.0,
+        "ebit_margin": 0.20,
+        "tax_rate": 0.21,
+        "terminal_growth": 0.025,
+        "shares_outstanding": 100.0,
+        "net_debt": 50_000.0,
+        "base_growth": 0.08,
+        "base_wacc": 0.10,
+    }
 
     def test_default_grid_5x5(self):
         """Default growth_steps and wacc_steps produce a 5×5 grid."""
@@ -143,16 +143,16 @@ class TestFormatSensitivityTable:
 class TestTornadoSensitivity:
     """Tests for single-variable tornado sensitivity."""
 
-    _BASE_KWARGS = dict(
-        revenue=1_000_000.0,
-        ebit_margin=0.20,
-        tax_rate=0.21,
-        terminal_growth=0.025,
-        shares_outstanding=100.0,
-        net_debt=50_000.0,
-        base_growth=0.08,
-        base_wacc=0.10,
-    )
+    _BASE_KWARGS = {
+        "revenue": 1_000_000.0,
+        "ebit_margin": 0.20,
+        "tax_rate": 0.21,
+        "terminal_growth": 0.025,
+        "shares_outstanding": 100.0,
+        "net_debt": 50_000.0,
+        "base_growth": 0.08,
+        "base_wacc": 0.10,
+    }
 
     def test_returns_four_rows(self):
         rows = tornado_sensitivity(**self._BASE_KWARGS)

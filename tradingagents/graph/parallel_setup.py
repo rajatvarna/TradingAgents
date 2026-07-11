@@ -55,7 +55,7 @@ class ParallelGraphSetup:
         self.conditional_logic = conditional_logic
 
     def setup_graph(
-        self, selected_analysts=["market", "social", "news", "fundamentals"]
+        self, selected_analysts=None
     ):
         """Set up agent workflow with parallel analyst execution.
 
@@ -66,6 +66,8 @@ class ParallelGraphSetup:
         but all analysts execute concurrently. A lightweight join node
         collects results and transitions to the debate phase.
         """
+        if selected_analysts is None:
+            selected_analysts = ["market", "social", "news", "fundamentals"]
         if len(selected_analysts) == 0:
             raise ValueError("Trading Agents Graph Setup Error: no analysts selected!")
 

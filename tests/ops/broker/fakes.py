@@ -1,12 +1,14 @@
 """Deterministic in-memory MCP client for unit tests."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from decimal import Decimal
 from uuid import uuid4
 
 from ops.broker.mcp_client import (
-    AccountInfo, MCPOrderAck, MCPPosition, MCPUnavailable, RobinhoodMCPClient,
+    AccountInfo,
+    MCPOrderAck,
+    MCPPosition,
+    MCPUnavailable,
 )
 from ops.broker.types import OrderType, Side
 

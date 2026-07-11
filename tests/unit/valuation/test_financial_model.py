@@ -4,7 +4,6 @@ import pytest
 
 from tradingagents.valuation.financial_model import (
     FinancialModel,
-    ProjectionYear,
     build_financial_model,
     format_financial_model,
 )
@@ -14,16 +13,16 @@ from tradingagents.valuation.financial_model import (
 class TestBuildFinancialModel:
     """Tests for the detailed financial model builder."""
 
-    _BASE_KWARGS = dict(
-        ticker="TEST",
-        revenue=1_000_000_000.0,  # $1B
-        ebit=200_000_000.0,  # $200M (20% margin)
-        tax_rate=0.21,
-        wacc_val=0.10,
-        terminal_growth=0.025,
-        shares_outstanding=100_000_000.0,  # 100M shares
-        net_debt=500_000_000.0,  # $500M
-    )
+    _BASE_KWARGS = {
+        "ticker": "TEST",
+        "revenue": 1_000_000_000.0,  # $1B
+        "ebit": 200_000_000.0,  # $200M (20% margin)
+        "tax_rate": 0.21,
+        "wacc_val": 0.10,
+        "terminal_growth": 0.025,
+        "shares_outstanding": 100_000_000.0,  # 100M shares
+        "net_debt": 500_000_000.0,  # $500M
+    }
 
     def test_returns_financial_model(self):
         model = build_financial_model(**self._BASE_KWARGS)

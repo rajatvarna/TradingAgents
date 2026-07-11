@@ -4,6 +4,7 @@ from typing import Annotated
 import pandas as pd
 import yfinance as yf
 from dateutil.relativedelta import relativedelta
+
 from ._indicator_descriptions import INDICATOR_DESCRIPTIONS
 from .point_in_time import historical_snapshot_caveat
 from .snapshots import snapshot

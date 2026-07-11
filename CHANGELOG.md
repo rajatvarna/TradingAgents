@@ -21,6 +21,9 @@ Breaking changes within the 0.x line are called out explicitly.
 
 ### Fixed
 
+- `ConditionalLogic` was missing the single-router `should_continue_debate` and `should_continue_risk_analysis` methods that `tests/test_risk_router_path_map.py` and `TestHighUncertaintyDebateRounds` exercise directly; added them as thin wrappers delegating to the existing per-role completeness checks, without changing graph wiring (`tradingagents/graph/conditional_logic.py`).
+- `tests/test_data_tool_wrappers.py`: `test_get_news` and `test_get_insider_transactions` asserted stale `route_to_vendor` call signatures (missing `max_summary_chars` for `get_news`, missing the trailing `curr_date` arg for `get_insider_transactions`) that were out of sync with the current `tradingagents/agents/utils/news_data_tools.py` implementation.
+
 - Resolved all 295 pre-existing `ruff` lint violations (#23), including three real bugs: an undefined `message_buffer` reference in `cli/main.py`'s `update_research_team_status` (never called, so never triggered — now takes the buffer as a parameter), a dead comparison expression with no effect in `_compute_base_pattern` (`tradingagents/dataflows/technicals_deep.py`), and duplicate dict keys in `tradingagents/default_config.py` that silently shadowed earlier `_ENV_OVERRIDES` and `DEFAULT_CONFIG` entries. The rest were auto-fixed import/whitespace cleanup plus manual triage of `zip()` `strict=` parameters, a mutable default argument, missing `raise ... from`, and other style rules.
 
 - `TradingMemoryLog._row_to_dict`: `sqlite3.Row.__contains__` checks integer indexes, not column names, so `"meta" in row` always evaluated `False`, silently discarding every stored meta payload. Fixed to use `row.keys()` membership test.

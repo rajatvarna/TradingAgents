@@ -76,6 +76,16 @@ def _format_forensic_context(fs: dict) -> str:
     if not fs or fs.get("composite_score") is None:
         return ""
 
+    if not fs.get("data_available", True):
+        narrative = fs.get("narrative_summary") or "Forensic accounting data unavailable for this ticker."
+        return (
+            "=== FORENSIC ACCOUNTING SCORE — EARNINGS QUALITY RED FLAGS ===\n"
+            f"DATA UNAVAILABLE: {narrative}\n"
+            "Do not treat this as a clean earnings-quality result — no forensic data could be fetched, "
+            "so proceed with the financial statements available to you and note the gap in your report.\n"
+            "=== END FORENSIC ACCOUNTING SCORE ===\n"
+        )
+
     def _cs(key: str) -> str:
         cs = fs.get(key) or {}
         score = cs.get("score")

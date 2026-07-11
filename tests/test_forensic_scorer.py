@@ -33,6 +33,52 @@ def test_score_forensics_empty_history_degrades_gracefully():
     assert score.composite_score == 40.0  # all criteria fall back to WARN(4)
     assert score.hard_blockers == []
     assert "unavailable" in score.narrative_summary
+    assert score.data_available is False
+
+
+@pytest.mark.unit
+def test_score_forensics_nonempty_history_sets_data_available_true():
+    score = score_forensics("AAPL", [_snap()])
+
+    assert score.data_available is True
+
+
+@pytest.mark.unit
+def test_score_forensics_missing_cf_ni_on_latest_quarter_uses_correct_snapshot():
+    # history[0] has no cf_ni_ratio (OCF missing); the negative ratio belongs
+    # to history[1]. The hard blocker must not misattribute it to the latest
+    # quarter's positive net income.
+    history = [
+        _snap(net_income=100.0, operating_cash_flow=None, cf_ni_ratio=None),
+        _snap(net_income=50.0, operating_cash_flow=-20.0, cf_ni_ratio=-0.4),
+        _snap(net_income=45.0, operating_cash_flow=40.0, cf_ni_ratio=0.9),
+        _snap(net_income=40.0, operating_cash_flow=38.0, cf_ni_ratio=0.95),
+    ]
+
+    score = score_forensics("EDGECO", history)
+
+    assert "positive net income with negative operating cash flow" not in " ".join(score.hard_blockers)
+
+
+@pytest.mark.unit
+def test_score_forensics_missing_dso_on_latest_quarters_uses_correct_snapshots():
+    # history[0] and history[1] have no dso_days; the real DSO trend is
+    # between history[2] and history[4]. revenue_growing must compare the
+    # same snapshots the DSO values come from, not history[0]/history[4].
+    history = [
+        _snap(dso_days=None, revenue=100.0),
+        _snap(dso_days=None, revenue=100.0),
+        _snap(dso_days=30.0, revenue=90.0),
+        _snap(dso_days=25.0, revenue=80.0),
+        _snap(dso_days=15.0, revenue=50.0),
+    ]
+
+    score = score_forensics("ALIGNCO", history)
+
+    # DSO rose from 15 -> 30 (100%) while revenue over the *same* snapshots
+    # (50 -> 90) also grew, so this should fail as channel stuffing —
+    # not be silently computed against the wrong (unfiltered) revenue pair.
+    assert score.receivables_quality_score.pass_fail == "FAIL"
 
 
 @pytest.mark.unit

@@ -14,6 +14,7 @@ degrades to None rather than crashing the scoring pipeline.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass
@@ -58,8 +59,15 @@ def _row(df, col, *names):
     return None
 
 
-def _build_forensic_history(tk, periods: int = 8) -> list:  # noqa: ANN001
-    """Build up to `periods` quarters of forensic snapshots from yfinance."""
+def _build_forensic_history(tk, trade_date: str | None = None, periods: int = 8) -> list:  # noqa: ANN001
+    """Build up to `periods` quarters of forensic snapshots from yfinance.
+
+    When `trade_date` is given, quarters whose period-end date falls after it
+    are dropped so a backtest cannot see financial statements for a quarter
+    that had not yet closed as of the simulated trade date. This does not
+    account for reporting lag (statements are typically filed weeks after
+    period end) — it only prevents the worst case of using unclosed quarters.
+    """
     try:
         qf = tk.quarterly_financials
         qcf = tk.quarterly_cashflow
@@ -67,10 +75,25 @@ def _build_forensic_history(tk, periods: int = 8) -> list:  # noqa: ANN001
     except Exception:
         return []
 
+    cutoff = None
+    if trade_date:
+        try:
+            cutoff = datetime.strptime(trade_date, "%Y-%m-%d")
+        except (TypeError, ValueError):
+            cutoff = None
+
     try:
-        dates = list(qf.columns[:periods])
+        all_dates = list(qf.columns)
     except Exception:
         return []
+
+    if cutoff is not None:
+        all_dates = [
+            c for c in all_dates
+            if not hasattr(c, "to_pydatetime") or c.to_pydatetime().replace(tzinfo=None) <= cutoff
+        ]
+
+    dates = all_dates[:periods]
 
     history = []
 
@@ -130,8 +153,14 @@ def _build_forensic_history(tk, periods: int = 8) -> list:  # noqa: ANN001
     return history
 
 
-def fetch_forensic_fundamentals(ticker: str) -> list:
+def fetch_forensic_fundamentals(ticker: str, trade_date: str | None = None) -> list:
     """Fetch and structure forensic fundamentals history for a single ticker.
+
+    Args:
+        ticker: Ticker symbol.
+        trade_date: Optional "YYYY-MM-DD" simulated trade date. When given,
+            quarters that had not yet closed as of this date are excluded
+            (see `_build_forensic_history` for the lookahead caveat).
 
     Returns a list of ForensicSnapshot, most recent quarter first, or an
     empty list if the data cannot be fetched (missing dependency, network
@@ -139,4 +168,4 @@ def fetch_forensic_fundamentals(ticker: str) -> list:
     """
     import yfinance as yf  # lazy import — keeps module importable without yfinance installed
     tk = yf.Ticker(ticker)
-    return _safe(lambda: _build_forensic_history(tk), [])
+    return _safe(lambda: _build_forensic_history(tk, trade_date=trade_date), [])

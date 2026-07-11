@@ -45,9 +45,17 @@ class ForensicScore:
     composite_grade: str
     hard_blockers: list
     narrative_summary: str
+    data_available: bool = True     # False when no forensic history could be fetched
 
     def to_prompt_context(self) -> str:
         """Render a structured block for injection into agent system prompts."""
+        if not self.data_available:
+            return f"""
+=== FORENSIC ACCOUNTING SCORE: {self.ticker} ===
+DATA UNAVAILABLE — {self.narrative_summary}
+The numeric scores below are neutral placeholders, not a genuine forensic assessment.
+=== END FORENSIC ACCOUNTING SCORE ===
+"""
         blockers_str = "\n".join(f"  ⛔ {b}" for b in self.hard_blockers) if self.hard_blockers else "  None"
         return f"""
 === FORENSIC ACCOUNTING SCORE: {self.ticker} ===
@@ -71,15 +79,17 @@ Summary:
 def _score_cf_ni_divergence(history: list[ForensicSnapshot]) -> CriterionScore:
     """Score cash flow / net income divergence across up to 4 quarters (0-10)."""
     w = WEIGHTS["forensic_cf_ni_divergence"]
-    ratios = [s.cf_ni_ratio for s in history[:4] if s.cf_ni_ratio is not None]
-    if not ratios:
+    snaps = [s for s in history[:4] if s.cf_ni_ratio is not None]
+    if not snaps:
         return CriterionScore("CF/NI Divergence", 4, w, "WARN", "OCF/NI ratio unavailable.")
+    ratios = [s.cf_ni_ratio for s in snaps]
 
     latest = ratios[0]
+    latest_snap = snaps[0]
     avg = sum(ratios) / len(ratios)
     sustained_low = all(r < 0.8 for r in ratios) if len(ratios) >= 2 else False
 
-    if latest < 0 and history[0].net_income is not None and history[0].net_income > 0:
+    if latest < 0 and latest_snap.net_income is not None and latest_snap.net_income > 0:
         return CriterionScore(
             "CF/NI Divergence", 0, w, "FAIL",
             f"Net income positive but operating cash flow negative (OCF/NI={latest:.2f}) — major red flag.",
@@ -137,17 +147,17 @@ def _score_accruals_quality(history: list[ForensicSnapshot]) -> CriterionScore:
 def _score_receivables_quality(history: list[ForensicSnapshot]) -> CriterionScore:
     """Score DSO trend vs revenue growth as a channel-stuffing check (0-10)."""
     w = WEIGHTS["forensic_receivables_quality"]
-    dso_vals = [s.dso_days for s in history[:5] if s.dso_days is not None]
-    if len(dso_vals) < 2:
+    dso_snaps = [s for s in history[:5] if s.dso_days is not None]
+    if len(dso_snaps) < 2:
         return CriterionScore("Receivables Quality", 4, w, "WARN", "Insufficient DSO history.")
 
-    latest, prior = dso_vals[0], dso_vals[-1]
+    latest, prior = dso_snaps[0].dso_days, dso_snaps[-1].dso_days
     dso_change_pct = ((latest - prior) / prior * 100) if prior else None
 
     revenue_growing = (
-        history[0].revenue is not None
-        and history[min(len(history) - 1, 4)].revenue is not None
-        and history[0].revenue > history[min(len(history) - 1, 4)].revenue
+        dso_snaps[0].revenue is not None
+        and dso_snaps[-1].revenue is not None
+        and dso_snaps[0].revenue > dso_snaps[-1].revenue
     )
 
     if dso_change_pct is None:
@@ -267,5 +277,6 @@ def score_forensics(ticker: str, history: list[ForensicSnapshot]) -> ForensicSco
         composite_score=round(composite, 1),
         composite_grade=grade,
         hard_blockers=hard_blockers,
+        data_available=bool(history),
         narrative_summary=narrative,
     )

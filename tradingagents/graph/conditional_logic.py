@@ -82,14 +82,19 @@ class ConditionalLogic:
             return "tools_derivatives"
         return "Msg Clear Derivatives"
 
-    def should_continue_debate(self, state: AgentState) -> str:
-        """Determine if debate should continue.
+    def should_continue_after_bull_researcher(self, state: AgentState) -> str:
+        """Determine the next node after the Bull Researcher."""
+        if self._investment_debate_is_complete(state):
+            return "Research Manager"
+        return "Bear Researcher"
 
-        When ``high_uncertainty`` is True (set by the Conflict Detector when
-        analyst signals diverge severely), the effective debate limit is raised
-        by one extra full round so the researchers can work through the
-        contradictions before the Research Manager decides.
-        """
+    def should_continue_after_bear_researcher(self, state: AgentState) -> str:
+        """Determine the next node after the Bear Researcher."""
+        if self._investment_debate_is_complete(state):
+            return "Research Manager"
+        return "Bull Researcher"
+
+    def _investment_debate_is_complete(self, state: AgentState) -> bool:
         inv = state["investment_debate_state"]
         high_uncertainty = bool(state.get("high_uncertainty", False))
         effective_max_rounds = self.max_debate_rounds + (1 if high_uncertainty else 0)
@@ -102,7 +107,7 @@ class ConditionalLogic:
                 "Debate consensus detected at round %d — exiting early",
                 inv["count"] // 2,
             )
-            return "Research Manager"
+            return True
 
         if inv["count"] >= 2 * effective_max_rounds:
             if high_uncertainty:
@@ -110,15 +115,32 @@ class ConditionalLogic:
                     "High-uncertainty extra debate round completed at round %d — handing off to Research Manager",
                     inv["count"] // 2,
                 )
-            return "Research Manager"
-        if self._early_stop_investment_debate(state):
-            return "Research Manager"
-        if state["investment_debate_state"]["current_response"].startswith("Bull"):
-            return "Bear Researcher"
-        return "Bull Researcher"
+            return True
 
-    def should_continue_risk_analysis(self, state: AgentState) -> str:
-        """Determine if risk analysis should continue."""
+        if self._early_stop_investment_debate(state):
+            return True
+
+        return False
+
+    def should_continue_after_aggressive_analyst(self, state: AgentState) -> str:
+        """Determine the next node after the Aggressive Analyst."""
+        if self._risk_analysis_is_complete(state):
+            return "Portfolio Manager"
+        return "Conservative Analyst"
+
+    def should_continue_after_conservative_analyst(self, state: AgentState) -> str:
+        """Determine the next node after the Conservative Analyst."""
+        if self._risk_analysis_is_complete(state):
+            return "Portfolio Manager"
+        return "Neutral Analyst"
+
+    def should_continue_after_neutral_analyst(self, state: AgentState) -> str:
+        """Determine the next node after the Neutral Analyst."""
+        if self._risk_analysis_is_complete(state):
+            return "Portfolio Manager"
+        return "Aggressive Analyst"
+
+    def _risk_analysis_is_complete(self, state: AgentState) -> bool:
         risk = state["risk_debate_state"]
         # Early exit if aggressive and conservative sides converged (at least 2 turns)
         if risk["count"] >= 2 and self._detect_consensus(
@@ -129,19 +151,17 @@ class ConditionalLogic:
                 "Risk debate consensus detected at round %d — exiting early",
                 risk["count"],
             )
-            return "Portfolio Manager"
+            return True
 
         if (
             state["risk_debate_state"]["count"] >= 3 * self.max_risk_discuss_rounds
         ):  # 3 * max_risk_discuss_rounds turns total (default 1 -> one per risk agent)
-            return "Portfolio Manager"
+            return True
+
         if self._early_stop_risk_debate(state):
-            return "Portfolio Manager"
-        if state["risk_debate_state"]["latest_speaker"].startswith("Aggressive"):
-            return "Conservative Analyst"
-        if state["risk_debate_state"]["latest_speaker"].startswith("Conservative"):
-            return "Neutral Analyst"
-        return "Aggressive Analyst"
+            return True
+
+        return False
 
     def _detect_consensus(self, text_a: str, text_b: str) -> bool:
         """Return True if both debate sides appear to have converged.

@@ -158,7 +158,7 @@ class ParallelGraphSetup:
 
         workflow.add_conditional_edges(
             "Bull Researcher",
-            self.conditional_logic.should_continue_debate,
+            self.conditional_logic.should_continue_after_bull_researcher,
             {
                 "Bear Researcher": "Bear Researcher",
                 "Research Manager": "Research Manager",
@@ -166,7 +166,7 @@ class ParallelGraphSetup:
         )
         workflow.add_conditional_edges(
             "Bear Researcher",
-            self.conditional_logic.should_continue_debate,
+            self.conditional_logic.should_continue_after_bear_researcher,
             {
                 "Bull Researcher": "Bull Researcher",
                 "Research Manager": "Research Manager",
@@ -176,7 +176,7 @@ class ParallelGraphSetup:
         workflow.add_edge("Trader", "Aggressive Analyst")
         workflow.add_conditional_edges(
             "Aggressive Analyst",
-            self.conditional_logic.should_continue_risk_analysis,
+            self.conditional_logic.should_continue_after_aggressive_analyst,
             {
                 "Conservative Analyst": "Conservative Analyst",
                 "Portfolio Manager": "Portfolio Manager",
@@ -184,7 +184,7 @@ class ParallelGraphSetup:
         )
         workflow.add_conditional_edges(
             "Conservative Analyst",
-            self.conditional_logic.should_continue_risk_analysis,
+            self.conditional_logic.should_continue_after_conservative_analyst,
             {
                 "Neutral Analyst": "Neutral Analyst",
                 "Portfolio Manager": "Portfolio Manager",
@@ -192,7 +192,7 @@ class ParallelGraphSetup:
         )
         workflow.add_conditional_edges(
             "Neutral Analyst",
-            self.conditional_logic.should_continue_risk_analysis,
+            self.conditional_logic.should_continue_after_neutral_analyst,
             {
                 "Aggressive Analyst": "Aggressive Analyst",
                 "Portfolio Manager": "Portfolio Manager",

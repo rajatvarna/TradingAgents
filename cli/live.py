@@ -196,6 +196,7 @@ class MessageStore:
         self.messages: deque = deque(maxlen=max_length)
         self.tool_calls: deque = deque(maxlen=max_length)
         self._processed_message_ids: set[str] = set()
+        self._processed_message_fingerprints: set = set()
 
     def add_message(self, message_type: str, content: str):
         """Append a timestamped message entry."""
@@ -217,6 +218,7 @@ class MessageStore:
         self.messages.clear()
         self.tool_calls.clear()
         self._processed_message_ids.clear()
+        self._processed_message_fingerprints.clear()
 
 
 # ---------------------------------------------------------------------------

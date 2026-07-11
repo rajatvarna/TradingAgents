@@ -358,19 +358,23 @@ class GraphSetup:
         workflow.add_edge("Conflict Detector", "State Compressor Pre-Debate")
         workflow.add_edge("State Compressor Pre-Debate", "Bull Researcher")
 
-        # Both research-debate edges share the complete DEBATE_PATH_MAP (#1088).
-        for debate_node in ("Bull Researcher", "Bear Researcher"):
-            workflow.add_conditional_edges(
-                debate_node,
-                self.conditional_logic.should_continue_debate,
-                DEBATE_PATH_MAP,
-            )
+        # Both research-debate edges use node-specific routers (#1092).
+        workflow.add_conditional_edges(
+            "Bull Researcher",
+            self.conditional_logic.should_continue_after_bull_researcher,
+            DEBATE_PATH_MAP,
+        )
+        workflow.add_conditional_edges(
+            "Bear Researcher",
+            self.conditional_logic.should_continue_after_bear_researcher,
+            DEBATE_PATH_MAP,
+        )
 
         workflow.add_edge("Research Manager", "State Compressor Pre-Trader")
         workflow.add_edge("State Compressor Pre-Trader", "Trader")
         workflow.add_edge("Trader", "Aggressive Analyst")
 
-        # All three risk edges share the complete RISK_ANALYSIS_PATH_MAP (#1088).
+        # All three risk edges use node-specific routers (#1092).
         risk_path_map = dict(RISK_ANALYSIS_PATH_MAP)
         if self.config.get("use_market_gate", True):
             from tradingagents.agents.risk_mgmt.market_gate import create_market_gate
@@ -378,12 +382,21 @@ class GraphSetup:
             workflow.add_edge("Market Gate", "Portfolio Manager")
             risk_path_map["Portfolio Manager"] = "Market Gate"
 
-        for risk_node in ("Aggressive Analyst", "Conservative Analyst", "Neutral Analyst"):
-            workflow.add_conditional_edges(
-                risk_node,
-                self.conditional_logic.should_continue_risk_analysis,
-                risk_path_map,
-            )
+        workflow.add_conditional_edges(
+            "Aggressive Analyst",
+            self.conditional_logic.should_continue_after_aggressive_analyst,
+            risk_path_map,
+        )
+        workflow.add_conditional_edges(
+            "Conservative Analyst",
+            self.conditional_logic.should_continue_after_conservative_analyst,
+            risk_path_map,
+        )
+        workflow.add_conditional_edges(
+            "Neutral Analyst",
+            self.conditional_logic.should_continue_after_neutral_analyst,
+            risk_path_map,
+        )
 
         if run_recorder_node is not None:
             workflow.add_node("Run Recorder", run_recorder_node)

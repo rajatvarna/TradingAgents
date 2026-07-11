@@ -1,5 +1,6 @@
 from decimal import Decimal
 from unittest.mock import MagicMock
+import pytest
 from ops.broker.types import Order, Side, OrderType
 from ops.config import OpsConfig
 from ops.guardrails.base import RuleContext
@@ -10,7 +11,7 @@ def _buy_ctx(equity: str) -> RuleContext:
     o = Order(
         client_order_id="c", symbol="AAPL", side=Side.BUY,
         notional_dollars=Decimal("25"), order_type=OrderType.MARKET,
-        stop_loss_price=Decimal("184"),
+        stop_pct=Decimal("-0.08"),
     )
     b = MagicMock()
     b.get_equity.return_value = Decimal(equity)
@@ -39,7 +40,15 @@ def test_daily_drawdown_blocks_at_threshold():
 
 def test_daily_drawdown_does_not_block_sells():
     rule = DailyDrawdownRule(start_of_day_equity=lambda: Decimal("250"))
-    assert rule.check(_sell_ctx("200")).allowed is True
+    # Inline ctx with positive notional since drawdown rule short-circuits on side != BUY
+    o = Order(
+        client_order_id="c", symbol="AAPL", side=Side.SELL,
+        notional_dollars=Decimal("50"), order_type=OrderType.MARKET,
+    )
+    b = MagicMock()
+    b.get_equity.return_value = Decimal("200")
+    ctx = RuleContext(order=o, broker=b, config=OpsConfig())
+    assert rule.check(ctx).allowed is True
 
 
 def test_weekly_drawdown_allows_above_threshold():
@@ -54,4 +63,12 @@ def test_weekly_drawdown_blocks_at_threshold():
 
 def test_weekly_drawdown_blocks_sells_too():
     rule = WeeklyDrawdownRule(start_of_week_equity=lambda: Decimal("250"))
-    assert rule.check(_sell_ctx("200")).allowed is True
+    # Inline ctx with positive notional since drawdown rule short-circuits on side != BUY
+    o = Order(
+        client_order_id="c", symbol="AAPL", side=Side.SELL,
+        notional_dollars=Decimal("50"), order_type=OrderType.MARKET,
+    )
+    b = MagicMock()
+    b.get_equity.return_value = Decimal("200")
+    ctx = RuleContext(order=o, broker=b, config=OpsConfig())
+    assert rule.check(ctx).allowed is True

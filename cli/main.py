@@ -41,6 +41,7 @@ def _port_open(port: int) -> bool:
 from cli.report_headings import transform as _prune_report_headings
 from cli.announcements import display_announcements, fetch_announcements
 from cli.stats_handler import StatsCallbackHandler
+from cli.chunk_ingest import ingest_chunk_messages
 from cli.utils import (
     ask_anthropic_effort,
     ask_gemini_thinking_config,
@@ -813,24 +814,7 @@ def run_analysis(
         # the TUI render loop and stats callbacks intact.
         def render_chunk(chunk):
             """Process one graph output chunk and refresh the TUI display."""
-            # Process all messages in chunk, deduplicating by message ID
-            for message in chunk.get("messages", []):
-                msg_id = getattr(message, "id", None)
-                if msg_id is not None:
-                    if message_store.is_duplicate(msg_id):
-                        continue
-                    message_store.mark_processed(msg_id)
-
-                msg_type, content = classify_message_type(message)
-                if content and content.strip():
-                    message_store.add_message(msg_type, content)
-
-                if hasattr(message, "tool_calls") and message.tool_calls:
-                    for tool_call in message.tool_calls:
-                        if isinstance(tool_call, dict):
-                            message_store.add_tool_call(tool_call["name"], tool_call["args"])
-                        else:
-                            message_store.add_tool_call(tool_call.name, tool_call.args)
+            ingest_chunk_messages(message_store, chunk, classify_message_type)
 
             # Analyst status updates
             agent_tracker.update_from_analyst_stream(

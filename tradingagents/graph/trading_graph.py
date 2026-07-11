@@ -145,13 +145,13 @@ def _coerce_max_retries(value):
     than silently disabling retries.
     """
     if isinstance(value, bool):
-        raise ValueError(f"llm_max_retries must be an integer, not a boolean: {value!r}")
+        raise ValueError(f"llm_max_retries (TRADINGAGENTS_LLM_MAX_RETRIES) must be a non-negative integer, not a boolean: {value!r}")
     try:
         n = int(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"llm_max_retries must be an integer, got {value!r}") from exc
+        raise ValueError(f"llm_max_retries (TRADINGAGENTS_LLM_MAX_RETRIES) must be a non-negative integer, got {value!r}") from exc
     if n < 0:
-        raise ValueError(f"llm_max_retries must be >= 0, got {n}")
+        raise ValueError(f"llm_max_retries (TRADINGAGENTS_LLM_MAX_RETRIES) must be >= 0, got {n}")
     return n
 
 

@@ -28,6 +28,14 @@ class NoSuchPosition(BrokerError):
     pass
 
 
+class QuoteUnavailable(BrokerError):
+    """Raised when a quote source cannot return a price for a symbol
+    (e.g. yfinance is flaky, the ticker is delisted, network hiccup).
+    Because it inherits BrokerError, GuardedBroker's place_order catches it
+    and journals as order_rejected."""
+    pass
+
+
 class Broker(ABC):
     @abstractmethod
     def get_cash(self) -> Decimal: ...
@@ -43,3 +51,6 @@ class Broker(ABC):
 
     @abstractmethod
     def place_order(self, order: Order) -> Fill: ...
+
+    @abstractmethod
+    def close_position(self, symbol: str, *, client_order_id: str | None = None) -> Fill: ...

@@ -24,6 +24,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_QUICK_THINK_LLM":      "quick_think_llm",
     "TRADINGAGENTS_LLM_BACKEND_URL":      "backend_url",
     "TRADINGAGENTS_OUTPUT_LANGUAGE":      "output_language",
+    "TRADINGAGENTS_LLM_MAX_RETRIES":      "llm_max_retries",
     "TRADINGAGENTS_MAX_DEBATE_ROUNDS":    "max_debate_rounds",
     "TRADINGAGENTS_MAX_RISK_ROUNDS":      "max_risk_discuss_rounds",
     "TRADINGAGENTS_CHECKPOINT_ENABLED":   "checkpoint_enabled",
@@ -196,6 +197,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # Supported llm_provider values (see also CLI and factory):
     # openai, google, anthropic, xai, deepseek, kimi, qwen, qwen-cn, glm, glm-cn,
     # minimax, minimax-cn, openrouter, deepinfra, github_copilot, ollama, bedrock, azure
+    "llm_max_retries": None,
     "llm_provider": "google",
     "deep_think_llm": "gemini-2.5-pro",
     "quick_think_llm": "gemini-2.5-flash-lite",

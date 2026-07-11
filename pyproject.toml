@@ -75,6 +75,10 @@ scheduled = [
 webui = [
     "streamlit>=1.45.0",
 ]
+# Chat interface support. Install with: pip install "tradingagents[chat]"
+chat = [
+    "streamlit>=1.50",
+]
 akshare = [
     "akshare>=1.15.0",
 ]

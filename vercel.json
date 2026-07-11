@@ -1,0 +1,16 @@
+{
+  "name": "strattonoak",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "functions": {
+    "api/health.py": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "api/analyze.py": {
+      "memory": 2048,
+      "maxDuration": 300
+    }
+  }
+}

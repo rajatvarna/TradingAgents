@@ -27,7 +27,7 @@ jobs:
       - name: Install uv
         run: pip install uv
       - name: Install dependencies
-        run: uv pip install --system -e ".[dev,portfolio]"
+        run: uv pip install --system -e ".[dev,portfolio,scheduled]"
       - name: Run unit tests
         run: >
           python -m pytest -m unit -q --tb=short

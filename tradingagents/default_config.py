@@ -528,7 +528,7 @@ MONSTER_STOCK_METHODOLOGY_CONFIG: dict = {
     "evidence_enabled": True,
     "quant_anchor_enabled": True,
     "citation_verification_enabled": True,
-    "evidence_strict_mode": "warn",
+    "evidence_strict_mode": "block",
     "price_target_warn_multiple": 3.0,
     "price_target_block_multiple": 5.0,
 

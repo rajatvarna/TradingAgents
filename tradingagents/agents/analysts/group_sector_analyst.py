@@ -46,6 +46,10 @@ Your analysis MUST cover these five points:
 5. **ROTATION RISK** — Are any other sectors or groups showing early leadership
    rotation that could pull buying power away from this group?
 
+6. **CONFIDENCE & DISCONFIRMING EVIDENCE** — State your confidence in this rating
+   (low/medium/high) and name the single data point that would most quickly change it
+   (e.g. a specific leader breaking down, or a new leadership group emerging).
+
 CONCLUSION: Rate the group environment as:
 - **PASS**: Group is in top third, theme is confirmed, 3+ leaders acting well → supports the trade
 - **WARN**: Mixed signals — group partially leading or confirmation limited
@@ -101,7 +105,7 @@ def create_group_sector_analyst(llm):
         prompt_messages = [
             ("system", system_message),
             ("human", f"Analyze the group and sector environment for {ticker} as of {current_date}. "
-                      f"Provide a detailed group leadership assessment following the five-point framework above."),
+                      f"Provide a detailed group leadership assessment following the framework above."),
         ]
 
         from langchain_core.prompts import ChatPromptTemplate

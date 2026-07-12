@@ -66,6 +66,10 @@ Your analysis MUST cover:
 6. **2-4 WEEK OUTLOOK** — Provide a specific, actionable 2-4 week market outlook
    including key levels to watch on the Nasdaq and S&P 500.
 
+7. **CONFIDENCE & DISCONFIRMING EVIDENCE** — State your confidence in this assessment
+   (low/medium/high) and explicitly name the one piece of evidence that, if it changed,
+   would most quickly overturn this phase classification.
+
 IMPORTANT RULES FROM THE FRAMEWORK:
 - 5+ consecutive negative H/L/G sessions = significant warning, reduce exposure immediately
 - 7+ distribution days in 25 sessions = market likely in correction

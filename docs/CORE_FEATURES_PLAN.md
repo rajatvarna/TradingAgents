@@ -1,8 +1,36 @@
 # Core Features Implementation Plan
 
-**Status:** Proposed
+**Status:** In progress — Phase 0 revised after implementation research (see note below)
 **Last updated:** 2026-07-12
 **Scope:** The next set of core features for this fork, sequenced into three phases.
+
+> **Revision note (2026-07-12):** Sections 1 and 3 below (current-state
+> inventory and F1/F2) were written from a review that underestimated how
+> mature `ops/` already is. It turns out `ops/` is a full live-trading
+> daemon (`ops run`): a guarded broker abstraction (`GuardedBroker` + a rule
+> engine) with an event-sourced journal, startup reconciliation, a
+> position guardian with daily/weekly kill-switches, and a scheduled
+> scanner → strategy → order loop (`Orchestrator.tick()`) already wired to
+> Robinhood and an in-memory paper broker. Two corrections that changed
+> what got built:
+> - **F1 (Portfolio Engine) was dropped.** `GuardedBroker` + the event
+>   journal already *is* the portfolio state (positions, cash, P&L);
+>   building a second `tradingagents/portfolio/` store would have
+>   duplicated it.
+> - **F2 (Alpaca broker) was rescoped to fit the existing architecture.**
+>   Rather than a new order-approval queue/state-machine, Alpaca was added
+>   as a `Broker` implementation matching `RobinhoodBroker`'s pattern,
+>   reusing the existing rule engine and live-flip ritual as the
+>   human-in-the-loop gate. Implemented in `ops/broker/alpaca.py` — see
+>   `ops/README.md` for setup and `CHANGELOG.md` for the full change list.
+>
+> F3 (LLM budget cap) is revised similarly: a count-based
+> `daily_analysis_budget` already gates how many tickers get analyzed per
+> day (`ops/universe/composite.py`); F3 now adds a USD ledger on top of it
+> plus explicit next-day deferral for candidates either cap cuts (see
+> §3 F3 below, updated). F4 (scanner loop) is **already built** as
+> `ops run` / `Orchestrator.tick()` — no work needed there. F5 and F6 are
+> unaffected by this revision.
 
 This plan is grounded in a review of the current codebase and the approved
 [Hedge Management Platform Specification](HEDGE_PLATFORM_SPEC.md). It identifies
@@ -55,143 +83,133 @@ criteria. All new code follows existing repo conventions: lazy LLM imports,
 
 ## 3. Phase 0 — foundation for live operation
 
-### F1. Portfolio Engine (`tradingagents/portfolio/`)
+### F1. Portfolio Engine — DROPPED (superseded by existing `ops/broker` state)
 
-**Problem.** Every flow today is per-ticker. Portfolio-level logic exists only as
-fragments: `scripts/run_portfolio.py` (risk-parity weights in a research script),
-`portfolio_positions` config passed into `risk_guardrails.py` (caller must
-assemble the list by hand), `ops/guardrails/sizing_rules.py`, and
-`portfolio_advisor/` (a separate app with its own broker and scheduler). There is
-no single source of truth for "what do we hold, what is our cash, what should
-change today."
+**Original problem statement assumed no portfolio state existed.** It does:
+`GuardedBroker` (wrapping `PaperBroker`/`RobinhoodBroker`/`AlpacaBroker`) plus
+the event-sourced `ops/journal.py` already track positions, cash, cost basis,
+and fills, with `ops/reconcile.py` keeping that state honest against the real
+broker on every startup. `ops/strategy/post_earnings_momentum.py` already
+sizes new positions per-trade against current equity, and
+`ops/guardrails/sizing_rules.py` (`PerPositionCapRule`, `MaxOpenPositionsRule`,
+`CashReserveRule`) already enforces portfolio-level limits. Building a second,
+parallel `tradingagents/portfolio/` store as originally scoped would have
+duplicated this — dropped instead of implemented.
 
-**Design.** New package `tradingagents/portfolio/`:
-
-```
-tradingagents/portfolio/
-├── __init__.py
-├── state.py        # PortfolioState: positions, cash, cost basis, realized/unrealized PnL
-├── store.py        # SQLite persistence at ~/.tradingagents/portfolio/portfolio.db
-├── sizing.py       # target-weight computation: rating → weight, Kelly-capped,
-│                   # correlation-aware (lift logic from scripts/run_portfolio.py)
-├── rebalancer.py   # diff(current positions, target weights) → list[OrderIntent]
-└── types.py        # Position, OrderIntent, RebalancePlan dataclasses
-```
-
-Key decisions:
-
-- `PortfolioState` is loaded/saved through `store.py` only; brokers **sync into**
-  it (reconciliation) rather than being queried ad hoc. `ops/reconcile.py`
-  already contains reconciliation logic to migrate here.
-- `sizing.py` consumes the graph's final `structured_signal` (rating + confidence)
-  plus the existing Kelly guardrail
-  (`tradingagents/guardrails/position_sizing_guardrail.py`) so sizing and
-  guardrails share one code path.
-- `rebalancer.py` emits `OrderIntent` objects (symbol, side, qty, limit hint,
-  reason) — it never talks to a broker. Execution is F2's job.
-- Existing per-position risk budget (`max_portfolio_heat_pct` in
-  `risk_guardrails.py`) reads positions from `PortfolioState` instead of a
-  config-supplied list (config path kept as a fallback for backwards compat).
-
-**Config keys** (added to `DEFAULT_CONFIG`):
-`portfolio_enabled` (bool, default `False`), `portfolio_db_path` (default
-`~/.tradingagents/portfolio/portfolio.db`), `portfolio_max_positions`,
-`portfolio_min_cash_pct`, `portfolio_rebalance_band_pct` (no-trade band, default 2%).
-
-**Tests** (`tests/portfolio/`, all `@pytest.mark.unit`):
-state round-trip through SQLite; sizing respects Kelly cap and correlation
-penalty; rebalancer no-trade band; rebalancer never produces negative cash;
-reconciliation merges broker fills idempotently.
-
-**Acceptance criteria.** `python -m tradingagents.portfolio status` prints
-holdings/cash/PnL from the store; a graph run with `portfolio_enabled=True`
-appends a `RebalancePlan` to the run artifacts; all existing tests still pass
-with the feature off.
-
-**Estimated effort:** 4–6 days.
+**Remaining, non-duplicative gap (not yet built):** `PostEarningsMomentumStrategy`
+sizes every new position identically (`per_position_cap_pct` of equity) —
+it ignores correlation with current holdings. The research-side
+`tradingagents/experiments/portfolio.py::PortfolioCoordinator` already computes
+correlation-aware, risk-parity target weights, but only as a standalone script
+(`scripts/run_portfolio.py`), disconnected from `ops/strategy`. A future,
+narrower feature could wire that correlation-aware sizing into an alternate
+`Strategy` implementation — worth scoping separately if there's appetite, but
+out of scope for this plan.
 
 ---
 
-### F2. Alpaca broker adapter + order lifecycle (`ops/broker/alpaca.py`)
+### F2. Alpaca broker adapter — IMPLEMENTED, rescoped to fit `ops/broker`
 
-**Problem.** Spec decision #4 selects Alpaca (paper first, then live), but
-`ops/broker/` only implements `paper.py` and `robinhood.py`. There is also no
-order lifecycle: `base.py` submits and forgets — no states, no partial fills,
-no cancel/replace, no reconciliation loop.
+**Original problem statement** called for a new order-lifecycle state machine
+and a separate human-approval queue. Neither was needed: `ops/broker/base.py`'s
+`Broker` ABC plus `GuardedBroker`'s rule-chain evaluation, the event-sourced
+journal (order recorded before the fill, only a confirmed `filled` ack is ever
+journaled as a fill), and the existing **live-flip ritual** (`ops/main.py`,
+`_live_flip_ritual`) already provide order safety and a human-in-the-loop gate
+for going live — Robinhood already worked this way. Adding a second, parallel
+approval mechanism would have fought the existing design instead of using it.
 
-**Design.**
+**What was actually built** — `ops/broker/alpaca.py` + `ops/broker/alpaca_client.py`:
 
-1. **Order state machine** in `ops/broker/types.py`:
-   `PENDING_APPROVAL → SUBMITTED → PARTIALLY_FILLED → FILLED | CANCELLED | REJECTED | EXPIRED`.
-   Transitions validated in one place; every transition appended to the existing
-   audit ledger (`tradingagents/audit/`).
-2. **`ops/broker/alpaca.py`** implementing the existing `BrokerBase` interface:
-   REST (via `alpaca-py`, new optional extra `pip install ".[alpaca]"`), paper
-   endpoint by default (`ALPACA_PAPER=true`), keys from env
-   (`ALPACA_API_KEY`/`ALPACA_SECRET_KEY`) with Vault passthrough like other keys.
-   Lazy import inside methods per repo convention so the test suite runs without
-   the dependency.
-3. **Human approval gate.** `OrderIntent`s from F1 land in `PENDING_APPROVAL`;
-   a small approval queue (reuse `tradingagents/orchestrator/queue_store.py`)
-   holds them until approved via CLI (`tradingagents orders approve <id>`) or
-   the existing notification channel (`ops/notify/`). Spec §1 requires human
-   approval before real capital moves — this gate is **on by default** and can
-   only be disabled for the paper endpoint.
-4. **Reconciliation job**: on schedule (F4's loop) pull fills from Alpaca, apply
-   to `PortfolioState`, flag drift (position exists at broker but not in store,
-   or vice versa) through `ops/notify/`.
+- `AlpacaBroker(Broker)`, structured identically to `RobinhoodBroker`: journals
+  the order before submission, resolves `Order.stop_pct` to an absolute stop
+  from the *actual* fill price (never a stale pre-trade reference — the same
+  M2 safety property `PaperBroker`/`RobinhoodBroker` already have), and only
+  journals a fill when the broker ack reports a genuine `filled` status with
+  real quantity/price (mirrors `RobinhoodBroker._require_filled`).
+- `RealAlpacaClient` talks to Alpaca's REST trading API directly via
+  `requests` (already a core dependency — no new SDK/extra needed). It submits
+  an order then polls to a terminal status (bounded timeout), so `AlpacaBroker`
+  only ever sees a terminal ack — the same submit/poll split
+  `RealRobinhoodMCPClient._await_fill` already uses.
+- New `OpsConfig.alpaca_paper` (default `True`, env `OPS_ALPACA_PAPER`) and
+  `OpsConfig.is_live_money` property. Alpaca's paper endpoint is real Alpaca
+  infrastructure but fake money, so it is treated like `broker_mode = "paper"`
+  (no live-flip ritual, no live-gate cap); `alpaca_paper=False` is treated
+  exactly like `robinhood` (real money → live-flip ritual + live-gate cap).
+- `ops.live_gate.count_live_buy_fills` now takes a `broker_mode` parameter so
+  the live-gate fill count is scoped per broker — switching from Robinhood to
+  Alpaca (or vice versa) does not inherit the other broker's fill history and
+  lift the cap early.
+- `ops.reconcile`'s cash-drift check now covers any external broker
+  (`broker_mode != "paper"`), not just Robinhood — Alpaca (paper or live) is
+  external state with its own cash ledger, same as Robinhood.
+- Credentials via `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` env vars, matching
+  the repo's per-provider convention. See `ops/README.md` for the full setup
+  and operational notes.
 
-**Config keys:** `broker` (`"paper" | "alpaca" | "robinhood"`), `alpaca_paper`
-(default `True`), `order_approval_required` (default `True`, hard-forced `True`
-when `alpaca_paper=False` unless `order_approval_override_ack` is set).
+**Tests** (`tests/ops/broker/test_alpaca.py`, plus additions to
+`tests/ops/test_config.py`, `tests/ops/test_live_gate.py`,
+`tests/ops/test_reconcile.py`, `tests/ops/scheduler/test_orchestrator.py`,
+`tests/ops/test_main.py`): mirror the existing `RobinhoodBroker` test suite
+(fill/stop journaling, non-`filled` acks never journaled, `AlpacaUnavailable`
+wraps as `BrokerError`) plus new coverage for `alpaca_paper` gating, per-broker
+live-gate scoping, generalized cash-drift reconciliation, and the live-flip
+ritual triggering correctly for `alpaca_paper=False` but not for Alpaca's paper
+endpoint. All unit-marked, no network calls, no new dependency.
 
-**Tests** (`tests/ops/broker/`): state-machine transition matrix (invalid
-transitions raise); Alpaca client against recorded/mocked HTTP responses
-(submit, partial fill, cancel, reject); approval gate blocks submission;
-reconciliation idempotency; live endpoint refuses to run with approval disabled.
-
-**Acceptance criteria.** End-to-end paper flow: rebalance plan → approval →
-paper fill → portfolio store updated → audit ledger contains the full
-transition history. No network calls in unit tests.
-
-**Estimated effort:** 5–7 days (paper); live-mode hardening +2 days.
+**Not built (deliberately out of scope):** cancel/replace order support (Alpaca
+supports it; neither `RobinhoodBroker` nor `PaperBroker` do either, so adding
+it only for Alpaca would be an inconsistent surface), and portfolio-level
+(multi-symbol) order batching — orders are still placed and journaled
+one at a time, matching the existing strategy interface.
 
 ---
 
-### F3. Hard daily LLM budget cap (`tradingagents/spend_tracker.py` + graph wiring)
+### F3. Hard daily LLM budget cap (`tradingagents/spend_tracker.py` + graph wiring) — NOT YET IMPLEMENTED
 
-**Problem.** Spec decision #5 requires a hard daily budget cap with overflow
-queued to the next day. `spend_tracker.py` records spend and
-`graph/cost_callback.py` computes per-run cost, but nothing enforces a limit —
-an unattended scanning loop (F4) could spend without bound.
+**Problem, revised.** Spec decision #5 wants a hard daily budget cap with
+overflow queued to the next day. `ops/config.py::OpsConfig.daily_analysis_budget`
+already gates *how many tickers* get the full LLM pipeline per day
+(`ops/universe/composite.py` caps candidates at
+`min(daily_analysis_budget, free_slots)`), enforced inside the existing
+`Orchestrator.tick()` — so the count-based half of this already exists and
+works. Two real gaps remain: (1) no dollar-based tracking — the cap is a
+candidate count, not a cost ceiling, so it under- or over-spends depending on
+which tickers get analyzed; (2) no explicit deferral — candidates cut by the
+count cap are simply not selected that day and are re-evaluated fresh
+tomorrow (they may or may not reappear depending on the leaderboard), rather
+than being queued forward as the spec's "overflow to next day" implies.
 
-**Design.**
+**Design (updated to layer on the existing mechanism, not replace it).**
 
-- Extend `SpendTracker` with `check_budget(estimated_cost) -> BudgetDecision`
-  (`ALLOW | DENY`), backed by a daily ledger at
-  `~/.tradingagents/spend/YYYY-MM-DD.json`. Day boundary in the exchange
-  timezone from `ops/scheduler/market_calendar.py`.
-- Pre-flight estimate before each graph run: `estimate_run_cost(config)` using
-  the model catalog's per-token pricing and historical mean tokens-per-run for
-  that (provider, depth) pair recorded by `cost_callback` (fallback to a
-  conservative constant on first runs).
-- On `DENY`, the orchestrator (`tradingagents/orchestrator/dispatch.py`)
-  re-queues the ticker with `deferred_until = next trading day` instead of
-  dropping it — matching the spec's "queues overflow to next day."
-- Mid-run tripwire: `cost_callback` compares cumulative actual spend against
-  `daily_budget_hard_multiplier × cap` (default 1.25) and aborts the run via the
-  existing checkpoint mechanism so it can resume next day without losing work.
+- Extend `SpendTracker` (`tradingagents/spend_tracker.py`) with a persistent
+  daily USD ledger at `~/.tradingagents/spend/YYYY-MM-DD.json` (day boundary
+  from `ops/trading_time.py`, matching the existing daily/weekly snapshot
+  boundary convention in `ops/position_guardian.py`).
+- `Orchestrator.tick()` checks the ledger before dispatching each candidate to
+  the pipeline adapter: if projected spend would exceed `daily_llm_budget_usd`,
+  stop dispatching for the day and journal the remaining candidates as
+  deferred (new `KIND_ANALYSIS_DEFERRED` event) rather than silently dropping
+  them — the next trading day's cycle reads deferred candidates back in ahead
+  of a fresh universe scan, satisfying "queues overflow to next day."
+- `daily_analysis_budget` (count) and `daily_llm_budget_usd` (dollars) are
+  independent caps that both apply — whichever is hit first stops that day's
+  dispatching, both produce the same deferral behavior.
 
 **Config keys:** `daily_llm_budget_usd` (default `None` = unlimited, preserving
-current behavior), `daily_budget_hard_multiplier` (default `1.25`).
+current behavior — count-based `daily_analysis_budget` still applies on its
+own as today).
 
-**Tests:** budget ledger rollover at day boundary; DENY → deferred re-queue;
-mid-run tripwire aborts and checkpoint resumes; `None` budget bypasses all
-checks; estimate falls back safely with no history.
+**Tests:** ledger day-boundary rollover; dispatch stops and defers when the
+USD cap is hit before the count cap (and vice versa); deferred candidates are
+re-offered on the next cycle ahead of fresh scan results; `None` budget
+preserves exactly today's count-only behavior (regression guard).
 
-**Acceptance criteria.** With `daily_llm_budget_usd=1.00` and a batch of 10
-tickers queued, runs stop when the ledger crosses $1.00 and the remainder appear
-in the queue dated for the next trading day.
+**Acceptance criteria.** With `daily_llm_budget_usd` set low enough to bind
+before `daily_analysis_budget`, `Orchestrator.tick()` stops dispatching mid-batch
+and the untouched candidates appear analyzed on the next trading day's tick
+without a fresh universe scan needing to rediscover them.
 
 **Estimated effort:** 2–3 days.
 
@@ -199,53 +217,22 @@ in the queue dated for the next trading day.
 
 ## 4. Phase 1 — automation and reliability
 
-### F4. Scanner-to-analysis automation loop
+### F4. Scanner-to-analysis automation loop — ALREADY BUILT, no work needed
 
-**Problem.** Spec §1's headline capability — "continuously scans user-selected
-GICS sectors … routes candidates through AI-driven analysis" — exists only as
-disconnected parts: `ops/universe/` can screen, `tradingagents/orchestrator/`
-can queue and dispatch, `ops/scheduler/` knows the market calendar. Nothing
-connects them into a daemon.
-
-**Design.** New module `ops/scheduler/pipeline.py`, run as
-`python -m ops.scheduler` (entry already exists — extend `orchestrator.py`):
-
-```
-market_calendar tick (post-close)
-  → universe scan: ops/universe/composite.py over active GICS sectors
-  → candidate filter: drop tickers analyzed within N days (queue_store history)
-  → enqueue into tradingagents/orchestrator/queue_store.py (priority = composite score)
-  → dispatch loop: orchestrator/dispatch.py, concurrency from config,
-      each run gated by F3 budget check
-  → on completion: promoter.py decides watchlist/portfolio promotion,
-      F1 rebalancer runs once per cycle after the batch completes
-  → notifications: ops/notify/ summary (existing summary.py)
-```
-
-Key decisions:
-
-- One process, cooperative asyncio loop; no new infra (no celery/redis). State
-  in the existing queue store so restart-safe.
-- Sector activation config: `active_sectors` (list of GICS sector names,
-  default all 11 — matches spec decision #6), consumed by a new
-  `ops/universe/filters.py::filter_by_sector()` (extend existing filters).
-- Crash-safety: each stage wrapped, failures notify and skip the ticker;
-  per-run checkpointing already exists (`--checkpoint`) and is enabled by the
-  daemon by default.
-
-**Config keys:** `scanner_enabled` (default `False`), `active_sectors`,
-`scan_reanalysis_cooldown_days` (default 5), `scan_max_candidates_per_day`
-(default 10), `dispatch_concurrency` (default 2).
-
-**Tests** (`tests/ops/scheduler/`): candidate cooldown filter; priority ordering
-by composite score; budget-deny defers rest of batch; promoter feeds
-rebalancer exactly once per cycle; restart resumes queue without duplicates.
-
-**Acceptance criteria.** `python -m ops.scheduler --once` performs one full
-cycle end-to-end against the paper broker with recorded data fixtures; running
-it twice in one day analyzes zero new tickers (cooldown holds).
-
-**Estimated effort:** 5–7 days.
+**Original problem statement** assumed no daemon connected universe screening,
+queueing, and dispatch. It already exists: `ops run` (`ops/main.py`) is an
+always-on service — `ops/scheduler/orchestrator.py::Orchestrator.tick()`,
+scheduled via APScheduler every 30 minutes during NYSE market hours — that
+already runs the full cycle the spec describes: momentum + earnings universe
+scan (`ops/universe/composite.py`) → strategy sizing
+(`ops/strategy/post_earnings_momentum.py`) → guarded order placement
+(`GuardedBroker`) → exit evaluation (`ops/exits/engine.py`) → position-guardian
+stop enforcement, with startup reconciliation, a daily/weekly kill-switch, a
+dead-man's-switch heartbeat, and push/email notifications
+(`ops/notify/`) already wired. `ops/README.md` documents running it as a
+launchd service. **No new module is needed for this feature** — F3's USD
+ledger is the one real gap in this loop (see F3 above); once that lands, this
+item is complete as-is.
 
 ---
 
@@ -325,38 +312,46 @@ unmodified.
 
 ---
 
-## 6. Sequencing and milestones
+## 6. Sequencing and milestones (revised)
 
 ```
-Phase 0 (≈ 2.5 weeks)        Phase 1 (≈ 2 weeks)       Phase 2 (≈ 1 week)
+Phase 0 (remaining)          Phase 1 (≈ 2 weeks)       Phase 2 (≈ 1 week)
 ─────────────────────        ───────────────────       ──────────────────
-F3 budget cap  ──┐           F5 typed config ──┐       F6 intraday data
-F1 portfolio ────┼──►        F4 scanner loop ──┼──►
-F2 alpaca+orders ┘              (needs F1–F3)  ┘          (needs F2, F4)
+F2 alpaca broker  ✅ done     F5 typed config           F6 intraday data
+F3 budget cap     ← next     F4 scanner loop  ✅ done      (needs F2)
+F1 portfolio      ✂ dropped
 ```
 
-- **F3 first** — smallest, and it de-risks every unattended run that follows.
-- **F1 before F2** — the order lifecycle needs `OrderIntent`/`PortfolioState`.
-- **F4 needs F1–F3**; **F5** can proceed in parallel with F4.
-- **Milestone M1 (end of Phase 0):** paper-traded, human-approved, budget-capped
-  single-cycle flow, driven manually.
-- **Milestone M2 (end of Phase 1):** the same flow runs unattended on the market
-  calendar with validated config.
-- **Milestone M3 (end of Phase 2):** intraday-aware exits on live positions.
+- **F2 shipped** as `ops/broker/alpaca.py` (see §3 above) — Alpaca is now a
+  selectable `broker_mode` alongside `paper`/`robinhood`.
+- **F1 dropped** — no separate portfolio-state package; `ops/broker` +
+  `ops/journal` already is that state.
+- **F3 is next** — the USD ledger + deferral layered on the existing
+  count-based `daily_analysis_budget`.
+- **F4 required no work** — `ops run` already is the scanner-to-analysis loop.
+- **F5** (typed config) can proceed independently at any point.
+- **Milestone M1 (paper-traded, budget-capped, unattended single-cycle flow):**
+  reached once F3 lands — F2 and F4 are already in place.
+- **Milestone M2 (validated config):** F5.
+- **Milestone M3 (intraday-aware exits):** F6, needs F2 (done).
 
-One branch and one PR per feature, per repo convention
-(`feat/portfolio-engine`, `feat/alpaca-broker`, `feat/llm-budget-cap`,
-`feat/scanner-pipeline`, `feat/typed-config`, `feat/intraday-data`), each with a
-`CHANGELOG.md` entry under `[Unreleased]`.
+One branch and one PR per remaining feature, per repo convention
+(`feat/llm-budget-cap`, `feat/typed-config`, `feat/intraday-data`), each with a
+`CHANGELOG.md` entry under `[Unreleased]`. F2 was implemented directly on
+`claude/core-features-plan-gwdmiq` per this session's instructions; the
+`ops/broker/alpaca.py` change is small and self-contained enough not to need
+its own branch, but should still get upstream-fork review before merging to
+`main`.
 
 ### Upstream note
 
 Per `CLAUDE.md` this is a contribution-first fork. Realistically: **F5** (typed
 config validation) and **F6** (intraday intervals) are strong upstream PR
 candidates — general-purpose, additive, well-tested. **F3** (budget cap) is
-plausible upstream. **F1/F2/F4** build on this fork's `ops/` platform layer,
-which upstream does not have; they stay fork-local unless upstream signals
-interest via an issue first.
+plausible upstream, scoped to the `tradingagents/` package (not `ops/`).
+**F2 (Alpaca) and F4 (scanner loop)** live entirely in this fork's `ops/`
+platform layer, which upstream does not have (upstream is a single-ticker
+research framework, not a live-trading service); they stay fork-local.
 
 ## 7. Cross-cutting requirements (apply to every feature)
 

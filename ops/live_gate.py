@@ -24,19 +24,23 @@ def flip_epoch(journal: Journal) -> datetime | None:
     return journal.first_event_at(MARKER_KIND)
 
 
-def count_live_buy_fills(journal: Journal) -> int:
-    """Count BUY fills after the flip marker that occurred in live mode.
+def count_live_buy_fills(journal: Journal, *, broker_mode: str = "robinhood") -> int:
+    """Count BUY fills after the flip marker that occurred in live mode
+    for ``broker_mode`` specifically.
 
     Historical fills (without a ``broker_mode`` key) are excluded —
-    fail-safe: the gate stays active rather than lifting early. Runs as a
-    single SQL COUNT (L2) — this is evaluated on every BUY through the
-    rule chain, and a Python-side scan of the whole events table would
-    creep quadratic as the journal grows.
+    fail-safe: the gate stays active rather than lifting early. The count
+    is scoped to a single broker_mode so switching live brokers (e.g.
+    robinhood -> alpaca live) does not inherit fill history from a
+    different broker and skip the live-gate cap early. Runs as a single
+    SQL COUNT (L2) — this is evaluated on every BUY through the rule
+    chain, and a Python-side scan of the whole events table would creep
+    quadratic as the journal grows.
     """
     epoch = flip_epoch(journal)
     if epoch is None:
         return 0
     return journal.count_events(
         events.KIND_FILL, since=epoch,
-        payload_equals={"side": "BUY", "broker_mode": "robinhood"},
+        payload_equals={"side": "BUY", "broker_mode": broker_mode},
     )

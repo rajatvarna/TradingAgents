@@ -145,7 +145,44 @@ def build_guarded_robinhood_broker(
         build_default_rule_chain(
             start_of_day_equity=start_of_day_equity,
             start_of_week_equity=start_of_week_equity,
-            live_fill_count=lambda: count_live_buy_fills(journal),
+            live_fill_count=lambda: count_live_buy_fills(journal, broker_mode="robinhood"),
+        )
+    )
+    return GuardedBroker(inner=inner, engine=engine, journal=journal, config=config)
+
+
+def build_guarded_alpaca_broker(
+    *,
+    config: OpsConfig,
+    journal: Journal,
+    alpaca_client: "AlpacaTradingClient | None" = None,
+    start_of_day_equity: EquityFn,
+    start_of_week_equity: EquityFn,
+) -> GuardedBroker:
+    """Build a guarded Alpaca broker.
+
+    Pass `alpaca_client=FakeAlpacaClient(...)` in tests; production callers
+    omit it and a `RealAlpacaClient` is constructed from ALPACA_API_KEY /
+    ALPACA_SECRET_KEY, talking to Alpaca's paper endpoint unless
+    ``config.alpaca_paper`` is False (real money — see OpsConfig.is_live_money).
+    The live-gate fill count is scoped to broker_mode="alpaca" so it never
+    inherits fill history from a different live broker (see
+    ops.live_gate.count_live_buy_fills).
+    """
+    from ops.broker.alpaca import AlpacaBroker
+    from ops.broker.alpaca_client import RealAlpacaClient
+    from ops.live_gate import count_live_buy_fills
+
+    client = (
+        alpaca_client if alpaca_client is not None
+        else RealAlpacaClient(paper=config.alpaca_paper)
+    )
+    inner = AlpacaBroker(client=client, journal=journal)
+    engine = RuleEngine(
+        build_default_rule_chain(
+            start_of_day_equity=start_of_day_equity,
+            start_of_week_equity=start_of_week_equity,
+            live_fill_count=lambda: count_live_buy_fills(journal, broker_mode="alpaca"),
         )
     )
     return GuardedBroker(inner=inner, engine=engine, journal=journal, config=config)
@@ -159,4 +196,5 @@ __all__ = [
     "build_guarded_paper_broker",
     "build_guarded_paper_broker_from_journal",
     "build_guarded_robinhood_broker",
+    "build_guarded_alpaca_broker",
 ]

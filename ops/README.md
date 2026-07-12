@@ -27,6 +27,45 @@ the cached token until it expires.
   check inside `RobinhoodBroker` reject any SPOT order. Do not remove
   either gate.
 
+## Alpaca (live broker)
+
+`broker_mode = "alpaca"` connects to Alpaca's REST trading API directly via
+`requests` (no SDK dependency). Set credentials via env vars, matching the
+repo's per-provider convention:
+
+```bash
+export ALPACA_API_KEY=...
+export ALPACA_SECRET_KEY=...
+```
+
+Alpaca exposes the same API for its paper and live trading accounts — only
+the base URL and the account's real-money status differ, controlled by
+`alpaca_paper` (`OPS_ALPACA_PAPER` env override, default `true`):
+
+- `alpaca_paper=true` (default): talks to `https://paper-api.alpaca.markets`.
+  This is real Alpaca infrastructure but fake money — the live-flip ritual
+  and the live-gate position cap do **not** apply, same posture as
+  `broker_mode = "paper"`.
+- `alpaca_paper=false`: talks to `https://api.alpaca.markets` (real money) and
+  is treated exactly like `robinhood` — first startup requires the live-flip
+  ritual, and new positions are capped at `live_max_position` until
+  `live_fill_gate_count` live BUY fills have occurred *on Alpaca specifically*
+  (switching from Robinhood does not carry over its fill count, or vice
+  versa — see `ops.live_gate.count_live_buy_fills`).
+
+Both paper and live Alpaca are external systems with their own cash ledger
+(unlike this repo's own in-memory `PaperBroker`), so both go through the
+same one-time `_ensure_live_baseline` treatment and reconciliation cash-drift
+check as Robinhood.
+
+```bash
+# Alpaca paper trading: safe to run anytime, no live-flip ritual.
+OPS_BROKER_MODE=alpaca .venv/bin/python -m ops.cli run
+
+# Alpaca live trading: opt-in, real money.
+OPS_BROKER_MODE=alpaca OPS_ALPACA_PAPER=false .venv/bin/python -m ops.cli run
+```
+
 ## Running the orchestrator service
 
 The `ops run` command starts the always-on orchestrator + guardian in the

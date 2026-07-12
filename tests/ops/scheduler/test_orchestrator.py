@@ -648,3 +648,63 @@ def test_exit_close_position_no_such_position_journals_skip_not_check_error():
     ]
     assert len(skips) == 1
     assert "guardian race" in skips[0]["payload"]["reason"]
+
+
+# --- _compute_live_cap: gate scoped to the real-money broker in use --------
+
+
+def test_compute_live_cap_none_for_paper_broker():
+    orch = _make_orchestrator()
+    assert orch._compute_live_cap() is None
+
+
+def test_compute_live_cap_none_for_alpaca_paper_mode():
+    from ops.config import OpsConfig
+    orch = _make_orchestrator(config=OpsConfig(broker_mode="alpaca", alpaca_paper=True))
+    assert orch._compute_live_cap() is None
+
+
+def test_compute_live_cap_active_for_robinhood_under_fill_gate():
+    from ops.config import OpsConfig
+    cfg = OpsConfig(broker_mode="robinhood", live_max_position=Decimal("10"), live_fill_gate_count=20)
+    journal = _make_journal()
+    from ops.live_gate import record_flip_marker
+    record_flip_marker(journal)
+    orch = _make_orchestrator(config=cfg, journal=journal)
+    assert orch._compute_live_cap() == Decimal("10")
+
+
+def test_compute_live_cap_active_for_alpaca_live_mode():
+    from ops.config import OpsConfig
+    cfg = OpsConfig(broker_mode="alpaca", alpaca_paper=False, live_max_position=Decimal("10"), live_fill_gate_count=20)
+    journal = _make_journal()
+    from ops.live_gate import record_flip_marker
+    record_flip_marker(journal)
+    orch = _make_orchestrator(config=cfg, journal=journal)
+    assert orch._compute_live_cap() == Decimal("10")
+
+
+def test_compute_live_cap_robinhood_fills_dont_lift_alpaca_gate():
+    """Fill history from one live broker must not lift the live-gate cap
+    for a different live broker after switching broker_mode."""
+    from ops.config import OpsConfig
+    from ops.live_gate import record_flip_marker
+    journal = _make_journal()
+    record_flip_marker(journal)
+    for _ in range(25):
+        journal.record_event("fill", {"side": "BUY", "broker_mode": "robinhood"})
+    cfg = OpsConfig(broker_mode="alpaca", alpaca_paper=False, live_max_position=Decimal("10"), live_fill_gate_count=20)
+    orch = _make_orchestrator(config=cfg, journal=journal)
+    assert orch._compute_live_cap() == Decimal("10")
+
+
+def test_compute_live_cap_lifts_after_fill_gate_count_for_broker():
+    from ops.config import OpsConfig
+    from ops.live_gate import record_flip_marker
+    journal = _make_journal()
+    record_flip_marker(journal)
+    for _ in range(20):
+        journal.record_event("fill", {"side": "BUY", "broker_mode": "alpaca"})
+    cfg = OpsConfig(broker_mode="alpaca", alpaca_paper=False, live_max_position=Decimal("10"), live_fill_gate_count=20)
+    orch = _make_orchestrator(config=cfg, journal=journal)
+    assert orch._compute_live_cap() is None

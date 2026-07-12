@@ -212,13 +212,17 @@ class Orchestrator:
     def _compute_live_cap(self) -> Decimal | None:
         """Return the live-gate position cap, or None when the gate is inactive.
 
-        While the gate is active (live broker, fewer than ``live_fill_gate_count``
-        live BUY fills since the flip), proposed BUY notional is clamped to
-        ``live_max_position``.
+        While the gate is active (real-money broker — robinhood, or alpaca
+        with alpaca_paper=False — with fewer than ``live_fill_gate_count``
+        live BUY fills of THAT broker since the flip), proposed BUY notional
+        is clamped to ``live_max_position``. Paper brokers (including
+        Alpaca's paper endpoint) are never gated.
         """
-        if self._config.broker_mode != "robinhood":
+        if not self._config.is_live_money:
             return None
-        if count_live_buy_fills(self._journal) >= self._config.live_fill_gate_count:
+        if count_live_buy_fills(
+            self._journal, broker_mode=self._config.broker_mode
+        ) >= self._config.live_fill_gate_count:
             return None
         return self._config.live_max_position
 

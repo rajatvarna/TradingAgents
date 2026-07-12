@@ -40,7 +40,14 @@ _FULL_BLACKOUT_SYMBOLS = frozenset({"SPOT"})
 
 @dataclass(frozen=True)
 class OpsConfig:
-    broker_mode: str = "paper"  # "paper" or "robinhood"
+    broker_mode: str = "paper"  # "paper", "robinhood", or "alpaca"
+    alpaca_paper: bool = True
+    """Only meaningful when broker_mode == "alpaca". True (default) talks to
+    Alpaca's paper-trading endpoint — real Alpaca infrastructure, fake money,
+    so the live-flip ritual and live-gate position cap do NOT apply (same
+    posture as broker_mode == "paper"). False talks to Alpaca's live
+    endpoint (real money) and is treated exactly like robinhood — see
+    ``is_live_money``."""
     deny_list: frozenset[str] = field(default_factory=lambda: _DEFAULT_DENY_LIST)  # Not env-overridable; extend via code
     full_blackout_symbols: frozenset[str] = field(default_factory=lambda: _FULL_BLACKOUT_SYMBOLS)  # Not env-overridable; extend via code
     per_position_cap_pct: Decimal = Decimal("0.12")
@@ -100,9 +107,9 @@ class OpsConfig:
                 f"(hysteresis band), got {self.momentum_exit_rank} <= "
                 f"{self.daily_analysis_budget}"
             )
-        if self.broker_mode not in ("paper", "robinhood"):
+        if self.broker_mode not in ("paper", "robinhood", "alpaca"):
             raise ValueError(
-                f"broker_mode must be 'paper' or 'robinhood', got {self.broker_mode!r}"
+                f"broker_mode must be 'paper', 'robinhood', or 'alpaca', got {self.broker_mode!r}"
             )
         if not self.full_blackout_symbols <= self.deny_list:
             raise ValueError(
@@ -115,6 +122,21 @@ class OpsConfig:
             raise ValueError(
                 f"live_fill_gate_count must be >= 0, got {self.live_fill_gate_count}"
             )
+
+    @property
+    def is_live_money(self) -> bool:
+        """True when the configured broker moves real money.
+
+        robinhood is always real money. alpaca is real money only when
+        alpaca_paper=False — its paper endpoint is real Alpaca
+        infrastructure but fake money, so it is deliberately excluded here
+        (same posture as broker_mode == "paper"). Callers use this to gate
+        the live-flip ritual and the live-gate position cap."""
+        if self.broker_mode == "robinhood":
+            return True
+        if self.broker_mode == "alpaca":
+            return not self.alpaca_paper
+        return False
 
 
 def _env_decimal(name: str) -> Decimal | None:
@@ -137,12 +159,28 @@ def _env_int(name: str) -> int | None:
         raise ValueError(f"Invalid value for {name!r}: {raw!r}") from exc
 
 
+def _env_bool(name: str) -> bool | None:
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    normalized = raw.strip().lower()
+    if normalized in ("1", "true", "yes", "on"):
+        return True
+    if normalized in ("0", "false", "no", "off"):
+        return False
+    raise ValueError(f"Invalid boolean value for {name!r}: {raw!r}")
+
+
 def load_config() -> OpsConfig:
     kwargs: dict = {}
 
     broker_mode = os.environ.get("OPS_BROKER_MODE")
     if broker_mode is not None:
         kwargs["broker_mode"] = broker_mode
+
+    alpaca_paper = _env_bool("OPS_ALPACA_PAPER")
+    if alpaca_paper is not None:
+        kwargs["alpaca_paper"] = alpaca_paper
 
     per_position_cap_pct = _env_decimal("OPS_PER_POSITION_CAP_PCT")
     if per_position_cap_pct is not None:

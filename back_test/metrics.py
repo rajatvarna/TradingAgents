@@ -64,6 +64,58 @@ def max_drawdown(equity: pd.Series) -> float:
     return float(drawdown.min())
 
 
+def sortino_ratio(
+    returns: pd.Series,
+    rf: float = 0.0,
+    periods_per_year: int = 252,
+) -> float:
+    """Annualized Sortino ratio, using downside deviation instead of total std.
+
+    rf is the annual risk-free rate. Downside deviation only considers
+    returns below the (period) risk-free rate; if there are none, the
+    ratio is 0.0 rather than undefined/infinite.
+    """
+    if returns.empty:
+        return 0.0
+    period_rf = rf / periods_per_year
+    excess = returns - period_rf
+    downside = excess[excess < 0]
+    if downside.empty:
+        return 0.0
+    downside_std = math.sqrt((downside**2).mean())
+    if not downside_std or math.isnan(downside_std) or downside_std == 0:
+        return 0.0
+    return float(excess.mean() / downside_std * math.sqrt(periods_per_year))
+
+
+def calmar_ratio(equity: pd.Series, periods_per_year: int = 252) -> float:
+    """Annualized return divided by the magnitude of max drawdown.
+
+    Returns 0.0 when there is no drawdown (undefined ratio) to keep the
+    result JSON-serializable instead of inf/nan.
+    """
+    mdd = max_drawdown(equity)
+    if mdd == 0:
+        return 0.0
+    return annualized_return(equity, periods_per_year) / abs(mdd)
+
+
+def profit_factor(trades: List[dict]) -> Optional[float]:
+    """Gross profit divided by gross loss across closed round-trip trades.
+
+    Returns None if there are no closed trades, and float('inf') if there
+    are winning trades but no losing trades (gross loss of 0).
+    """
+    closed = [t for t in trades if t.get("pnl") is not None]
+    if not closed:
+        return None
+    gross_profit = sum(t["pnl"] for t in closed if t["pnl"] > 0)
+    gross_loss = -sum(t["pnl"] for t in closed if t["pnl"] < 0)
+    if gross_loss == 0:
+        return float("inf") if gross_profit > 0 else 0.0
+    return gross_profit / gross_loss
+
+
 def win_rate(trades: List[dict]) -> Optional[float]:
     """Fraction of round-trip trades whose realized PnL was positive.
 
@@ -84,11 +136,14 @@ def summarize(equity: pd.Series, trades: Optional[List[dict]] = None) -> dict:
         "total_return":       total_return(equity),
         "annualized_return":  annualized_return(equity),
         "sharpe_ratio":       sharpe_ratio(rets),
+        "sortino_ratio":      sortino_ratio(rets),
+        "calmar_ratio":       calmar_ratio(equity),
         "max_drawdown":       max_drawdown(equity),
         "n_observations":     int(len(equity)),
     }
     if trades is not None:
         wr = win_rate(trades)
         summary["win_rate"] = wr
+        summary["profit_factor"] = profit_factor(trades)
         summary["n_trades"] = len([t for t in trades if t.get("pnl") is not None])
     return summary

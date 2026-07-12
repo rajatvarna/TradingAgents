@@ -9,6 +9,8 @@ Breaking changes within the 0.x line are called out explicitly.
 ## [Unreleased]
 ### Added
 
+- **Core features implementation plan**: `docs/CORE_FEATURES_PLAN.md` — phased plan (portfolio engine, Alpaca broker + order lifecycle, daily LLM budget cap, scanner-to-analysis automation, typed config validation, intraday data intervals) grounded in the current codebase inventory and the hedge platform spec. (`docs/CORE_FEATURES_PLAN.md`)
+
 - **Backtest risk-adjusted metrics**: `sortino_ratio`, `calmar_ratio`, and `profit_factor` added to `back_test/metrics.py::summarize()` alongside the existing Sharpe/max-drawdown/win-rate. (`back_test/metrics.py`)
 - **Evaluation harness wired to backtest metrics**: `tradingagents/evaluation/benchmark.py::run_benchmark()` now reports `pnl_metrics_20d`/`pnl_metrics_60d` (Sharpe/Sortino/Calmar/profit-factor computed over synthetic per-recommendation trades) alongside the existing directional hit-rate metrics. (`tradingagents/evaluation/benchmark.py`)
 - **Confidence-calibration curve**: `benchmark.py` now extracts a stated confidence value from decision text (`_extract_confidence`) and buckets predictions by confidence to compute actual hit-rate per bucket plus a mean absolute calibration error, surfaced as `calibration_20d` in the run summary. (`tradingagents/evaluation/benchmark.py`)

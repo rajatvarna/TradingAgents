@@ -32,6 +32,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from ops import (
     build_guarded_alpaca_broker,
+    build_guarded_ibkr_broker,
     build_guarded_paper_broker_from_journal,
     build_guarded_robinhood_broker,
     events,
@@ -161,11 +162,11 @@ def _build_broker(config: OpsConfig, journal: Journal):
 
     Paper mode rebuilds the inner PaperBroker from the journal (via
     build_guarded_paper_broker_from_journal) so a restarted ops run
-    picks up prior positions and cash. Robinhood and Alpaca modes read
-    live state from the broker itself — both are external systems with
-    their own cash ledger (even Alpaca's paper endpoint: it's real Alpaca
-    infrastructure, just fake money), so both get the external-baseline
-    treatment via _ensure_live_baseline.
+    picks up prior positions and cash. Robinhood, Alpaca, and IBKR modes
+    read live state from the broker itself — all three are external
+    systems with their own cash ledger (even Alpaca's/IBKR's paper
+    endpoints: real broker infrastructure, just fake money), so all three
+    get the external-baseline treatment via _ensure_live_baseline.
     """
     from ops.quotes import make_yfinance_quote_source
     quote_source = make_yfinance_quote_source()
@@ -188,6 +189,13 @@ def _build_broker(config: OpsConfig, journal: Journal):
         return broker
     if config.broker_mode == "alpaca":
         broker = build_guarded_alpaca_broker(
+            config=config, journal=journal,
+            start_of_day_equity=_sod, start_of_week_equity=_sow,
+        )
+        _ensure_live_baseline(journal, broker)
+        return broker
+    if config.broker_mode == "ibkr":
+        broker = build_guarded_ibkr_broker(
             config=config, journal=journal,
             start_of_day_equity=_sod, start_of_week_equity=_sow,
         )

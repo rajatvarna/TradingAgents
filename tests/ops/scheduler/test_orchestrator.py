@@ -708,3 +708,31 @@ def test_compute_live_cap_lifts_after_fill_gate_count_for_broker():
     cfg = OpsConfig(broker_mode="alpaca", alpaca_paper=False, live_max_position=Decimal("10"), live_fill_gate_count=20)
     orch = _make_orchestrator(config=cfg, journal=journal)
     assert orch._compute_live_cap() is None
+
+
+def test_compute_live_cap_none_for_ibkr_paper_mode():
+    from ops.config import OpsConfig
+    orch = _make_orchestrator(config=OpsConfig(broker_mode="ibkr", ibkr_paper=True))
+    assert orch._compute_live_cap() is None
+
+
+def test_compute_live_cap_active_for_ibkr_live_mode():
+    from ops.config import OpsConfig
+    from ops.live_gate import record_flip_marker
+    journal = _make_journal()
+    record_flip_marker(journal)
+    cfg = OpsConfig(broker_mode="ibkr", ibkr_paper=False, live_max_position=Decimal("10"), live_fill_gate_count=20)
+    orch = _make_orchestrator(config=cfg, journal=journal)
+    assert orch._compute_live_cap() == Decimal("10")
+
+
+def test_compute_live_cap_alpaca_fills_dont_lift_ibkr_gate():
+    from ops.config import OpsConfig
+    from ops.live_gate import record_flip_marker
+    journal = _make_journal()
+    record_flip_marker(journal)
+    for _ in range(25):
+        journal.record_event("fill", {"side": "BUY", "broker_mode": "alpaca"})
+    cfg = OpsConfig(broker_mode="ibkr", ibkr_paper=False, live_max_position=Decimal("10"), live_fill_gate_count=20)
+    orch = _make_orchestrator(config=cfg, journal=journal)
+    assert orch._compute_live_cap() == Decimal("10")

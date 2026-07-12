@@ -10,6 +10,12 @@ from ops.broker.alpaca_client import (
     AlpacaPosition,
     AlpacaUnavailable,
 )
+from ops.broker.ibkr_client import (
+    IBKRAccountInfo,
+    IBKROrderAck,
+    IBKRPosition,
+    IBKRUnavailable,
+)
 from ops.broker.mcp_client import (
     AccountInfo,
     MCPOrderAck,
@@ -267,6 +273,133 @@ class FakeAlpacaClient:
             del self._positions[symbol]
         ack = self._make_ack(
             symbol=symbol, side=Side.SELL, notional=None, quantity=qty,
+            client_order_id=client_order_id, fill_price=price, ack_qty=qty,
+        )
+        self.placed.append(ack)
+        return ack
+
+
+class FakeIBKRClient:
+    """Deterministic in-memory IBKRTradingClient for unit tests.
+
+    Whole-share only (mirrors IBKR itself) — seed_position/set_quote take
+    whole-share quantities. Status strings use ib_insync's casing
+    ('Filled', not 'filled') so tests catch a status-string mismatch."""
+
+    def __init__(self, *, cash: Decimal = Decimal("1000")):
+        self._cash = cash
+        self._positions: dict[str, IBKRPosition] = {}
+        self._quotes: dict[str, Decimal] = {}
+        self.placed: list[IBKROrderAck] = []
+        self._raise_on_next_call: Exception | None = None
+        self._next_ack_override: dict | None = None
+
+    def set_quote(self, symbol: str, price: Decimal) -> None:
+        self._quotes[symbol] = price
+
+    def seed_position(self, symbol: str, quantity: Decimal, avg_price: Decimal) -> None:
+        self._positions[symbol] = IBKRPosition(
+            symbol=symbol, quantity=quantity, avg_entry_price=avg_price,
+        )
+
+    def fail_next(self, exc: Exception) -> None:
+        self._raise_on_next_call = exc
+
+    def next_ack_status(self, status: str, *, filled_qty=None, filled_avg_price=None) -> None:
+        self._next_ack_override = {
+            "status": status, "filled_qty": filled_qty, "filled_avg_price": filled_avg_price,
+        }
+
+    def _check_fail(self) -> None:
+        if self._raise_on_next_call is not None:
+            exc = self._raise_on_next_call
+            self._raise_on_next_call = None
+            raise exc
+
+    def get_account(self) -> IBKRAccountInfo:
+        self._check_fail()
+        equity = self._cash + sum(
+            (p.quantity * self._quotes.get(p.symbol, p.avg_entry_price) for p in self._positions.values()),
+            start=Decimal("0"),
+        )
+        return IBKRAccountInfo(cash=self._cash, equity=equity, buying_power=self._cash)
+
+    def get_positions(self) -> list[IBKRPosition]:
+        self._check_fail()
+        return list(self._positions.values())
+
+    def get_quote(self, symbol: str) -> Decimal:
+        self._check_fail()
+        if symbol not in self._quotes:
+            raise IBKRUnavailable(f"no quote for {symbol}")
+        return self._quotes[symbol]
+
+    def _make_ack(self, *, symbol, side, quantity, client_order_id, fill_price, ack_qty) -> IBKROrderAck:
+        override = self._next_ack_override
+        self._next_ack_override = None
+        if override is not None:
+            return IBKROrderAck(
+                order_id=str(uuid4()), client_order_id=client_order_id,
+                symbol=symbol, side=side, quantity=quantity,
+                status=override["status"],
+                filled_qty=override["filled_qty"], filled_avg_price=override["filled_avg_price"],
+            )
+        return IBKROrderAck(
+            order_id=str(uuid4()), client_order_id=client_order_id,
+            symbol=symbol, side=side, quantity=quantity,
+            status="Filled", filled_qty=ack_qty, filled_avg_price=fill_price,
+        )
+
+    def place_order(
+        self, *, symbol: str, side: Side, quantity: Decimal,
+        order_type: OrderType, limit_price: Decimal | None,
+        client_order_id: str,
+    ) -> IBKROrderAck:
+        self._check_fail()
+        price = self._quotes.get(symbol, Decimal("1"))
+        if side == Side.BUY:
+            self._cash -= quantity * price
+            existing = self._positions.get(symbol)
+            if existing is None:
+                self._positions[symbol] = IBKRPosition(
+                    symbol=symbol, quantity=quantity, avg_entry_price=price,
+                )
+            else:
+                new_qty = existing.quantity + quantity
+                new_avg = (existing.avg_entry_price * existing.quantity + price * quantity) / new_qty
+                self._positions[symbol] = IBKRPosition(
+                    symbol=symbol, quantity=new_qty, avg_entry_price=new_avg,
+                )
+        else:  # SELL
+            existing = self._positions.get(symbol)
+            if existing is None:
+                raise ValueError(f"SELL with no position in {symbol}")
+            self._cash += quantity * price
+            remaining = existing.quantity - quantity
+            if remaining > Decimal("1e-9"):
+                self._positions[symbol] = IBKRPosition(
+                    symbol=symbol, quantity=remaining, avg_entry_price=existing.avg_entry_price,
+                )
+            else:
+                del self._positions[symbol]
+        ack = self._make_ack(
+            symbol=symbol, side=side, quantity=quantity,
+            client_order_id=client_order_id, fill_price=price, ack_qty=quantity,
+        )
+        self.placed.append(ack)
+        return ack
+
+    def close_position(self, symbol: str, *, client_order_id: str) -> IBKROrderAck:
+        self._check_fail()
+        existing = self._positions.get(symbol)
+        if existing is None:
+            raise ValueError(f"close_position with no position in {symbol}")
+        price = self._quotes.get(symbol, Decimal("1"))
+        qty = existing.quantity
+        self._cash += qty * price
+        del self._positions[symbol]
+        ack = self._make_ack(
+            symbol=symbol, side=Side.SELL, quantity=qty,
             client_order_id=client_order_id, fill_price=price, ack_qty=qty,
         )
         self.placed.append(ack)

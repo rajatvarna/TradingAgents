@@ -108,7 +108,21 @@ out of scope for this plan.
 
 ---
 
-### F2. Alpaca broker adapter — IMPLEMENTED, rescoped to fit `ops/broker`
+### F2. Alpaca + Interactive Brokers (IBKR) broker adapters — IMPLEMENTED, rescoped to fit `ops/broker`
+
+**Update:** IBKR was added as a third execution broker alongside Alpaca,
+following the exact same rescoped approach (see below) rather than a new
+mechanism — `ops/broker/ibkr.py` + `ops/broker/ibkr_client.py`, connecting
+via `ib_insync` to a local TWS/IB Gateway session (reusing the connection
+convention already established for IBKR *data* in
+`tradingagents/dataflows/ibkr.py`). One IBKR-specific wrinkle: IBKR has no
+notional-dollar order type reachable generically through the API, so
+`IBKRBroker` converts requested notional to a whole-share quantity itself
+(floored) before submitting — the one place this broker's behavior
+genuinely diverges from Alpaca/Robinhood's fractional-dollar-precise
+fills. `ibkr_paper` (config flag, mirrors `alpaca_paper`) gates the
+live-flip ritual and live-gate cap identically. See `ops/README.md` for
+setup and the CHANGELOG for the full change list.
 
 **Original problem statement** called for a new order-lifecycle state machine
 and a separate human-approval queue. Neither was needed: `ops/broker/base.py`'s

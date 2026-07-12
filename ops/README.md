@@ -66,6 +66,68 @@ OPS_BROKER_MODE=alpaca .venv/bin/python -m ops.cli run
 OPS_BROKER_MODE=alpaca OPS_ALPACA_PAPER=false .venv/bin/python -m ops.cli run
 ```
 
+## Interactive Brokers (IBKR)
+
+`broker_mode = "ibkr"` connects to Interactive Brokers via **Trader
+Workstation (TWS)** or **IB Gateway** running locally with API access
+enabled — the same `ib_insync` connection convention already used for
+IBKR *data* in `tradingagents/dataflows/ibkr.py`, reused here for order
+execution. Install the optional dependency:
+
+```bash
+pip install ".[portfolio]"   # includes ib_insync
+```
+
+Start TWS or IB Gateway, enable API access (Global Configuration → API →
+Settings → Enable ActiveX and Socket Clients), then run:
+
+```bash
+# IBKR paper trading (TWS default port 7497): safe to run anytime, no
+# live-flip ritual.
+OPS_BROKER_MODE=ibkr .venv/bin/python -m ops.cli run
+
+# IBKR live trading (TWS default port 7496): opt-in, real money.
+OPS_BROKER_MODE=ibkr OPS_IBKR_PAPER=false .venv/bin/python -m ops.cli run
+```
+
+Connection is configured via env vars (all optional — defaults shown):
+
+```bash
+export IBKR_HOST=127.0.0.1
+export IBKR_PORT=7497        # only needed to override the ibkr_paper-derived default
+export IBKR_CLIENT_ID=10     # must be unique among clients connected to the same TWS/Gateway
+```
+
+`ibkr_paper` (`OPS_IBKR_PAPER` env override, default `true`) selects the
+*default* port only — 7497 (TWS paper) vs 7496 (TWS live). **IB Gateway
+uses different ports** (4002 paper / 4001 live): if you run Gateway
+instead of TWS, set `IBKR_PORT` explicitly. Setting `ibkr_paper` does not
+itself verify which account the already-running TWS/Gateway session is
+logged into — that's controlled by which TWS/Gateway instance you started
+and logged into, not by this flag. Get the flag and the running
+instance out of sync and you can end up talking to a live account while
+`ibkr_paper=true`, so treat the two as one decision, not two.
+
+Both IBKR paper and live are external systems with their own cash ledger
+(unlike this repo's own in-memory `PaperBroker`), so both go through the
+same one-time `_ensure_live_baseline` treatment and reconciliation
+cash-drift check as Robinhood/Alpaca. `ibkr_paper=false` is treated exactly
+like `robinhood`/Alpaca-live: first startup requires the live-flip ritual,
+and new positions are capped at `live_max_position` until
+`live_fill_gate_count` live BUY fills have occurred *on IBKR specifically*.
+
+### IBKR-specific order sizing
+
+Alpaca and Robinhood fill orders to a precise dollar notional (fractional
+shares). IBKR has no notional-dollar order type reachable generically
+through the API, so `IBKRBroker` converts the requested notional to a
+**whole-share quantity itself, floored** — e.g. a $99 BUY at $10.50/share
+buys 9 shares ($94.50), not a fractional 9.428... shares. The filled
+notional can therefore be somewhat less than requested. A notional too
+small to buy even one share raises rather than placing a zero-quantity
+order. This applies to `place_order`; `close_position` always sells the
+full held quantity, matching the other brokers.
+
 ## Running the orchestrator service
 
 The `ops run` command starts the always-on orchestrator + guardian in the

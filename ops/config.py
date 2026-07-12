@@ -40,7 +40,7 @@ _FULL_BLACKOUT_SYMBOLS = frozenset({"SPOT"})
 
 @dataclass(frozen=True)
 class OpsConfig:
-    broker_mode: str = "paper"  # "paper", "robinhood", or "alpaca"
+    broker_mode: str = "paper"  # "paper", "robinhood", "alpaca", or "ibkr"
     alpaca_paper: bool = True
     """Only meaningful when broker_mode == "alpaca". True (default) talks to
     Alpaca's paper-trading endpoint — real Alpaca infrastructure, fake money,
@@ -48,6 +48,14 @@ class OpsConfig:
     posture as broker_mode == "paper"). False talks to Alpaca's live
     endpoint (real money) and is treated exactly like robinhood — see
     ``is_live_money``."""
+    ibkr_paper: bool = True
+    """Only meaningful when broker_mode == "ibkr". True (default) connects
+    to a paper-trading TWS/IB Gateway session (fake money — same posture as
+    broker_mode == "paper", no live-flip ritual). False connects to a live
+    session (real money) and is treated exactly like robinhood — see
+    ``is_live_money``. Note this only selects the DEFAULT port (7497 paper /
+    7496 live, matching TWS); it does not itself verify which account the
+    already-running TWS/Gateway process is logged into — see ops/README.md."""
     deny_list: frozenset[str] = field(default_factory=lambda: _DEFAULT_DENY_LIST)  # Not env-overridable; extend via code
     full_blackout_symbols: frozenset[str] = field(default_factory=lambda: _FULL_BLACKOUT_SYMBOLS)  # Not env-overridable; extend via code
     per_position_cap_pct: Decimal = Decimal("0.12")
@@ -107,9 +115,10 @@ class OpsConfig:
                 f"(hysteresis band), got {self.momentum_exit_rank} <= "
                 f"{self.daily_analysis_budget}"
             )
-        if self.broker_mode not in ("paper", "robinhood", "alpaca"):
+        if self.broker_mode not in ("paper", "robinhood", "alpaca", "ibkr"):
             raise ValueError(
-                f"broker_mode must be 'paper', 'robinhood', or 'alpaca', got {self.broker_mode!r}"
+                "broker_mode must be 'paper', 'robinhood', 'alpaca', or 'ibkr', "
+                f"got {self.broker_mode!r}"
             )
         if not self.full_blackout_symbols <= self.deny_list:
             raise ValueError(
@@ -127,15 +136,18 @@ class OpsConfig:
     def is_live_money(self) -> bool:
         """True when the configured broker moves real money.
 
-        robinhood is always real money. alpaca is real money only when
-        alpaca_paper=False — its paper endpoint is real Alpaca
-        infrastructure but fake money, so it is deliberately excluded here
-        (same posture as broker_mode == "paper"). Callers use this to gate
-        the live-flip ritual and the live-gate position cap."""
+        robinhood is always real money. alpaca/ibkr are real money only
+        when their respective *_paper flag is False — their paper
+        endpoints are real broker infrastructure but fake money, so they
+        are deliberately excluded here (same posture as broker_mode ==
+        "paper"). Callers use this to gate the live-flip ritual and the
+        live-gate position cap."""
         if self.broker_mode == "robinhood":
             return True
         if self.broker_mode == "alpaca":
             return not self.alpaca_paper
+        if self.broker_mode == "ibkr":
+            return not self.ibkr_paper
         return False
 
 
@@ -181,6 +193,10 @@ def load_config() -> OpsConfig:
     alpaca_paper = _env_bool("OPS_ALPACA_PAPER")
     if alpaca_paper is not None:
         kwargs["alpaca_paper"] = alpaca_paper
+
+    ibkr_paper = _env_bool("OPS_IBKR_PAPER")
+    if ibkr_paper is not None:
+        kwargs["ibkr_paper"] = ibkr_paper
 
     per_position_cap_pct = _env_decimal("OPS_PER_POSITION_CAP_PCT")
     if per_position_cap_pct is not None:

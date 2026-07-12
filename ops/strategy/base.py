@@ -1,7 +1,7 @@
 """Strategy primitives."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 from typing import Protocol
@@ -19,6 +19,16 @@ class StrategyOrder:
     pipeline: PipelineResult
 
 
+@dataclass(frozen=True)
+class ProposeOrdersResult:
+    orders: list[StrategyOrder]
+    # F3: symbols the daily LLM USD budget cut off before their pipeline
+    # turn (never evaluated this cycle) — the orchestrator journals these
+    # as deferred so they're re-offered, once, on the next trading day's
+    # cycle ahead of fresh scan results.
+    deferred_symbols: list[str] = field(default_factory=list)
+
+
 class Strategy(Protocol):
     def propose_orders(
         self,
@@ -28,4 +38,4 @@ class Strategy(Protocol):
         current_equity: Decimal,
         asof_date: date,
         live_max_position_cap: Decimal | None = None,
-    ) -> list[StrategyOrder]: ...
+    ) -> ProposeOrdersResult: ...

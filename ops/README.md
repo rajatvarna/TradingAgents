@@ -128,6 +128,31 @@ small to buy even one share raises rather than placing a zero-quantity
 order. This applies to `place_order`; `close_position` always sells the
 full held quantity, matching the other brokers.
 
+## Daily LLM budget
+
+Two independent, complementary caps limit same-day pipeline (LLM) spend —
+whichever binds first stops dispatching new candidates for the day:
+
+- `daily_analysis_budget` (default 8): max number of candidates analyzed
+  per day, applied by `ops/universe/composite.py` before any candidate
+  reaches the pipeline.
+- `daily_llm_budget_usd` (default unset — unlimited, env
+  `OPS_DAILY_LLM_BUDGET_USD`): a hard USD ceiling on cumulative same-day
+  spend across all pipeline runs, tracked by a `SpendTracker` shared across
+  the whole `ops run` process and reset at each new trading day.
+
+```bash
+OPS_DAILY_LLM_BUDGET_USD=5.00 .venv/bin/python -m ops.cli run
+```
+
+A candidate cut off by either cap is **deferred, not dropped**: it's
+journaled (`analysis_deferred`) and given exactly one retry — reoffered
+ahead of fresh scan results on the *next* trading day's cycle (recomputed
+against that day's eligibility/liquidity, never reconstructed from stale
+data), then marked `analysis_deferred_consumed` regardless of whether it
+made it back into that day's candidates. A symbol that keeps getting cut
+every day is not retried forever — only once per deferral.
+
 ## Running the orchestrator service
 
 The `ops run` command starts the always-on orchestrator + guardian in the

@@ -9,16 +9,23 @@ import re
 import threading
 from dataclasses import dataclass, field
 from datetime import date
+from decimal import Decimal
 from enum import Enum
 from typing import Protocol
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.spend_tracker import SpendTracker
 
 
 class PipelineDecision(str, Enum):
     BUY = "BUY"
     HOLD = "HOLD"
     SELL = "SELL"
+    # F3: the daily LLM USD budget was already exhausted before this
+    # candidate's turn — no graph run was attempted. Distinct from HOLD so
+    # the orchestrator can defer (re-offer next cycle) rather than treat
+    # this as a genuine "analyzed, no trade" decision.
+    DEFERRED = "DEFERRED"
 
 
 @dataclass(frozen=True)
@@ -67,12 +74,26 @@ def parse_decision(text: str) -> PipelineDecision:
 
 
 class TradingAgentsPipelineAdapter:
-    """Wraps the upstream graph. Constructs lazily and reuses one instance."""
+    """Wraps the upstream graph. Constructs lazily and reuses one instance.
 
-    def __init__(self, **graph_kwargs):
+    F3 (daily LLM USD budget): a single SpendTracker instance is created
+    once and mutated in place (reset() + max_cost update) at each new
+    day's first call, rather than a fresh tracker per day — the graph is
+    itself constructed lazily and cached forever (see _ensure_graph), so
+    its `callbacks` list captures this tracker's identity once; the same
+    object must keep accumulating/gating correctly across calls spanning
+    multiple days. daily_budget_usd=None (default) preserves today's
+    behavior exactly: the tracker's max_cost stays None forever, so
+    budget_exceeded never trips and propagate() always runs the graph.
+    """
+
+    def __init__(self, *, daily_budget_usd: Decimal | None = None, **graph_kwargs):
         self._kwargs = graph_kwargs
         self._graph: TradingAgentsGraph | None = None
         self._lock = threading.Lock()
+        self._daily_budget_usd = daily_budget_usd
+        self._spend_tracker = SpendTracker(max_cost=None)
+        self._tracker_date: date | None = None
 
     def _ensure_graph(self) -> TradingAgentsGraph:
         # Fast path: no lock once the cache is populated.
@@ -86,9 +107,28 @@ class TradingAgentsPipelineAdapter:
         return self._graph
 
     def _build_graph(self) -> TradingAgentsGraph:
-        return TradingAgentsGraph(**self._kwargs)
+        kwargs = dict(self._kwargs)
+        kwargs["callbacks"] = list(kwargs.get("callbacks") or []) + [self._spend_tracker]
+        return TradingAgentsGraph(**kwargs)
+
+    def _budget_exceeded_for(self, asof_date: date) -> bool:
+        """Roll the tracker over to a fresh budget on a new day; return
+        whether today's cumulative spend has already exhausted it.
+        No-op (always False) when daily_budget_usd is unset."""
+        if self._daily_budget_usd is None:
+            return False
+        if self._tracker_date != asof_date:
+            self._spend_tracker.reset()
+            self._spend_tracker.max_cost = float(self._daily_budget_usd)
+            self._tracker_date = asof_date
+        return self._spend_tracker.budget_exceeded
 
     def propagate(self, symbol: str, asof_date: date) -> PipelineResult:
+        if self._budget_exceeded_for(asof_date):
+            return PipelineResult(
+                symbol=symbol, date=asof_date, decision=PipelineDecision.DEFERRED,
+                raw={"reason": "daily_llm_budget_usd exhausted"},
+            )
         graph = self._ensure_graph()
         raw, decision_text = graph.propagate(symbol, asof_date.isoformat())
         decision = parse_decision(decision_text or "")

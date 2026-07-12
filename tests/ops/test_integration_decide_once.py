@@ -53,7 +53,7 @@ def test_full_pass_fill_then_stop(tmp_path):
         pipeline=pipeline,
         current_equity=guarded.get_equity(),
         asof_date=date(2026, 6, 30),
-    )
+    ).orders
     assert {p.order.symbol for p in proposals} == {"AAPL"}
 
     # Place orders

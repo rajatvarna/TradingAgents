@@ -155,11 +155,22 @@ class Journal:
         instance."""
         return self._path
 
-    def record_event(self, kind: str, payload: dict[str, Any]) -> None:
+    def record_event(
+        self, kind: str, payload: dict[str, Any], *, at: datetime | None = None,
+    ) -> None:
+        """Record an event. `at` defaults to real wall-clock time (the
+        normal, production behavior); pass it explicitly only when the
+        caller has its own notion of "now" (e.g. Orchestrator's injectable
+        now_fn) and that notion governs a has_event_today/
+        has_event_since_last_monday gate compared against this event —
+        otherwise a caller-simulated date can silently desync from the
+        real timestamp this row would otherwise get, as
+        KIND_DAILY_CYCLE_RUN does (see ops/scheduler/orchestrator.py)."""
+        ts = _to_iso(at) if at is not None else _now_iso()
         with self._lock:
             self._conn.execute(
                 "INSERT INTO events (at, kind, payload) VALUES (?, ?, ?)",
-                (_now_iso(), kind, json.dumps(payload, default=str)),
+                (ts, kind, json.dumps(payload, default=str)),
             )
 
     def read_events(self) -> list[dict[str, Any]]:
@@ -481,6 +492,32 @@ class Journal:
                 (kind, _to_iso(since)),
             ).fetchall()
         return frozenset(r[0] for r in rows if r[0])
+
+    def pending_kind_symbols(self, defer_kind: str, consume_kind: str) -> frozenset[str]:
+        """Distinct payload['symbol'] values with a `defer_kind` event not
+        yet superseded by a later `consume_kind` event for the same
+        symbol — a generic "pending until consumed" query (parametric on
+        kind, so the journal stays agnostic of what deferred/consumed mean
+        domain-wise). Used by ops/scheduler/orchestrator.py for the daily
+        LLM-budget deferral queue (F3): a symbol cut off by the budget is
+        pending until the next cycle re-offers and consumes it."""
+        with self._lock:
+            deferred_rows = self._conn.execute(
+                "SELECT json_extract(payload, '$.symbol') AS symbol, MAX(id) AS last_id"
+                " FROM events WHERE kind = ? GROUP BY symbol",
+                (defer_kind,),
+            ).fetchall()
+            consumed_rows = self._conn.execute(
+                "SELECT json_extract(payload, '$.symbol') AS symbol, MAX(id) AS last_id"
+                " FROM events WHERE kind = ? GROUP BY symbol",
+                (consume_kind,),
+            ).fetchall()
+        deferred = {r[0]: r[1] for r in deferred_rows if r[0]}
+        consumed = {r[0]: r[1] for r in consumed_rows if r[0]}
+        return frozenset(
+            sym for sym, last_deferred_id in deferred.items()
+            if sym not in consumed or consumed[sym] < last_deferred_id
+        )
 
     def __enter__(self) -> Journal:
         return self

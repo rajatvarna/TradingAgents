@@ -71,6 +71,12 @@ class OpsConfig:
     live_fill_gate_count: int = 20
     # Cost dial: max full-pipeline (LLM) analyses per day; risk is capped separately.
     daily_analysis_budget: int = 8
+    # Cost dial (F3): hard USD cap on same-day cumulative LLM spend across
+    # ALL pipeline runs, independent of and in addition to
+    # daily_analysis_budget's candidate-count cap — whichever binds first
+    # stops dispatching for the day. None (default) preserves today's
+    # behavior exactly: unlimited USD spend, count cap only.
+    daily_llm_budget_usd: Decimal | None = None
     # Exit engine (spec Component 6). Entry is top-daily_analysis_budget;
     # the gap up to momentum_exit_rank is deliberate hysteresis.
     momentum_exit_rank: int = 25
@@ -104,6 +110,10 @@ class OpsConfig:
         if self.daily_analysis_budget <= 0:
             raise ValueError(
                 f"daily_analysis_budget must be > 0, got {self.daily_analysis_budget}"
+            )
+        if self.daily_llm_budget_usd is not None and self.daily_llm_budget_usd <= 0:
+            raise ValueError(
+                f"daily_llm_budget_usd must be > 0 when set, got {self.daily_llm_budget_usd}"
             )
         for fname in ("earnings_max_hold_days", "stopout_reentry_cooldown_days"):
             val = getattr(self, fname)
@@ -245,6 +255,10 @@ def load_config() -> OpsConfig:
     daily_analysis_budget = _env_int("OPS_DAILY_ANALYSIS_BUDGET")
     if daily_analysis_budget is not None:
         kwargs["daily_analysis_budget"] = daily_analysis_budget
+
+    daily_llm_budget_usd = _env_decimal("OPS_DAILY_LLM_BUDGET_USD")
+    if daily_llm_budget_usd is not None:
+        kwargs["daily_llm_budget_usd"] = daily_llm_budget_usd
 
     momentum_exit_rank = _env_int("OPS_MOMENTUM_EXIT_RANK")
     if momentum_exit_rank is not None:

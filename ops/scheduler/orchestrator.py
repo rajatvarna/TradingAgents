@@ -76,6 +76,7 @@ class Orchestrator:
         self._journal.record_event(
             events.KIND_DAILY_CYCLE_RUN,
             events.daily_cycle_run_payload(asof_date=asof_date),
+            at=now,
         )
 
         # Leaderboard is computed ONCE per tick: the exit engine reads held
@@ -97,23 +98,41 @@ class Orchestrator:
 
         held = {p.symbol for p in self._broker.get_positions()}
         free_slots = max(0, self._config.max_open_positions - len(held))
+        # F3: symbols the daily LLM USD budget deferred on a prior cycle
+        # get one retry, prioritized ahead of this cycle's fresh scan
+        # results — recomputed at today's cap/eligibility, never
+        # reconstructed from stale data.
+        pending_deferred = self._journal.pending_kind_symbols(
+            events.KIND_ANALYSIS_DEFERRED, events.KIND_ANALYSIS_DEFERRED_CONSUMED,
+        )
         candidates = self._universe_builder(
             asof_date=asof_date, config=self._config,
             held_symbols=frozenset(held), free_slots=free_slots,
             excluded_symbols=self._cooldown_symbols(asof_date),
             momentum_leaders=leaderboard,
+            priority_symbols=pending_deferred,
         )
+        # Each deferred symbol gets exactly one retry: mark it consumed
+        # for today regardless of whether it made it back into candidates
+        # (still eligible vs. no longer eligible/liquid) — otherwise a
+        # symbol that never regains eligibility would be retried forever.
+        for symbol in pending_deferred:
+            self._journal.record_event(
+                events.KIND_ANALYSIS_DEFERRED_CONSUMED,
+                events.analysis_deferred_consumed_payload(symbol=symbol, asof_date=asof_date),
+                at=now,
+            )
         fresh_candidates = [c for c in candidates if c.symbol not in held]
         current_equity = self._broker.get_equity()
         live_cap = self._compute_live_cap()
-        proposals = self._strategy.propose_orders(
+        result = self._strategy.propose_orders(
             candidates=fresh_candidates,
             pipeline=self._pipeline_adapter,
             current_equity=current_equity,
             asof_date=asof_date,
             live_max_position_cap=live_cap,
         )
-        for proposal in proposals:
+        for proposal in result.orders:
             try:
                 self._broker.place_order(proposal.order)
             except OrderRejected:
@@ -130,6 +149,15 @@ class Orchestrator:
                     client_order_id=proposal.order.client_order_id,
                     entry_rank=cand.momentum.rank if cand.momentum else None,
                 ),
+            )
+        for symbol in result.deferred_symbols:
+            self._journal.record_event(
+                events.KIND_ANALYSIS_DEFERRED,
+                events.analysis_deferred_payload(
+                    symbol=symbol, asof_date=asof_date,
+                    reason="daily_llm_budget_usd exhausted",
+                ),
+                at=now,
             )
 
     def _run_exits(self, leaderboard, asof_date) -> None:

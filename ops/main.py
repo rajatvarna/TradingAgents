@@ -276,7 +276,7 @@ def _wire(broker, journal: Journal, config: OpsConfig):
         broker=broker,
         universe_builder=build_composite_universe,
         strategy=PostEarningsMomentumStrategy(config=config),
-        pipeline_adapter=TradingAgentsPipelineAdapter(),
+        pipeline_adapter=TradingAgentsPipelineAdapter(daily_budget_usd=config.daily_llm_budget_usd),
         calendar=calendar, journal=journal, config=config,
     )
     guardian = PositionGuardian(

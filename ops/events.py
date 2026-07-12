@@ -89,6 +89,12 @@ KIND_EXIT_UNKNOWN_PROVENANCE = "exit_unknown_provenance"
 # Scheduler / daily-cycle gate
 KIND_DAILY_CYCLE_RUN = "daily_cycle_run"
 
+# F3: daily LLM USD budget — a candidate cut off by an exhausted budget is
+# deferred (offered again, once, on the next trading day's cycle ahead of
+# fresh scan results) rather than silently dropped for the day.
+KIND_ANALYSIS_DEFERRED = "analysis_deferred"
+KIND_ANALYSIS_DEFERRED_CONSUMED = "analysis_deferred_consumed"
+
 # Kinds deliberately NOT notified. Everything here is an audit trail the
 # operator reads via `ops status` or sqlite, not a push/email — either
 # because it fires during normal operation (service lifecycle, replay
@@ -119,6 +125,9 @@ AUDIT_ONLY: frozenset[str] = frozenset({
     KIND_EXIT_UNKNOWN_PROVENANCE,
     # Operational bookkeeping, gates the once-daily universe/exit cycle.
     KIND_DAILY_CYCLE_RUN,
+    # F3 budget-deferral bookkeeping — not urgent; visible via ops status/sqlite.
+    KIND_ANALYSIS_DEFERRED,
+    KIND_ANALYSIS_DEFERRED_CONSUMED,
 })
 
 
@@ -436,6 +445,14 @@ def daily_cycle_run_payload(*, asof_date: date) -> dict[str, Any]:
     return {"asof_date": asof_date.isoformat()}
 
 
+def analysis_deferred_payload(*, symbol: str, asof_date: date, reason: str) -> dict[str, Any]:
+    return {"symbol": symbol, "asof_date": asof_date.isoformat(), "reason": reason}
+
+
+def analysis_deferred_consumed_payload(*, symbol: str, asof_date: date) -> dict[str, Any]:
+    return {"symbol": symbol, "asof_date": asof_date.isoformat()}
+
+
 # Kind -> builder registry: the enforcement test walks this to prove every
 # POLICY kind has a builder and every builder's kind has been classified
 # (POLICY or AUDIT_ONLY). Register every new builder here.
@@ -476,4 +493,6 @@ BUILDERS: dict[str, Callable[..., dict[str, Any]]] = {
     KIND_EXIT_CHECK_ERROR: exit_check_error_payload,
     KIND_EXIT_UNKNOWN_PROVENANCE: exit_unknown_provenance_payload,
     KIND_DAILY_CYCLE_RUN: daily_cycle_run_payload,
+    KIND_ANALYSIS_DEFERRED: analysis_deferred_payload,
+    KIND_ANALYSIS_DEFERRED_CONSUMED: analysis_deferred_consumed_payload,
 }

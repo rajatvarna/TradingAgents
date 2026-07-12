@@ -180,50 +180,75 @@ one at a time, matching the existing strategy interface.
 
 ---
 
-### F3. Hard daily LLM budget cap (`tradingagents/spend_tracker.py` + graph wiring) — NOT YET IMPLEMENTED
+### F3. Hard daily LLM budget cap — IMPLEMENTED
 
 **Problem, revised.** Spec decision #5 wants a hard daily budget cap with
 overflow queued to the next day. `ops/config.py::OpsConfig.daily_analysis_budget`
-already gates *how many tickers* get the full LLM pipeline per day
+already gated *how many tickers* get the full LLM pipeline per day
 (`ops/universe/composite.py` caps candidates at
 `min(daily_analysis_budget, free_slots)`), enforced inside the existing
-`Orchestrator.tick()` — so the count-based half of this already exists and
-works. Two real gaps remain: (1) no dollar-based tracking — the cap is a
-candidate count, not a cost ceiling, so it under- or over-spends depending on
-which tickers get analyzed; (2) no explicit deferral — candidates cut by the
-count cap are simply not selected that day and are re-evaluated fresh
-tomorrow (they may or may not reappear depending on the leaderboard), rather
-than being queued forward as the spec's "overflow to next day" implies.
+`Orchestrator.tick()` — so the count-based half already existed. Two real gaps
+remained: (1) no dollar-based tracking — the cap was a candidate count, not a
+cost ceiling; (2) no explicit deferral — candidates cut by either cap were
+simply dropped for the day rather than queued forward.
 
-**Design (updated to layer on the existing mechanism, not replace it).**
+**What was actually built** (simpler than the original design — no separate
+JSON ledger file was needed):
 
-- Extend `SpendTracker` (`tradingagents/spend_tracker.py`) with a persistent
-  daily USD ledger at `~/.tradingagents/spend/YYYY-MM-DD.json` (day boundary
-  from `ops/trading_time.py`, matching the existing daily/weekly snapshot
-  boundary convention in `ops/position_guardian.py`).
-- `Orchestrator.tick()` checks the ledger before dispatching each candidate to
-  the pipeline adapter: if projected spend would exceed `daily_llm_budget_usd`,
-  stop dispatching for the day and journal the remaining candidates as
-  deferred (new `KIND_ANALYSIS_DEFERRED` event) rather than silently dropping
-  them — the next trading day's cycle reads deferred candidates back in ahead
-  of a fresh universe scan, satisfying "queues overflow to next day."
-- `daily_analysis_budget` (count) and `daily_llm_budget_usd` (dollars) are
-  independent caps that both apply — whichever is hit first stops that day's
-  dispatching, both produce the same deferral behavior.
+- `TradingAgentsGraph` already installs a `SpendTracker` `callbacks` hook
+  supporting a `max_cost` that raises `BudgetExceededError` mid-run when
+  exceeded (used, unrelated to F3, by `_run_graph`'s existing per-run
+  abort-and-continue handling). `ops/pipeline_adapter.py::TradingAgentsPipelineAdapter`
+  now constructs ONE persistent `SpendTracker` at adapter-construction time,
+  wires it into the graph's `callbacks=` once (the graph itself is built
+  lazily and cached forever), and *mutates it in place* (`.reset()` +
+  `.max_cost` update) at each new trading day's first call — no separate
+  ledger file, no cross-process persistence needed, since the entire day's
+  candidate-dispatch loop runs within one `Orchestrator.tick()` call.
+- Before running the graph at all, `propagate()` checks
+  `self._spend_tracker.budget_exceeded`; once tripped, it short-circuits to a
+  new `PipelineDecision.DEFERRED` — cheaper than letting the graph start a run
+  and abort mid-way.
+- `PostEarningsMomentumStrategy.propose_orders` (the one `Strategy`
+  implementation) now returns `ProposeOrdersResult(orders, deferred_symbols)`
+  instead of a bare list — matching the `Strategy` protocol's updated
+  contract — and stops evaluating further candidates the moment one defers
+  (every remaining candidate would too, same shared tracker).
+- `Orchestrator._tick_impl` journals each deferred symbol
+  (`KIND_ANALYSIS_DEFERRED`) and, before calling the universe builder, reads
+  back any symbols pending from a *prior* cycle via the new generic
+  `Journal.pending_kind_symbols(defer_kind, consume_kind)` query, passing them
+  as `priority_symbols` into `build_composite_universe` — which moves any
+  still-eligible match to the front of the candidate list (recomputed fresh
+  against today's liquidity/eligibility, never reconstructed from stale data)
+  before the count/$ cap is applied. Every pending symbol is marked
+  `KIND_ANALYSIS_DEFERRED_CONSUMED` that same cycle regardless of outcome, so
+  a symbol gets exactly one retry, not an indefinite one.
+- Both caps are independent and both still apply: `daily_analysis_budget`
+  (count, pre-existing) and `daily_llm_budget_usd` (dollars, new) — whichever
+  binds first stops the day's dispatching.
 
-**Config keys:** `daily_llm_budget_usd` (default `None` = unlimited, preserving
-current behavior — count-based `daily_analysis_budget` still applies on its
-own as today).
+**Config keys:** `daily_llm_budget_usd: Decimal | None = None` (env
+`OPS_DAILY_LLM_BUDGET_USD`) — unset preserves prior behavior exactly (count
+cap only, unlimited USD).
 
-**Tests:** ledger day-boundary rollover; dispatch stops and defers when the
-USD cap is hit before the count cap (and vice versa); deferred candidates are
-re-offered on the next cycle ahead of fresh scan results; `None` budget
-preserves exactly today's count-only behavior (regression guard).
+**Bonus fix during implementation:** found and fixed a real bug in
+`Journal.has_event_today` while building/testing this — see CHANGELOG "Fix:
+`has_event_today` desync..." entry. `record_event` gained an optional `at`
+override (mirroring `record_equity_snapshot`'s existing pattern), used for
+`KIND_DAILY_CYCLE_RUN` and the new F3 deferral events so their timestamps
+match the orchestrator's injected/simulated `now` rather than always real
+wall-clock time.
 
-**Acceptance criteria.** With `daily_llm_budget_usd` set low enough to bind
-before `daily_analysis_budget`, `Orchestrator.tick()` stops dispatching mid-batch
-and the untouched candidates appear analyzed on the next trading day's tick
-without a fresh universe scan needing to rediscover them.
+**Tests:** `tests/ops/test_pipeline_adapter.py` (budget exhaustion → DEFERRED
+without running the graph; day-boundary reset; unset budget always runs),
+`tests/ops/strategy/test_post_earnings_momentum.py` (stops on first DEFERRED,
+collects the rest as deferred), `tests/ops/universe/test_composite.py`
+(`priority_symbols` reordering), `tests/ops/test_journal.py`
+(`pending_kind_symbols` semantics, including "deferred → consumed → deferred
+again" reappearing correctly), `tests/ops/scheduler/test_orchestrator.py`
+(end-to-end wiring: priority passed in, consumption marked, deferred events
+journaled). All passing, no new dependency.
 
 **Estimated effort:** 2–3 days.
 
@@ -329,43 +354,46 @@ unmodified.
 ## 6. Sequencing and milestones (revised)
 
 ```
-Phase 0 (remaining)          Phase 1 (≈ 2 weeks)       Phase 2 (≈ 1 week)
-─────────────────────        ───────────────────       ──────────────────
-F2 alpaca broker  ✅ done     F5 typed config           F6 intraday data
-F3 budget cap     ← next     F4 scanner loop  ✅ done      (needs F2)
+Phase 0 — ALL DONE               Phase 1                   Phase 2
+─────────────────────            ───────────────────       ──────────────────
+F2 alpaca broker  ✅ done         F5 typed config  ← next   F6 intraday data
+F2 ibkr broker    ✅ done         F4 scanner loop  ✅ done      (needs F2, done)
+F3 budget cap     ✅ done
 F1 portfolio      ✂ dropped
 ```
 
-- **F2 shipped** as `ops/broker/alpaca.py` (see §3 above) — Alpaca is now a
-  selectable `broker_mode` alongside `paper`/`robinhood`.
+- **F2 shipped** as `ops/broker/alpaca.py` + `ops/broker/ibkr.py` (see §3
+  above) — `paper`/`robinhood`/`alpaca`/`ibkr` are all selectable
+  `broker_mode` values now.
 - **F1 dropped** — no separate portfolio-state package; `ops/broker` +
   `ops/journal` already is that state.
-- **F3 is next** — the USD ledger + deferral layered on the existing
-  count-based `daily_analysis_budget`.
+- **F3 shipped** — USD budget + one-retry deferral layered on the existing
+  count-based `daily_analysis_budget` (see §3 above for what was actually
+  built, which turned out simpler than the original design: an in-process
+  `SpendTracker` mutated per-day, no separate ledger file).
 - **F4 required no work** — `ops run` already is the scanner-to-analysis loop.
-- **F5** (typed config) can proceed independently at any point.
-- **Milestone M1 (paper-traded, budget-capped, unattended single-cycle flow):**
-  reached once F3 lands — F2 and F4 are already in place.
-- **Milestone M2 (validated config):** F5.
-- **Milestone M3 (intraday-aware exits):** F6, needs F2 (done).
+- **Phase 0 is complete.** Remaining work is F5 (typed config, next) and F6
+  (intraday data).
+- **Milestone M1 (paper-traded, budget-capped, unattended single-cycle
+  flow): reached** — F2, F3, F4 are all in place.
+- **Milestone M2 (validated config):** F5, not started.
+- **Milestone M3 (intraday-aware exits):** F6, needs F2 (done), not started.
 
 One branch and one PR per remaining feature, per repo convention
-(`feat/llm-budget-cap`, `feat/typed-config`, `feat/intraday-data`), each with a
-`CHANGELOG.md` entry under `[Unreleased]`. F2 was implemented directly on
-`claude/core-features-plan-gwdmiq` per this session's instructions; the
-`ops/broker/alpaca.py` change is small and self-contained enough not to need
-its own branch, but should still get upstream-fork review before merging to
-`main`.
+(`feat/typed-config`, `feat/intraday-data`), each with a `CHANGELOG.md` entry
+under `[Unreleased]`. F1–F4 were implemented directly on
+`claude/core-features-plan-gwdmiq` per this session's instructions.
 
 ### Upstream note
 
 Per `CLAUDE.md` this is a contribution-first fork. Realistically: **F5** (typed
 config validation) and **F6** (intraday intervals) are strong upstream PR
-candidates — general-purpose, additive, well-tested. **F3** (budget cap) is
-plausible upstream, scoped to the `tradingagents/` package (not `ops/`).
-**F2 (Alpaca) and F4 (scanner loop)** live entirely in this fork's `ops/`
-platform layer, which upstream does not have (upstream is a single-ticker
-research framework, not a live-trading service); they stay fork-local.
+candidates — general-purpose, additive, well-tested. **F2 (Alpaca/IBKR
+brokers), F3 (budget deferral), and F4 (scanner loop)** live entirely in this
+fork's `ops/` platform layer, which upstream does not have (upstream is a
+single-ticker research framework, not a live-trading service); they stay
+fork-local, though F3 does lean on `tradingagents/spend_tracker.py`'s
+already-upstream-relevant `SpendTracker`/`BudgetExceededError` mechanism.
 
 ## 7. Cross-cutting requirements (apply to every feature)
 

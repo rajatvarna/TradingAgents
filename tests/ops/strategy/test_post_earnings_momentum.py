@@ -43,7 +43,7 @@ def test_emits_buy_order_for_pipeline_buy():
     orders = strat.propose_orders(
         candidates=[_candidate("AAPL")], pipeline=pipe,
         current_equity=Decimal("250"), asof_date=date(2026, 6, 30),
-    )
+    ).orders
     assert len(orders) == 1
     so = orders[0]
     assert so.order.symbol == "AAPL"
@@ -68,7 +68,7 @@ def test_skips_non_buy_decisions():
     orders = strat.propose_orders(
         candidates=[_candidate("AAPL"), _candidate("MSFT")], pipeline=pipe,
         current_equity=Decimal("250"), asof_date=date(2026, 6, 30),
-    )
+    ).orders
     assert orders == []
 
 
@@ -81,7 +81,7 @@ def test_skips_when_notional_below_floor():
         candidates=[_candidate("AAPL")], pipeline=pipe,
         current_equity=Decimal("40"),     # 12% = $4.80, below $5 floor
         asof_date=date(2026, 6, 30),
-    )
+    ).orders
     assert orders == []
 
 
@@ -92,7 +92,7 @@ def test_client_order_id_is_unique_per_candidate(monkeypatch):
     orders = strat.propose_orders(
         candidates=[_candidate("AAPL"), _candidate("MSFT")], pipeline=pipe,
         current_equity=Decimal("250"), asof_date=date(2026, 6, 30),
-    )
+    ).orders
     cids = {o.order.client_order_id for o in orders}
     assert len(cids) == 2
 
@@ -112,11 +112,11 @@ def test_client_order_id_distinct_across_ticks_for_same_symbol_and_date():
     first_tick = strat.propose_orders(
         candidates=[_candidate("AAPL")], pipeline=pipe,
         current_equity=Decimal("250"), asof_date=asof,
-    )
+    ).orders
     second_tick = strat.propose_orders(
         candidates=[_candidate("AAPL")], pipeline=pipe,
         current_equity=Decimal("250"), asof_date=asof,
-    )
+    ).orders
     id1 = first_tick[0].order.client_order_id
     id2 = second_tick[0].order.client_order_id
     assert id1 != id2
@@ -133,7 +133,7 @@ def test_live_max_position_cap_clamps_notional():
         candidates=[_candidate("AAPL")], pipeline=pipe,
         current_equity=Decimal("250"), asof_date=date(2026, 6, 30),
         live_max_position_cap=Decimal("10"),
-    )
+    ).orders
     assert len(orders) == 1
     assert orders[0].order.notional_dollars == Decimal("10.00")
 
@@ -148,7 +148,7 @@ def test_live_max_position_cap_no_effect_when_higher():
         candidates=[_candidate("AAPL")], pipeline=pipe,
         current_equity=Decimal("250"), asof_date=date(2026, 6, 30),
         live_max_position_cap=Decimal("100"),
-    )
+    ).orders
     assert len(orders) == 1
     assert orders[0].order.notional_dollars == Decimal("30.00")
 
@@ -162,7 +162,7 @@ def test_live_max_position_cap_none_uses_normal_notional():
         candidates=[_candidate("AAPL")], pipeline=pipe,
         current_equity=Decimal("250"), asof_date=date(2026, 6, 30),
         live_max_position_cap=None,
-    )
+    ).orders
     assert len(orders) == 1
     assert orders[0].order.notional_dollars == Decimal("30.00")
 
@@ -177,7 +177,53 @@ def test_momentum_candidate_gets_momentum_reason():
     orders = strategy.propose_orders(
         candidates=[cand], pipeline=_fake_pipeline_buy(),
         current_equity=Decimal("1000"), asof_date=date(2026, 7, 2),
-    )
+    ).orders
     assert len(orders) == 1
     assert "6-mo momentum leader" in orders[0].reason
     assert "0.4" in orders[0].reason
+
+
+# --- F3: daily LLM budget deferral ------------------------------------------
+
+
+class _FirstDefersPipeline:
+    """Fake pipeline: symbol given in `deferred_symbol` returns DEFERRED,
+    everything else returns BUY."""
+
+    def __init__(self, deferred_symbol):
+        self._deferred_symbol = deferred_symbol
+
+    def propagate(self, symbol, asof_date):
+        from ops.pipeline_adapter import PipelineResult
+        decision = (
+            PipelineDecision.DEFERRED if symbol == self._deferred_symbol
+            else PipelineDecision.BUY
+        )
+        return PipelineResult(symbol=symbol, date=asof_date, decision=decision, raw={})
+
+
+def test_deferred_decision_stops_evaluating_remaining_candidates():
+    """Once the shared budget tracker is exhausted, every remaining
+    candidate would also defer — stop evaluating rather than burning
+    setup work on calls that will all short-circuit the same way."""
+    cfg = OpsConfig()
+    strat = PostEarningsMomentumStrategy(config=cfg)
+    pipe = _FirstDefersPipeline(deferred_symbol="MSFT")
+    result = strat.propose_orders(
+        candidates=[_candidate("AAPL"), _candidate("MSFT"), _candidate("NVDA")],
+        pipeline=pipe, current_equity=Decimal("250"), asof_date=date(2026, 6, 30),
+    )
+    assert len(result.orders) == 1
+    assert result.orders[0].order.symbol == "AAPL"
+    assert result.deferred_symbols == ["MSFT", "NVDA"]
+
+
+def test_no_deferred_symbols_when_budget_not_exhausted():
+    cfg = OpsConfig()
+    strat = PostEarningsMomentumStrategy(config=cfg)
+    pipe = StubPipelineAdapter({"AAPL": PipelineDecision.BUY})
+    result = strat.propose_orders(
+        candidates=[_candidate("AAPL")], pipeline=pipe,
+        current_equity=Decimal("250"), asof_date=date(2026, 6, 30),
+    )
+    assert result.deferred_symbols == []

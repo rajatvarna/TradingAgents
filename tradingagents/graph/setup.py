@@ -168,17 +168,39 @@ class GraphSetup:
         compression_enabled = self.config.get("state_compression_enabled", False)
 
         def compressor_node(state):
-            """Prune old messages to reduce prompt token counts between graph phases."""
+            """Prune old messages to reduce prompt token counts between graph phases.
+
+            Keeps at least the last 2 messages, but walks further back if needed
+            so the kept window never starts mid tool-call (an AIMessage with
+            ``tool_calls`` whose matching ToolMessage got pruned would produce an
+            invalid request on the next LLM call).
+            """
             if not compression_enabled:
                 return {}
             msgs = state.get("messages", [])
             n = len(msgs)
             if n <= 2:
                 return {}
-            # Remove all but the last 2 messages then prepend a summary note.
-            removals = [RemoveMessage(id=m.id) for m in msgs[:-2] if m.id is not None]
+            keep_from = n - 2
+            while keep_from > 0:
+                candidate = msgs[keep_from]
+                if getattr(candidate, "type", None) == "tool":
+                    keep_from -= 1
+                    continue
+                prev = msgs[keep_from - 1]
+                if getattr(prev, "tool_calls", None):
+                    keep_from -= 1
+                    continue
+                break
+            removals = [RemoveMessage(id=m.id) for m in msgs[:keep_from] if m.id is not None]
+            if not removals:
+                return {}
+            ticker = state.get("company_of_interest") or "the instrument"
             summary = HumanMessage(
-                content=f"[prior tool outputs summarised — {n} messages compressed]"
+                content=(
+                    f"[{len(removals)} prior tool-call messages for {ticker} compressed — "
+                    "synthesized findings remain available in the analyst report fields]"
+                )
             )
             return {"messages": [summary] + removals}
 

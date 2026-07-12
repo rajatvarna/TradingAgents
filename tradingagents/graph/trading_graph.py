@@ -683,7 +683,8 @@ class TradingAgentsGraph:
                 n_entries=self.config.get("analyst_weights_lookback", 20)
             )
             init_agent_state["analyst_weights"] = analyst_weights
-        except Exception:
+        except Exception as exc:
+            logger.warning("Analyst weights computation failed, falling back to unweighted: %s", exc)
             init_agent_state["analyst_weights"] = {}
 
         try:
@@ -1064,7 +1065,7 @@ class TradingAgentsGraph:
             if analyst_weights:
                 logger.info("Analyst accuracy weights loaded: %s", analyst_weights)
         except Exception as exc:
-            logger.debug("Analyst weights computation skipped: %s", exc)
+            logger.warning("Analyst weights computation failed, falling back to unweighted: %s", exc)
             init_agent_state["analyst_weights"] = {}
 
         # Macro regime classification — inject FRED-based regime label before analysis.

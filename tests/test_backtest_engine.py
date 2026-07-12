@@ -1354,12 +1354,12 @@ if __name__ == "__main__":
 
 class MarketImpactSlippageTest(unittest.TestCase):
     def _engine(self, **overrides):
-        kwargs = dict(
-            ticker="TEST",
-            start_date="2025-01-01",
-            end_date="2025-01-02",
-            initial_capital=100_000.0,
-        )
+        kwargs = {
+            "ticker": "TEST",
+            "start_date": "2025-01-01",
+            "end_date": "2025-01-02",
+            "initial_capital": 100_000.0,
+        }
         kwargs.update(overrides)
         return BacktestEngine(**kwargs)
 

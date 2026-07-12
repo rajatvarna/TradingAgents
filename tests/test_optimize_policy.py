@@ -73,6 +73,37 @@ class OptimizePolicyTest(unittest.TestCase):
         self.assertEqual(folds[0].test_end, "2025-01-06")
         self.assertEqual(folds[1].train_start, "2025-01-03")
 
+    def test_build_walk_forward_folds_embargo_gap_skips_days(self):
+        days = pd.Series(pd.date_range("2025-01-01", periods=10, freq="D"))
+
+        folds = build_walk_forward_folds(
+            days, train_days=4, test_days=2, step_days=2, embargo_days=1,
+        )
+
+        # Without embargo, fold[0] test would start 2025-01-05; with a
+        # 1-day embargo it should be pushed to 2025-01-06.
+        self.assertEqual(folds[0].train_end, "2025-01-04")
+        self.assertEqual(folds[0].test_start, "2025-01-06")
+        self.assertEqual(folds[0].test_end, "2025-01-07")
+
+    def test_build_walk_forward_folds_rejects_negative_embargo(self):
+        days = pd.Series(pd.date_range("2025-01-01", periods=10, freq="D"))
+
+        with self.assertRaises(ValueError):
+            build_walk_forward_folds(
+                days, train_days=4, test_days=2, embargo_days=-1,
+            )
+
+    def test_build_walk_forward_folds_embargo_reduces_fold_count(self):
+        days = pd.Series(pd.date_range("2025-01-01", periods=10, freq="D"))
+
+        no_embargo = build_walk_forward_folds(days, train_days=4, test_days=2, step_days=2)
+        with_embargo = build_walk_forward_folds(
+            days, train_days=4, test_days=2, step_days=2, embargo_days=2,
+        )
+
+        self.assertGreaterEqual(len(no_embargo), len(with_embargo))
+
 
 if __name__ == "__main__":
     unittest.main()

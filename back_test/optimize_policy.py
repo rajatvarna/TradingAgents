@@ -185,18 +185,30 @@ def build_walk_forward_folds(
     train_days: int,
     test_days: int,
     step_days: Optional[int] = None,
+    embargo_days: int = 0,
 ) -> list[Fold]:
+    """Build walk-forward train/test folds.
+
+    ``embargo_days`` skips a gap of trading days between the end of the
+    train window and the start of the test window. This purges the fold
+    boundary so features/labels computed with trailing windows in the
+    training set (e.g. multi-day indicators) can't leak into the test
+    window's signal — a standard walk-forward hygiene practice.
+    """
     days = pd.Series(pd.to_datetime(trading_days).drop_duplicates()).sort_values().reset_index(drop=True)
     step = step_days or test_days
     if train_days <= 1 or test_days <= 0 or step <= 0:
         raise ValueError("train_days must be > 1 and test_days/step_days must be positive")
+    if embargo_days < 0:
+        raise ValueError("embargo_days must be >= 0")
 
     folds: list[Fold] = []
     start_idx = 0
     fold_index = 0
-    while start_idx + train_days + test_days <= len(days):
+    while start_idx + train_days + embargo_days + test_days <= len(days):
         train = days.iloc[start_idx:start_idx + train_days]
-        test = days.iloc[start_idx + train_days:start_idx + train_days + test_days]
+        test_start_idx = start_idx + train_days + embargo_days
+        test = days.iloc[test_start_idx:test_start_idx + test_days]
         folds.append(
             Fold(
                 index=fold_index,
@@ -231,6 +243,7 @@ def walk_forward_optimize(
     seed: int,
     initial_capital: float,
     strategies_dir: Optional[Path] = None,
+    embargo_days: int = 0,
 ) -> dict[str, Any]:
     trading_days = _load_trading_days(ticker, start, end, initial_capital)
     folds = build_walk_forward_folds(
@@ -238,6 +251,7 @@ def walk_forward_optimize(
         train_days=train_days,
         test_days=test_days,
         step_days=step_days,
+        embargo_days=embargo_days,
     )
     if not folds:
         raise ValueError(
@@ -282,6 +296,10 @@ def walk_forward_optimize(
         )
         test_score = score_metrics(test_metrics, test_report)
         test_scores.append(test_score)
+        # Overfit ratio: how much better the tuned params look in-sample
+        # than out-of-sample. Near 0 is well-generalized; large positive
+        # values indicate the search overfit the training window.
+        overfit_ratio = best_train_score - test_score
         fold_results.append({
             "fold": fold.__dict__,
             "best_params": best_params,
@@ -291,6 +309,7 @@ def walk_forward_optimize(
             "test_score": test_score,
             "test_metrics": test_metrics,
             "test_report": test_report,
+            "overfit_ratio": overfit_ratio,
             "baseline_test_score": score_metrics(baseline_test_metrics, baseline_test_report),
             "baseline_test_metrics": baseline_test_metrics,
             "n_trials": n_trials,
@@ -298,6 +317,7 @@ def walk_forward_optimize(
         })
 
     mean_test_score = sum(test_scores) / len(test_scores)
+    mean_overfit_ratio = sum(f["overfit_ratio"] for f in fold_results) / len(fold_results)
     return {
         "schema_version": "policy_optimization_v1",
         "optimizer": "optuna_tpe",
@@ -309,6 +329,7 @@ def walk_forward_optimize(
         "train_days": train_days,
         "test_days": test_days,
         "step_days": step_days or test_days,
+        "embargo_days": embargo_days,
         "seed": seed,
         "search_space": {
             "source": "back_test.optimize_policy.suggest_policy_params",
@@ -317,6 +338,7 @@ def walk_forward_optimize(
         "summary": {
             "n_folds": len(fold_results),
             "mean_test_score": mean_test_score,
+            "mean_overfit_ratio": mean_overfit_ratio,
             "best_fold_index": max(
                 range(len(fold_results)),
                 key=lambda i: fold_results[i]["test_score"],
@@ -337,6 +359,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--train-days", type=int, default=120)
     parser.add_argument("--test-days", type=int, default=20)
     parser.add_argument("--step-days", type=int, default=None)
+    parser.add_argument("--embargo-days", type=int, default=0,
+                        help="Trading-day gap purged between train and test windows (default: 0)")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--initial-capital", type=float, default=100_000.0)
     parser.add_argument("--strategies-dir", type=Path, default=None)
@@ -354,6 +378,7 @@ def main() -> None:
         train_days=args.train_days,
         test_days=args.test_days,
         step_days=args.step_days,
+        embargo_days=args.embargo_days,
         seed=args.seed,
         initial_capital=args.initial_capital,
         strategies_dir=args.strategies_dir,

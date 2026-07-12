@@ -38,10 +38,14 @@ CLI usage
     python -m tradingagents.audit.replay summary <path>
     python -m tradingagents.audit.replay prompts <path>
     python -m tradingagents.audit.replay tree <path>
+    python -m tradingagents.audit.replay export <path> [--output bundle.json]
 
 All commands accept ``--json`` for machine-readable output and
 ``--registry-dir <path>`` to override the prompt template lookup
-(useful for replaying against an older repo checkout).
+(useful for replaying against an older repo checkout). ``export``
+bundles verify + summary + prompts + tree into one JSON artifact —
+handy for handing a single file to a compliance reviewer instead of
+running four separate commands.
 """
 
 from __future__ import annotations
@@ -338,6 +342,23 @@ class Replayer:
     # Call tree
     # ------------------------------------------------------------------ #
 
+    def export_bundle(self) -> dict[str, Any]:
+        """Bundle verify + summary + prompts + tree into one portable artifact.
+
+        Intended for handing a single file to a compliance reviewer or
+        external auditor without them needing to run four separate CLI
+        commands against the raw trace file.
+        """
+        verify_result = self.verify_chain()
+        return {
+            "source_path": str(self.path),
+            "exported_at": datetime.now().isoformat(timespec="seconds"),
+            "chain_verification": asdict(verify_result),
+            "summary": self.summary().to_dict(),
+            "prompt_verification": [c.to_dict() for c in self.verify_prompts()],
+            "call_tree": self.tree(),
+        }
+
     def tree(self) -> list[dict[str, Any]]:
         """Reconstruct the call hierarchy from ``parent_record_id`` links.
 
@@ -508,13 +529,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "command",
-        choices=["verify", "summary", "prompts", "tree"],
+        choices=["verify", "summary", "prompts", "tree", "export"],
         help="What to do with the trace file.",
     )
     parser.add_argument("path", help="Path to the trace JSONL file.")
     parser.add_argument(
         "--json", action="store_true",
         help="Emit machine-readable JSON instead of human-readable output.",
+    )
+    parser.add_argument(
+        "--output", "-o", default=None,
+        help=(
+            "For 'export': write the bundle to this file instead of stdout "
+            "(always JSON, regardless of --json)."
+        ),
     )
     parser.add_argument(
         "--registry-dir", default=None,
@@ -562,6 +590,16 @@ def main(argv: list[str] | None = None) -> int:
         roots = replayer.tree()
         _print_tree(roots, args.json)
         return 0
+
+    if args.command == "export":
+        bundle = replayer.export_bundle()
+        rendered = json.dumps(bundle, indent=2, default=str)
+        if args.output:
+            Path(args.output).write_text(rendered, encoding="utf-8")
+            print(f"Audit bundle written to {args.output}")
+        else:
+            print(rendered)
+        return 0 if bundle["chain_verification"]["ok"] else 1
 
     return 2  # unreachable
 

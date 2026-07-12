@@ -1350,3 +1350,66 @@ class BacktestEngineTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MarketImpactSlippageTest(unittest.TestCase):
+    def _engine(self, **overrides):
+        kwargs = dict(
+            ticker="TEST",
+            start_date="2025-01-01",
+            end_date="2025-01-02",
+            initial_capital=100_000.0,
+        )
+        kwargs.update(overrides)
+        return BacktestEngine(**kwargs)
+
+    def test_flat_model_ignores_volume(self):
+        engine = self._engine(slippage_bps=10.0, slippage_model="flat")
+        price = engine._buy_execution_price(100.0, notional=50_000.0, day_volume=1_000)
+        self.assertAlmostEqual(price, 100.0 * 1.001)
+
+    def test_volume_scaled_model_adds_impact_on_top_of_flat_bps(self):
+        engine = self._engine(
+            slippage_bps=10.0, slippage_model="volume_scaled", market_impact_coefficient=50.0,
+        )
+        flat_only = self._engine(slippage_bps=10.0, slippage_model="flat")
+        impacted_price = engine._buy_execution_price(100.0, notional=50_000.0, day_volume=1_000)
+        flat_price = flat_only._buy_execution_price(100.0, notional=50_000.0, day_volume=1_000)
+        self.assertGreater(impacted_price, flat_price)
+
+    def test_volume_scaled_model_larger_order_has_more_impact(self):
+        engine = self._engine(
+            slippage_bps=0.0, slippage_model="volume_scaled", market_impact_coefficient=50.0,
+        )
+        small_order_price = engine._buy_execution_price(100.0, notional=1_000.0, day_volume=100_000)
+        large_order_price = engine._buy_execution_price(100.0, notional=50_000.0, day_volume=100_000)
+        self.assertGreater(large_order_price, small_order_price)
+
+    def test_volume_scaled_model_falls_back_to_flat_without_volume(self):
+        engine = self._engine(
+            slippage_bps=5.0, slippage_model="volume_scaled", market_impact_coefficient=50.0,
+        )
+        price = engine._buy_execution_price(100.0, notional=50_000.0, day_volume=None)
+        self.assertAlmostEqual(price, 100.0 * 1.0005)
+
+    def test_sell_side_impact_reduces_execution_price(self):
+        engine = self._engine(
+            slippage_bps=0.0, slippage_model="volume_scaled", market_impact_coefficient=50.0,
+        )
+        flat_only = self._engine(slippage_bps=0.0, slippage_model="flat")
+        impacted_price = engine._sell_execution_price(100.0, notional=50_000.0, day_volume=1_000)
+        flat_price = flat_only._sell_execution_price(100.0, notional=50_000.0, day_volume=1_000)
+        self.assertLess(impacted_price, flat_price)
+
+    def test_invalid_slippage_model_raises(self):
+        with self.assertRaises(ValueError):
+            self._engine(slippage_model="bogus")
+
+    def test_participation_rate_is_clamped_to_one(self):
+        engine = self._engine(
+            slippage_bps=0.0, slippage_model="volume_scaled", market_impact_coefficient=50.0,
+        )
+        # Order notional far exceeds day dollar volume; impact should not blow up.
+        capped_bps = engine._market_impact_bps(notional=10_000_000.0, fill_price=100.0, day_volume=10)
+        uncapped_equiv_bps = engine.market_impact_coefficient * 10_000.0  # sqrt(1.0) case
+        self.assertAlmostEqual(capped_bps, uncapped_equiv_bps)

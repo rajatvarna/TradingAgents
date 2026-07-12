@@ -168,6 +168,17 @@ class TestReplayerBasics:
         assert len(roots) == 1
         assert roots[0]["record_id"] == orphan.record_id
 
+    def test_export_bundle_combines_all_views(self, trivial_trace):
+        bundle = Replayer(trivial_trace).export_bundle()
+        assert bundle["source_path"] == str(trivial_trace)
+        assert "exported_at" in bundle
+        assert bundle["chain_verification"]["ok"] is True
+        assert bundle["summary"]["session_id"] == "s1"
+        # trivial_trace's LLM_START carries prompt provenance metadata,
+        # so verify_prompts() should produce exactly one row for it.
+        assert len(bundle["prompt_verification"]) == 1
+        assert len(bundle["call_tree"]) == 1
+
 
 # -------------------------------------------------------------------- #
 # verify_chain — wraps T1.3
@@ -373,6 +384,37 @@ class TestCLI:
         assert rc == 0
         out = capsys.readouterr().out
         assert "Bull Researcher" in out
+
+    def test_export_prints_bundle_to_stdout(self, trivial_trace, capsys):
+        rc = cli_main(["export", str(trivial_trace)])
+        assert rc == 0
+        out = capsys.readouterr().out
+        bundle = json.loads(out)
+        assert bundle["chain_verification"]["ok"] is True
+        assert bundle["summary"]["session_id"] == "s1"
+        assert "prompt_verification" in bundle
+        assert "call_tree" in bundle
+
+    def test_export_writes_to_output_file(self, trivial_trace, capsys, tmp_path):
+        out_path = tmp_path / "bundle.json"
+        rc = cli_main(["export", str(trivial_trace), "--output", str(out_path)])
+        assert rc == 0
+        bundle = json.loads(out_path.read_text(encoding="utf-8"))
+        assert bundle["source_path"] == str(trivial_trace)
+        assert bundle["chain_verification"]["ok"] is True
+        out = capsys.readouterr().out
+        assert "written to" in out
+
+    def test_export_exits_1_for_tampered_chain(self, trivial_trace, capsys):
+        lines = trivial_trace.read_text().splitlines()
+        rec = json.loads(lines[1])
+        rec["payload"]["messages"][0]["content"] = "FORGED"
+        from tradingagents.audit.schemas import canonical_json
+        lines[1] = canonical_json(rec)
+        trivial_trace.write_text("\n".join(lines) + "\n")
+
+        rc = cli_main(["export", str(trivial_trace)])
+        assert rc == 1
 
 
 # -------------------------------------------------------------------- #

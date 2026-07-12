@@ -12,13 +12,16 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from statistics import mean, stdev
 from typing import Any
 
+import pandas as pd
 import yfinance as yf
 
+from back_test.metrics import calmar_ratio, profit_factor, sharpe_ratio, sortino_ratio
 from tradingagents.agents.utils.rating import RATINGS_5_TIER, parse_rating
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.graph.trading_graph import TradingAgentsGraph
@@ -43,12 +46,36 @@ _QUARTERLY_DATES_2023_2025: list[str] = [
 
 _RESULTS_DIR = Path(__file__).resolve().parent / "results"
 
+# Matches "Confidence: 0.75" / "confidence - 80%" / "Confidence: **0.6**".
+_CONFIDENCE_RE = re.compile(r"confidence.*?[:\-][\s*]*([0-9]*\.?[0-9]+)\s*(%)?", re.IGNORECASE)
+
 
 def _score_from_rating(rating: str) -> int:
     for r in RATINGS_5_TIER:
         if r.lower() == rating.lower():
             return _RATING_TO_SCORE[r]
     return 0
+
+
+def _extract_confidence(text: str) -> float | None:
+    """Best-effort extraction of a stated confidence value from decision text.
+
+    Accepts either a 0..1 fraction or a percentage (normalized to 0..1).
+    Returns None if no confidence statement is found or the value is out
+    of the expected [0, 1] range after normalization.
+    """
+    if not text:
+        return None
+    for line in text.splitlines():
+        m = _CONFIDENCE_RE.search(line)
+        if not m:
+            continue
+        value = float(m.group(1))
+        if m.group(2) == "%" or value > 1.0:
+            value = value / 100.0
+        if 0.0 <= value <= 1.0:
+            return value
+    return None
 
 
 def _run_single(
@@ -65,6 +92,7 @@ def _run_single(
             "decision": decision,
             "rating": rating,
             "score": score,
+            "confidence": _extract_confidence(decision),
             "error": None,
         }
     except Exception as exc:
@@ -76,6 +104,7 @@ def _run_single(
             "decision": None,
             "rating": None,
             "score": None,
+            "confidence": None,
             "error": str(exc),
         }
 
@@ -189,6 +218,125 @@ def _compute_directional_metrics(
     }
 
 
+_CALIBRATION_BUCKETS: list[tuple[float, float]] = [
+    (0.0, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.01),
+]
+
+
+def _compute_calibration_curve(
+    results: list[dict[str, Any]], horizon: str = "ret_20d",
+) -> dict[str, Any]:
+    """Bucket directional predictions by stated confidence and measure the
+    actual hit rate per bucket.
+
+    A well-calibrated model's hit rate should track its stated confidence
+    (e.g. predictions made at ~80% confidence should be correct ~80% of the
+    time). Predictions with no parsed confidence value are excluded.
+    """
+    buckets: list[dict[str, Any]] = []
+    for lo, hi in _CALIBRATION_BUCKETS:
+        hits = 0
+        total = 0
+        confidences: list[float] = []
+        for r in results:
+            if r.get("error"):
+                continue
+            score = r.get("score")
+            confidence = r.get("confidence")
+            if score is None or confidence is None:
+                continue
+            if not (lo <= confidence < hi):
+                continue
+            direction = 1 if score > 0 else (-1 if score < 0 else 0)
+            if direction == 0:
+                continue
+            ret = (r.get("forward_returns") or {}).get(horizon)
+            if ret is None:
+                continue
+            total += 1
+            confidences.append(confidence)
+            if (direction > 0 and ret > 0) or (direction < 0 and ret < 0):
+                hits += 1
+        buckets.append({
+            "confidence_range": [lo, min(hi, 1.0)],
+            "n_predictions": total,
+            "mean_stated_confidence": mean(confidences) if confidences else None,
+            "actual_hit_rate": hits / total if total > 0 else None,
+        })
+
+    scored = [b for b in buckets if b["n_predictions"] > 0]
+    if scored:
+        calibration_error = mean(
+            abs(b["mean_stated_confidence"] - b["actual_hit_rate"]) for b in scored
+        )
+    else:
+        calibration_error = None
+
+    return {
+        "buckets": buckets,
+        "mean_absolute_calibration_error": calibration_error,
+        "n_predictions_with_confidence": sum(b["n_predictions"] for b in buckets),
+    }
+
+
+def _compute_pnl_metrics(
+    results: list[dict[str, Any]], horizon: str = "ret_20d",
+) -> dict[str, Any]:
+    """Treat each directional recommendation as a synthetic trade and compute
+    risk-adjusted P&L metrics using the same ratios as the backtest engine.
+
+    A bullish score takes a long "position" with realized return equal to
+    the forward return; a bearish score takes a short position with the
+    sign flipped. Trades are ordered by (date, ticker) to build a pseudo
+    equity curve; this is a proxy for consistency with back_test.metrics,
+    not a substitute for a real position-level backtest.
+    """
+    trade_returns: list[float] = []
+    trades: list[dict[str, Any]] = []
+
+    ordered = sorted(
+        (r for r in results if not r.get("error") and r.get("score") is not None),
+        key=lambda r: (r.get("date") or "", r.get("ticker") or ""),
+    )
+    for r in ordered:
+        score = r["score"]
+        direction = 1 if score > 0 else (-1 if score < 0 else 0)
+        if direction == 0:
+            continue
+        fwd = r.get("forward_returns", {})
+        ret = fwd.get(horizon)
+        if ret is None:
+            continue
+        pnl_return = direction * ret
+        trade_returns.append(pnl_return)
+        trades.append({"pnl": pnl_return})
+
+    if not trade_returns:
+        return {
+            "n_trades": 0,
+            "sharpe_ratio": None,
+            "sortino_ratio": None,
+            "calmar_ratio": None,
+            "profit_factor": None,
+        }
+
+    equity = (1.0 + pd.Series(trade_returns)).cumprod()
+    rets = equity.pct_change().dropna()
+    if rets.empty:
+        rets = pd.Series(trade_returns)
+
+    # periods_per_year=1: each "period" is one recommendation, not one day,
+    # so we report per-trade (non-annualized) ratios rather than pretend
+    # these are daily-frequency series.
+    return {
+        "n_trades": len(trade_returns),
+        "sharpe_ratio": sharpe_ratio(rets, periods_per_year=1),
+        "sortino_ratio": sortino_ratio(rets, periods_per_year=1),
+        "calmar_ratio": calmar_ratio(equity, periods_per_year=1),
+        "profit_factor": profit_factor(trades),
+    }
+
+
 def run_benchmark(
     tickers: list[str] | None = None,
     dates: list[str] | None = None,
@@ -258,6 +406,9 @@ def run_benchmark(
             "per_key": dict(consistency_by_key.items()),
         },
         "direction": directional,
+        "pnl_metrics_20d": _compute_pnl_metrics(all_runs, horizon="ret_20d"),
+        "pnl_metrics_60d": _compute_pnl_metrics(all_runs, horizon="ret_60d"),
+        "calibration_20d": _compute_calibration_curve(all_runs, horizon="ret_20d"),
         "score_distribution": _score_distribution(all_runs),
     }
 
@@ -312,6 +463,23 @@ def _print_summary(summary: dict[str, Any]) -> None:
     print(f"  Hit rate (60d): {dir_.get('hit_rate_60d')}")
     print(f"  False positive rate (20d): {dir_.get('false_positive_rate_20d')}")
     print(f"  False positive rate (60d): {dir_.get('false_positive_rate_60d')}")
+    print()
+
+    pnl20 = summary.get("pnl_metrics_20d", {})
+    print("--- Risk-Adjusted P&L (20d, synthetic per-trade) ---")
+    print(f"  Sharpe: {pnl20.get('sharpe_ratio')}")
+    print(f"  Sortino: {pnl20.get('sortino_ratio')}")
+    print(f"  Calmar: {pnl20.get('calmar_ratio')}")
+    print(f"  Profit factor: {pnl20.get('profit_factor')}")
+    print()
+
+    calib = summary.get("calibration_20d", {})
+    print("--- Confidence Calibration (20d) ---")
+    print(f"  Mean absolute calibration error: {calib.get('mean_absolute_calibration_error')}")
+    for b in calib.get("buckets", []):
+        if b["n_predictions"] > 0:
+            print(f"  {b['confidence_range']}: n={b['n_predictions']} "
+                  f"stated={b['mean_stated_confidence']:.2f} actual={b['actual_hit_rate']:.2f}")
     print()
 
     print("--- Score Distribution ---")

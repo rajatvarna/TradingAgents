@@ -39,6 +39,7 @@ and ^IXIC benchmark data fetches.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
@@ -117,6 +118,8 @@ class BacktestEngine:
         strategies_dir: Optional[Path] = None,
         commission: float = 0.0,
         slippage_bps: float = 0.0,
+        slippage_model: str = "flat",
+        market_impact_coefficient: float = 0.0,
         min_stop_distance_pct: float = 0.0,
         max_trade_risk_pct: float = 0.0,
         max_single_add_pct: float = 100.0,
@@ -146,6 +149,10 @@ class BacktestEngine:
         self.strategies_dir = strategies_dir or STRATEGIES_ROOT / ticker
         self.commission = float(commission)
         self.slippage_bps = float(slippage_bps)
+        if slippage_model not in ("flat", "volume_scaled"):
+            raise ValueError(f"Unknown slippage_model: {slippage_model!r} (expected 'flat' or 'volume_scaled')")
+        self.slippage_model = slippage_model
+        self.market_impact_coefficient = float(market_impact_coefficient)
         self.min_stop_distance_pct = float(min_stop_distance_pct)
         self.max_trade_risk_pct = float(max_trade_risk_pct)
         self.max_single_add_pct = float(max_single_add_pct)
@@ -341,6 +348,7 @@ class BacktestEngine:
             day_high = float(row["High"])
             day_low = float(row["Low"])
             day_close = float(row["Close"])
+            day_volume = float(row["Volume"]) if "Volume" in row and pd.notna(row["Volume"]) else None
 
             # 1) Activate / rotate strategy if today >= next strategy's as_of_date
             new_active = self._strategy_for_date(strategies, date)
@@ -407,6 +415,7 @@ class BacktestEngine:
                         signal_date=position.stop_loss_as_of,
                         reason="stop_loss",
                         fill_basis=fill_basis,
+                        day_volume=day_volume,
                     )
                     position = None
                     expired_count, pending_orders = self._prune_pending_orders(
@@ -436,6 +445,7 @@ class BacktestEngine:
                             fill_basis=fill_basis,
                             order_type="reduce_stop",
                             reason="reduce_stop",
+                            day_volume=day_volume,
                         )
                     else:
                         still_pending.append(order)
@@ -466,6 +476,7 @@ class BacktestEngine:
                             fill_basis=fill_basis,
                             order_type="take_profit",
                             reason="take_profit",
+                            day_volume=day_volume,
                         )
                     else:
                         still_pending.append(order)
@@ -498,6 +509,7 @@ class BacktestEngine:
                             position,
                             executions,
                             fill_basis=fill_basis,
+                            day_volume=day_volume,
                         )
                     else:
                         still_pending.append(order)
@@ -601,6 +613,8 @@ class BacktestEngine:
             "risk_stop_adjusted": self.risk_stop_adjusted,
             "commission": self.commission,
             "slippage_bps": self.slippage_bps,
+            "slippage_model": self.slippage_model,
+            "market_impact_coefficient": self.market_impact_coefficient,
             "min_stop_distance_pct": self.min_stop_distance_pct,
             "max_trade_risk_pct": self.max_trade_risk_pct,
             "max_single_add_pct": self.max_single_add_pct,
@@ -1097,11 +1111,41 @@ class BacktestEngine:
     def _stop_fill_price(day_open: float, stop_price: float) -> tuple[float, str]:
         return (day_open, "stop_gap") if day_open <= stop_price else (stop_price, "stop_touch")
 
-    def _buy_execution_price(self, fill_price: float) -> float:
-        return fill_price * (1.0 + self.slippage_bps / 10_000.0)
+    def _market_impact_bps(self, notional: float, fill_price: float, day_volume: Optional[float]) -> float:
+        """Square-root market-impact model: impact scales with the square
+        root of the order's participation rate in that day's dollar volume.
 
-    def _sell_execution_price(self, fill_price: float) -> float:
-        return max(0.0, fill_price * (1.0 - self.slippage_bps / 10_000.0))
+        This approximates the standard "square-root law" used in execution
+        research (impact ~ coefficient * sqrt(order_size / daily_volume)),
+        as an alternative to a flat bps assumption that ignores order size
+        relative to liquidity. Falls back to 0 impact when volume data or
+        the coefficient is unavailable, so it degrades gracefully to the
+        flat-bps model.
+        """
+        if (
+            self.slippage_model != "volume_scaled"
+            or self.market_impact_coefficient <= 0
+            or not day_volume
+            or day_volume <= 0
+            or fill_price <= 0
+            or notional <= 0
+        ):
+            return 0.0
+        dollar_volume = day_volume * fill_price
+        participation_rate = min(1.0, notional / dollar_volume)
+        return self.market_impact_coefficient * math.sqrt(participation_rate) * 10_000.0
+
+    def _buy_execution_price(
+        self, fill_price: float, notional: float = 0.0, day_volume: Optional[float] = None,
+    ) -> float:
+        impact_bps = self._market_impact_bps(notional, fill_price, day_volume)
+        return fill_price * (1.0 + (self.slippage_bps + impact_bps) / 10_000.0)
+
+    def _sell_execution_price(
+        self, fill_price: float, notional: float = 0.0, day_volume: Optional[float] = None,
+    ) -> float:
+        impact_bps = self._market_impact_bps(notional, fill_price, day_volume)
+        return max(0.0, fill_price * (1.0 - (self.slippage_bps + impact_bps) / 10_000.0))
 
     def _execute_buy_order(
         self,
@@ -1112,7 +1156,12 @@ class BacktestEngine:
         position: Optional[Position],
         executions: List[dict],
         fill_basis: str,
+        day_volume: Optional[float] = None,
     ) -> tuple[float, Optional[Position]]:
+        # First pass: size the order using the flat-slippage price (no
+        # impact yet, since impact depends on the order's own notional
+        # value). Second pass below re-derives execution_price using that
+        # sized notional as the market-impact estimate.
         execution_price = self._buy_execution_price(fill_price)
         position_value = position.shares * fill_price if position else 0.0
         equity = cash + position_value
@@ -1151,6 +1200,12 @@ class BacktestEngine:
         notional = max(0.0, spend - self.commission)
         if notional <= 0 or execution_price <= 0:
             return cash, position
+        if self.slippage_model == "volume_scaled":
+            # Second pass: re-price using the sized notional as the
+            # market-impact estimate now that order size is known.
+            execution_price = self._buy_execution_price(fill_price, notional, day_volume)
+            if execution_price <= 0:
+                return cash, position
         shares = notional / execution_price
         if shares <= 0:
             return cash, position
@@ -1249,12 +1304,12 @@ class BacktestEngine:
     def _reduce_position_limit(
         self, position, fill_price, size_pct, exit_date, cash, trades, executions,
         signal_date=None, fill_basis="limit_touch",
-        order_type="take_profit", reason="take_profit",
+        order_type="take_profit", reason="take_profit", day_volume=None,
     ):
         shares_to_sell = max(0.0, min(position.shares, position.shares * (size_pct / 100.0)))
         if shares_to_sell <= 0:
             return cash, trades, position
-        execution_price = self._sell_execution_price(fill_price)
+        execution_price = self._sell_execution_price(fill_price, shares_to_sell * fill_price, day_volume)
         entry_commission = position.entry_commission * (shares_to_sell / position.shares)
         proceeds = max(0.0, shares_to_sell * execution_price - self.commission)
         pnl = (execution_price - position.entry_price) * shares_to_sell - self.commission - entry_commission
@@ -1286,9 +1341,9 @@ class BacktestEngine:
 
     def _close_position_limit(
         self, position, fill_price, exit_date, cash, trades, executions,
-        signal_date=None, reason="exit", fill_basis="limit_touch"
+        signal_date=None, reason="exit", fill_basis="limit_touch", day_volume=None,
     ):
-        execution_price = self._sell_execution_price(fill_price)
+        execution_price = self._sell_execution_price(fill_price, position.shares * fill_price, day_volume)
         proceeds = max(0.0, position.shares * execution_price - self.commission)
         entry_commission = position.entry_commission
         pnl = (execution_price - position.entry_price) * position.shares - self.commission - entry_commission

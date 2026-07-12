@@ -31,7 +31,14 @@ from .symbol_utils import crypto_base
 _HK_RE = re.compile(r"^(\d{1,5})\.HK$", re.IGNORECASE)
 _SH_RE = re.compile(r"^(\d{6})\.SS$", re.IGNORECASE)
 _SZ_RE = re.compile(r"^(\d{6})\.SZ$", re.IGNORECASE)
-_US_RE = re.compile(r"^[A-Z][A-Z.\-]{0,9}$")
+_US_RE = re.compile(r"^[A-Z][A-Z\-]{0,9}$")
+
+# Yahoo exchange suffixes for markets Futu does not serve under the bare
+# US.<ticker> convention (Toronto, London, ASX, Paris, Xetra, Tokyo, ...).
+# A bare US ticker never contains a dot, so any dotted suffix not already
+# matched above (HK/SS/SZ) is an unsupported non-US market — reject it
+# rather than let it fall through to the US.<ticker> guess.
+_NON_US_SUFFIX_RE = re.compile(r"^[A-Z0-9]+\.[A-Z]{1,3}$")
 
 # Yahoo suffixes/markers that indicate a non-equity instrument (forex, futures,
 # indices) which Futu's US.<ticker> convention does not cover — never guess.
@@ -69,6 +76,10 @@ def _to_futu_symbol(symbol: str) -> str:
         raise DataVendorError(f"futu: {symbol!r} is not a supported equity symbol")
     if len(s) == 6 and s[:3] in _FOREX_CURRENCIES and s[3:] in _FOREX_CURRENCIES:
         raise DataVendorError(f"futu: {symbol!r} looks like a forex pair, not an equity")
+    if _NON_US_SUFFIX_RE.match(s):
+        raise DataVendorError(
+            f"futu: {symbol!r} carries an unsupported non-US/HK/CN exchange suffix"
+        )
 
     if _US_RE.match(s):
         return f"US.{s}"
@@ -78,7 +89,7 @@ def _to_futu_symbol(symbol: str) -> str:
 
 def _ctx():
     try:
-        from futu import OpenQuoteContext  # type: ignore
+        from futu import OpenQuoteContext
     except ImportError as e:
         raise DataVendorError("futu-api not installed") from e
     cfg = get_config()
@@ -94,23 +105,34 @@ def _ctx():
 def get_stock_data(symbol: str, start_date: str, end_date: str) -> str:
     """Daily klines via ``ctx.request_history_kline(...)``, formatted as a CSV
     table matching ``get_YFin_data_online``'s output shape."""
-    from futu import RET_OK, AuType, KLType  # type: ignore
+    import pandas as pd
+    from futu import RET_OK, AuType, KLType
 
     futu_symbol = _to_futu_symbol(symbol)
     ctx = _ctx()
     try:
-        ret, data, _page_key = ctx.request_history_kline(
-            futu_symbol,
-            start=start_date,
-            end=end_date,
-            ktype=KLType.K_DAY,
-            autype=AuType.QFQ,
-            max_count=1000,
-        )
-        if ret != RET_OK:
-            raise DataVendorError(f"futu.get_stock_data({futu_symbol}): {data}")
-        if data is None or data.empty:
+        pages = []
+        page_key = None
+        while True:
+            ret, data, page_key = ctx.request_history_kline(
+                futu_symbol,
+                start=start_date,
+                end=end_date,
+                ktype=KLType.K_DAY,
+                autype=AuType.QFQ,
+                max_count=1000,
+                page_req_key=page_key,
+            )
+            if ret != RET_OK:
+                raise DataVendorError(f"futu.get_stock_data({futu_symbol}): {data}")
+            if data is not None and not data.empty:
+                pages.append(data)
+            if page_key is None:
+                break
+
+        if not pages:
             raise DataVendorError(f"futu.get_stock_data({futu_symbol}): no rows returned")
+        data = pd.concat(pages, ignore_index=True)
 
         cols = ["time_key", "open", "high", "low", "close", "volume"]
         keep = [c for c in cols if c in data.columns]
@@ -129,7 +151,7 @@ def get_options_chain(symbol: str, expiration: str = "") -> str:
     """Options chain via ``ctx.get_option_expiration_date`` + ``ctx.get_option_chain``,
     with IV/greeks filled in from ``ctx.get_market_snapshot``. Formatted to match
     ``yfinance_options.get_options_chain``."""
-    from futu import RET_OK, OptionCondType, OptionType  # type: ignore
+    from futu import RET_OK, OptionCondType, OptionType
 
     futu_symbol = _to_futu_symbol(symbol)
     ctx = _ctx()
@@ -175,7 +197,13 @@ def get_options_chain(symbol: str, expiration: str = "") -> str:
 
         def _fmt(df, n: int = 12) -> str:
             keep = [c for c in cols if c in df.columns]
-            return df[keep].head(n).to_markdown(index=False)
+            if len(df) <= n:
+                return df[keep].to_markdown(index=False)
+            # Keep the strikes nearest the median (proxy for ATM) rather than
+            # naively taking the lowest-strike rows after an ascending sort.
+            centered = df.iloc[(df["strike_price"] - df["strike_price"].median()).abs().argsort()[:n]]
+            centered = centered.sort_values("strike_price")
+            return centered[keep].to_markdown(index=False) + f"\n\n_(showing {n} of {len(df)} strikes)_"
 
         return (
             f"# Options chain for {futu_symbol} (from {symbol}) — expiry {exp}\n"

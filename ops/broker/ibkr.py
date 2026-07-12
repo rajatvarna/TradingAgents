@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from decimal import ROUND_DOWN, Decimal
 
 from ops import events
-from ops.broker.base import Broker, BrokerError, NoSuchPosition
+from ops.broker.base import Broker, BrokerError, NoSuchPosition, OrderRejected
 from ops.broker.ibkr_client import IBKROrderAck, IBKRTradingClient, IBKRUnavailable
 from ops.broker.types import Fill, Order, Position, Side
 from ops.journal import Journal
@@ -91,9 +91,15 @@ class IBKRBroker(Broker):
             held = existing.quantity.to_integral_value(rounding=ROUND_DOWN)
             quantity = min(quantity, held)
         if quantity < _MIN_QUANTITY:
-            raise BrokerError(
+            # Continue-able (OrderRejected), not BrokerError: this is a
+            # per-symbol sizing problem, not a broker outage. Orchestrator's
+            # dispatch loop treats BrokerError as "stop the whole tick" —
+            # one small-notional candidate must not suppress every
+            # later candidate that tick.
+            raise OrderRejected(
+                "IBKRZeroShareSizing",
                 f"notional ${order.notional_dollars} at price ${price} rounds to "
-                f"0 whole shares of {order.symbol} — IBKR fills whole shares only"
+                f"0 whole shares of {order.symbol} — IBKR fills whole shares only",
             )
         self._journal.record_order(
             client_order_id=order.client_order_id, symbol=order.symbol,

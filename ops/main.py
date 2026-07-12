@@ -6,10 +6,10 @@ scheduler drains in-flight jobs, journal closes cleanly. Exit codes:
 - 2: reconciliation-halted shutdown (journal has inconsistency events)
 - 3: startup-halted — broker unreachable while building/reconciling
      (journal has broker_unreachable + startup_halted events)
-- 4: live-flip ritual refused — first real-money start (robinhood, or
-     alpaca with alpaca_paper=False) without a TTY, or the typed equity
-     confirmation did not match (journal has a live_flip_refused event);
-     nothing was scheduled
+- 4: live-flip ritual refused — first real-money start (robinhood,
+     alpaca with alpaca_paper=False, or ibkr with ibkr_paper=False)
+     without a TTY, or the typed equity confirmation did not match
+     (journal has a live_flip_refused event); nothing was scheduled
 
 Every session brackets itself with service_started / service_stopping
 journal events (the uptime record used by the graduation evaluation);
@@ -308,9 +308,9 @@ def _startup(config: OpsConfig, journal: Journal):
     if config.is_live_money:
         # Before reconcile/scheduling: nothing live may proceed until the
         # first flip is confirmed (or the marker already exists). Covers
-        # robinhood and alpaca with alpaca_paper=False; Alpaca's own paper
-        # endpoint is excluded (fake money — same posture as broker_mode
-        # == "paper").
+        # robinhood, alpaca with alpaca_paper=False, and ibkr with
+        # ibkr_paper=False; their paper endpoints are excluded (fake money
+        # — same posture as broker_mode == "paper").
         _live_flip_ritual(journal, broker, config)
     orchestrator, guardian, calendar = _wire(broker, journal, config)
     result = reconcile(journal=journal, broker=broker, broker_mode=config.broker_mode)

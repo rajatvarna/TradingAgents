@@ -44,6 +44,8 @@ Breaking changes within the 0.x line are called out explicitly.
 
 ### Fixed
 
+- **CodeRabbit review fixes on PR #32.** `IBKRBroker.place_order` raised a bare `BrokerError` when notional rounded to 0 whole shares — the orchestrator's dispatch loop treats `BrokerError` as "stop the whole tick," so one small-notional IBKR candidate could suppress every later candidate that tick. Now raises `OrderRejected` (continue-able), matching the treatment of any other per-symbol rejection. Separately, `Orchestrator._tick_impl` was recording `KIND_ANALYSIS_DEFERRED_CONSUMED` for pending budget-deferred symbols immediately after building candidates — before `get_equity`/`_compute_live_cap`/`propose_orders` ran — so a failure in any of those silently burned a symbol's one retry without it ever actually being re-evaluated. Moved the consumption marking to after `propose_orders` succeeds. (`ops/broker/ibkr.py`, `ops/scheduler/orchestrator.py`)
+
 - `ConditionalLogic` was missing the single-router `should_continue_debate` and `should_continue_risk_analysis` methods that `tests/test_risk_router_path_map.py` and `TestHighUncertaintyDebateRounds` exercise directly; added them as thin wrappers delegating to the existing per-role completeness checks, without changing graph wiring (`tradingagents/graph/conditional_logic.py`).
 - `tests/test_data_tool_wrappers.py`: `test_get_news` and `test_get_insider_transactions` asserted stale `route_to_vendor` call signatures (missing `max_summary_chars` for `get_news`, missing the trailing `curr_date` arg for `get_insider_transactions`) that were out of sync with the current `tradingagents/agents/utils/news_data_tools.py` implementation.
 

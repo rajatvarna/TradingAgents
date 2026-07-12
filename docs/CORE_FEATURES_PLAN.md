@@ -353,7 +353,7 @@ unmodified.
 
 ## 6. Sequencing and milestones (revised)
 
-```
+```text
 Phase 0 — ALL DONE               Phase 1                   Phase 2
 ─────────────────────            ───────────────────       ──────────────────
 F2 alpaca broker  ✅ done         F5 typed config  ← next   F6 intraday data

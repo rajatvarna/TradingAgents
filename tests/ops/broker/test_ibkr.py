@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import pytest
 
-from ops.broker.base import BrokerError, NoSuchPosition
+from ops.broker.base import BrokerError, NoSuchPosition, OrderRejected
 from ops.broker.ibkr import IBKRBroker
 from ops.broker.ibkr_client import IBKRTradingClient, IBKRUnavailable
 from ops.broker.types import Order, OrderType, Side
@@ -107,10 +107,14 @@ def test_place_order_journals_requested_notional_not_filled_notional(fake_client
 def test_place_order_buy_notional_too_small_for_one_share_raises(fake_client, journal):
     """$5 at $10.50/share rounds to 0 whole shares — IBKR cannot fill
     this; must raise before journaling anything (mirrors the 'nothing
-    sellable' precedent in RobinhoodBroker.close_position)."""
+    sellable' precedent in RobinhoodBroker.close_position). Specifically
+    OrderRejected (a continue-able rejection), not a bare BrokerError —
+    the orchestrator's dispatch loop treats BrokerError as "stop the
+    whole tick", and a per-symbol sizing problem must not suppress every
+    later candidate that tick."""
     fake_client.set_quote("AAPL", Decimal("10.50"))
     broker = IBKRBroker(client=fake_client, journal=journal)
-    with pytest.raises(BrokerError):
+    with pytest.raises(OrderRejected):
         broker.place_order(Order(
             client_order_id="b-1", symbol="AAPL", side=Side.BUY,
             notional_dollars=Decimal("5"), order_type=OrderType.MARKET,

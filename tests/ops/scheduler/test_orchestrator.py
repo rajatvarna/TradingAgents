@@ -779,6 +779,31 @@ def test_tick_marks_pending_deferred_symbols_consumed(tmp_path):
     ) == frozenset()
 
 
+def test_tick_leaves_deferred_symbol_pending_when_propose_orders_fails(tmp_path):
+    """Regression: KIND_ANALYSIS_DEFERRED_CONSUMED must not be recorded
+    until propose_orders actually succeeds. Recording it any earlier (e.g.
+    right after building candidates) would silently burn a symbol's one
+    retry on a tick that crashed before ever re-evaluating it — the
+    retry never actually happened, so it must still be pending next time."""
+    from ops.events import (
+        KIND_ANALYSIS_DEFERRED,
+        KIND_ANALYSIS_DEFERRED_CONSUMED,
+        analysis_deferred_payload,
+    )
+    journal = _make_journal()
+    journal.record_event(KIND_ANALYSIS_DEFERRED, analysis_deferred_payload(
+        symbol="NVDA", asof_date=date(2026, 7, 2), reason="budget exhausted",
+    ))
+    strategy = _fake_strategy([])
+    strategy.propose_orders.side_effect = RuntimeError("boom")
+    orch = _make_orchestrator(universe_builder=_fake_universe([]), strategy=strategy, journal=journal)
+    orch.tick()  # tick() swallows the RuntimeError as orchestrator_tick_error
+    assert [e for e in journal.read_events() if e["kind"] == KIND_ANALYSIS_DEFERRED_CONSUMED] == []
+    assert journal.pending_kind_symbols(
+        KIND_ANALYSIS_DEFERRED, KIND_ANALYSIS_DEFERRED_CONSUMED,
+    ) == frozenset({"NVDA"})
+
+
 def test_tick_journals_deferred_symbols_from_strategy_result(tmp_path):
     from ops.events import KIND_ANALYSIS_DEFERRED
     journal = _make_journal()

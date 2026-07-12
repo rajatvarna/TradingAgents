@@ -112,16 +112,6 @@ class Orchestrator:
             momentum_leaders=leaderboard,
             priority_symbols=pending_deferred,
         )
-        # Each deferred symbol gets exactly one retry: mark it consumed
-        # for today regardless of whether it made it back into candidates
-        # (still eligible vs. no longer eligible/liquid) — otherwise a
-        # symbol that never regains eligibility would be retried forever.
-        for symbol in pending_deferred:
-            self._journal.record_event(
-                events.KIND_ANALYSIS_DEFERRED_CONSUMED,
-                events.analysis_deferred_consumed_payload(symbol=symbol, asof_date=asof_date),
-                at=now,
-            )
         fresh_candidates = [c for c in candidates if c.symbol not in held]
         current_equity = self._broker.get_equity()
         live_cap = self._compute_live_cap()
@@ -132,6 +122,21 @@ class Orchestrator:
             asof_date=asof_date,
             live_max_position_cap=live_cap,
         )
+        # Each deferred symbol gets exactly one retry: mark it consumed
+        # for today regardless of whether it made it back into candidates
+        # (still eligible vs. no longer eligible/liquid) or resulted in an
+        # order — otherwise a symbol that never regains eligibility would
+        # be retried forever. Recorded only after propose_orders succeeds
+        # (not right after building candidates): if get_equity/
+        # _compute_live_cap/propose_orders raises above, the retry never
+        # actually happened, so the symbol must stay pending for the next
+        # tick rather than being silently burned.
+        for symbol in pending_deferred:
+            self._journal.record_event(
+                events.KIND_ANALYSIS_DEFERRED_CONSUMED,
+                events.analysis_deferred_consumed_payload(symbol=symbol, asof_date=asof_date),
+                at=now,
+            )
         for proposal in result.orders:
             try:
                 self._broker.place_order(proposal.order)

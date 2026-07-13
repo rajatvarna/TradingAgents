@@ -417,6 +417,118 @@ class TestResearchManagerAgent:
         assert llm.with_structured_output.return_value.invoke.call_count == 1
         assert cache
 
+
+# ---------------------------------------------------------------------------
+# A4 decision-layer rewrites: research manager v2, trader system v4 / user v2,
+# portfolio manager v3 — shipped available-not-default per the A6 merge-gate
+# convention (no default flips without a scorecard).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestResearchManagerV2Content:
+    def test_v2_prompt_carries_synthesis_rubric_and_shared_blocks(self):
+        captured = {}
+        llm = _structured_rm_llm(captured)
+        rm = create_research_manager(llm)
+        state = _make_rm_state()
+        state["prompt_versions"] = {"managers/research_manager": "v2"}
+        rm(state)
+        prompt = captured["prompt"]
+        assert "load-bearing claims" in prompt.lower()
+        assert "p(thesis plays out" in prompt.lower()
+        assert "past mistakes" in prompt.lower()
+        assert "never invent" in prompt.lower() or "calibrat" in prompt.lower()
+        assert "${" not in prompt
+
+    def test_v2_prompt_includes_lessons_when_past_context_present(self):
+        captured = {}
+        llm = _structured_rm_llm(captured)
+        rm = create_research_manager(llm)
+        state = _make_rm_state()
+        state["prompt_versions"] = {"managers/research_manager": "v2"}
+        state["past_context"] = "[2026-01-05 | NVDA | Buy | +5.0%] Entered too early."
+        rm(state)
+        assert "Entered too early." in captured["prompt"]
+
+    def test_v2_config_carries_shared_prompt_hashes(self):
+        plan = ResearchPlan(
+            recommendation=PortfolioRating.HOLD, rationale="r", strategic_actions="s"
+        )
+        structured = MagicMock()
+        structured.invoke.return_value = plan
+        llm = MagicMock()
+        llm.with_structured_output.return_value = structured
+        rm = create_research_manager(llm)
+        state = _make_rm_state()
+        state["prompt_versions"] = {"managers/research_manager": "v2"}
+        rm(state)
+        _, kwargs = structured.invoke.call_args
+        metadata = kwargs["config"]["metadata"]
+        assert metadata["prompt_version"] == "v2"
+        assert set(metadata["shared_prompt_hashes"]) == {"_shared/rating_scale", "_shared/calibration"}
+
+    def test_default_config_still_selects_v1(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["managers/research_manager"] == "v1"
+
+    def test_conviction_and_horizon_render_when_present(self):
+        plan = ResearchPlan(
+            recommendation=PortfolioRating.BUY,
+            rationale="Bull case carried on evidenced growth claims.",
+            strategic_actions="Build position over two weeks.",
+            conviction=72,
+            horizon="3-6 months",
+        )
+        md = render_research_plan(plan)
+        assert "**Conviction**: 72" in md
+        assert "**Horizon**: 3-6 months" in md
+
+    def test_conviction_and_horizon_omitted_when_absent(self):
+        plan = ResearchPlan(
+            recommendation=PortfolioRating.HOLD,
+            rationale="r",
+            strategic_actions="s",
+        )
+        md = render_research_plan(plan)
+        assert "Conviction" not in md
+        assert "Horizon" not in md
+
+
+@pytest.mark.unit
+class TestTraderV4Content:
+    def test_system_v4_prompt_carries_ev_framing_and_calibration(self):
+        captured = {}
+        llm = _structured_trader_llm(captured)
+        trader = create_trader(llm)
+        state = _make_trader_state()
+        state["prompt_versions"] = {"trader/trader_system": "v4"}
+        trader(state)
+        system_content = next(m["content"] for m in captured["prompt"] if m["role"] == "system")
+        assert "expected value" in system_content.lower()
+        assert "calibrat" in system_content.lower()
+        assert "${" not in system_content
+
+    def test_user_v2_prompt_carries_capital_context(self):
+        captured = {}
+        llm = _structured_trader_llm(captured)
+        trader = create_trader(llm)
+        state = _make_trader_state()
+        state["prompt_versions"] = {"trader/trader_user": "v2"}
+        state["holdings_info"] = {"nav": 100000.0, "quantity": 10.0, "avg_buy_price": 150.0}
+        trader(state)
+        user_content = next(m["content"] for m in captured["prompt"] if m["role"] == "user")
+        assert "capital context" in user_content.lower()
+        assert "existing position in this ticker" in user_content.lower()
+        assert "${" not in user_content
+
+    def test_default_config_unchanged(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["trader/trader_system"] == "v3"
+        assert DEFAULT_CONFIG["prompt_versions"]["trader/trader_user"] == "v1"
+
 # ---------------------------------------------------------------------------
 # Sentiment Analyst: schema, render, structured happy path + fallback
 # ---------------------------------------------------------------------------

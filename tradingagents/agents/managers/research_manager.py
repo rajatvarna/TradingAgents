@@ -77,12 +77,24 @@ def create_research_manager(llm, cache=None, prompt_registry=None):
         analyst_weights_block = _format_analyst_weights_block(state.get("analyst_weights") or {})
         high_uncertainty_block = _format_high_uncertainty_block(bool(state.get("high_uncertainty", False)))
 
+        past_context = state.get("past_context", "")
+        lessons_line = (
+            f"**Lessons from prior decisions and outcomes:**\n{past_context}\n"
+            if past_context
+            else ""
+        )
+
         version = state.get("prompt_versions", {}).get("managers/research_manager", "v1")
-        prompt, prompt_hash = registry.render(
+        prompt, prompt_hash, shared_hashes = registry.render_with_shared(
             "managers/research_manager",
             version=version,
+            shared={
+                "rating_scale_block": ("_shared/rating_scale", "v1"),
+                "calibration_block": ("_shared/calibration", "v1"),
+            },
             instrument_context=instrument_context,
             history=history + user_research_block + analyst_weights_block + high_uncertainty_block,
+            lessons_line=lessons_line,
             language_instruction=get_language_instruction(),
         )
 
@@ -98,6 +110,7 @@ def create_research_manager(llm, cache=None, prompt_registry=None):
                     "prompt_key": "managers/research_manager",
                     "prompt_version": version,
                     "prompt_hash": prompt_hash,
+                    "shared_prompt_hashes": shared_hashes,
                 }
             },
         )

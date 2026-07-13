@@ -454,14 +454,14 @@ B3 prompt CLI                B5 structured outputs
 | A1 shared prompt contract | ✅ Done — `docs/PROMPT_STYLE_GUIDE.md` + `PromptRegistry.render_with_shared()` + two shared partials; infrastructure only, no agent forced onto it |
 | A2 analyst v2 prompts | 🟡 In progress — fundamentals/news/sentiment/valuation/quant have v2 templates (available, not default); technical/ESG/derivative/alt-data/group-sector/market-phase/postmortem/options remain |
 | A3 debate redesign | ✅ Landed as available-not-default — `researchers/*.v3.txt`, `risk/*.v2.txt`; needs an A6 scorecard before any default flips |
-| A4 decision layer + A5 rating scale | ⬜ Not started |
+| A4 decision layer + A5 rating scale | ✅ Landed as available-not-default — `managers/research_manager.v2.txt` (synthesis rubric: load-bearing claims, factual-dispute resolution, per-theme scorecard, P(thesis) reconciliation, past-mistake check, rating+conviction+horizon), `trader/trader_system.v4.txt` (EV framing + calibration block), `trader/trader_user.v2.txt` (capital context + risk-constraint budget flags — wires up the previously-unused `build_capital_context` helper), `managers/portfolio_manager.v3.txt` (dissent record + rating/target/stop consistency rule); A5's `_shared/rating_scale.v1.txt` composed into both managers via `render_with_shared`. `ResearchPlan` gained optional `conviction`/`horizon` fields, `PortfolioDecision` gained optional `dissent` — additive, so v1/v2 templates and existing callers are unaffected. Needs an A6 scorecard before any default flips |
 | A6 A/B harness + judge | ✅ Done — `tradingagents/evaluation/prompt_ab.py`, `prompt_judge.py`; no scorecard has been run yet (needs live API keys) |
 | A7 token hygiene | ⬜ Not started |
 | B1 typed config | ⬜ Not started |
 | B2 intraday data | ⬜ Not started |
 | B3 prompt CLI | ⬜ Not started |
-| B4 reliability priors | ⬜ Not started |
-| B5 structured-output completion | ⬜ Not started |
+| B4 reliability priors | 🟡 Partially superseded — `research_manager.py::_format_analyst_weights_block` already injects per-analyst accuracy weights into the prompt (shipped earlier as "Confidence-Weighted Analyst Voting", unconditionally when ≥2 analysts have a non-neutral weight, no config flag). What A4 didn't yet do: extend the same reliability-prior treatment to the Portfolio Manager, and decide whether the always-on behavior should gain the `use_analyst_reliability_priors` flag this plan originally specified |
+| B5 structured-output completion | 🟡 Partially done — Trader/PM already had structured `action`/`rating`, numeric `win_probability`, entry/stop/target, and evidence IDs before this plan; A4 added `conviction`/`horizon` to the Research Manager and `dissent` to the PM. Still missing: an explicit falsifiers list field (researchers state theirs in prose; managers don't have a structured field for it) |
 
 Every version shipped so far (A2/A3) is **available, not default** — no
 `default_config.py` default has flipped, because no A6 scorecard run exists

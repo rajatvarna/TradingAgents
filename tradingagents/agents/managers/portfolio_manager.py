@@ -172,9 +172,10 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
         evidence_context = _format_evidence_context(state)
 
         version = state.get("prompt_versions", {}).get("managers/portfolio_manager", "v1")
-        prompt, prompt_hash = registry.render(
+        prompt, prompt_hash, shared_hashes = registry.render_with_shared(
             "managers/portfolio_manager",
             version=version,
+            shared={"rating_scale_block": ("_shared/rating_scale", "v1")},
             instrument_context=instrument_context,
             scope_guard=scope_guard,
             research_plan=research_plan,
@@ -218,6 +219,7 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
                     "prompt_key": "managers/portfolio_manager",
                     "prompt_version": version,
                     "prompt_hash": prompt_hash,
+                    "shared_prompt_hashes": shared_hashes,
                 }
             },
         )

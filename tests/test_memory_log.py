@@ -925,6 +925,38 @@ class TestPortfolioManagerInjection:
         result = pm_node(_make_pm_state())
         assert result["final_trade_decision"].startswith(plain_response)
 
+    # A4 — v3 (dissent record + shared rating scale), available-not-default
+
+    def test_pm_v3_prompt_carries_dissent_and_consistency_instructions(self):
+        captured = {}
+        llm = _structured_pm_llm(captured)
+        pm_node = create_portfolio_manager(llm)
+        state = _make_pm_state()
+        state["prompt_versions"] = {"managers/portfolio_manager": "v3"}
+        pm_node(state)
+        prompt = captured["prompt"]
+        assert "dissent record" in prompt.lower()
+        assert "consistency rule" in prompt.lower()
+        assert "${" not in prompt
+
+    def test_pm_render_includes_dissent_when_present(self):
+        decision = PortfolioDecision(
+            rating=PortfolioRating.HOLD,
+            executive_summary="Hold pending confirmation.",
+            investment_thesis="Balanced case.",
+            dissent="The aggressive analyst argued the breakout volume alone justified a Buy.",
+        )
+        captured = {}
+        llm = _structured_pm_llm(captured, decision)
+        pm_node = create_portfolio_manager(llm)
+        result = pm_node(_make_pm_state())
+        assert "**Dissent**: The aggressive analyst argued" in result["final_trade_decision"]
+
+    def test_pm_default_config_still_selects_v2(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["managers/portfolio_manager"] == "v2"
+
     # get_past_context ordering and limits
 
     def test_same_ticker_prioritised(self, tmp_path):

@@ -62,6 +62,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import string
 from pathlib import Path
 
@@ -73,6 +74,19 @@ logger = logging.getLogger(__name__)
 # fresh PromptRegistry.
 _PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PROMPTS_DIR: Path = _PACKAGE_ROOT / "prompts"
+
+
+def _template_references(template_text: str, var_name: str) -> bool:
+    """True if ``template_text`` references ``$var_name`` or ``${var_name}``.
+
+    Used by :meth:`PromptRegistry.render_with_shared` to skip rendering a
+    shared partial a given template version doesn't actually use. Requires
+    a non-identifier character (or end of string) after the name so
+    ``data_integrity_block`` doesn't false-match a longer identifier like
+    ``data_integrity_block_extra``.
+    """
+    pattern = r"\$\{" + re.escape(var_name) + r"\}|\$" + re.escape(var_name) + r"(?![A-Za-z0-9_])"
+    return re.search(pattern, template_text) is not None
 
 
 class PromptNotFoundError(FileNotFoundError):
@@ -196,8 +210,19 @@ class PromptRegistry:
         ``shared`` maps a template-variable name in ``key``'s template to
         ``(shared_key, shared_version)`` — e.g.
         ``{"data_integrity_block": ("_shared/data_integrity", "v1")}``.
-        Each shared partial is rendered first (against the same
-        ``variables``, so a shared block may itself use a caller-supplied
+        Only the shared partials the *selected version* of ``key``'s
+        template actually references (as ``$var_name`` or ``${var_name}``)
+        are rendered and injected — callers pass the same ``shared`` dict
+        unconditionally across every version of an agent's template (see
+        e.g. ``researchers/bull_researcher.py``'s ``_SHARED_BLOCKS``), and
+        older versions that don't reference a given block simply skip
+        rendering it. This also means a registry that doesn't ship
+        ``_shared/`` partials at all (an isolated test fixture, for
+        instance) still works for any template version that doesn't use
+        them.
+
+        Each referenced shared partial is rendered against the same
+        ``variables`` (so a shared block may itself use a caller-supplied
         variable if one is ever needed) and the result is injected into
         ``variables`` under the given name before rendering ``key``.
 
@@ -207,13 +232,17 @@ class PromptRegistry:
         retyped and re-hashed a dozen times.
 
         Returns ``(rendered_text, template_hash, shared_hashes)`` where
-        ``shared_hashes`` maps each shared partial's key to its own
-        template hash, so trace metadata can record provenance of both the
-        agent-specific template and every shared block composed into it.
+        ``shared_hashes`` maps each *referenced* shared partial's key to
+        its own template hash, so trace metadata can record provenance of
+        both the agent-specific template and every shared block composed
+        into it.
         """
+        template_text, _ = self.load(key, version)
         shared_hashes: dict[str, str] = {}
         merged_variables = dict(variables)
         for var_name, (shared_key, shared_version) in (shared or {}).items():
+            if not _template_references(template_text, var_name):
+                continue
             shared_text, shared_hash = self.render(shared_key, version=shared_version, **variables)
             merged_variables[var_name] = shared_text
             shared_hashes[shared_key] = shared_hash

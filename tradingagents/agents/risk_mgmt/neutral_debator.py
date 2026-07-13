@@ -1,3 +1,4 @@
+from tradingagents.agents.risk_mgmt.aggressive_debator import _SHARED_BLOCKS
 from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     format_risk_constraints,
@@ -28,9 +29,10 @@ def create_neutral_debator(llm, prompt_registry=None):
         trader_decision = state["trader_investment_plan"]
 
         version = state.get("prompt_versions", {}).get("risk/neutral", "v1")
-        prompt, prompt_hash = registry.render(
+        prompt, prompt_hash, shared_hashes = registry.render_with_shared(
             "risk/neutral",
             version=version,
+            shared=_SHARED_BLOCKS,
             trader_decision=trader_decision,
             market_research_report=market_research_report,
             sentiment_report=sentiment_report,
@@ -51,6 +53,7 @@ def create_neutral_debator(llm, prompt_registry=None):
                     "prompt_key": "risk/neutral",
                     "prompt_version": version,
                     "prompt_hash": prompt_hash,
+                    "shared_prompt_hashes": shared_hashes,
                 }
             },
         )

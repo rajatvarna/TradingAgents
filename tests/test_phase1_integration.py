@@ -212,7 +212,7 @@ class TestAgentToTraceToReplayer:
         assert len(checks) == 1
         c = checks[0]
         assert c.prompt_key == "researchers/bull_researcher"
-        assert c.prompt_version == "v1"
+        assert c.prompt_version == "v2"
         assert c.matches, (
             f"recorded hash {c.recorded_hash} did not match current "
             f"registry hash {c.current_hash} — bull_researcher.v1.txt may "
@@ -240,7 +240,12 @@ class TestAgentToTraceToReplayer:
         alt_registry = PromptRegistry(base_dir=alt_prompts)
 
         node = create_bull_researcher(llm, prompt_registry=alt_registry)
-        node(_state_for_researchers())
+        state = _state_for_researchers()
+        # alt_registry only carries a v1 template; pin to it explicitly —
+        # the default fallback is v2 (matching default_config.py) and
+        # alt_registry doesn't have that file.
+        state["prompt_versions"] = {"researchers/bull_researcher": "v1"}
+        node(state)
 
         # The trace records the original template's hash.  Now we
         # tamper with the file on disk.

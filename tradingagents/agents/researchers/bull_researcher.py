@@ -5,6 +5,16 @@ from tradingagents.agents.utils.agent_utils import (
 )
 from tradingagents.audit.prompt_registry import default_registry
 
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md) composed into whichever
+# template version is selected. Templates that don't reference
+# ${data_integrity_block}/${calibration_block} (v1, v2) simply leave the
+# rendered blocks unused — string.Template.substitute ignores extra
+# variables, so this is safe to pass unconditionally.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
+
 
 def _format_monster_block_for_researcher(mss: dict) -> str:
     """Summarise the MonsterStockScore for researcher prompt injection."""
@@ -79,10 +89,11 @@ def create_bull_researcher(llm, prompt_registry=None):
             else "Asset fundamentals report (may be unavailable for crypto)"
         )
 
-        version = state.get("prompt_versions", {}).get("researchers/bull_researcher", "v1")
-        prompt, prompt_hash = registry.render(
+        version = state.get("prompt_versions", {}).get("researchers/bull_researcher", "v2")
+        prompt, prompt_hash, shared_hashes = registry.render_with_shared(
             "researchers/bull_researcher",
             version=version,
+            shared=_SHARED_BLOCKS,
             target_label=target_label,
             fundamentals_label=fundamentals_label,
             market_research_report=market_research_report,
@@ -111,6 +122,7 @@ def create_bull_researcher(llm, prompt_registry=None):
                     "prompt_key": "researchers/bull_researcher",
                     "prompt_version": version,
                     "prompt_hash": prompt_hash,
+                    "shared_prompt_hashes": shared_hashes,
                 }
             },
         )

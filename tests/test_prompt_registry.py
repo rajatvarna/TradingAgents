@@ -297,7 +297,7 @@ class TestAgentFactoryRecordsPromptMetadata:
         args, kwargs = llm.invoke.call_args
         md = kwargs["config"]["metadata"]
         assert md["prompt_key"] == "researchers/bull_researcher"
-        assert md["prompt_version"] == "v1"
+        assert md["prompt_version"] == "v2"
         assert len(md["prompt_hash"]) == 64
 
     def test_bear_researcher_passes_prompt_metadata(self):
@@ -313,7 +313,7 @@ class TestAgentFactoryRecordsPromptMetadata:
         args, kwargs = llm.invoke.call_args
         md = kwargs["config"]["metadata"]
         assert md["prompt_key"] == "researchers/bear_researcher"
-        assert md["prompt_version"] == "v1"
+        assert md["prompt_version"] == "v2"
         assert len(md["prompt_hash"]) == 64
 
     def test_aggressive_debator_passes_prompt_metadata(self):
@@ -569,3 +569,229 @@ class TestPromptVersionsConfigResolves:
                 missing.append((key, version))
 
         assert not missing, f"prompt_versions declares versions with no template file: {missing}"
+
+
+# -------------------------------------------------------------------- #
+# A3 debate-layer redesign: researchers v3 (evidence over rhetoric)
+#
+# v3 is new content, not a byte-identical migration of anything, so these
+# are golden-content checks (does the rendered template carry the
+# structural markers the A3 redesign requires) plus node-level tests that
+# selecting v3 via prompt_versions actually renders and records shared
+# partial hashes. v3 is shipped available-but-not-default: default_config
+# still selects v2, per the A6 merge-gate convention (no default flips
+# without a scorecard) documented in docs/PROMPT_AND_CORE_FEATURES_PLAN.md.
+# -------------------------------------------------------------------- #
+
+
+@pytest.mark.unit
+class TestResearcherV3Content:
+    def _render(self, key):
+        registry = default_registry()
+        rendered, _, shared_hashes = registry.render_with_shared(
+            key,
+            version="v3",
+            shared={
+                "data_integrity_block": ("_shared/data_integrity", "v1"),
+                "calibration_block": ("_shared/calibration", "v1"),
+            },
+            **_BULL_INPUTS,
+            group_sector_report="GROUP",
+            market_phase_report="PHASE",
+            monster_stock_block="MONSTER",
+            language_instruction="",
+        )
+        return rendered, shared_hashes
+
+    def test_bull_v3_carries_evidence_over_rhetoric_markers(self):
+        rendered, shared_hashes = self._render("researchers/bull_researcher")
+        assert "steelman" in rendered.lower()
+        assert "P(bull thesis plays out" in rendered
+        assert "falsifiers" in rendered.lower() or "flip you to" in rendered.lower()
+        # Shared data-integrity block actually composed in, not just referenced
+        assert "never invent" in rendered.lower()
+        assert set(shared_hashes) == {"_shared/data_integrity", "_shared/calibration"}
+
+    def test_bear_v3_carries_evidence_over_rhetoric_markers(self):
+        rendered, shared_hashes = self._render("researchers/bear_researcher")
+        assert "steelman" in rendered.lower()
+        assert "P(bear thesis plays out" in rendered
+        assert "falsifiers" in rendered.lower() or "flip you to" in rendered.lower()
+        assert "never invent" in rendered.lower()
+
+    def test_v3_drops_conversational_style_instruction(self):
+        """The A3 rewrite's whole point is dropping the rhetoric-optimizing
+        'conversational style, debating effectively' framing v1/v2 use."""
+        rendered, _ = self._render("researchers/bull_researcher")
+        assert "conversational style" not in rendered.lower()
+
+    def test_no_unresolved_placeholders(self):
+        rendered, _ = self._render("researchers/bull_researcher")
+        # A leftover ${...} means a variable was referenced but not supplied
+        assert "${" not in rendered
+
+
+@pytest.mark.unit
+class TestResearcherDefaultVersionUnchangedByV3Availability:
+    """Shipping v3 must not silently change what runs by default — that
+    only happens via an explicit default_config bump backed by an A6
+    scorecard."""
+
+    def test_default_config_still_selects_v2(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["researchers/bull_researcher"] == "v2"
+        assert DEFAULT_CONFIG["prompt_versions"]["researchers/bear_researcher"] == "v2"
+
+    def test_node_without_explicit_override_still_renders_v2(self):
+        from unittest.mock import MagicMock
+
+        from tradingagents.agents.researchers.bull_researcher import create_bull_researcher
+
+        llm = MagicMock()
+        llm.invoke.return_value = MagicMock(content="bull says go")
+        node = create_bull_researcher(llm)
+        state = TestAgentFactoryRecordsPromptMetadata()._state_for_researchers()
+        node(state)
+
+        _, kwargs = llm.invoke.call_args
+        assert kwargs["config"]["metadata"]["prompt_version"] == "v2"
+
+    def test_node_honors_explicit_v3_override(self):
+        from unittest.mock import MagicMock
+
+        from tradingagents.agents.researchers.bull_researcher import create_bull_researcher
+
+        llm = MagicMock()
+        llm.invoke.return_value = MagicMock(content="bull says go")
+        node = create_bull_researcher(llm)
+        state = TestAgentFactoryRecordsPromptMetadata()._state_for_researchers()
+        state["prompt_versions"] = {"researchers/bull_researcher": "v3"}
+        node(state)
+
+        _, kwargs = llm.invoke.call_args
+        md = kwargs["config"]["metadata"]
+        assert md["prompt_version"] == "v3"
+        assert set(md["shared_prompt_hashes"]) == {"_shared/data_integrity", "_shared/calibration"}
+
+
+# -------------------------------------------------------------------- #
+# A3 debate-layer redesign: risk team v2 (personas -> risk functions)
+# -------------------------------------------------------------------- #
+
+_RISK_INPUTS = dict(
+    trader_decision="BUY, entry 100, stop 92, target 120",
+    market_research_report="MARKET",
+    sentiment_report="SENTIMENT",
+    news_report="NEWS",
+    fundamentals_report="FUND",
+    scope_guard="SCOPE",
+    history="HIST",
+)
+_RISK_SHARED = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
+
+
+@pytest.mark.unit
+class TestRiskTeamV2Content:
+    def test_aggressive_v2_reframed_as_upside_opportunity_cost_analyst(self):
+        registry = default_registry()
+        rendered, _, shared_hashes = registry.render_with_shared(
+            "risk/aggressive",
+            version="v2",
+            shared=_RISK_SHARED,
+            **_RISK_INPUTS,
+            current_conservative_response="CONS",
+            current_neutral_response="NEUT",
+            language_instruction="",
+        )
+        assert "Upside / Opportunity-Cost Analyst" in rendered
+        assert "opportunity cost" in rendered.lower()
+        assert "double-counting" in rendered.lower()
+        assert "Case | Probability | Price impact | Portfolio impact" in rendered
+        assert "actively champion" not in rendered.lower()
+        assert "never invent" in rendered.lower()
+        assert set(shared_hashes) == {"_shared/data_integrity", "_shared/calibration"}
+
+    def test_conservative_v2_reframed_as_downside_analyst(self):
+        registry = default_registry()
+        rendered, _, _ = registry.render_with_shared(
+            "risk/conservative",
+            version="v2",
+            shared=_RISK_SHARED,
+            **_RISK_INPUTS,
+            current_aggressive_response="AGG",
+            current_neutral_response="NEUT",
+            language_instruction="",
+        )
+        assert "Downside Analyst" in rendered
+        assert "kelly" in rendered.lower()
+        assert "stop-loss stress test" in rendered.lower()
+        assert "Case | Probability | Price impact | Portfolio impact" in rendered
+
+    def test_neutral_v2_reframed_as_calibration_referee(self):
+        registry = default_registry()
+        rendered, _, _ = registry.render_with_shared(
+            "risk/neutral",
+            version="v2",
+            shared=_RISK_SHARED,
+            **_RISK_INPUTS,
+            current_aggressive_response="AGG",
+            current_conservative_response="CONS",
+            language_instruction="",
+        )
+        assert "Calibration Referee" in rendered
+        assert "factual disputes" in rendered.lower()
+        assert "judgment disagreements" in rendered.lower()
+        assert "reconciled" in rendered.lower()
+
+    def test_v2_drops_no_special_formatting_instruction(self):
+        """v1's 'output conversationally ... no special formatting' fights
+        the scenario-table requirement v2 replaces it with."""
+        registry = default_registry()
+        rendered, _, _ = registry.render_with_shared(
+            "risk/aggressive",
+            version="v2",
+            shared=_RISK_SHARED,
+            **_RISK_INPUTS,
+            current_conservative_response="",
+            current_neutral_response="",
+            language_instruction="",
+        )
+        assert "no special formatting" not in rendered.lower()
+
+    def test_default_config_still_selects_v1_for_risk_team(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["risk/aggressive"] == "v1"
+        assert DEFAULT_CONFIG["prompt_versions"]["risk/conservative"] == "v1"
+        assert DEFAULT_CONFIG["prompt_versions"]["risk/neutral"] == "v1"
+
+    def test_aggressive_node_honors_explicit_v2_override(self):
+        from unittest.mock import MagicMock
+
+        from tradingagents.agents.risk_mgmt.aggressive_debator import create_aggressive_debator
+
+        llm = MagicMock()
+        llm.invoke.return_value = MagicMock(content="upside view")
+        node = create_aggressive_debator(llm)
+        state = {
+            "risk_debate_state": {
+                "history": "h", "aggressive_history": "ah",
+                "conservative_history": "ch", "neutral_history": "nh",
+                "current_aggressive_response": "", "current_conservative_response": "",
+                "current_neutral_response": "", "count": 0,
+            },
+            "market_report": "m", "sentiment_report": "s",
+            "news_report": "n", "fundamentals_report": "f",
+            "trader_investment_plan": "BUY",
+            "prompt_versions": {"risk/aggressive": "v2"},
+        }
+        node(state)
+
+        _, kwargs = llm.invoke.call_args
+        md = kwargs["config"]["metadata"]
+        assert md["prompt_version"] == "v2"
+        assert set(md["shared_prompt_hashes"]) == {"_shared/data_integrity", "_shared/calibration"}

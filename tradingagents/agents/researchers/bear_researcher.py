@@ -1,4 +1,7 @@
-from tradingagents.agents.researchers.bull_researcher import _format_monster_block_for_researcher
+from tradingagents.agents.researchers.bull_researcher import (
+    _SHARED_BLOCKS,
+    _format_monster_block_for_researcher,
+)
 from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     get_language_instruction,
@@ -52,10 +55,11 @@ def create_bear_researcher(llm, prompt_registry=None):
             else "Asset fundamentals report (may be unavailable for crypto)"
         )
 
-        version = state.get("prompt_versions", {}).get("researchers/bear_researcher", "v1")
-        prompt, prompt_hash = registry.render(
+        version = state.get("prompt_versions", {}).get("researchers/bear_researcher", "v2")
+        prompt, prompt_hash, shared_hashes = registry.render_with_shared(
             "researchers/bear_researcher",
             version=version,
+            shared=_SHARED_BLOCKS,
             target_label=target_label,
             fundamentals_label=fundamentals_label,
             market_research_report=market_research_report,
@@ -81,6 +85,7 @@ def create_bear_researcher(llm, prompt_registry=None):
                     "prompt_key": "researchers/bear_researcher",
                     "prompt_version": version,
                     "prompt_hash": prompt_hash,
+                    "shared_prompt_hashes": shared_hashes,
                 }
             },
         )

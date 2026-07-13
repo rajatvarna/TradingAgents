@@ -5,6 +5,14 @@ from tradingagents.agents.utils.agent_utils import (
 )
 from tradingagents.audit.prompt_registry import default_registry
 
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md). See
+# researchers/bull_researcher.py's _SHARED_BLOCKS for why this is passed
+# unconditionally regardless of which template version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
+
 
 def create_aggressive_debator(llm, prompt_registry=None):
     registry = prompt_registry or default_registry()
@@ -28,9 +36,10 @@ def create_aggressive_debator(llm, prompt_registry=None):
         trader_decision = state["trader_investment_plan"]
 
         version = state.get("prompt_versions", {}).get("risk/aggressive", "v1")
-        prompt, prompt_hash = registry.render(
+        prompt, prompt_hash, shared_hashes = registry.render_with_shared(
             "risk/aggressive",
             version=version,
+            shared=_SHARED_BLOCKS,
             trader_decision=trader_decision,
             market_research_report=market_research_report,
             sentiment_report=sentiment_report,
@@ -51,6 +60,7 @@ def create_aggressive_debator(llm, prompt_registry=None):
                     "prompt_key": "risk/aggressive",
                     "prompt_version": version,
                     "prompt_hash": prompt_hash,
+                    "shared_prompt_hashes": shared_hashes,
                 }
             },
         )

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ReportDetail, getReport } from "@/lib/engine";
+import { ReportDetail, ReportOutcome, getReport, getReportOutcome } from "@/lib/engine";
+import { cn } from "@/lib/utils";
 
 const SECTION_LABELS: Record<string, string> = {
   final_decision: "Final Decision",
@@ -24,6 +25,22 @@ function SummaryStat({ label, value }: { label: string; value: string | null }) 
   );
 }
 
+function OutcomeStat({ label, ret, correct }: { label: string; ret: number | null; correct: boolean | null }) {
+  return (
+    <div>
+      <dt className="text-xs text-slate-500">{label}</dt>
+      <dd className={cn("text-sm font-medium", ret === null ? "text-slate-500" : ret > 0 ? "text-emerald-400" : "text-red-400")}>
+        {ret !== null ? `${ret >= 0 ? "+" : ""}${(ret * 100).toFixed(1)}%` : "not enough history yet"}
+        {correct !== null && (
+          <span className={cn("ml-2 text-xs", correct ? "text-emerald-400" : "text-red-400")}>
+            {correct ? "✓ call correct" : "✗ call missed"}
+          </span>
+        )}
+      </dd>
+    </div>
+  );
+}
+
 export default function ReportDetailPage() {
   const params = useParams<{ ticker: string; date: string }>();
   const ticker = decodeURIComponent(String(params.ticker ?? ""));
@@ -31,15 +48,29 @@ export default function ReportDetailPage() {
 
   const [report, setReport] = useState<ReportDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<ReportOutcome | null>(null);
+  const [outcomeLoading, setOutcomeLoading] = useState(false);
+  const [outcomeError, setOutcomeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!ticker || !date) return;
     setReport(null);
     setError(null);
+    setOutcome(null);
+    setOutcomeError(null);
     getReport(ticker, date)
       .then(setReport)
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load report"));
   }, [ticker, date]);
+
+  const checkOutcome = () => {
+    setOutcomeLoading(true);
+    setOutcomeError(null);
+    getReportOutcome(ticker, date)
+      .then(setOutcome)
+      .catch((err) => setOutcomeError(err instanceof Error ? err.message : "Failed to check outcome"))
+      .finally(() => setOutcomeLoading(false));
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
@@ -92,6 +123,46 @@ export default function ReportDetailPage() {
                 <SummaryStat label="Stop Loss" value={report.stop_loss} />
                 <SummaryStat label="Time Horizon" value={report.time_horizon} />
               </dl>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-700 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-semibold text-slate-300">Track Record</h2>
+                {!outcome && (
+                  <button
+                    onClick={checkOutcome}
+                    disabled={outcomeLoading || !report.rating}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                      outcomeLoading || !report.rating
+                        ? "bg-slate-800 text-slate-500 cursor-not-allowed"
+                        : "bg-blue-600 hover:bg-blue-500 text-white"
+                    )}
+                    title={!report.rating ? "No parseable rating to evaluate" : "Fetches live price history"}
+                  >
+                    {outcomeLoading ? "Checking…" : "Check outcome"}
+                  </button>
+                )}
+              </div>
+
+              {outcomeError && (
+                <div className="text-xs text-red-300 bg-red-900/40 border border-red-700 rounded-lg px-3 py-2">
+                  {outcomeError}
+                </div>
+              )}
+
+              {!outcome && !outcomeError && (
+                <p className="text-xs text-slate-500">
+                  Compares this report&apos;s rating against actual forward price returns.
+                </p>
+              )}
+
+              {outcome && (
+                <dl className="grid grid-cols-2 gap-3">
+                  <OutcomeStat label="20-day return" ret={outcome.ret_20d} correct={outcome.correct_20d} />
+                  <OutcomeStat label="60-day return" ret={outcome.ret_60d} correct={outcome.correct_60d} />
+                </dl>
+              )}
             </div>
 
             <div className="space-y-3">

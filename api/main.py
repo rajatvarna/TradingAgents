@@ -34,6 +34,7 @@ from fastapi.responses import (
 from api.auth import require_auth
 from api.deployment_config import parse_cors_origins
 from api.reports import get_report as _get_persisted_report
+from api.reports import get_report_outcome as _get_persisted_report_outcome
 from api.reports import list_reports as _list_persisted_reports
 from api.db import (
     DB_PATH,
@@ -1062,6 +1063,22 @@ async def get_persisted_report(ticker: str, date: str):
     if report is None:
         raise HTTPException(status_code=404, detail="Report not found")
     return JSONResponse(content=report)
+
+
+@app.get("/reports/{ticker}/{date}/outcome", response_class=JSONResponse)
+async def get_persisted_report_outcome(ticker: str, date: str):
+    """Return whether a persisted report's call was directionally correct.
+
+    Fetches actual forward price returns (yfinance) on demand — this is a
+    live network call, not a cached/precomputed value, so call it only when
+    a user asks to see the track record rather than on every report view.
+    """
+    cleaned_ticker = _safe_path_segment(ticker.strip().upper())
+    cleaned_date = _safe_path_segment(date.strip())
+    outcome = _get_persisted_report_outcome(cleaned_ticker, cleaned_date)
+    if outcome is None:
+        raise HTTPException(status_code=404, detail="Report not found or has no parseable rating")
+    return JSONResponse(content=outcome)
 
 
 # ---------------------------------------------------------------------------

@@ -76,6 +76,45 @@ def list_reports(logs_dir: Path = LOGS_DIR) -> list[dict]:
     return sorted(results, key=lambda r: r["date"], reverse=True)
 
 
+def get_report_outcome(ticker: str, date: str, logs_dir: Path = LOGS_DIR) -> dict | None:
+    """Compute whether a persisted report's call was directionally correct.
+
+    Reuses the evaluation harness's forward-return logic
+    (``tradingagents.evaluation.benchmark``) against the *actual* price
+    history since the report's date, rather than re-deriving hit-rate
+    statistics that only exist in aggregate benchmark runs. Imported lazily
+    because it makes a live network call (yfinance) and pulls in the
+    evaluation module's heavier dependency chain — call this on demand, not
+    as part of routine report listing/viewing.
+
+    Returns ``None`` if the report doesn't exist or has no parseable rating.
+    """
+    report = get_report(ticker, date, logs_dir)
+    if report is None or not report.get("rating"):
+        return None
+
+    from tradingagents.evaluation.benchmark import _fetch_forward_returns, _score_from_rating
+
+    score = _score_from_rating(report["rating"])
+    returns = _fetch_forward_returns(ticker, date)
+
+    def _correct(ret: float | None) -> bool | None:
+        if ret is None or score == 0:
+            return None
+        return (score > 0) == (ret > 0)
+
+    return {
+        "ticker": ticker,
+        "date": date,
+        "rating": report["rating"],
+        "score": score,
+        "ret_20d": returns["ret_20d"],
+        "ret_60d": returns["ret_60d"],
+        "correct_20d": _correct(returns["ret_20d"]),
+        "correct_60d": _correct(returns["ret_60d"]),
+    }
+
+
 def get_report(ticker: str, date: str, logs_dir: Path = LOGS_DIR) -> dict | None:
     """Return the full parsed report for one ticker/date, or ``None`` if absent."""
     reports_dir = logs_dir / ticker / date / "reports"

@@ -61,6 +61,17 @@ export type ReportDetail = {
   meta: Record<string, unknown>;
 };
 
+export type ReportOutcome = {
+  ticker: string;
+  date: string;
+  rating: string;
+  score: number;
+  ret_20d: number | null;
+  ret_60d: number | null;
+  correct_20d: boolean | null;
+  correct_60d: boolean | null;
+};
+
 export type RequestListResponse = {
   total: number;
   requests: RequestStatus[];
@@ -138,6 +149,14 @@ export async function getReport(ticker: string, date: string): Promise<ReportDet
     { cache: "no-store" }
   );
   return parseOrThrow<ReportDetail>(res);
+}
+
+export async function getReportOutcome(ticker: string, date: string): Promise<ReportOutcome> {
+  const res = await fetch(
+    `/api/engine/reports/${encodeURIComponent(ticker)}/${encodeURIComponent(date)}/outcome`,
+    { cache: "no-store" }
+  );
+  return parseOrThrow<ReportOutcome>(res);
 }
 
 export async function getOpenRequests(): Promise<RequestListResponse> {

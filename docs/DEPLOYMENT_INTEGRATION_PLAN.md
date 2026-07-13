@@ -332,17 +332,37 @@ removal once Phase 1's SSE port lands.
 New features that only make sense (or only become cheap) once Phases 1–3 land.
 Complements — does not duplicate — `CORE_FEATURES_PLAN.md` F1–F6.
 
-| # | Feature | Design sketch | Tests / acceptance |
-|---|---------|---------------|--------------------|
-| D-1 | **Run-status & cost dashboard page** (`/runs`) | Surface `api/main.py`'s open/closed request lists plus the F3 `SpendTracker` daily-budget ledger: per-run cost, model, duration, deferred queue. One fetch per view via the engine proxy. | Unit: ledger aggregation endpoint. Accept: today's spend vs `daily_llm_budget_usd` visible on Vercel. |
-| D-2 | **Portfolio & journal view** (`/portfolio`) | Read-only view over the ops event-sourced journal + `GuardedBroker` positions (the F1 decision: journal *is* portfolio state). Engine API gains `GET /portfolio` + `GET /journal?since=`. Strictly read-only over HTTP — order placement stays behind the ops live-flip ritual, never exposed to the web tier. | Unit: journal query endpoint pagination. Accept: positions/fills from a paper run render on Vercel. |
-| D-3 | **Scheduled screener→engine hand-off** | The screener's watchlist (`global-screener/data/watchlist.json`) becomes an input source for `ops/universe/composite.py`, so the deployed watchlist and the daemon's candidate universe stop being separate worlds. | Unit: composite-universe source parsing. Accept: adding a ticker on the site (or in the JSON) makes it a scanner candidate next tick. |
-| D-4 | **Webhook/notify bridge** | Engine API emits job-completion webhooks; reuse `notify.py` channels; Vercel page shows toast/badge on completion instead of requiring an open SSE tab. | Unit: webhook payload schema + retry/backoff. |
-| D-5 | **Typed config for the deployment seam** | Extend F5's typed-config work to cover the new env surface (`ENGINE_API_URL/TOKEN`, CORS origins, report paths) with startup validation and actionable errors. | Unit: config validation matrix. |
-| D-6 | **Report quality metadata in the archive** | `/reports` responses include the evaluation-benchmark metrics (hit-rate, calibration) already computed by `tradingagents/evaluation/`, so the archive doubles as a track record. | Unit: metadata join on a fixture archive. |
+| # | Feature | Design sketch | Tests / acceptance | Status |
+|---|---------|---------------|--------------------|--------|
+| D-5 | **Typed config for the deployment seam** | `api/deployment_config.py` validates `ENGINE_API_CORS_ORIGINS` (each entry a well-formed origin) and `ENGINE_API_TOKEN` at startup; `global-screener/lib/engineConfig.ts` validates `ENGINE_API_URL` parses as an http(s) URL before the proxy uses it. | 12 unit tests (`tests/test_api_deployment_config.py`). | **Done** |
+| D-1 | **Run-status & cost dashboard page** (`/runs`) | Scoped down from the original design: there is no bridge between `api/main.py` and `ops/`'s `SpendTracker`/`daily_llm_budget_usd` — those belong to the separate live-trading daemon, not this analysis-job API, and fabricating a connection would misrepresent the system. `/runs` instead surfaces what `api/main.py` actually tracks: open/closed requests and today's per-provider LLM call/token/cost usage, via the existing `/requests/open`, `/requests/closed`, `/metrics/llm-calls/today` endpoints (added to the proxy allow-list; no new backend surface needed). | Manual/type-check verified (no new backend logic to unit-test — pure aggregation of existing typed responses). | **Done, rescoped** |
+| D-6 | **Report quality metadata in the archive** | Rescoped from "join in aggregate benchmark hit-rate/calibration stats" (no such per-report join key exists — `tradingagents/evaluation/benchmark.py`'s metrics are computed across many historical runs, not stored per ticker/date) to a genuine per-report check: `api/reports.py::get_report_outcome()` reuses the benchmark harness's own `_fetch_forward_returns`/`_score_from_rating` helpers to compare a report's rating against *actual* subsequent price action. Exposed as `GET /reports/{ticker}/{date}/outcome` — deliberately a separate, on-demand endpoint (not folded into the plain report GET) because it makes a live yfinance call. Frontend: a "Check outcome" button on the report detail page, not an automatic fetch. | 5 unit tests mocking the forward-return call (`tests/test_api_reports.py`). | **Done, rescoped** |
+| D-2 | **Portfolio & journal view** (`/portfolio`) | Read-only view over the ops event-sourced journal + `GuardedBroker` positions (the F1 decision: journal *is* portfolio state). Engine API gains `GET /portfolio` + `GET /journal?since=`. Strictly read-only over HTTP — order placement stays behind the ops live-flip ritual, never exposed to the web tier. | Unit: journal query endpoint pagination. Accept: positions/fills from a paper run render on Vercel. | Not started — see investigation note below |
+| D-3 | **Scheduled screener→engine hand-off** | The screener's watchlist (`global-screener/data/watchlist.json`) becomes an input source for `ops/universe/composite.py`, so the deployed watchlist and the daemon's candidate universe stop being separate worlds. | Unit: composite-universe source parsing. Accept: adding a ticker on the site (or in the JSON) makes it a scanner candidate next tick. | Not started — see investigation note below |
+| D-4 | **Webhook/notify bridge** | Engine API emits job-completion webhooks; reuse `notify.py` channels; Vercel page shows toast/badge on completion instead of requiring an open SSE tab. | Unit: webhook payload schema + retry/backoff. | Not started — see investigation note below |
 
-Suggested order: D-5 → D-1 → D-2 → D-6 → D-3 → D-4 (config safety first, then
-visibility, then automation).
+**Why D-2/D-3/D-4 are not started:** all three reach into `ops/` — the
+separate, already-running live-trading daemon (guarded broker, event-sourced
+journal, scheduled scanner loop) — which is a fundamentally different trust
+and risk domain than the analysis-job API and screener frontend this plan
+otherwise touches. Exposing *any* of it (even read-only) to a public web tier
+deserves its own design review rather than being folded into this session's
+pass:
+
+- **D-2** needs the journal/broker's actual schema inventoried and a decision
+  on whether `api/main.py` (a different process from the `ops run` daemon)
+  should read the daemon's SQLite/event store directly, through a new
+  read-only RPC, or not connect the two processes at all.
+- **D-3** would change what tickers the live scanner evaluates — a
+  behavior change to a system that places real (or paper) orders — and
+  should not land without the person operating that daemon reviewing it.
+- **D-4** is the least risky of the three but depends on D-1's job-completion
+  signal existing in a webhook-friendly form and on `notify.py`'s existing
+  channel contracts, neither of which were re-verified in this pass.
+
+Recommended: scope each as its own follow-up, starting with a short design
+note (mirroring this document's format) once there's a chance to review the
+current `ops/` journal/broker schema with whoever operates it.
 
 ---
 

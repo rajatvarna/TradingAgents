@@ -4,7 +4,8 @@ import json
 
 import pytest
 
-from api.reports import get_report, list_reports
+import tradingagents.evaluation.benchmark as benchmark
+from api.reports import get_report, get_report_outcome, list_reports
 
 
 def _write_report(base, ticker, date, *, final="**Rating**: Buy\n", trader="**Action**: Buy\n"):
@@ -77,3 +78,66 @@ def test_get_report_tolerates_malformed_meta_json(tmp_path):
     report = get_report("NVDA", "2026-07-01", tmp_path)
 
     assert report["meta"] == {}
+
+
+@pytest.mark.unit
+def test_get_report_outcome_none_when_report_missing(tmp_path):
+    assert get_report_outcome("NVDA", "2026-07-01", tmp_path) is None
+
+
+@pytest.mark.unit
+def test_get_report_outcome_none_when_no_parseable_rating(tmp_path):
+    _write_report(tmp_path, "NVDA", "2026-07-01", final="no rating line here\n")
+    assert get_report_outcome("NVDA", "2026-07-01", tmp_path) is None
+
+
+@pytest.mark.unit
+def test_get_report_outcome_computes_directional_correctness(tmp_path, monkeypatch):
+    _write_report(tmp_path, "NVDA", "2026-07-01", final="**Rating**: Buy\n")
+    monkeypatch.setattr(
+        benchmark,
+        "_fetch_forward_returns",
+        lambda ticker, date: {"ret_20d": 0.05, "ret_60d": -0.02},
+    )
+
+    outcome = get_report_outcome("NVDA", "2026-07-01", tmp_path)
+
+    assert outcome["rating"] == "Buy"
+    assert outcome["score"] == 2
+    assert outcome["ret_20d"] == 0.05
+    assert outcome["correct_20d"] is True
+    assert outcome["ret_60d"] == -0.02
+    assert outcome["correct_60d"] is False
+
+
+@pytest.mark.unit
+def test_get_report_outcome_sell_rating_correctness(tmp_path, monkeypatch):
+    _write_report(tmp_path, "NVDA", "2026-07-01", final="**Rating**: Sell\n")
+    monkeypatch.setattr(
+        benchmark,
+        "_fetch_forward_returns",
+        lambda ticker, date: {"ret_20d": -0.03, "ret_60d": None},
+    )
+
+    outcome = get_report_outcome("NVDA", "2026-07-01", tmp_path)
+
+    assert outcome["score"] == -2
+    assert outcome["correct_20d"] is True
+    assert outcome["ret_60d"] is None
+    assert outcome["correct_60d"] is None
+
+
+@pytest.mark.unit
+def test_get_report_outcome_neutral_score_has_no_correctness(tmp_path, monkeypatch):
+    _write_report(tmp_path, "NVDA", "2026-07-01", final="**Rating**: Hold\n")
+    monkeypatch.setattr(
+        benchmark,
+        "_fetch_forward_returns",
+        lambda ticker, date: {"ret_20d": 0.01, "ret_60d": 0.02},
+    )
+
+    outcome = get_report_outcome("NVDA", "2026-07-01", tmp_path)
+
+    assert outcome["score"] == 0
+    assert outcome["correct_20d"] is None
+    assert outcome["correct_60d"] is None

@@ -530,8 +530,10 @@ def create_msg_delete(concurrency_limit: int = 1):
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=30), reraise=True)
-def invoke_with_retry(chain, prompt):
+def invoke_with_retry(chain, prompt, config=None):
     """Invoke a LangChain model/chain with exponential backoff for transient errors."""
+    if config is not None:
+        return chain.invoke(prompt, config=config)
     return chain.invoke(prompt)
 
 

@@ -6,17 +6,24 @@ from tradingagents.agents.utils.agent_utils import (
     invoke_with_retry,
 )
 from tradingagents.agents.utils.options_tools import get_options_data
-from tradingagents.prompts import load_prompt
+from tradingagents.audit.prompt_registry import default_registry
 
 
-def create_options_analyst(llm):
+def create_options_analyst(llm, prompt_registry=None):
+    registry = prompt_registry or default_registry()
+
     def options_analyst_node(state):
         current_date = state["trade_date"]
         instrument_context = build_instrument_context(state["company_of_interest"])
 
         tools = [get_options_data]
 
-        system_message = load_prompt("options_analyst") + get_language_instruction()
+        version = state.get("prompt_versions", {}).get("analysts/options", "v1")
+        system_message, prompt_hash = registry.render(
+            "analysts/options",
+            version=version,
+            language_instruction=get_language_instruction(),
+        )
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -42,7 +49,17 @@ def create_options_analyst(llm):
 
         chain = prompt | llm.bind_tools(tools)
 
-        result = invoke_with_retry(chain, state["messages"])
+        result = invoke_with_retry(
+            chain,
+            state["messages"],
+            config={
+                "metadata": {
+                    "prompt_key": "analysts/options",
+                    "prompt_version": version,
+                    "prompt_hash": prompt_hash,
+                }
+            },
+        )
 
         report = ""
         if len(result.tool_calls) == 0:

@@ -297,6 +297,12 @@ DEFAULT_CONFIG = _apply_env_overrides({
         "analysts/group_sector": "v1",
         "analysts/market_phase": "v1",
         "analysts/postmortem": "v1",
+        "analysts/esg": "v1",
+        "analysts/derivative": "v1",
+        "analysts/alternative_data": "v1",
+        "analysts/quant": "v1",
+        "analysts/technical": "v1",
+        "analysts/options": "v1",
     },
     # Output language for analyst reports and final decision
     # Internal agent debate stays in English for reasoning quality

@@ -13,11 +13,14 @@ from tradingagents.agents.utils.tool_call_recovery import (
     log_tool_call_failure,
     recover_tool_calls,
 )
+from tradingagents.audit.prompt_registry import default_registry
 
 logger = logging.getLogger(__name__)
 
 
-def create_quant_analyst(llm):
+def create_quant_analyst(llm, prompt_registry=None):
+    registry = prompt_registry or default_registry()
+
     def quant_analyst_node(state):
         current_date = state["trade_date"]
         ticker = state.get("company_of_interest", "UNKNOWN")
@@ -25,37 +28,13 @@ def create_quant_analyst(llm):
 
         tools = [get_quantitative_metrics]
 
-        system_message = (
-            "You are a senior Quantitative Risk Analyst. Your job is to statistically evaluate the "
-            "risk and return characteristics of the given instrument with the discipline of an institutional "
-            "risk desk — every number must be interpreted, not just recited.\n\n"
-            "STEP 1 — Call get_quantitative_metrics with:\n"
-            "  ticker = the ticker symbol\n"
-            f"  curr_date = {current_date}   ← use this EXACT date\n\n"
-            "STEP 2 — Write a detailed report that MUST include ALL of the following sections, each grounded "
-            "in the exact figures returned by the tool:\n"
-            "1. **Volatility Profile** — annualized volatility, and whether it is high or low relative to "
-            "typical broad-market volatility (~15-20% annualized); state the implication for expected daily/"
-            "weekly price swings.\n"
-            "2. **Risk Metrics** — VaR (95%) in both percentage and (if price is available) dollar/price terms, "
-            "and Expected Shortfall (CVaR) interpreted as the average loss in the worst-case tail beyond VaR.\n"
-            "3. **Return Analysis** — Sharpe Ratio and what it implies about risk-adjusted return quality "
-            "(below 0 = poor, 0-1 = subpar, 1-2 = good, >2 = excellent), plus annualized return itself.\n"
-            "4. **Distribution Analysis** — skewness (positive = occasional large gains, negative = occasional "
-            "large losses — a critical tail-risk signal) and kurtosis (fat tails = higher probability of extreme "
-            "moves than a normal distribution would suggest), with explicit implications for tail risk.\n"
-            "5. **Max Drawdown** — worst peak-to-trough loss, and recovery context if available (how long "
-            "before the instrument recovered, or whether it currently remains in drawdown).\n"
-            "6. **Stop Loss Recommendation** — a specific % or price level derived from the VaR/volatility "
-            "figures, with the reasoning shown (e.g. 1.5–2x daily VaR as a stop distance).\n"
-            "7. **Position Sizing Guidance** — a concrete recommendation (e.g. target volatility contribution, "
-            "or max % of portfolio) derived from the volatility and VaR figures, appropriate for a risk-managed "
-            "portfolio rather than a single best guess.\n"
-            "8. **Risk Classification** — an overall risk rating (Low / Moderate / High / Extreme) synthesizing "
-            "all metrics above, with the primary driver of that rating stated explicitly.\n"
-            "9. **Summary Table** — Markdown table: Metric | Value | Interpretation"
-            + get_strict_data_instruction()
-            + get_language_instruction()
+        version = state.get("prompt_versions", {}).get("analysts/quant", "v1")
+        system_message, prompt_hash = registry.render(
+            "analysts/quant",
+            version=version,
+            current_date=current_date,
+            strict_data_instruction=get_strict_data_instruction(),
+            language_instruction=get_language_instruction(),
         )
 
         prompt = ChatPromptTemplate.from_messages([
@@ -74,7 +53,16 @@ def create_quant_analyst(llm):
         prompt = prompt.partial(instrument_context=instrument_context)
 
         chain = prompt | llm.bind_tools(tools)
-        result = chain.invoke(state["messages"])
+        result = chain.invoke(
+            state["messages"],
+            config={
+                "metadata": {
+                    "prompt_key": "analysts/quant",
+                    "prompt_version": version,
+                    "prompt_hash": prompt_hash,
+                }
+            },
+        )
 
         result, recovered = recover_tool_calls(result, tools, logger)
         log_tool_call_failure("Quant Analyst", ticker, [t.name for t in tools], result, logger)

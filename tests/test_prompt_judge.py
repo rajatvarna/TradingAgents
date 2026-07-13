@@ -16,15 +16,15 @@ from tradingagents.evaluation.prompt_judge import (
 
 
 def _score(**overrides) -> PromptQualityScore:
-    defaults = dict(
-        covers_required_sections=4,
-        states_numeric_confidence=True,
-        cites_evidence_or_data=4,
-        avoids_unsupported_claims=5,
-        names_falsifiers=True,
-        overall=4,
-        rationale="Solid report with numeric confidence and cited figures.",
-    )
+    defaults = {
+        "covers_required_sections": 4,
+        "states_numeric_confidence": True,
+        "cites_evidence_or_data": 4,
+        "avoids_unsupported_claims": 5,
+        "names_falsifiers": True,
+        "overall": 4,
+        "rationale": "Solid report with numeric confidence and cited figures.",
+    }
     defaults.update(overrides)
     return PromptQualityScore(**defaults)
 

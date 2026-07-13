@@ -47,4 +47,4 @@ Output exactly this structure:
 - Max Gain Available: [pct]% at [date]
 - Decline Predictability: [early/mid/late warning vs actual exit]
 - What Went Right: [one sentence, or "nothing notable"]
-- LESSON: [one paragraph]
+- LESSON: [one paragraph]${language_instruction}

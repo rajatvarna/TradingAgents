@@ -63,4 +63,4 @@ IMPORTANT RULES FROM THE FRAMEWORK:
 - Never ignore the market phase — it gates ALL buy decisions
 
 Conclude with a one-line Market Phase Summary in this exact format:
-**PHASE: [phase] | MMSS: [YES/NO] | AGGRESSION: [0/25/50/75/100]% | OUTLOOK: [Bullish/Neutral/Bearish]**
+**PHASE: [phase] | MMSS: [YES/NO] | AGGRESSION: [0/25/50/75/100]% | OUTLOOK: [Bullish/Neutral/Bearish]**${language_instruction}

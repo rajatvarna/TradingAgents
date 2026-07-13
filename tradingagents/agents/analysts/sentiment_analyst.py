@@ -61,7 +61,6 @@ from tradingagents.dataflows.reddit import fetch_reddit_posts
 from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
 from tradingagents.dataflows.y_finance import get_instrument_profile
 
-
 # A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
 # render_with_shared skips any block a given template version doesn't
 # reference, so this is safe to pass regardless of which version is selected.

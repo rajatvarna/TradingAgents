@@ -405,16 +405,16 @@ class TestConfiguredPromptVersionsReachState:
 
         captured = {}
 
-        class _Probe(Exception):
+        class _ProbeError(Exception):
             pass
 
         def _capture_invoke(state, **kwargs):
             captured["state"] = state
-            raise _Probe()
+            raise _ProbeError()
 
         ta.graph.invoke = _capture_invoke
 
-        with pytest.raises(_Probe):
+        with pytest.raises(_ProbeError):
             ta.propagate("AAPL", "2026-01-02")
 
         assert captured["state"]["prompt_versions"] == cfg["prompt_versions"]
@@ -428,16 +428,16 @@ class TestConfiguredPromptVersionsReachState:
 
         captured = {}
 
-        class _Probe(Exception):
+        class _ProbeError(Exception):
             pass
 
         def _capture_stream(state, **kwargs):
             captured["state"] = state
-            raise _Probe()
+            raise _ProbeError()
 
         ta.graph.stream = _capture_stream
 
-        with pytest.raises(_Probe):
+        with pytest.raises(_ProbeError):
             list(ta.stream_run("AAPL", "2026-01-02"))
 
         assert captured["state"]["prompt_versions"] == cfg["prompt_versions"]
@@ -679,15 +679,15 @@ class TestResearcherDefaultVersionUnchangedByV3Availability:
 # A3 debate-layer redesign: risk team v2 (personas -> risk functions)
 # -------------------------------------------------------------------- #
 
-_RISK_INPUTS = dict(
-    trader_decision="BUY, entry 100, stop 92, target 120",
-    market_research_report="MARKET",
-    sentiment_report="SENTIMENT",
-    news_report="NEWS",
-    fundamentals_report="FUND",
-    scope_guard="SCOPE",
-    history="HIST",
-)
+_RISK_INPUTS = {
+    "trader_decision": "BUY, entry 100, stop 92, target 120",
+    "market_research_report": "MARKET",
+    "sentiment_report": "SENTIMENT",
+    "news_report": "NEWS",
+    "fundamentals_report": "FUND",
+    "scope_guard": "SCOPE",
+    "history": "HIST",
+}
 _RISK_SHARED = {
     "data_integrity_block": ("_shared/data_integrity", "v1"),
     "calibration_block": ("_shared/calibration", "v1"),

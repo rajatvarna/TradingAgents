@@ -1,6 +1,8 @@
 # Prompt Improvement & Core Features Plan
 
-**Status:** Proposed
+**Status:** In progress — A0, A1, A6 complete; A2 (5/13 analysts) and A3
+(researchers + risk team) landed as available-not-default versions; see §4
+for the up-to-date progress table.
 **Last updated:** 2026-07-13
 **Scope:** (A) a systematic upgrade of every agent prompt in the analysis and
 decision pipeline, with measurable before/after evaluation; (B) the remaining
@@ -117,11 +119,15 @@ unaudited; 12 dead YAML files.
    instruction, instrument context) become template variables; the Python
    formatting helpers (`_format_technical_monster_context` etc.) stay in the
    agent files.
-2. Extend `default_config["prompt_versions"]` with the analyst keys
-   (`analysts/market_analyst: "v1"` …). `v1` is a byte-faithful extraction
-   of today's inline text, so behavior is unchanged — guarded by a
-   golden-render unit test comparing the registry render against the
-   pre-extraction string for a fixed variable set.
+2. Extend `default_config["prompt_versions"]` with the analyst keys, matching
+   the registry key each agent factory actually renders (e.g.
+   `analysts/market: "v1"`, `analysts/fundamentals: "v1"`,
+   `analysts/group_sector: "v1"` — the key is the template's path stem
+   under `tradingagents/prompts/analysts/`, not the agent module's file
+   name). `v1` is a byte-faithful extraction of today's inline text, so
+   behavior is unchanged — guarded by a golden-render unit test comparing
+   the registry render against the pre-extraction string for a fixed
+   variable set.
 3. Migrate `options_analyst` off `prompts/loader.py`; delete the 12 stale
    YAML files and `loader.py` itself once nothing imports it
    (`prompts/loader.py` and `prompts/__init__.py` exports removed in the
@@ -439,6 +445,29 @@ B3 prompt CLI                B5 structured outputs
 | A7 digest mode | `feat/debate-context-digest` | Yes |
 | B4 reliability priors | `feat/analyst-reliability-priors` | Fork-first, propose later |
 | B2 intraday | `feat/intraday-data` | Yes |
+
+**Progress (updated as work lands):**
+
+| Item | Status |
+|---|---|
+| A0 registry unification | ✅ Done — all 14 analysts on `PromptRegistry`; `prompts/loader.py` and all 13 dead YAML files deleted; the `prompt_versions` → agent-state wiring bug found during this work is also fixed |
+| A1 shared prompt contract | ✅ Done — `docs/PROMPT_STYLE_GUIDE.md` + `PromptRegistry.render_with_shared()` + two shared partials; infrastructure only, no agent forced onto it |
+| A2 analyst v2 prompts | 🟡 In progress — fundamentals/news/sentiment/valuation/quant have v2 templates (available, not default); technical/ESG/derivative/alt-data/group-sector/market-phase/postmortem/options remain |
+| A3 debate redesign | ✅ Landed as available-not-default — `researchers/*.v3.txt`, `risk/*.v2.txt`; needs an A6 scorecard before any default flips |
+| A4 decision layer + A5 rating scale | ⬜ Not started |
+| A6 A/B harness + judge | ✅ Done — `tradingagents/evaluation/prompt_ab.py`, `prompt_judge.py`; no scorecard has been run yet (needs live API keys) |
+| A7 token hygiene | ⬜ Not started |
+| B1 typed config | ⬜ Not started |
+| B2 intraday data | ⬜ Not started |
+| B3 prompt CLI | ⬜ Not started |
+| B4 reliability priors | ⬜ Not started |
+| B5 structured-output completion | ⬜ Not started |
+
+Every version shipped so far (A2/A3) is **available, not default** — no
+`default_config.py` default has flipped, because no A6 scorecard run exists
+yet (it requires live API keys this environment doesn't have). The next
+concrete step for A2/A3 is running `prompt_ab.py` against each candidate
+before considering a default flip.
 
 ## 5. Cross-cutting requirements
 

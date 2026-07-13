@@ -14,8 +14,6 @@ Analysts are added to this file as they migrate off inline prompts.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import Runnable
@@ -66,7 +64,7 @@ def _reset_registry():
 # --------------------------------------------------------------------- #
 
 
-def _group_sector_legacy(group_context: str, market_context: str) -> str:
+def _group_sector_legacy(group_context: str, market_context: str, language_instruction: str = "") -> str:
     return f"""You are the Group & Sector Leadership Analyst for the TradingAgents system.
 You operate on the principle that approximately 50% of a stock's price performance is
 driven by its sector and industry group (the Boik 50% rule).
@@ -80,7 +78,7 @@ PRE-COMPUTED GROUP DATA (from the scoring engine):
 MARKET ENVIRONMENT:
 {market_context}
 
-Your analysis MUST cover these five points:
+Your analysis MUST cover these six points:
 
 1. **GROUP ENVIRONMENT RATING** — Rate as: Strong / Neutral / Weak and explain why.
 
@@ -114,7 +112,7 @@ HARD RULE from the framework: If the group is not in the top third AND there are
 fewer than 3 group leaders acting well, the stock has a significantly reduced
 probability of being a monster stock regardless of individual fundamentals.
 
-Append a summary table with: Group Name | RS Rank Percentile | Leader Count | Confirmation | Rating
+Append a summary table with: Group Name | RS Rank Percentile | Leader Count | Confirmation | Rating{language_instruction}
 """
 
 
@@ -126,6 +124,7 @@ class TestGroupSectorAnalystPrompt:
             "analysts/group_sector",
             group_context="GROUP_CTX",
             market_context="MARKET_CTX",
+            language_instruction="",
         )
         assert rendered == _group_sector_legacy("GROUP_CTX", "MARKET_CTX").rstrip("\n")
 
@@ -154,7 +153,7 @@ class TestGroupSectorAnalystPrompt:
 # --------------------------------------------------------------------- #
 
 
-def _market_phase_legacy(market_context: str) -> str:
+def _market_phase_legacy(market_context: str, language_instruction: str = "") -> str:
     return f"""You are the Market Phase Analyst for the TradingAgents system.
 Your role is to assess the overall market environment and prescribe specific strategy
 adjustments based on the Boik market phase framework.
@@ -220,7 +219,7 @@ IMPORTANT RULES FROM THE FRAMEWORK:
 - Never ignore the market phase — it gates ALL buy decisions
 
 Conclude with a one-line Market Phase Summary in this exact format:
-**PHASE: [phase] | MMSS: [YES/NO] | AGGRESSION: [0/25/50/75/100]% | OUTLOOK: [Bullish/Neutral/Bearish]**
+**PHASE: [phase] | MMSS: [YES/NO] | AGGRESSION: [0/25/50/75/100]% | OUTLOOK: [Bullish/Neutral/Bearish]**{language_instruction}
 """
 
 
@@ -228,7 +227,9 @@ Conclude with a one-line Market Phase Summary in this exact format:
 class TestMarketPhaseAnalystPrompt:
     def test_byte_identical(self):
         registry = default_registry()
-        rendered, _ = registry.render("analysts/market_phase", market_context="MKT_CTX")
+        rendered, _ = registry.render(
+            "analysts/market_phase", market_context="MKT_CTX", language_instruction=""
+        )
         assert rendered == _market_phase_legacy("MKT_CTX").rstrip("\n")
 
     def test_node_passes_prompt_metadata(self, monkeypatch):
@@ -254,7 +255,7 @@ class TestMarketPhaseAnalystPrompt:
 # --------------------------------------------------------------------- #
 
 
-def _postmortem_legacy(past_recommendation: str, outcome_data: str) -> str:
+def _postmortem_legacy(past_recommendation: str, outcome_data: str, language_instruction: str = "") -> str:
     return f"""You are the Post-Mortem Analyst for the TradingAgents system.
 Your role is to evaluate past trading recommendations with the benefit of hindsight,
 identify what went right or wrong with intellectual honesty (including when the original call
@@ -304,7 +305,7 @@ Output exactly this structure:
 - Max Gain Available: [pct]% at [date]
 - Decline Predictability: [early/mid/late warning vs actual exit]
 - What Went Right: [one sentence, or "nothing notable"]
-- LESSON: [one paragraph]
+- LESSON: [one paragraph]{language_instruction}
 """
 
 
@@ -316,6 +317,7 @@ class TestPostmortemAnalystPrompt:
             "analysts/postmortem",
             past_recommendation="PAST_REC",
             outcome_data="OUTCOME",
+            language_instruction="",
         )
         assert rendered == _postmortem_legacy("PAST_REC", "OUTCOME").rstrip("\n")
 
@@ -889,10 +891,10 @@ class TestValuationAnalystPrompt:
     def test_golden_hash(self):
         registry = default_registry()
         rendered, _ = registry.render(
-            "analysts/valuation", subject_label="company", language_instruction=""
+            "analysts/valuation", subject_label="companies", language_instruction=""
         )
         digest = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
-        assert digest == "4c39f71fd147b9efe9ef703057b047353632a241b22126ade52a98dc11212307"
+        assert digest == "01e6c5eb687a0e6b27862787ad939d549fd904ee58103af9b0f22913ee207b6e"
 
     def test_node_tool_free_fallback_passes_prompt_metadata(self, monkeypatch):
         from tradingagents.agents.analysts import valuation_analyst as va
@@ -1056,7 +1058,7 @@ class TestValuationV2Content:
                 "data_integrity_block": ("_shared/data_integrity", "v1"),
                 "calibration_block": ("_shared/calibration", "v1"),
             },
-            subject_label="company",
+            subject_label="companies",
             language_instruction="",
         )
         assert "assumption provenance table" in rendered.lower()

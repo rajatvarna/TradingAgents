@@ -11,7 +11,7 @@ ${group_context}
 MARKET ENVIRONMENT:
 ${market_context}
 
-Your analysis MUST cover these five points:
+Your analysis MUST cover these six points:
 
 1. **GROUP ENVIRONMENT RATING** — Rate as: Strong / Neutral / Weak and explain why.
 
@@ -45,4 +45,4 @@ HARD RULE from the framework: If the group is not in the top third AND there are
 fewer than 3 group leaders acting well, the stock has a significantly reduced
 probability of being a monster stock regardless of individual fundamentals.
 
-Append a summary table with: Group Name | RS Rank Percentile | Leader Count | Confirmation | Rating
+Append a summary table with: Group Name | RS Rank Percentile | Leader Count | Confirmation | Rating${language_instruction}

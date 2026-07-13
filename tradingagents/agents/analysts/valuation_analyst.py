@@ -873,7 +873,7 @@ def create_valuation_analyst(llm, toolkit=None, prompt_registry=None):
         current_date = state["trade_date"]
         ticker = str(state["company_of_interest"])
         asset_type = state.get("asset_type", "stock")
-        subject_label = "company" if asset_type == "stock" else "asset or protocol"
+        subject_label = "companies" if asset_type == "stock" else "assets or protocols"
         instrument_context = get_instrument_context_from_state(state)
 
         tools = [

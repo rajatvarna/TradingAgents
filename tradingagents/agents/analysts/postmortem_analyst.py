@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage
 
+from tradingagents.agents.utils.agent_utils import get_language_instruction
 from tradingagents.audit.prompt_registry import default_registry
 
 
@@ -28,6 +29,7 @@ def create_postmortem_analyst(llm, prompt_registry=None):
             version=version,
             past_recommendation=past_rec,
             outcome_data=outcome,
+            language_instruction=get_language_instruction(),
         )
 
         from langchain_core.prompts import ChatPromptTemplate

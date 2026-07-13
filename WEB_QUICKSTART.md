@@ -1,5 +1,10 @@
 # TradingAgents Web App - Quick Start Guide
 
+> **Note:** This describes the `web/` FastAPI+vanilla-JS surface, one of
+> several parallel engine UIs in this repo (not the Vercel-deployed
+> screener — see `VERCEL_DEPLOYMENT.md`). See
+> `docs/DEPLOYMENT_INTEGRATION_PLAN.md` for the consolidation plan.
+
 Get the web application running locally in 5 minutes.
 
 ## Prerequisites

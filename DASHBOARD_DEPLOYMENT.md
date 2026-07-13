@@ -1,5 +1,13 @@
 # StrattonOak Dashboard & API Deployment
 
+> **Note: this describes a deployment that is not live.** The root Next.js
+> "StrattonOak" app and `api/*.py` Vercel functions referenced below were
+> never successfully deployed (the Vercel project's Root Directory is set to
+> `global-screener/`, an unrelated app — see `VERCEL_DEPLOYMENT.md`). This
+> doc is kept for historical reference; see
+> `docs/DEPLOYMENT_INTEGRATION_PLAN.md` for the current deployment
+> architecture and the plan that retires the surfaces described here.
+
 This document explains how to deploy the **interactive dashboard** and **trading analysis API** to Vercel.
 
 ## Architecture

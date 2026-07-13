@@ -227,28 +227,53 @@ deployment target but still runs.
 
 *Goal: the Vercel site gains the engine features users see locally.*
 
-1. New route group in `global-screener/`:
-   - `app/analyze/page.tsx` — analysis form (ticker via existing screener row
-     "Analyze" action or free entry, date, provider/model, analyst selection —
-     port the field set from `components/AnalysisForm.tsx`), live progress via
-     SSE, rendered markdown report (reuse the repo's report structure).
-   - `app/reports/page.tsx` + `app/reports/[ticker]/page.tsx` — browse the
-     report archive from Phase 1.3.
-2. `app/api/engine/[...path]/route.ts` — thin authenticated proxy to
-   `ENGINE_API_URL` (D3). Streams SSE through. Rejects if env unset with a
-   clear "engine not configured" payload the UI turns into a setup hint —
-   the screener keeps working with no engine attached.
-3. Wire screener → analysis: each `ScreenerTable` row and `TopMovers` entry
-   gets an "AI analyze" affordance linking to `/analyze?ticker=…`.
+1. **Done**, with one adjustment. `global-screener/`:
+   - `app/analyze/page.tsx` — analysis form (ticker prefillable via
+     `?ticker=`, date, provider), then **polls** `GET /status/{request_id}`
+     every 3s and renders the recommendation + a link to the full report on
+     completion. Not SSE — matches Phase 1's deferral of the `JobStream` port;
+     `api/main.py` doesn't yet have a per-node stream to consume. Revisit once
+     that lands.
+   - `app/reports/page.tsx` + `app/reports/[ticker]/[date]/page.tsx` — browse
+     the report archive from Phase 1.3, rendered as collapsible raw-markdown
+     sections (no markdown-to-HTML dependency added; plain text is legible
+     enough for v1, a `react-markdown` upgrade is a cheap follow-up).
+2. **Done.** `app/api/engine/[...path]/route.ts` — server-side proxy to
+   `ENGINE_API_URL`, adding the `ENGINE_API_TOKEN` bearer header (D3, D4).
+   **Narrower than originally scoped:** only forwards `analyze`/`status`/
+   `reports` path prefixes (an explicit allow-list) rather than every engine
+   path — the full API also exposes `/env`, `/vault/refresh`, and
+   `/batching/schedules*`, which this public-facing proxy must never be able
+   to reach. Returns 503 with a clear message when `ENGINE_API_URL` is unset;
+   the screener keeps working either way.
+3. **Not done.** Wiring an "AI analyze" affordance into `ScreenerTable` /
+   `TopMovers` rows directly — deferred as a follow-up to avoid a risky
+   edit to that component's tightly-coupled column-rendering logic in the
+   same pass. Header nav links to `/analyze` and `/reports` were added to
+   `app/page.tsx` instead, and `/analyze?ticker=X` already works as a target.
 4. Set `ENGINE_API_URL`/`ENGINE_API_TOKEN` in the Vercel project (encrypted env
-   vars; already-shared keys rotated per the standing security note).
+   vars; already-shared keys rotated per the standing security note). **Not
+   yet done** — operator action once an engine host is deployed.
 5. Smoke path: Vercel preview deployment against a staging engine host before
-   flipping prod env vars.
+   flipping prod env vars. **Not yet done** — no engine host is deployed yet.
 
-*Acceptance:* on the production Vercel URL you can run the same analysis you
-run locally in `webui.py`, watch it stream, and read the same report the local
-UI would produce. With engine env unset, the site degrades gracefully to
-today's screener.
+*Acceptance so far:* `tsc --noEmit` passes; with `ENGINE_API_URL` pointed at a
+local `api.main:app`, `/analyze` submits and polls to completion and
+`/reports` lists and renders persisted reports. Full production build could
+not be exercised in this sandbox (network policy blocks the `next/font`
+Google Fonts fetch `app/layout.tsx` already depended on — pre-existing,
+unrelated to this change, confirmed by reproducing it against the
+pre-Phase-2 commit too); verify with `next build` in an environment with
+normal internet access before deploying.
+
+**Incidental fix:** discovered while adding `app/reports/` and `lib/engine.ts`
+— the repo-root `.gitignore` has four duplicate unanchored `reports/` entries
+and one unanchored `lib/` entry (meant for the Python engine's own output
+directories), which silently `git add`-swallowed both new paths under
+`global-screener/`. Added explicit re-include negations rather than auditing
+every generic short pattern in that file; other unanchored patterns
+(`results/`, `dist/`, `build/`, `var/`, etc.) may have the same latent problem
+elsewhere and are out of scope here.
 
 ### Phase 3 — Retire the fossil surfaces
 

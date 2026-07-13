@@ -64,9 +64,16 @@ To make a route publicly reachable (e.g. for an external uptime monitor):
 
 Set in the Vercel dashboard for the `trading-agents` project (Root Directory
 `global-screener/`). See `global-screener/README.md` for the current list
-(Redis caching, fallback data vendor, refresh interval). None of these are
-secrets that grant engine/LLM access — the screener only reads free public
-market data.
+(Redis caching, fallback data vendor, refresh interval, `ENGINE_API_URL`/
+`ENGINE_API_TOKEN`). None of the screener's own variables are secrets that
+grant engine/LLM access — it only reads free public market data;
+`ENGINE_API_TOKEN` is the one exception (kept server-side, never sent to the
+browser).
+
+`OPS_JOURNAL_PATH` is a separate variable set on the **engine API host**
+(not Vercel) to enable the `/portfolio` page — see `api/ops_view.py`. Unset
+by default; the ops live-trading daemon's journal is not assumed to be on
+the same host as the engine API.
 
 > Security: any key that was ever shared in plaintext (chat, commits,
 > screenshots) should be rotated in the provider dashboard and only

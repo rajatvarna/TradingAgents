@@ -33,6 +33,7 @@ from fastapi.responses import (
 
 from api.auth import require_auth
 from api.deployment_config import parse_cors_origins
+from api.ops_view import get_portfolio_status as _get_portfolio_status
 from api.reports import get_report as _get_persisted_report
 from api.reports import get_report_outcome as _get_persisted_report_outcome
 from api.reports import list_reports as _list_persisted_reports
@@ -1079,6 +1080,25 @@ async def get_persisted_report_outcome(ticker: str, date: str):
     if outcome is None:
         raise HTTPException(status_code=404, detail="Report not found or has no parseable rating")
     return JSONResponse(content=outcome)
+
+
+@app.get("/portfolio", response_class=JSONResponse, dependencies=[Depends(require_auth)])
+async def get_portfolio():
+    """Read-only snapshot of the ops/ live-trading journal.
+
+    Requires OPS_JOURNAL_PATH to point at the ops daemon's journal file on
+    this host — the daemon is a separate process that may run elsewhere
+    entirely, so co-location is never assumed. Returns 503 if unset.
+    Positions/cash come from journal replay only (no broker/network calls);
+    see ops/status.py for why that's safe to run alongside the live service.
+    """
+    status = await asyncio.to_thread(_get_portfolio_status)
+    if status is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Portfolio view not configured (OPS_JOURNAL_PATH is unset on this host)",
+        )
+    return JSONResponse(content=status)
 
 
 # ---------------------------------------------------------------------------

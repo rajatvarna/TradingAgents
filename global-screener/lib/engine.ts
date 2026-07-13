@@ -72,6 +72,42 @@ export type ReportOutcome = {
   correct_60d: boolean | null;
 };
 
+export type PortfolioPosition = {
+  symbol: string;
+  quantity: number;
+  entry: number | null;
+  stop: number | null;
+};
+
+export type PortfolioFill = {
+  symbol: string;
+  side: string;
+  quantity: number;
+  price: number;
+  filled_at: string;
+};
+
+export type PortfolioStatus = {
+  service: {
+    journal_path: string;
+    broker_mode: string;
+    last_started: { at: string } | null;
+    last_stopping: { at: string } | null;
+  };
+  positions: { source: string; items: PortfolioPosition[] };
+  cash: { cash: number };
+  halts: { daily_halt_today: boolean; kill_switch_this_week: boolean };
+  fills: { today_count: number; today: PortfolioFill[]; last: PortfolioFill | null };
+  live_gate: {
+    flip_marker_present: boolean;
+    live_buy_fills: number;
+    cap: number;
+    gate_count: number;
+    remaining: number;
+  };
+  anomalies_7d: Record<string, { count: number; last_at: string | null }>;
+};
+
 export type RequestListResponse = {
   total: number;
   requests: RequestStatus[];
@@ -157,6 +193,11 @@ export async function getReportOutcome(ticker: string, date: string): Promise<Re
     { cache: "no-store" }
   );
   return parseOrThrow<ReportOutcome>(res);
+}
+
+export async function getPortfolioStatus(): Promise<PortfolioStatus> {
+  const res = await fetch("/api/engine/portfolio", { cache: "no-store" });
+  return parseOrThrow<PortfolioStatus>(res);
 }
 
 export async function getOpenRequests(): Promise<RequestListResponse> {

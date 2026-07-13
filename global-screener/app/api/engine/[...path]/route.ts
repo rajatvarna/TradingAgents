@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getEngineConfig } from "@/lib/engineConfig";
 
 // Only these top-level engine path segments are reachable through this proxy.
-const ALLOWED_PREFIXES = new Set(["analyze", "status", "reports", "requests", "metrics"]);
+const ALLOWED_PREFIXES = new Set(["analyze", "status", "reports", "requests", "metrics", "portfolio"]);
 
 function authHeaders(token: string | null): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};

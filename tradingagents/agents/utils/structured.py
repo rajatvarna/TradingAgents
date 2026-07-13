@@ -68,6 +68,7 @@ def invoke_structured_or_freetext(
     render: Callable[[T], str],
     agent_name: str,
     cache: MutableMapping[str, str] | None = None,
+    config: dict | None = None,
 ) -> str:
     """Run the structured call and render to markdown; fall back to free-text on any failure.
 
@@ -75,7 +76,15 @@ def invoke_structured_or_freetext(
     invocations, a list of message dicts for chat models that take that
     shape). The same value is forwarded to the free-text path so the
     fallback sees the same input the structured call did.
+
+    ``config`` (e.g. ``{"metadata": {"prompt_key": ..., "prompt_version": ...}}``)
+    is forwarded to whichever LLM call actually runs, so prompt-provenance
+    metadata reaches the trace regardless of which path fires.
     """
+    kwargs = {}
+    if config is not None:
+        kwargs["config"] = config
+
     freetext_key = _cache_key(agent_name, "freetext", prompt)
     if cache is not None and freetext_key in cache:
         return cache[freetext_key]
@@ -85,7 +94,7 @@ def invoke_structured_or_freetext(
         if cache is not None and key in cache:
             return cache[key]
         try:
-            result = structured_llm.invoke(prompt)
+            result = structured_llm.invoke(prompt, **kwargs)
             if result is None:
                 # A thinking model can answer in plain text instead of calling
                 # the tool, leaving the parser with nothing to return. Treat it
@@ -101,7 +110,7 @@ def invoke_structured_or_freetext(
                 agent_name, exc,
             )
 
-    response = normalize_content(plain_llm.invoke(prompt))
+    response = normalize_content(plain_llm.invoke(prompt, **kwargs))
     content = response.content
     if cache is not None:
         cache[freetext_key] = content

@@ -34,9 +34,10 @@ class _RecordingLLM(Runnable):
     call ``llm.invoke(prompt, config=...)`` directly).
     """
 
-    def __init__(self, content: str = "captured report"):
+    def __init__(self, content: str = "captured report", supports_tools: bool = True):
         self.content = content
         self.last_config = None
+        self.supports_tools = supports_tools
 
     def invoke(self, input, config=None, **kwargs):
         self.last_config = config
@@ -44,7 +45,11 @@ class _RecordingLLM(Runnable):
 
     def bind_tools(self, tools, **kwargs):
         """Tool-bound analysts call ``llm.bind_tools(tools)`` before piping;
-        returning self keeps this a real Runnable so config still propagates."""
+        returning self keeps this a real Runnable so config still propagates.
+        With ``supports_tools=False``, raises like a tool-free provider
+        (e.g. codex) so the caller's ``bind_tools_or_none`` fallback fires."""
+        if not self.supports_tools:
+            raise NotImplementedError("this fake LLM does not support tools")
         return self
 
 
@@ -726,3 +731,230 @@ class TestOptionsAnalystPrompt:
         assert llm.last_config["metadata"]["prompt_version"] == "v1"
         assert len(llm.last_config["metadata"]["prompt_hash"]) == 64
         assert out["options_report"] == "captured report"
+
+
+# --------------------------------------------------------------------- #
+# Market / Fundamentals / News / Valuation / Sentiment analysts
+#
+# These five prompts are large (2.5k-6.7k chars) and carry a tool-bound
+# path plus a tool-free fallback path that share one rendered system
+# message. Rather than hand-transcribing multi-kilobyte legacy f-strings
+# into this file (itself a transcription-error risk), each was verified
+# byte-identical against the live pre-migration code path with a one-off
+# script at migration time (see the T1.4b commit). Going forward these
+# are pinned as golden-hash snapshots: any accidental future edit to the
+# template changes the hash and fails loudly, matching the "golden
+# transcript" regression approach in docs/PROMPT_AND_CORE_FEATURES_PLAN.md
+# (A6) without the risk of a five-figure hand-copied string silently
+# drifting from what the test claims to guard.
+# --------------------------------------------------------------------- #
+
+import hashlib
+
+
+@pytest.mark.unit
+class TestMarketAnalystPrompt:
+    def test_golden_hash(self):
+        registry = default_registry()
+        rendered, _ = registry.render(
+            "analysts/market", monster_context="MONSTER_CTX_SAMPLE", language_instruction=""
+        )
+        digest = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+        assert digest == "55c5a51f85fa034d03a2cc8da392abc21a4f56e4242fd5bfb570835bf9cea597"
+
+    def test_node_tool_free_fallback_passes_prompt_metadata(self, monkeypatch):
+        from tradingagents.agents.analysts import market_analyst as ma
+
+        monkeypatch.setattr(ma, "_prefetch_market_data", lambda ticker, current_date: "STUB")
+        llm = _RecordingLLM(supports_tools=False)
+        node = ma.create_market_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "messages": [HumanMessage(content="Analyze")],
+        }
+        out = node(state)
+
+        assert llm.last_config["metadata"]["prompt_key"] == "analysts/market"
+        assert llm.last_config["metadata"]["prompt_version"] == "v1"
+        assert len(llm.last_config["metadata"]["prompt_hash"]) == 64
+        assert out["market_report"] == "captured report"
+
+    def test_node_tool_bound_passes_prompt_metadata(self):
+        from tradingagents.agents.analysts.market_analyst import create_market_analyst
+
+        llm = _RecordingLLM(supports_tools=True)
+        node = create_market_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "messages": [HumanMessage(content="Analyze")],
+        }
+        out = node(state)
+
+        assert llm.last_config["metadata"]["prompt_key"] == "analysts/market"
+        assert out["market_report"] == "captured report"
+
+
+@pytest.mark.unit
+class TestFundamentalsAnalystPrompt:
+    def test_golden_hash(self):
+        registry = default_registry()
+        rendered, _ = registry.render(
+            "analysts/fundamentals",
+            monster_context="MONSTER_CTX_SAMPLE",
+            forensic_context="FORENSIC_CTX_SAMPLE",
+            subject_label="company",
+            language_instruction="",
+        )
+        digest = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+        assert digest == "b144f3d202ead2100dc227cc9e4f99b1430d194761c78cf2e38097b4745e14da"
+
+    def test_node_tool_free_fallback_passes_prompt_metadata(self, monkeypatch):
+        from tradingagents.agents.analysts import fundamentals_analyst as fa
+
+        monkeypatch.setattr(fa, "_prefetch_fundamentals_data", lambda ticker, current_date: "STUB")
+        llm = _RecordingLLM(supports_tools=False)
+        node = fa.create_fundamentals_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "messages": [HumanMessage(content="Analyze")],
+        }
+        out = node(state)
+
+        assert llm.last_config["metadata"]["prompt_key"] == "analysts/fundamentals"
+        assert out["fundamentals_report"] == "captured report"
+
+    def test_node_tool_bound_passes_prompt_metadata(self):
+        from tradingagents.agents.analysts.fundamentals_analyst import create_fundamentals_analyst
+
+        llm = _RecordingLLM(supports_tools=True)
+        node = create_fundamentals_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "messages": [HumanMessage(content="Analyze")],
+        }
+        out = node(state)
+
+        assert llm.last_config["metadata"]["prompt_key"] == "analysts/fundamentals"
+        assert out["fundamentals_report"] == "captured report"
+
+
+@pytest.mark.unit
+class TestNewsAnalystPrompt:
+    def test_golden_hash(self):
+        registry = default_registry()
+        rendered, _ = registry.render(
+            "analysts/news", asset_label="company", language_instruction=""
+        )
+        digest = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+        assert digest == "cd84eb798b909df1dba49e007f3b49b6179bb730cc9d33cbd82609ea9dcfb692"
+
+    def test_node_tool_free_fallback_passes_prompt_metadata(self, monkeypatch):
+        from tradingagents.agents.analysts import news_analyst as na
+
+        monkeypatch.setattr(na, "_prefetch_news_data", lambda ticker, current_date: "STUB")
+        llm = _RecordingLLM(supports_tools=False)
+        node = na.create_news_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "messages": [HumanMessage(content="Analyze")],
+        }
+        out = node(state)
+
+        assert llm.last_config["metadata"]["prompt_key"] == "analysts/news"
+        assert out["news_report"] == "captured report"
+
+    def test_node_tool_bound_passes_prompt_metadata(self):
+        from tradingagents.agents.analysts.news_analyst import create_news_analyst
+
+        llm = _RecordingLLM(supports_tools=True)
+        node = create_news_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "messages": [HumanMessage(content="Analyze")],
+        }
+        out = node(state)
+
+        assert llm.last_config["metadata"]["prompt_key"] == "analysts/news"
+        assert out["news_report"] == "captured report"
+
+
+@pytest.mark.unit
+class TestValuationAnalystPrompt:
+    def test_golden_hash(self):
+        registry = default_registry()
+        rendered, _ = registry.render(
+            "analysts/valuation", subject_label="company", language_instruction=""
+        )
+        digest = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+        assert digest == "4c39f71fd147b9efe9ef703057b047353632a241b22126ade52a98dc11212307"
+
+    def test_node_tool_free_fallback_passes_prompt_metadata(self, monkeypatch):
+        from tradingagents.agents.analysts import valuation_analyst as va
+
+        monkeypatch.setattr(va, "_prefetch_valuation_data", lambda ticker: "STUB")
+        llm = _RecordingLLM(supports_tools=False)
+        node = va.create_valuation_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "messages": [HumanMessage(content="Analyze")],
+        }
+        out = node(state)
+
+        assert llm.last_config["metadata"]["prompt_key"] == "analysts/valuation"
+        assert out["valuation_report"] == "captured report"
+
+    def test_node_tool_bound_passes_prompt_metadata(self):
+        from tradingagents.agents.analysts.valuation_analyst import create_valuation_analyst
+
+        llm = _RecordingLLM(supports_tools=True)
+        node = create_valuation_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "messages": [HumanMessage(content="Analyze")],
+        }
+        out = node(state)
+
+        assert llm.last_config["metadata"]["prompt_key"] == "analysts/valuation"
+        assert out["valuation_report"] == "captured report"
+
+
+@pytest.mark.unit
+class TestSentimentAnalystPrompt:
+    def test_golden_hash(self):
+        registry = default_registry()
+        rendered, _ = registry.render("analysts/sentiment", language_instruction="")
+        digest = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+        assert digest == "e7ca352934f5735c2a3f087492116e9eb0d54f56bf89eeaf27160f1af4b8254d"
+
+    def test_node_passes_prompt_metadata(self, monkeypatch):
+        from tradingagents.agents.analysts import sentiment_analyst as sa
+
+        monkeypatch.setattr(sa, "get_news", type("T", (), {"func": staticmethod(lambda *a, **k: "STUB")}))
+        monkeypatch.setattr(sa, "fetch_stocktwits_messages", lambda *a, **k: "STUB")
+        monkeypatch.setattr(sa, "fetch_reddit_posts", lambda *a, **k: "STUB")
+        monkeypatch.setattr(sa, "fetch_bluesky_posts", lambda *a, **k: "STUB")
+        monkeypatch.setattr(sa, "fetch_mastodon_posts", lambda *a, **k: "STUB")
+        monkeypatch.setattr(sa, "get_fear_greed_index", lambda: "STUB")
+        monkeypatch.setattr(sa, "agentkey_configured", lambda: False)
+
+        llm = _RecordingLLM()
+        node = sa.create_sentiment_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "messages": [HumanMessage(content="Analyze")],
+        }
+        out = node(state)
+
+        assert llm.last_config["metadata"]["prompt_key"] == "analysts/sentiment"
+        assert llm.last_config["metadata"]["prompt_version"] == "v1"
+        assert len(llm.last_config["metadata"]["prompt_hash"]) == 64
+        assert out["sentiment_report"] == "captured report"

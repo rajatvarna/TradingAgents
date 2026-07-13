@@ -8,11 +8,12 @@ from langchain_core.messages import AIMessage
 
 @pytest.mark.unit
 def test_news_analyst_prompt_names_get_news_ticker():
-    from pathlib import Path
+    # Prompt text moved to tradingagents/prompts/analysts/news.v1.txt (T1.4b).
+    from tradingagents.audit.prompt_registry import default_registry
 
-    source = Path("tradingagents/agents/analysts/news_analyst.py").read_text()
-    assert "get_news(ticker, start_date, end_date)" in source
-    assert "get_news(query, start_date, end_date)" not in source
+    template, _ = default_registry().load("analysts/news", "v1")
+    assert "get_news(ticker, start_date, end_date)" in template
+    assert "get_news(query, start_date, end_date)" not in template
 
 
 @pytest.mark.unit
@@ -38,7 +39,7 @@ def test_market_analyst_preserves_partial_content_with_tool_calls(monkeypatch):
     from tradingagents.agents.analysts.market_analyst import create_market_analyst
 
     class Chain:
-        def invoke(self, messages):
+        def invoke(self, messages, config=None):
             msg = AIMessage(content="partial market note")
             msg.tool_calls = [{"name": "get_stock_data", "args": {"symbol": "AAPL"}, "id": "1"}]
             return msg

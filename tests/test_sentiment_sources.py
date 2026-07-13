@@ -10,10 +10,8 @@ import pytest
 
 import tradingagents.dataflows.bluesky as bluesky_mod
 import tradingagents.dataflows.mastodon as mastodon_mod
-from tradingagents.agents.analysts.sentiment_analyst import (
-    _build_system_message,
-    create_sentiment_analyst,
-)
+from tradingagents.agents.analysts.sentiment_analyst import create_sentiment_analyst
+from tradingagents.audit.prompt_registry import default_registry
 
 
 def _mock_urlopen(payload):
@@ -97,7 +95,8 @@ class TestMastodonFetcher:
 class TestPromptWiring:
     @pytest.mark.unit
     def test_system_message_is_static(self):
-        msg = _build_system_message()
+        # Prompt text moved to tradingagents/prompts/analysts/sentiment.v1.txt (T1.4b).
+        msg, _ = default_registry().render("analysts/sentiment", version="v1", language_instruction="")
         assert "sentiment analyst" in msg.lower()
         assert "StockTwits" in msg
         assert "Bluesky" in msg

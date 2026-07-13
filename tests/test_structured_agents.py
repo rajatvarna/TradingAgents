@@ -498,7 +498,7 @@ def _structured_sentiment_llm(captured: dict, report: SentimentReport | None = N
             narrative="StockTwits 75% bullish. News constructive. Reddit upbeat.",
         )
     structured = MagicMock()
-    structured.invoke.side_effect = lambda prompt: (
+    structured.invoke.side_effect = lambda prompt, **kwargs: (
         captured.__setitem__("prompt", prompt) or report
     )
     llm = MagicMock()

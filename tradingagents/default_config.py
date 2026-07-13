@@ -303,6 +303,11 @@ DEFAULT_CONFIG = _apply_env_overrides({
         "analysts/quant": "v1",
         "analysts/technical": "v1",
         "analysts/options": "v1",
+        "analysts/market": "v1",
+        "analysts/fundamentals": "v1",
+        "analysts/news": "v1",
+        "analysts/valuation": "v1",
+        "analysts/sentiment": "v1",
     },
     # Output language for analyst reports and final decision
     # Internal agent debate stays in English for reasoning quality

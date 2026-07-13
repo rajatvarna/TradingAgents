@@ -540,3 +540,32 @@ class TestSharedPartialsShipped:
         assert "confidence" in text.lower()
         assert "falsifier" in text.lower() or "change your conclusion" in text.lower()
         assert len(digest) == 64
+
+
+# -------------------------------------------------------------------- #
+# Config <-> registry consistency (A6 "verify" guard)
+#
+# Cheap regression guard against exactly the failure mode T1.4's docstring
+# warns about: default_config.py declaring a version that has no matching
+# file on disk (a typo, or a version bumped in one place and not the
+# other). Every key in default_config["prompt_versions"] must resolve.
+# -------------------------------------------------------------------- #
+
+
+@pytest.mark.unit
+class TestPromptVersionsConfigResolves:
+    def test_every_configured_prompt_version_has_a_template_file(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        registry = default_registry()
+        prompt_versions = DEFAULT_CONFIG["prompt_versions"]
+        assert prompt_versions, "default_config.py's prompt_versions must not be empty"
+
+        missing = []
+        for key, version in prompt_versions.items():
+            try:
+                registry.load(key, version)
+            except PromptNotFoundError:
+                missing.append((key, version))
+
+        assert not missing, f"prompt_versions declares versions with no template file: {missing}"

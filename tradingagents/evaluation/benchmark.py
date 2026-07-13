@@ -343,6 +343,7 @@ def run_benchmark(
     n_runs: int = 2,
     config: dict[str, Any] | None = None,
     results_dir: Path | None = None,
+    callbacks: list | None = None,
 ) -> dict[str, Any]:
     tickers = tickers or _DEFAULT_TICKERS
     dates = dates or _QUARTERLY_DATES_2023_2025[-4:]  # default: last 4 quarters
@@ -356,7 +357,11 @@ def run_benchmark(
     all_runs: list[dict[str, Any]] = []
     consistency_by_key: dict[str, Any] = {}
 
-    graph = TradingAgentsGraph(debug=False, config=cfg)
+    # `callbacks` lets a caller attach a SpendTracker (or any other
+    # LangChain callback) to measure cost/usage across the whole benchmark
+    # run — used by tradingagents/evaluation/prompt_ab.py to compare cost
+    # between two prompt_versions configurations.
+    graph = TradingAgentsGraph(debug=False, config=cfg, callbacks=callbacks)
 
     for ticker in tickers:
         for trade_date in dates:

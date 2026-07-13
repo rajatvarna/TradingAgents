@@ -178,25 +178,45 @@ No functional change; Vercel prod diff is empty.
 
 *Goal: a single, secured, streaming engine API deployable off-Vercel.*
 
-1. Port `web/app.py`'s `JobStream` (replay-buffered, multi-consumer SSE) into
-   `api/main.py` as `GET /jobs/{id}/events`; keep the existing polling
-   endpoints for clients that can't hold SSE open.
-2. Add bearer-token auth (`ENGINE_API_TOKEN` env; `Authorization: Bearer`)
-   to all mutating endpoints; `/healthz` stays open. Constant-time compare;
-   401 on mismatch; disabled only when the var is unset *and*
-   `ENGINE_API_ALLOW_ANON=1`.
-3. Add a `GET /reports` + `GET /reports/{ticker}/{date}` pair that serves the
-   persisted per-ticker report artifacts (same store `webui.py` and the docs
-   site read), so every frontend renders the same reports.
-4. CORS middleware allowing the Vercel domains (still useful for local dev even
-   though D3 proxies in prod).
+1. ~~Port `web/app.py`'s `JobStream` (replay-buffered, multi-consumer SSE) into
+   `api/main.py`~~ — **deferred.** `api/worker.py` runs the engine via a
+   single blocking `ta.propagate()` call in a thread-pool executor (with
+   quota/429-retry/batch-scheduling logic layered around it); `web/app.py`'s
+   version instead drives `ta.graph.stream()` node-by-node. Porting the
+   replay-buffered stream properly means restructuring the blocking call into
+   a per-node stream without regressing the retry/quota logic — a larger,
+   riskier change than the rest of Phase 1 and deferred to its own PR.
+   `api/main.py` already has a coarser `GET /stream/{request_id}` (2s-poll SSE
+   of request status) and `GET /logs/{request_id}` (raw stdout tail), which
+   cover "is it done yet" / "watch it work" in the meantime.
+2. **Done.** Bearer-token auth (`ENGINE_API_TOKEN` env; `Authorization:
+   Bearer`, constant-time compare) added via `api/auth.py::require_auth` on
+   all mutating endpoints and on the secret-leaking `GET/PUT /env*` endpoints.
+   Adjusted from the original design: auth is **opt-in** (open when
+   `ENGINE_API_TOKEN` is unset) rather than fail-closed-by-default, because
+   `api/main.py` ships built-in HTML consoles (`/ui`, `/batching`,
+   `/settings`) whose inline JS doesn't send an Authorization header yet —
+   fail-closed-by-default would have silently broken every existing
+   deployment's console on upgrade. Wiring token entry into those consoles is
+   a follow-up; until then, operators who set `ENGINE_API_TOKEN` must call
+   protected endpoints directly (e.g. from the Phase 2 Vercel proxy) rather
+   than through the built-in consoles.
+3. **Done.** `GET /reports` + `GET /reports/{ticker}/{date}` (`api/reports.py`)
+   serve the persisted per-ticker report artifacts (same store `webui.py` and
+   the docs site read) as structured JSON (raw markdown per section, not
+   pre-rendered HTML), so every frontend renders the same reports.
+4. **Done.** CORS middleware (`ENGINE_API_CORS_ORIGINS`, comma-separated;
+   defaults to the `global-screener/` local dev origin).
 5. Standardize the port on `:9000` everywhere (`Dockerfile.api`, docs,
    Procfile) and add a `Procfile`/`DEPLOYMENT_RAILWAY.md` update deploying
-   `api.main:app` instead of `web.app`.
-6. Tests (`@pytest.mark.unit`, no network): auth middleware accept/reject, SSE
-   replay-from-cursor semantics, reports listing against a tmp dir, schema
-   round-trips. Engine invocation stays behind the existing lazy-import seam so
-   the suite runs without credentials.
+   `api.main:app` instead of `web.app`. **Not yet done** — tracked as
+   remaining Phase 1 work alongside the SSE port.
+6. **Done** for the auth/reports slice: `tests/test_api_auth.py` (accept/
+   reject/missing-header/wrong-scheme, via a throwaway FastAPI app so the
+   heavy `api.main` module — which hardcodes `/data/...` paths for its Docker
+   deployment — never has to load) and `tests/test_api_reports.py` (listing/
+   parsing against a tmp dir, malformed-meta tolerance). Both
+   `@pytest.mark.unit`, no network, no credentials.
 
 *Acceptance:* `docker build -f Dockerfile.api . && docker run` yields an API
 where `POST /analyze` (with token) → `GET /jobs/{id}/events` streams progress →

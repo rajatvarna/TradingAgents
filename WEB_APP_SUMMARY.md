@@ -1,5 +1,13 @@
 # TradingAgents Web Application - Summary & Implementation Guide
 
+> **Note:** This describes the `web/` FastAPI+vanilla-JS surface. It is not
+> what's deployed on Vercel (see `VERCEL_DEPLOYMENT.md`), and as of
+> `docs/DEPLOYMENT_INTEGRATION_PLAN.md` Phase 3 the `Procfile` no longer
+> launches it either — `web/app.py` and `web/static/` remain in the repo for
+> reference, but nothing currently deploys them. `api/main.py` is now the
+> canonical engine API; this surface's SSE streaming is still slated to be
+> ported into it before this file is deleted for good.
+
 ## Overview
 
 A complete web GUI for TradingAgents has been implemented and is ready for deployment on Railway.com. The application features a modern, responsive interface with real-time analysis updates via WebSocket.

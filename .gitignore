@@ -262,6 +262,14 @@ MEREAD.md
 # Enterprise env file (secrets) and generated run reports
 .env.enterprise
 
+# The unanchored reports/ and lib/ excludes above (meant for Python build
+# artifacts) also match global-screener's app/reports/ Next.js route
+# directory and its lib/ helper directory. Re-include them explicitly.
+!/global-screener/app/reports/
+!/global-screener/app/reports/**
+!/global-screener/lib/
+!/global-screener/lib/**
+
 fix_*.py
 inspect_trace.py
 

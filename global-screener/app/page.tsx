@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { StockData } from "@/types";
 
 const TickerTape        = dynamic(() => import("@/components/TickerTape"),        { ssr: false });
@@ -36,6 +37,10 @@ export default function Home() {
           </span>
         </div>
         <div className="flex items-center gap-3 text-xs text-slate-400">
+          <Link href="/analyze" className="text-slate-400 hover:text-white transition-colors">Analyze</Link>
+          <Link href="/reports" className="text-slate-400 hover:text-white transition-colors">Reports</Link>
+          <Link href="/runs" className="text-slate-400 hover:text-white transition-colors">Runs</Link>
+          <Link href="/portfolio" className="text-slate-400 hover:text-white transition-colors">Portfolio</Link>
           <span className="hidden md:block">Prices delayed 15 min · Free data</span>
           <PriceAlerts stocks={screenerStocks} />
           <ThemeToggle />

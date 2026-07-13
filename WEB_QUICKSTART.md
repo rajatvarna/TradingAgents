@@ -1,5 +1,11 @@
 # TradingAgents Web App - Quick Start Guide
 
+> **Note:** This describes the `web/` FastAPI+vanilla-JS surface (not the
+> Vercel-deployed screener — see `VERCEL_DEPLOYMENT.md`). As of
+> `docs/DEPLOYMENT_INTEGRATION_PLAN.md` Phase 3 the `Procfile` no longer
+> deploys it (`api/main.py` is now the canonical engine API); this doc still
+> works for running it locally with `python -m web.app` if you need it.
+
 Get the web application running locally in 5 minutes.
 
 ## Prerequisites

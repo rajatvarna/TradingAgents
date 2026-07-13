@@ -20,7 +20,8 @@ import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -30,6 +31,12 @@ from fastapi.responses import (
     StreamingResponse,
 )
 
+from api.auth import require_auth
+from api.deployment_config import parse_cors_origins
+from api.ops_view import get_portfolio_status as _get_portfolio_status
+from api.reports import get_report as _get_persisted_report
+from api.reports import get_report_outcome as _get_persisted_report_outcome
+from api.reports import list_reports as _list_persisted_reports
 from api.db import (
     DB_PATH,
     cancel_all_open_requests,
@@ -488,6 +495,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS: defaults to the global-screener local dev origin; set
+# ENGINE_API_CORS_ORIGINS (comma-separated) once a deployed frontend proxies
+# to this API (docs/DEPLOYMENT_INTEGRATION_PLAN.md Phase 2). Parsed eagerly so
+# a malformed origin fails loudly at startup rather than as a silent CORS
+# mismatch at request time.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=parse_cors_origins(os.getenv("ENGINE_API_CORS_ORIGINS", "")),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 _HAS_MCP_SERVER = (_ROOT_DIR / "mcp_server" / "tradingagents_mcp_server.py").exists()
 
@@ -525,7 +544,7 @@ async def mcp_server_definition():
 # ---------------------------------------------------------------------------
 # POST /analyze
 # ---------------------------------------------------------------------------
-@app.post("/analyze", response_model=SubmitResponse, status_code=202)
+@app.post("/analyze", response_model=SubmitResponse, status_code=202, dependencies=[Depends(require_auth)])
 async def submit_analysis(body: AnalyzeRequest, request: Request):
     """Submit a stock analysis request. Returns a request_id immediately."""
     ticker = body.ticker.strip().upper()
@@ -708,7 +727,12 @@ async def get_batching_history(ticker: str, provider: str | None = None, limit: 
     )
 
 
-@app.post("/batching/schedules", response_model=BatchScheduleItem, status_code=201)
+@app.post(
+    "/batching/schedules",
+    response_model=BatchScheduleItem,
+    status_code=201,
+    dependencies=[Depends(require_auth)],
+)
 async def create_batched_schedule(body: BatchScheduleCreateRequest, request: Request):
     """Create a recurring batch schedule entry."""
     ticker = body.ticker.strip().upper()
@@ -753,7 +777,11 @@ async def create_batched_schedule(body: BatchScheduleCreateRequest, request: Req
     return _build_batch_schedule_item(row, base_url)
 
 
-@app.delete("/batching/schedules/{schedule_id}", response_class=JSONResponse)
+@app.delete(
+    "/batching/schedules/{schedule_id}",
+    response_class=JSONResponse,
+    dependencies=[Depends(require_auth)],
+)
 async def delete_batched_schedule(schedule_id: str):
     """Delete a recurring batch schedule entry."""
     deleted = await delete_batch_schedule(schedule_id=schedule_id, db_path=DB_PATH)
@@ -762,7 +790,11 @@ async def delete_batched_schedule(schedule_id: str):
     return JSONResponse(content={"id": schedule_id, "deleted": True})
 
 
-@app.put("/batching/schedules/{schedule_id}", response_model=BatchScheduleItem)
+@app.put(
+    "/batching/schedules/{schedule_id}",
+    response_model=BatchScheduleItem,
+    dependencies=[Depends(require_auth)],
+)
 async def update_batched_schedule(schedule_id: str, body: BatchScheduleUpdateRequest, request: Request):
     """Update provider/frequency for future runs of one schedule."""
     schedule = await get_batch_schedule(schedule_id=schedule_id, db_path=DB_PATH)
@@ -803,7 +835,12 @@ async def update_batched_schedule(schedule_id: str, body: BatchScheduleUpdateReq
     return _build_batch_schedule_item(row, base_url)
 
 
-@app.post("/batching/schedules/{schedule_id}/rerun", response_model=SubmitResponse, status_code=202)
+@app.post(
+    "/batching/schedules/{schedule_id}/rerun",
+    response_model=SubmitResponse,
+    status_code=202,
+    dependencies=[Depends(require_auth)],
+)
 async def rerun_batched_schedule(schedule_id: str, body: BatchScheduleRerunRequest):
     """Trigger an immediate rerun for one schedule using the selected provider."""
     schedule = await get_batch_schedule(schedule_id=schedule_id, db_path=DB_PATH)
@@ -841,7 +878,11 @@ async def rerun_batched_schedule(schedule_id: str, body: BatchScheduleRerunReque
     )
 
 
-@app.post("/requests/{request_id}/cancel", response_model=CancelResponse)
+@app.post(
+    "/requests/{request_id}/cancel",
+    response_model=CancelResponse,
+    dependencies=[Depends(require_auth)],
+)
 async def cancel_open_request(request_id: str):
     """Cancel a pending/running request."""
     row = await get_request(request_id, db_path=DB_PATH)
@@ -862,7 +903,11 @@ async def cancel_open_request(request_id: str):
     )
 
 
-@app.post("/requests/cancel-all", response_model=CancelAllResponse)
+@app.post(
+    "/requests/cancel-all",
+    response_model=CancelAllResponse,
+    dependencies=[Depends(require_auth)],
+)
 async def cancel_all_open_requests_endpoint():
     """Cancel all pending/running requests."""
     count = await cancel_all_open_requests(db_path=DB_PATH)
@@ -872,7 +917,7 @@ async def cancel_all_open_requests_endpoint():
     )
 
 
-@app.get("/env/{var_name}", response_model=EnvVarValueResponse)
+@app.get("/env/{var_name}", response_model=EnvVarValueResponse, dependencies=[Depends(require_auth)])
 async def get_env_var(var_name: str):
     """Get one allowed env variable value from process or .env file."""
     name = _validate_env_name(var_name)
@@ -882,7 +927,7 @@ async def get_env_var(var_name: str):
     return EnvVarValueResponse(name=name, value=value, exists=value is not None)
 
 
-@app.get("/env", response_class=JSONResponse)
+@app.get("/env", response_class=JSONResponse, dependencies=[Depends(require_auth)])
 async def list_env_vars():
     """List all env variable names and values from the .env file."""
     keys = _read_env_keys()
@@ -895,7 +940,7 @@ async def list_env_vars():
     return JSONResponse(content={"total": len(items), "items": items})
 
 
-@app.put("/env/{var_name}", response_model=EnvVarValueResponse)
+@app.put("/env/{var_name}", response_model=EnvVarValueResponse, dependencies=[Depends(require_auth)])
 async def set_env_var(var_name: str, body: EnvVarUpdateRequest):
     """Update one allowed env variable in runtime env and in .env."""
     name = _validate_env_name(var_name)
@@ -904,7 +949,7 @@ async def set_env_var(var_name: str, body: EnvVarUpdateRequest):
     return EnvVarValueResponse(name=name, value=body.value, exists=True)
 
 
-@app.post("/vault/refresh", response_model=VaultRefreshResponse)
+@app.post("/vault/refresh", response_model=VaultRefreshResponse, dependencies=[Depends(require_auth)])
 async def force_refresh_vault_keys():
     """Force immediate reload of configured API keys from HashiCorp Vault."""
     try:
@@ -992,6 +1037,77 @@ async def get_today_llm_calls_by_provider():
             "roles": role_items,
         }
     )
+
+
+def _safe_path_segment(value: str) -> str:
+    """Guard a single path segment against traversal (no '/', '..', or empty)."""
+    if not value or value in (".", "..") or "/" in value or "\\" in value:
+        raise HTTPException(status_code=400, detail="Invalid path segment")
+    return value
+
+
+# ---------------------------------------------------------------------------
+# GET /reports — persisted per-ticker analysis report archive
+# ---------------------------------------------------------------------------
+@app.get("/reports", response_class=JSONResponse, dependencies=[Depends(require_auth)])
+async def list_persisted_reports():
+    """List all persisted analysis reports (most recent date first)."""
+    reports = await asyncio.to_thread(_list_persisted_reports)
+    return JSONResponse(content=reports)
+
+
+@app.get(
+    "/reports/{ticker}/{date}",
+    response_class=JSONResponse,
+    dependencies=[Depends(require_auth)],
+)
+async def get_persisted_report(ticker: str, date: str):
+    """Return one persisted analysis report's parsed sections and metadata."""
+    cleaned_ticker = _safe_path_segment(ticker.strip().upper())
+    cleaned_date = _safe_path_segment(date.strip())
+    report = await asyncio.to_thread(_get_persisted_report, cleaned_ticker, cleaned_date)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return JSONResponse(content=report)
+
+
+@app.get(
+    "/reports/{ticker}/{date}/outcome",
+    response_class=JSONResponse,
+    dependencies=[Depends(require_auth)],
+)
+async def get_persisted_report_outcome(ticker: str, date: str):
+    """Return whether a persisted report's call was directionally correct.
+
+    Fetches actual forward price returns (yfinance) on demand — this is a
+    live network call, not a cached/precomputed value, so call it only when
+    a user asks to see the track record rather than on every report view.
+    """
+    cleaned_ticker = _safe_path_segment(ticker.strip().upper())
+    cleaned_date = _safe_path_segment(date.strip())
+    outcome = await asyncio.to_thread(_get_persisted_report_outcome, cleaned_ticker, cleaned_date)
+    if outcome is None:
+        raise HTTPException(status_code=404, detail="Report not found or has no parseable rating")
+    return JSONResponse(content=outcome)
+
+
+@app.get("/portfolio", response_class=JSONResponse, dependencies=[Depends(require_auth)])
+async def get_portfolio():
+    """Read-only snapshot of the ops/ live-trading journal.
+
+    Requires OPS_JOURNAL_PATH to point at the ops daemon's journal file on
+    this host — the daemon is a separate process that may run elsewhere
+    entirely, so co-location is never assumed. Returns 503 if unset.
+    Positions/cash come from journal replay only (no broker/network calls);
+    see ops/status.py for why that's safe to run alongside the live service.
+    """
+    status = await asyncio.to_thread(_get_portfolio_status)
+    if status is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Portfolio view not configured (OPS_JOURNAL_PATH is unset on this host)",
+        )
+    return JSONResponse(content=status)
 
 
 # ---------------------------------------------------------------------------

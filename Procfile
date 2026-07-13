@@ -1,1 +1,1 @@
-web: python -m web.app
+web: uvicorn api.main:app --host 0.0.0.0 --port 9000

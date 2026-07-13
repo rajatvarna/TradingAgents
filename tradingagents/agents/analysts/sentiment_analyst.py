@@ -62,6 +62,15 @@ from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
 from tradingagents.dataflows.y_finance import get_instrument_profile
 
 
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
+# render_with_shared skips any block a given template version doesn't
+# reference, so this is safe to pass regardless of which version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
+
+
 def _seven_days_back(trade_date: str) -> str:
     return (datetime.strptime(trade_date, "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
 
@@ -108,9 +117,10 @@ def create_sentiment_analyst(llm, prompt_registry=None):
             )
 
         version = state.get("prompt_versions", {}).get("analysts/sentiment", "v1")
-        rendered_message, prompt_hash = registry.render(
+        rendered_message, prompt_hash, shared_hashes = registry.render_with_shared(
             "analysts/sentiment",
             version=version,
+            shared=_SHARED_BLOCKS,
             language_instruction=get_language_instruction(),
         )
         system_message = build_cacheable_system_content(rendered_message, llm)
@@ -118,6 +128,7 @@ def create_sentiment_analyst(llm, prompt_registry=None):
             "prompt_key": "analysts/sentiment",
             "prompt_version": version,
             "prompt_hash": prompt_hash,
+            "shared_prompt_hashes": shared_hashes,
         }
 
         prompt = ChatPromptTemplate.from_messages(

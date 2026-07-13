@@ -16,6 +16,14 @@ from tradingagents.agents.utils.agent_utils import (
 from tradingagents.agents.utils.tool_fallback import bind_tools_or_none, safe_tool_text
 from tradingagents.audit.prompt_registry import default_registry
 
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
+# render_with_shared skips any block a given template version doesn't
+# reference, so this is safe to pass regardless of which version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Tool definitions
 # ──────────────────────────────────────────────────────────────────────────────
@@ -881,15 +889,17 @@ def create_valuation_analyst(llm, toolkit=None, prompt_registry=None):
         ]
 
         version = state.get("prompt_versions", {}).get("analysts/valuation", "v1")
-        system_message, prompt_hash = registry.render(
+        system_message, prompt_hash, shared_hashes = registry.render_with_shared(
             "analysts/valuation",
             version=version,
+            shared=_SHARED_BLOCKS,
             subject_label=subject_label,
             language_instruction=get_language_instruction(),
         )
         prompt_metadata = {
             "prompt_key": "analysts/valuation",
             "prompt_version": version,
+            "shared_prompt_hashes": shared_hashes,
             "prompt_hash": prompt_hash,
         }
 

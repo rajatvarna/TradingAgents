@@ -958,3 +958,155 @@ class TestSentimentAnalystPrompt:
         assert llm.last_config["metadata"]["prompt_version"] == "v1"
         assert len(llm.last_config["metadata"]["prompt_hash"]) == 64
         assert out["sentiment_report"] == "captured report"
+
+
+# --------------------------------------------------------------------- #
+# A2 analyst prompt upgrades: fundamentals/news/sentiment/valuation/quant v2
+#
+# New content, not a migration — golden-content checks (does the rendered
+# template carry the A2 rubric additions, does the shared A1 contract
+# compose in) plus a default-unchanged check per agent. Shipped available,
+# not default, per the A6 merge-gate convention: default_config.py keeps
+# selecting v1 for every one of these five until a scorecard justifies
+# flipping it.
+# --------------------------------------------------------------------- #
+
+
+@pytest.mark.unit
+class TestFundamentalsV2Content:
+    def test_carries_a2_additions(self):
+        rendered, _, shared_hashes = default_registry().render_with_shared(
+            "analysts/fundamentals",
+            version="v2",
+            shared={
+                "data_integrity_block": ("_shared/data_integrity", "v1"),
+                "calibration_block": ("_shared/calibration", "v1"),
+            },
+            monster_context="", forensic_context="", subject_label="company",
+            language_instruction="",
+        )
+        assert "what the market is already pricing in" in rendered.lower()
+        assert "base rate" in rendered.lower()
+        assert "never invent" in rendered.lower()
+        assert "confidence:" in rendered.lower()
+        assert set(shared_hashes) == {"_shared/data_integrity", "_shared/calibration"}
+        assert "${" not in rendered
+
+    def test_default_config_unchanged(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["analysts/fundamentals"] == "v1"
+
+
+@pytest.mark.unit
+class TestNewsV2Content:
+    def test_carries_a2_additions(self):
+        rendered, _, _ = default_registry().render_with_shared(
+            "analysts/news",
+            version="v2",
+            shared={
+                "data_integrity_block": ("_shared/data_integrity", "v1"),
+                "calibration_block": ("_shared/calibration", "v1"),
+            },
+            asset_label="company",
+            language_instruction="",
+        )
+        assert "materiality triage" in rendered.lower()
+        assert "new-information test" in rendered.lower()
+        assert "event-study framing" in rendered.lower()
+        assert "never invent" in rendered.lower()
+        assert "${" not in rendered
+
+    def test_default_config_unchanged(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["analysts/news"] == "v1"
+
+
+@pytest.mark.unit
+class TestSentimentV2Content:
+    def test_carries_a2_additions(self):
+        rendered, _, _ = default_registry().render_with_shared(
+            "analysts/sentiment",
+            version="v2",
+            shared={
+                "data_integrity_block": ("_shared/data_integrity", "v1"),
+                "calibration_block": ("_shared/calibration", "v1"),
+            },
+            language_instruction="",
+        )
+        assert "crowding" in rendered.lower()
+        assert "fade" in rendered.lower()
+        assert "never invent" in rendered.lower()
+        assert "${" not in rendered
+
+    def test_default_config_unchanged(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["analysts/sentiment"] == "v1"
+
+
+@pytest.mark.unit
+class TestValuationV2Content:
+    def test_carries_a2_additions(self):
+        rendered, _, _ = default_registry().render_with_shared(
+            "analysts/valuation",
+            version="v2",
+            shared={
+                "data_integrity_block": ("_shared/data_integrity", "v1"),
+                "calibration_block": ("_shared/calibration", "v1"),
+            },
+            subject_label="company",
+            language_instruction="",
+        )
+        assert "assumption provenance table" in rendered.lower()
+        assert "never invent" in rendered.lower()
+        assert "confidence:" in rendered.lower()
+        assert "${" not in rendered
+
+    def test_default_config_unchanged(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["analysts/valuation"] == "v1"
+
+
+@pytest.mark.unit
+class TestQuantV2Content:
+    def test_carries_a2_additions(self):
+        rendered, _, _ = default_registry().render_with_shared(
+            "analysts/quant",
+            version="v2",
+            shared={
+                "data_integrity_block": ("_shared/data_integrity", "v1"),
+                "calibration_block": ("_shared/calibration", "v1"),
+            },
+            current_date="2026-01-02",
+            strict_data_instruction="",
+            language_instruction="",
+        )
+        assert "regime context" in rendered.lower()
+        assert "sizing_inputs:" in rendered.lower()
+        assert "never invent" in rendered.lower()
+        assert "${" not in rendered
+
+    def test_default_config_unchanged(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["analysts/quant"] == "v1"
+
+    def test_node_honors_explicit_v2_override(self):
+        llm = _RecordingLLM(supports_tools=True)
+        from tradingagents.agents.analysts.quant_analyst import create_quant_analyst
+
+        node = create_quant_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "prompt_versions": {"analysts/quant": "v2"},
+            "messages": [HumanMessage(content="Analyze")],
+        }
+        node(state)
+
+        md = llm.last_config["metadata"]
+        assert md["prompt_version"] == "v2"
+        assert set(md["shared_prompt_hashes"]) == {"_shared/data_integrity", "_shared/calibration"}

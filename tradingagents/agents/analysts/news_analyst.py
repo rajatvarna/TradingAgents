@@ -18,6 +18,14 @@ from tradingagents.audit.prompt_registry import default_registry
 
 logger = logging.getLogger(__name__)
 
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
+# render_with_shared skips any block a given template version doesn't
+# reference, so this is safe to pass regardless of which version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
+
 
 def _tool_call_id(tool_call):
     if isinstance(tool_call, dict):
@@ -168,9 +176,10 @@ def create_news_analyst(llm, prompt_registry=None):
         ]
 
         version = state.get("prompt_versions", {}).get("analysts/news", "v1")
-        rendered_message, prompt_hash = registry.render(
+        rendered_message, prompt_hash, shared_hashes = registry.render_with_shared(
             "analysts/news",
             version=version,
+            shared=_SHARED_BLOCKS,
             asset_label=asset_label,
             language_instruction=get_language_instruction(),
         )
@@ -179,6 +188,7 @@ def create_news_analyst(llm, prompt_registry=None):
             "prompt_key": "analysts/news",
             "prompt_version": version,
             "prompt_hash": prompt_hash,
+            "shared_prompt_hashes": shared_hashes,
         }
 
         bound_llm = bind_tools_or_none(llm, tools, "News Analyst")

@@ -13,6 +13,14 @@ from tradingagents.agents.utils.agent_utils import (
 from tradingagents.agents.utils.tool_fallback import bind_tools_or_none, safe_tool_text
 from tradingagents.audit.prompt_registry import default_registry
 
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
+# render_with_shared skips any block a given template version doesn't
+# reference, so this is safe to pass regardless of which version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
+
 
 def _format_fundamental_monster_context(mss: dict) -> str:
     """Format Monster Stock fundamental + sponsorship scores for prompt injection."""
@@ -169,9 +177,10 @@ def create_fundamentals_analyst(llm, prompt_registry=None):
         ]
 
         version = state.get("prompt_versions", {}).get("analysts/fundamentals", "v1")
-        rendered_message, prompt_hash = registry.render(
+        rendered_message, prompt_hash, shared_hashes = registry.render_with_shared(
             "analysts/fundamentals",
             version=version,
+            shared=_SHARED_BLOCKS,
             monster_context=monster_context,
             forensic_context=forensic_context,
             subject_label=subject_label,
@@ -182,6 +191,7 @@ def create_fundamentals_analyst(llm, prompt_registry=None):
             "prompt_key": "analysts/fundamentals",
             "prompt_version": version,
             "prompt_hash": prompt_hash,
+            "shared_prompt_hashes": shared_hashes,
         }
 
         bound_llm = bind_tools_or_none(llm, tools, "Fundamentals Analyst")

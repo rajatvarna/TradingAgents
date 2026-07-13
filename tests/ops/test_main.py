@@ -40,6 +40,129 @@ def test_build_broker_robinhood(monkeypatch, tmp_path):
     assert callable(broker.place_order)
 
 
+def test_build_broker_alpaca(monkeypatch, tmp_path):
+    cfg = OpsConfig(broker_mode="alpaca")
+    j = Journal(str(tmp_path / "j.sqlite"))
+    from tests.ops.broker.fakes import FakeAlpacaClient
+    monkeypatch.setattr(
+        "ops.broker.alpaca_client.RealAlpacaClient",
+        lambda **kwargs: FakeAlpacaClient(),
+    )
+    broker = _build_broker(cfg, j)
+    assert callable(broker.place_order)
+
+
+def test_build_broker_ibkr(monkeypatch, tmp_path):
+    cfg = OpsConfig(broker_mode="ibkr")
+    j = Journal(str(tmp_path / "j.sqlite"))
+    from tests.ops.broker.fakes import FakeIBKRClient
+    monkeypatch.setattr(
+        "ops.broker.ibkr_client.RealIBKRClient",
+        lambda **kwargs: FakeIBKRClient(),
+    )
+    broker = _build_broker(cfg, j)
+    assert callable(broker.place_order)
+
+
+def test_ensure_live_baseline_records_cash_delta_once_for_ibkr(tmp_path):
+    """IBKR's paper endpoint is still external state (real TWS/Gateway
+    infrastructure, fake money) — same one-time baseline treatment."""
+    from ops.broker.ibkr import IBKRBroker
+    from ops.main import _ensure_live_baseline
+    from tests.ops.broker.fakes import FakeIBKRClient
+
+    j = Journal(str(tmp_path / "j.sqlite"))
+    client = FakeIBKRClient(cash=Decimal("100000"))
+    broker = IBKRBroker(client=client, journal=j)
+    _ensure_live_baseline(j, broker)
+    adjs = j.read_cash_adjustments()
+    assert len(adjs) == 1
+    assert adjs[0]["kind"] == "live_baseline"
+    assert adjs[0]["amount"] == Decimal("100000")
+    _ensure_live_baseline(j, broker)
+    assert len(j.read_cash_adjustments()) == 1
+
+
+def test_startup_gates_live_flip_ritual_on_is_live_money_for_ibkr(monkeypatch, tmp_path):
+    """_startup must call _live_flip_ritual for real-money ibkr
+    (ibkr_paper=False) but not for ibkr's paper endpoint."""
+    from unittest.mock import MagicMock
+
+    import ops.main as ops_main
+
+    calls = []
+    monkeypatch.setattr(
+        ops_main, "_live_flip_ritual",
+        lambda journal, broker, config: calls.append(config.broker_mode),
+    )
+    monkeypatch.setattr(ops_main, "_build_broker", lambda config, journal: MagicMock())
+    monkeypatch.setattr(
+        ops_main, "_wire",
+        lambda broker, journal, config: (MagicMock(), MagicMock(), MagicMock()),
+    )
+    monkeypatch.setattr(
+        ops_main, "reconcile",
+        lambda **kwargs: ReconcileResult(
+            diffs=[], cash_journal=Decimal("0"), cash_broker=Decimal("0"), cash_diff=Decimal("0"),
+        ),
+    )
+    j = Journal(str(tmp_path / "j.sqlite"))
+    ops_main._startup(OpsConfig(broker_mode="ibkr", ibkr_paper=True), j)
+    assert calls == []
+    ops_main._startup(OpsConfig(broker_mode="ibkr", ibkr_paper=False), j)
+    assert calls == ["ibkr"]
+
+
+def test_ensure_live_baseline_records_cash_delta_once_for_alpaca(tmp_path):
+    """Alpaca's paper endpoint is still external state (real Alpaca
+    infrastructure, fake money) — it gets the same one-time baseline
+    treatment as Robinhood so reconciliation can pass on a fresh journal."""
+    from ops.broker.alpaca import AlpacaBroker
+    from ops.main import _ensure_live_baseline
+    from tests.ops.broker.fakes import FakeAlpacaClient
+
+    j = Journal(str(tmp_path / "j.sqlite"))
+    client = FakeAlpacaClient(cash=Decimal("100000"))
+    broker = AlpacaBroker(client=client, journal=j)
+    _ensure_live_baseline(j, broker)
+    adjs = j.read_cash_adjustments()
+    assert len(adjs) == 1
+    assert adjs[0]["kind"] == "live_baseline"
+    assert adjs[0]["amount"] == Decimal("100000")
+    _ensure_live_baseline(j, broker)
+    assert len(j.read_cash_adjustments()) == 1
+
+
+def test_startup_gates_live_flip_ritual_on_is_live_money(monkeypatch, tmp_path):
+    """_startup must call _live_flip_ritual for real-money alpaca
+    (alpaca_paper=False) but not for alpaca's paper endpoint."""
+    from unittest.mock import MagicMock
+
+    import ops.main as ops_main
+
+    calls = []
+    monkeypatch.setattr(
+        ops_main, "_live_flip_ritual",
+        lambda journal, broker, config: calls.append(config.broker_mode),
+    )
+    monkeypatch.setattr(ops_main, "_build_broker", lambda config, journal: MagicMock())
+    monkeypatch.setattr(
+        ops_main, "_wire",
+        lambda broker, journal, config: (MagicMock(), MagicMock(), MagicMock()),
+    )
+    monkeypatch.setattr(
+        ops_main, "reconcile",
+        lambda **kwargs: ReconcileResult(
+            diffs=[], cash_journal=Decimal("0"), cash_broker=Decimal("0"), cash_diff=Decimal("0"),
+        ),
+    )
+    j = Journal(str(tmp_path / "j.sqlite"))
+    ops_main._startup(OpsConfig(broker_mode="alpaca", alpaca_paper=True), j)
+    assert calls == []
+    ops_main._startup(OpsConfig(broker_mode="alpaca", alpaca_paper=False), j)
+    assert calls == ["alpaca"]
+
+
 def test_wire_returns_orchestrator_guardian_calendar(tmp_path):
     cfg = OpsConfig()
     j = Journal(str(tmp_path / "j.sqlite"))

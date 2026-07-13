@@ -224,7 +224,7 @@ def decide_once(
         candidates=candidates, pipeline=pipeline,
         current_equity=guarded.get_equity(),
         asof_date=asof_date,
-    )
+    ).orders
 
     click.echo(f"## Pipeline decisions")
     if not proposals:

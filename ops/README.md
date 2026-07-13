@@ -27,6 +27,132 @@ the cached token until it expires.
   check inside `RobinhoodBroker` reject any SPOT order. Do not remove
   either gate.
 
+## Alpaca (live broker)
+
+`broker_mode = "alpaca"` connects to Alpaca's REST trading API directly via
+`requests` (no SDK dependency). Set credentials via env vars, matching the
+repo's per-provider convention:
+
+```bash
+export ALPACA_API_KEY=...
+export ALPACA_SECRET_KEY=...
+```
+
+Alpaca exposes the same API for its paper and live trading accounts — only
+the base URL and the account's real-money status differ, controlled by
+`alpaca_paper` (`OPS_ALPACA_PAPER` env override, default `true`):
+
+- `alpaca_paper=true` (default): talks to `https://paper-api.alpaca.markets`.
+  This is real Alpaca infrastructure but fake money — the live-flip ritual
+  and the live-gate position cap do **not** apply, same posture as
+  `broker_mode = "paper"`.
+- `alpaca_paper=false`: talks to `https://api.alpaca.markets` (real money) and
+  is treated exactly like `robinhood` — first startup requires the live-flip
+  ritual, and new positions are capped at `live_max_position` until
+  `live_fill_gate_count` live BUY fills have occurred *on Alpaca specifically*
+  (switching from Robinhood does not carry over its fill count, or vice
+  versa — see `ops.live_gate.count_live_buy_fills`).
+
+Both paper and live Alpaca are external systems with their own cash ledger
+(unlike this repo's own in-memory `PaperBroker`), so both go through the
+same one-time `_ensure_live_baseline` treatment and reconciliation cash-drift
+check as Robinhood.
+
+```bash
+# Alpaca paper trading: safe to run anytime, no live-flip ritual.
+OPS_BROKER_MODE=alpaca .venv/bin/python -m ops.cli run
+
+# Alpaca live trading: opt-in, real money.
+OPS_BROKER_MODE=alpaca OPS_ALPACA_PAPER=false .venv/bin/python -m ops.cli run
+```
+
+## Interactive Brokers (IBKR)
+
+`broker_mode = "ibkr"` connects to Interactive Brokers via **Trader
+Workstation (TWS)** or **IB Gateway** running locally with API access
+enabled — the same `ib_insync` connection convention already used for
+IBKR *data* in `tradingagents/dataflows/ibkr.py`, reused here for order
+execution. Install the optional dependency:
+
+```bash
+pip install ".[portfolio]"   # includes ib_insync
+```
+
+Start TWS or IB Gateway, enable API access (Global Configuration → API →
+Settings → Enable ActiveX and Socket Clients), then run:
+
+```bash
+# IBKR paper trading (TWS default port 7497): safe to run anytime, no
+# live-flip ritual.
+OPS_BROKER_MODE=ibkr .venv/bin/python -m ops.cli run
+
+# IBKR live trading (TWS default port 7496): opt-in, real money.
+OPS_BROKER_MODE=ibkr OPS_IBKR_PAPER=false .venv/bin/python -m ops.cli run
+```
+
+Connection is configured via env vars (all optional — defaults shown):
+
+```bash
+export IBKR_HOST=127.0.0.1
+export IBKR_PORT=7497        # only needed to override the ibkr_paper-derived default
+export IBKR_CLIENT_ID=10     # must be unique among clients connected to the same TWS/Gateway
+```
+
+`ibkr_paper` (`OPS_IBKR_PAPER` env override, default `true`) selects the
+*default* port only — 7497 (TWS paper) vs 7496 (TWS live). **IB Gateway
+uses different ports** (4002 paper / 4001 live): if you run Gateway
+instead of TWS, set `IBKR_PORT` explicitly. Setting `ibkr_paper` does not
+itself verify which account the already-running TWS/Gateway session is
+logged into — that's controlled by which TWS/Gateway instance you started
+and logged into, not by this flag. Get the flag and the running
+instance out of sync and you can end up talking to a live account while
+`ibkr_paper=true`, so treat the two as one decision, not two.
+
+Both IBKR paper and live are external systems with their own cash ledger
+(unlike this repo's own in-memory `PaperBroker`), so both go through the
+same one-time `_ensure_live_baseline` treatment and reconciliation
+cash-drift check as Robinhood/Alpaca. `ibkr_paper=false` is treated exactly
+like `robinhood`/Alpaca-live: first startup requires the live-flip ritual,
+and new positions are capped at `live_max_position` until
+`live_fill_gate_count` live BUY fills have occurred *on IBKR specifically*.
+
+### IBKR-specific order sizing
+
+Alpaca and Robinhood fill orders to a precise dollar notional (fractional
+shares). IBKR has no notional-dollar order type reachable generically
+through the API, so `IBKRBroker` converts the requested notional to a
+**whole-share quantity itself, floored** — e.g. a $99 BUY at $10.50/share
+buys 9 shares ($94.50), not a fractional 9.428... shares. The filled
+notional can therefore be somewhat less than requested. A notional too
+small to buy even one share raises rather than placing a zero-quantity
+order. This applies to `place_order`; `close_position` always sells the
+full held quantity, matching the other brokers.
+
+## Daily LLM budget
+
+Two independent, complementary caps limit same-day pipeline (LLM) spend —
+whichever binds first stops dispatching new candidates for the day:
+
+- `daily_analysis_budget` (default 8): max number of candidates analyzed
+  per day, applied by `ops/universe/composite.py` before any candidate
+  reaches the pipeline.
+- `daily_llm_budget_usd` (default unset — unlimited, env
+  `OPS_DAILY_LLM_BUDGET_USD`): a hard USD ceiling on cumulative same-day
+  spend across all pipeline runs, tracked by a `SpendTracker` shared across
+  the whole `ops run` process and reset at each new trading day.
+
+```bash
+OPS_DAILY_LLM_BUDGET_USD=5.00 .venv/bin/python -m ops.cli run
+```
+
+A candidate cut off by either cap is **deferred, not dropped**: it's
+journaled (`analysis_deferred`) and given exactly one retry — reoffered
+ahead of fresh scan results on the *next* trading day's cycle (recomputed
+against that day's eligibility/liquidity, never reconstructed from stale
+data), then marked `analysis_deferred_consumed` regardless of whether it
+made it back into that day's candidates. A symbol that keeps getting cut
+every day is not retried forever — only once per deferral.
+
 ## Running the orchestrator service
 
 The `ops run` command starts the always-on orchestrator + guardian in the

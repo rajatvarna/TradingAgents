@@ -171,6 +171,48 @@ def test_reconcile_live_cash_drift_produces_diff(tmp_path):
     assert cash_diffs[0].broker_qty == Decimal("500")
 
 
+def test_reconcile_alpaca_cash_drift_produces_diff(tmp_path):
+    """Alpaca is external state too (even its paper endpoint) — material
+    cash drift must surface exactly like Robinhood's."""
+    from ops import build_guarded_alpaca_broker
+    from tests.ops.broker.fakes import FakeAlpacaClient
+
+    j = Journal(str(tmp_path / "j.sqlite"))
+    client = FakeAlpacaClient(cash=Decimal("500"))
+    broker = build_guarded_alpaca_broker(
+        config=OpsConfig(broker_mode="alpaca"), journal=j,
+        alpaca_client=client,
+        start_of_day_equity=lambda: Decimal("500"),
+        start_of_week_equity=lambda: Decimal("500"),
+    )
+    result = reconcile(journal=j, broker=broker, broker_mode="alpaca")
+    cash_diffs = [d for d in result.diffs if d.kind == "cash_drift"]
+    assert len(cash_diffs) == 1
+    assert cash_diffs[0].symbol == "__CASH__"
+    assert cash_diffs[0].broker_qty == Decimal("500")
+
+
+def test_reconcile_ibkr_cash_drift_produces_diff(tmp_path):
+    """IBKR is external state too (even its paper endpoint) — material
+    cash drift must surface exactly like Robinhood's/Alpaca's."""
+    from ops import build_guarded_ibkr_broker
+    from tests.ops.broker.fakes import FakeIBKRClient
+
+    j = Journal(str(tmp_path / "j.sqlite"))
+    client = FakeIBKRClient(cash=Decimal("500"))
+    broker = build_guarded_ibkr_broker(
+        config=OpsConfig(broker_mode="ibkr"), journal=j,
+        ibkr_client=client,
+        start_of_day_equity=lambda: Decimal("500"),
+        start_of_week_equity=lambda: Decimal("500"),
+    )
+    result = reconcile(journal=j, broker=broker, broker_mode="ibkr")
+    cash_diffs = [d for d in result.diffs if d.kind == "cash_drift"]
+    assert len(cash_diffs) == 1
+    assert cash_diffs[0].symbol == "__CASH__"
+    assert cash_diffs[0].broker_qty == Decimal("500")
+
+
 def test_reconcile_paper_mode_ignores_cash_drift(tmp_path):
     """Paper mode has a structural cash offset (live starting_cash vs
     replay starting_cash=0), so cash_diff is NOT surfaced as a diff."""

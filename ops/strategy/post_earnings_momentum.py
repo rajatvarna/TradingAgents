@@ -16,7 +16,7 @@ from uuid import uuid4
 from ops.broker.types import Order, OrderType, Side
 from ops.config import OpsConfig
 from ops.pipeline_adapter import PipelineAdapter, PipelineDecision
-from ops.strategy.base import StrategyOrder
+from ops.strategy.base import ProposeOrdersResult, StrategyOrder
 from ops.universe import Candidate, CandidateSource
 
 
@@ -58,15 +58,23 @@ class PostEarningsMomentumStrategy:
         current_equity: Decimal,
         asof_date: date,
         live_max_position_cap: Decimal | None = None,
-    ) -> list[StrategyOrder]:
+    ) -> ProposeOrdersResult:
         notional = _quantize_money(current_equity * self._cfg.per_position_cap_pct)
         if live_max_position_cap is not None:
             notional = min(notional, live_max_position_cap)
         if notional < self._cfg.per_trade_dollar_floor:
-            return []
+            return ProposeOrdersResult(orders=[])
         out: list[StrategyOrder] = []
-        for cand in candidates:
+        deferred: list[str] = []
+        for i, cand in enumerate(candidates):
             result = pipeline.propagate(cand.symbol, asof_date)
+            if result.decision == PipelineDecision.DEFERRED:
+                # Budget exhausted for the day — every remaining candidate
+                # would defer too (same shared tracker); stop evaluating
+                # rather than burning setup work on calls that will all
+                # short-circuit the same way.
+                deferred.extend(c.symbol for c in candidates[i:])
+                break
             if result.decision != PipelineDecision.BUY:
                 continue
             order = Order(
@@ -83,4 +91,4 @@ class PostEarningsMomentumStrategy:
                 candidate=cand,
                 pipeline=result,
             ))
-        return out
+        return ProposeOrdersResult(orders=out, deferred_symbols=deferred)

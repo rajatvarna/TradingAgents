@@ -67,9 +67,12 @@ def test_real_adapter_constructs_graph_lazily(monkeypatch):
     adapter = TradingAgentsPipelineAdapter()
     assert constructed == []     # not yet
     r = adapter.propagate("AAPL", date(2026, 6, 30))
-    assert constructed == [{}]   # constructed exactly once on first call
+    # F3: the adapter's own SpendTracker is always wired in as a callback
+    # (measurement is unconditional, matching cost_callback.py's philosophy)
+    # even when no daily_budget_usd is configured.
+    assert constructed == [{"callbacks": [adapter._spend_tracker]}]
     adapter.propagate("MSFT", date(2026, 6, 30))
-    assert constructed == [{}]   # still only one construction
+    assert constructed == [{"callbacks": [adapter._spend_tracker]}]  # still only one construction
     assert r.decision == PipelineDecision.BUY
 
 
@@ -121,3 +124,76 @@ def test_ensure_graph_is_thread_safe(monkeypatch):
     assert not t1.is_alive() and not t2.is_alive(), "threads did not complete — possible deadlock"
     assert results[0] is results[1]
     assert build_count == 1
+
+
+# --- F3: daily LLM USD budget -----------------------------------------------
+
+
+def _fake_graph_class(constructed, *, cost_per_call=0.0):
+    """FakeGraph whose propagate() drives any SpendTracker passed via
+    callbacks= to accumulate cost_per_call, mirroring how the real graph's
+    on_llm_end hook feeds a SpendTracker automatically."""
+
+    class FakeGraph:
+        def __init__(self, **kwargs):
+            constructed.append(kwargs)
+            self._trackers = kwargs.get("callbacks") or []
+
+        def propagate(self, ticker, dt):
+            for cb in self._trackers:
+                cb.total_cost_usd += cost_per_call
+                if cb.max_cost is not None and cb.total_cost_usd >= cb.max_cost:
+                    cb.budget_exceeded = True
+            return ({}, "Buy")
+
+    return FakeGraph
+
+
+def test_no_budget_configured_always_runs_graph(monkeypatch):
+    constructed = []
+    monkeypatch.setattr(
+        "ops.pipeline_adapter.TradingAgentsGraph",
+        _fake_graph_class(constructed, cost_per_call=100.0),
+    )
+    adapter = TradingAgentsPipelineAdapter()  # daily_budget_usd=None (default)
+    for _ in range(5):
+        r = adapter.propagate("AAPL", date(2026, 6, 30))
+        assert r.decision == PipelineDecision.BUY
+    assert len(constructed) == 1  # graph still built exactly once
+
+
+def test_budget_exhausted_returns_deferred_without_running_graph(monkeypatch):
+    constructed = []
+    monkeypatch.setattr(
+        "ops.pipeline_adapter.TradingAgentsGraph",
+        _fake_graph_class(constructed, cost_per_call=1.0),
+    )
+    from decimal import Decimal
+    adapter = TradingAgentsPipelineAdapter(daily_budget_usd=Decimal("2"))
+    d = date(2026, 6, 30)
+    r1 = adapter.propagate("AAPL", d)
+    r2 = adapter.propagate("MSFT", d)
+    assert r1.decision == PipelineDecision.BUY
+    assert r2.decision == PipelineDecision.BUY
+    # Budget ($2) now exhausted by the two $1 calls above.
+    r3 = adapter.propagate("NVDA", d)
+    assert r3.decision == PipelineDecision.DEFERRED
+    assert r3.raw == {"reason": "daily_llm_budget_usd exhausted"}
+
+
+def test_budget_resets_on_new_day(monkeypatch):
+    constructed = []
+    monkeypatch.setattr(
+        "ops.pipeline_adapter.TradingAgentsGraph",
+        _fake_graph_class(constructed, cost_per_call=1.0),
+    )
+    from decimal import Decimal
+    adapter = TradingAgentsPipelineAdapter(daily_budget_usd=Decimal("1"))
+    day1 = date(2026, 6, 30)
+    day2 = date(2026, 7, 1)
+    r1 = adapter.propagate("AAPL", day1)
+    r2 = adapter.propagate("MSFT", day1)  # exhausted after day1's first call
+    r3 = adapter.propagate("NVDA", day2)  # new day -> fresh budget
+    assert r1.decision == PipelineDecision.BUY
+    assert r2.decision == PipelineDecision.DEFERRED
+    assert r3.decision == PipelineDecision.BUY

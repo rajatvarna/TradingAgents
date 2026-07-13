@@ -6,9 +6,10 @@ scheduler drains in-flight jobs, journal closes cleanly. Exit codes:
 - 2: reconciliation-halted shutdown (journal has inconsistency events)
 - 3: startup-halted — broker unreachable while building/reconciling
      (journal has broker_unreachable + startup_halted events)
-- 4: live-flip ritual refused — first robinhood start without a TTY, or
-     the typed equity confirmation did not match (journal has a
-     live_flip_refused event); nothing was scheduled
+- 4: live-flip ritual refused — first real-money start (robinhood,
+     alpaca with alpaca_paper=False, or ibkr with ibkr_paper=False)
+     without a TTY, or the typed equity confirmation did not match
+     (journal has a live_flip_refused event); nothing was scheduled
 
 Every session brackets itself with service_started / service_stopping
 journal events (the uptime record used by the graduation evaluation);
@@ -30,6 +31,8 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from ops import (
+    build_guarded_alpaca_broker,
+    build_guarded_ibkr_broker,
     build_guarded_paper_broker_from_journal,
     build_guarded_robinhood_broker,
     events,
@@ -159,8 +162,11 @@ def _build_broker(config: OpsConfig, journal: Journal):
 
     Paper mode rebuilds the inner PaperBroker from the journal (via
     build_guarded_paper_broker_from_journal) so a restarted ops run
-    picks up prior positions and cash. Robinhood mode reads live state
-    from the MCP.
+    picks up prior positions and cash. Robinhood, Alpaca, and IBKR modes
+    read live state from the broker itself — all three are external
+    systems with their own cash ledger (even Alpaca's/IBKR's paper
+    endpoints: real broker infrastructure, just fake money), so all three
+    get the external-baseline treatment via _ensure_live_baseline.
     """
     from ops.quotes import make_yfinance_quote_source
     quote_source = make_yfinance_quote_source()
@@ -180,6 +186,20 @@ def _build_broker(config: OpsConfig, journal: Journal):
         # The flip marker is deliberately NOT recorded here: it must mean
         # "the live-flip ritual passed" (A5), and _build_broker also runs
         # on attempts the ritual goes on to refuse. See _live_flip_ritual.
+        return broker
+    if config.broker_mode == "alpaca":
+        broker = build_guarded_alpaca_broker(
+            config=config, journal=journal,
+            start_of_day_equity=_sod, start_of_week_equity=_sow,
+        )
+        _ensure_live_baseline(journal, broker)
+        return broker
+    if config.broker_mode == "ibkr":
+        broker = build_guarded_ibkr_broker(
+            config=config, journal=journal,
+            start_of_day_equity=_sod, start_of_week_equity=_sow,
+        )
+        _ensure_live_baseline(journal, broker)
         return broker
     _ensure_paper_seed(journal, config)
     return build_guarded_paper_broker_from_journal(
@@ -222,7 +242,7 @@ def _live_flip_ritual(journal: Journal, broker, config: OpsConfig) -> None:
         )
     equity = broker.get_equity()
     expected = str(equity)
-    print("FIRST LIVE START — broker mode is 'robinhood' (real money).")
+    print(f"FIRST LIVE START — broker mode is {config.broker_mode!r} (real money).")
     print(f"Account equity: {expected}")
     print(
         f"Live gate: max ${config.live_max_position} per position for the "
@@ -256,7 +276,7 @@ def _wire(broker, journal: Journal, config: OpsConfig):
         broker=broker,
         universe_builder=build_composite_universe,
         strategy=PostEarningsMomentumStrategy(config=config),
-        pipeline_adapter=TradingAgentsPipelineAdapter(),
+        pipeline_adapter=TradingAgentsPipelineAdapter(daily_budget_usd=config.daily_llm_budget_usd),
         calendar=calendar, journal=journal, config=config,
     )
     guardian = PositionGuardian(
@@ -285,9 +305,12 @@ def _startup(config: OpsConfig, journal: Journal):
     BrokerError when it's unreachable; callers handle that distinctly
     from a reconciliation diff (see M6)."""
     broker = _build_broker(config, journal)
-    if config.broker_mode == "robinhood":
+    if config.is_live_money:
         # Before reconcile/scheduling: nothing live may proceed until the
-        # first flip is confirmed (or the marker already exists).
+        # first flip is confirmed (or the marker already exists). Covers
+        # robinhood, alpaca with alpaca_paper=False, and ibkr with
+        # ibkr_paper=False; their paper endpoints are excluded (fake money
+        # — same posture as broker_mode == "paper").
         _live_flip_ritual(journal, broker, config)
     orchestrator, guardian, calendar = _wire(broker, journal, config)
     result = reconcile(journal=journal, broker=broker, broker_mode=config.broker_mode)

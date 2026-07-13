@@ -93,3 +93,35 @@ def test_momentum_finder_used_when_no_precomputed_leaderboard():
     )
     assert [c.symbol for c in result] == ["NVDA"]
     assert calls == [["NVDA"]]  # deny-listed SPOT never reaches the finder
+
+
+# --- priority_symbols (F3 deferral retry) -----------------------------------
+
+
+def test_priority_symbols_moved_to_front_before_cap():
+    """A budget-deferred symbol re-offered via priority_symbols jumps ahead
+    of higher-ranked fresh candidates so a tight cap doesn't crowd it out
+    again on its one retry."""
+    leaders = [_mhit("NVDA", 1), _mhit("AMD", 2), _mhit("META", 3)]
+    result = _build(leaders=leaders, priority_symbols=frozenset({"META"}),
+                    free_slots=2)
+    assert [c.symbol for c in result] == ["META", "NVDA"]
+
+
+def test_priority_symbols_preserves_relative_order_within_group():
+    leaders = [_mhit("NVDA", 1), _mhit("AMD", 2), _mhit("META", 3), _mhit("AVGO", 4)]
+    result = _build(leaders=leaders, priority_symbols=frozenset({"META", "AVGO"}))
+    assert [c.symbol for c in result] == ["META", "AVGO", "NVDA", "AMD"]
+
+
+def test_priority_symbols_no_effect_when_not_in_merged_pool():
+    """A previously-deferred symbol that's no longer eligible (illiquid,
+    delisted, held, excluded, etc.) is simply absent — not fabricated."""
+    leaders = [_mhit("NVDA", 1), _mhit("AMD", 2)]
+    result = _build(leaders=leaders, priority_symbols=frozenset({"ZZZZ"}))
+    assert [c.symbol for c in result] == ["NVDA", "AMD"]
+
+
+def test_priority_symbols_default_is_noop():
+    leaders = [_mhit("NVDA", 1), _mhit("AMD", 2)]
+    assert [c.symbol for c in _build(leaders=leaders)] == ["NVDA", "AMD"]

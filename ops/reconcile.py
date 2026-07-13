@@ -66,10 +66,12 @@ def reconcile(*, journal: Journal, broker: Any, broker_mode: str) -> ReconcileRe
     cash_broker = broker.get_cash()
     cash_diff = cash_broker - cash_journal
 
-    # Live mode: any material cash drift halts startup. Paper mode carries a
-    # known structural offset (live PaperBroker's starting_cash vs replay's
-    # starting_cash=0), so cash drift is not a diff there.
-    if broker_mode == "robinhood" and abs(cash_diff) > _EPSILON_CASH:
+    # Any external broker (robinhood, alpaca — including Alpaca's paper
+    # endpoint, which is still external state with its own cash ledger):
+    # material cash drift halts startup. Only our own in-memory PaperBroker
+    # ("paper") carries a known structural offset (its starting_cash vs
+    # replay's starting_cash=0), so cash drift is not a diff there.
+    if broker_mode != "paper" and abs(cash_diff) > _EPSILON_CASH:
         diffs.append(PositionDiff(
             symbol="__CASH__",
             journal_qty=cash_journal, broker_qty=cash_broker,

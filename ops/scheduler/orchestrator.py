@@ -76,6 +76,7 @@ class Orchestrator:
         self._journal.record_event(
             events.KIND_DAILY_CYCLE_RUN,
             events.daily_cycle_run_payload(asof_date=asof_date),
+            at=now,
         )
 
         # Leaderboard is computed ONCE per tick: the exit engine reads held
@@ -97,23 +98,46 @@ class Orchestrator:
 
         held = {p.symbol for p in self._broker.get_positions()}
         free_slots = max(0, self._config.max_open_positions - len(held))
+        # F3: symbols the daily LLM USD budget deferred on a prior cycle
+        # get one retry, prioritized ahead of this cycle's fresh scan
+        # results — recomputed at today's cap/eligibility, never
+        # reconstructed from stale data.
+        pending_deferred = self._journal.pending_kind_symbols(
+            events.KIND_ANALYSIS_DEFERRED, events.KIND_ANALYSIS_DEFERRED_CONSUMED,
+        )
         candidates = self._universe_builder(
             asof_date=asof_date, config=self._config,
             held_symbols=frozenset(held), free_slots=free_slots,
             excluded_symbols=self._cooldown_symbols(asof_date),
             momentum_leaders=leaderboard,
+            priority_symbols=pending_deferred,
         )
         fresh_candidates = [c for c in candidates if c.symbol not in held]
         current_equity = self._broker.get_equity()
         live_cap = self._compute_live_cap()
-        proposals = self._strategy.propose_orders(
+        result = self._strategy.propose_orders(
             candidates=fresh_candidates,
             pipeline=self._pipeline_adapter,
             current_equity=current_equity,
             asof_date=asof_date,
             live_max_position_cap=live_cap,
         )
-        for proposal in proposals:
+        # Each deferred symbol gets exactly one retry: mark it consumed
+        # for today regardless of whether it made it back into candidates
+        # (still eligible vs. no longer eligible/liquid) or resulted in an
+        # order — otherwise a symbol that never regains eligibility would
+        # be retried forever. Recorded only after propose_orders succeeds
+        # (not right after building candidates): if get_equity/
+        # _compute_live_cap/propose_orders raises above, the retry never
+        # actually happened, so the symbol must stay pending for the next
+        # tick rather than being silently burned.
+        for symbol in pending_deferred:
+            self._journal.record_event(
+                events.KIND_ANALYSIS_DEFERRED_CONSUMED,
+                events.analysis_deferred_consumed_payload(symbol=symbol, asof_date=asof_date),
+                at=now,
+            )
+        for proposal in result.orders:
             try:
                 self._broker.place_order(proposal.order)
             except OrderRejected:
@@ -130,6 +154,15 @@ class Orchestrator:
                     client_order_id=proposal.order.client_order_id,
                     entry_rank=cand.momentum.rank if cand.momentum else None,
                 ),
+            )
+        for symbol in result.deferred_symbols:
+            self._journal.record_event(
+                events.KIND_ANALYSIS_DEFERRED,
+                events.analysis_deferred_payload(
+                    symbol=symbol, asof_date=asof_date,
+                    reason="daily_llm_budget_usd exhausted",
+                ),
+                at=now,
             )
 
     def _run_exits(self, leaderboard, asof_date) -> None:
@@ -212,13 +245,17 @@ class Orchestrator:
     def _compute_live_cap(self) -> Decimal | None:
         """Return the live-gate position cap, or None when the gate is inactive.
 
-        While the gate is active (live broker, fewer than ``live_fill_gate_count``
-        live BUY fills since the flip), proposed BUY notional is clamped to
-        ``live_max_position``.
+        While the gate is active (real-money broker — robinhood, or alpaca
+        with alpaca_paper=False — with fewer than ``live_fill_gate_count``
+        live BUY fills of THAT broker since the flip), proposed BUY notional
+        is clamped to ``live_max_position``. Paper brokers (including
+        Alpaca's paper endpoint) are never gated.
         """
-        if self._config.broker_mode != "robinhood":
+        if not self._config.is_live_money:
             return None
-        if count_live_buy_fills(self._journal) >= self._config.live_fill_gate_count:
+        if count_live_buy_fills(
+            self._journal, broker_mode=self._config.broker_mode
+        ) >= self._config.live_fill_gate_count:
             return None
         return self._config.live_max_position
 

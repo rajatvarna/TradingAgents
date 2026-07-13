@@ -52,3 +52,15 @@ def test_historical_fills_without_broker_mode_dont_count(tmp_path):
     j.record_event("fill", {"side": "BUY", "symbol": "AAPL"})  # no broker_mode key
     j.record_event("fill", {"side": "BUY", "symbol": "MSFT"})  # no broker_mode key
     assert count_live_buy_fills(j) == 0
+
+
+def test_broker_mode_param_scopes_count_to_that_broker(tmp_path):
+    """Switching live brokers must not inherit fill history from a
+    different one — each broker_mode's live-gate counter is independent."""
+    j = Journal(str(tmp_path / "j.sqlite"))
+    record_flip_marker(j)
+    j.record_event("fill", {"side": "BUY", "symbol": "AAPL", "broker_mode": "robinhood"})
+    j.record_event("fill", {"side": "BUY", "symbol": "AAPL", "broker_mode": "robinhood"})
+    j.record_event("fill", {"side": "BUY", "symbol": "MSFT", "broker_mode": "alpaca"})
+    assert count_live_buy_fills(j, broker_mode="robinhood") == 2
+    assert count_live_buy_fills(j, broker_mode="alpaca") == 1

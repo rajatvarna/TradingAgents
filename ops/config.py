@@ -40,7 +40,22 @@ _FULL_BLACKOUT_SYMBOLS = frozenset({"SPOT"})
 
 @dataclass(frozen=True)
 class OpsConfig:
-    broker_mode: str = "paper"  # "paper" or "robinhood"
+    broker_mode: str = "paper"  # "paper", "robinhood", "alpaca", or "ibkr"
+    alpaca_paper: bool = True
+    """Only meaningful when broker_mode == "alpaca". True (default) talks to
+    Alpaca's paper-trading endpoint — real Alpaca infrastructure, fake money,
+    so the live-flip ritual and live-gate position cap do NOT apply (same
+    posture as broker_mode == "paper"). False talks to Alpaca's live
+    endpoint (real money) and is treated exactly like robinhood — see
+    ``is_live_money``."""
+    ibkr_paper: bool = True
+    """Only meaningful when broker_mode == "ibkr". True (default) connects
+    to a paper-trading TWS/IB Gateway session (fake money — same posture as
+    broker_mode == "paper", no live-flip ritual). False connects to a live
+    session (real money) and is treated exactly like robinhood — see
+    ``is_live_money``. Note this only selects the DEFAULT port (7497 paper /
+    7496 live, matching TWS); it does not itself verify which account the
+    already-running TWS/Gateway process is logged into — see ops/README.md."""
     deny_list: frozenset[str] = field(default_factory=lambda: _DEFAULT_DENY_LIST)  # Not env-overridable; extend via code
     full_blackout_symbols: frozenset[str] = field(default_factory=lambda: _FULL_BLACKOUT_SYMBOLS)  # Not env-overridable; extend via code
     per_position_cap_pct: Decimal = Decimal("0.12")
@@ -56,6 +71,12 @@ class OpsConfig:
     live_fill_gate_count: int = 20
     # Cost dial: max full-pipeline (LLM) analyses per day; risk is capped separately.
     daily_analysis_budget: int = 8
+    # Cost dial (F3): hard USD cap on same-day cumulative LLM spend across
+    # ALL pipeline runs, independent of and in addition to
+    # daily_analysis_budget's candidate-count cap — whichever binds first
+    # stops dispatching for the day. None (default) preserves today's
+    # behavior exactly: unlimited USD spend, count cap only.
+    daily_llm_budget_usd: Decimal | None = None
     # Exit engine (spec Component 6). Entry is top-daily_analysis_budget;
     # the gap up to momentum_exit_rank is deliberate hysteresis.
     momentum_exit_rank: int = 25
@@ -90,6 +111,10 @@ class OpsConfig:
             raise ValueError(
                 f"daily_analysis_budget must be > 0, got {self.daily_analysis_budget}"
             )
+        if self.daily_llm_budget_usd is not None and self.daily_llm_budget_usd <= 0:
+            raise ValueError(
+                f"daily_llm_budget_usd must be > 0 when set, got {self.daily_llm_budget_usd}"
+            )
         for fname in ("earnings_max_hold_days", "stopout_reentry_cooldown_days"):
             val = getattr(self, fname)
             if val <= 0:
@@ -100,9 +125,10 @@ class OpsConfig:
                 f"(hysteresis band), got {self.momentum_exit_rank} <= "
                 f"{self.daily_analysis_budget}"
             )
-        if self.broker_mode not in ("paper", "robinhood"):
+        if self.broker_mode not in ("paper", "robinhood", "alpaca", "ibkr"):
             raise ValueError(
-                f"broker_mode must be 'paper' or 'robinhood', got {self.broker_mode!r}"
+                "broker_mode must be 'paper', 'robinhood', 'alpaca', or 'ibkr', "
+                f"got {self.broker_mode!r}"
             )
         if not self.full_blackout_symbols <= self.deny_list:
             raise ValueError(
@@ -115,6 +141,24 @@ class OpsConfig:
             raise ValueError(
                 f"live_fill_gate_count must be >= 0, got {self.live_fill_gate_count}"
             )
+
+    @property
+    def is_live_money(self) -> bool:
+        """True when the configured broker moves real money.
+
+        robinhood is always real money. alpaca/ibkr are real money only
+        when their respective *_paper flag is False — their paper
+        endpoints are real broker infrastructure but fake money, so they
+        are deliberately excluded here (same posture as broker_mode ==
+        "paper"). Callers use this to gate the live-flip ritual and the
+        live-gate position cap."""
+        if self.broker_mode == "robinhood":
+            return True
+        if self.broker_mode == "alpaca":
+            return not self.alpaca_paper
+        if self.broker_mode == "ibkr":
+            return not self.ibkr_paper
+        return False
 
 
 def _env_decimal(name: str) -> Decimal | None:
@@ -137,12 +181,32 @@ def _env_int(name: str) -> int | None:
         raise ValueError(f"Invalid value for {name!r}: {raw!r}") from exc
 
 
+def _env_bool(name: str) -> bool | None:
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    normalized = raw.strip().lower()
+    if normalized in ("1", "true", "yes", "on"):
+        return True
+    if normalized in ("0", "false", "no", "off"):
+        return False
+    raise ValueError(f"Invalid boolean value for {name!r}: {raw!r}")
+
+
 def load_config() -> OpsConfig:
     kwargs: dict = {}
 
     broker_mode = os.environ.get("OPS_BROKER_MODE")
     if broker_mode is not None:
         kwargs["broker_mode"] = broker_mode
+
+    alpaca_paper = _env_bool("OPS_ALPACA_PAPER")
+    if alpaca_paper is not None:
+        kwargs["alpaca_paper"] = alpaca_paper
+
+    ibkr_paper = _env_bool("OPS_IBKR_PAPER")
+    if ibkr_paper is not None:
+        kwargs["ibkr_paper"] = ibkr_paper
 
     per_position_cap_pct = _env_decimal("OPS_PER_POSITION_CAP_PCT")
     if per_position_cap_pct is not None:
@@ -191,6 +255,10 @@ def load_config() -> OpsConfig:
     daily_analysis_budget = _env_int("OPS_DAILY_ANALYSIS_BUDGET")
     if daily_analysis_budget is not None:
         kwargs["daily_analysis_budget"] = daily_analysis_budget
+
+    daily_llm_budget_usd = _env_decimal("OPS_DAILY_LLM_BUDGET_USD")
+    if daily_llm_budget_usd is not None:
+        kwargs["daily_llm_budget_usd"] = daily_llm_budget_usd
 
     momentum_exit_rank = _env_int("OPS_MOMENTUM_EXIT_RANK")
     if momentum_exit_rank is not None:

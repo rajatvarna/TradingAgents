@@ -18,7 +18,7 @@ from ops.journal import Journal
 from ops.pipeline_adapter import PipelineDecision, PipelineResult
 from ops.position_guardian import PositionGuardian
 from ops.scheduler.orchestrator import Orchestrator
-from ops.strategy.base import StrategyOrder
+from ops.strategy.base import ProposeOrdersResult, StrategyOrder
 
 
 class _Q:
@@ -55,9 +55,9 @@ def test_end_to_end_orchestrator_buy_then_guardian_stop_survives_restart(tmp_pat
         symbol="AAPL", date=date(2026, 6, 30), decision=PipelineDecision.BUY, raw={},
     )
     strategy = MagicMock()
-    strategy.propose_orders.return_value = [
+    strategy.propose_orders.return_value = ProposeOrdersResult(orders=[
         StrategyOrder(order=order, reason="test", candidate=candidate, pipeline=pipeline_result),
-    ]
+    ])
     pipeline = MagicMock()
 
     orch = Orchestrator(

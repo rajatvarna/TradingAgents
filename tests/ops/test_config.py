@@ -32,6 +32,77 @@ def test_full_blackout_symbols_must_be_subset_of_deny_list():
     with pytest.raises(ValueError):
         OpsConfig(full_blackout_symbols=frozenset({"NOTDENIED"}))
 
+
+def test_broker_mode_accepts_alpaca():
+    cfg = OpsConfig(broker_mode="alpaca")
+    assert cfg.broker_mode == "alpaca"
+
+
+def test_broker_mode_accepts_ibkr():
+    cfg = OpsConfig(broker_mode="ibkr")
+    assert cfg.broker_mode == "ibkr"
+
+
+def test_broker_mode_rejects_unknown_value():
+    with pytest.raises(ValueError):
+        OpsConfig(broker_mode="schwab")
+
+
+def test_alpaca_paper_defaults_true():
+    assert OpsConfig().alpaca_paper is True
+
+
+def test_ibkr_paper_defaults_true():
+    assert OpsConfig().ibkr_paper is True
+
+
+def test_is_live_money_paper_is_false():
+    assert OpsConfig(broker_mode="paper").is_live_money is False
+
+
+def test_is_live_money_robinhood_is_true():
+    assert OpsConfig(broker_mode="robinhood").is_live_money is True
+
+
+def test_is_live_money_alpaca_paper_is_false():
+    assert OpsConfig(broker_mode="alpaca", alpaca_paper=True).is_live_money is False
+
+
+def test_is_live_money_alpaca_live_is_true():
+    assert OpsConfig(broker_mode="alpaca", alpaca_paper=False).is_live_money is True
+
+
+def test_is_live_money_ibkr_paper_is_false():
+    assert OpsConfig(broker_mode="ibkr", ibkr_paper=True).is_live_money is False
+
+
+def test_is_live_money_ibkr_live_is_true():
+    assert OpsConfig(broker_mode="ibkr", ibkr_paper=False).is_live_money is True
+
+
+def test_load_config_reads_alpaca_paper_env_override(monkeypatch):
+    monkeypatch.setenv("OPS_ALPACA_PAPER", "false")
+    cfg = load_config()
+    assert cfg.alpaca_paper is False
+
+
+def test_load_config_alpaca_paper_env_rejects_invalid_value(monkeypatch):
+    monkeypatch.setenv("OPS_ALPACA_PAPER", "sorta")
+    with pytest.raises(ValueError):
+        load_config()
+
+
+def test_load_config_reads_ibkr_paper_env_override(monkeypatch):
+    monkeypatch.setenv("OPS_IBKR_PAPER", "false")
+    cfg = load_config()
+    assert cfg.ibkr_paper is False
+
+
+def test_load_config_ibkr_paper_env_rejects_invalid_value(monkeypatch):
+    monkeypatch.setenv("OPS_IBKR_PAPER", "sorta")
+    with pytest.raises(ValueError):
+        load_config()
+
 def test_load_config_reads_env_overrides(monkeypatch):
     monkeypatch.setenv("OPS_BROKER_MODE", "robinhood")
     monkeypatch.setenv("OPS_PER_POSITION_CAP_PCT", "0.05")

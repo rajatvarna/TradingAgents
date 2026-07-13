@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 from ops.broker.base import BrokerError, OrderRejected
 from ops.broker.types import Order, OrderType, Side
 from ops.scheduler.orchestrator import Orchestrator
-from ops.strategy.base import StrategyOrder
+from ops.strategy.base import ProposeOrdersResult, StrategyOrder
 
 
 def _fake_calendar(is_open: bool):
@@ -18,9 +18,11 @@ def _fake_pipeline():
     return MagicMock()
 
 
-def _fake_strategy(propose_orders_return):
+def _fake_strategy(propose_orders_return, *, deferred_symbols=None):
     strat = MagicMock()
-    strat.propose_orders.return_value = propose_orders_return
+    strat.propose_orders.return_value = ProposeOrdersResult(
+        orders=propose_orders_return, deferred_symbols=deferred_symbols or [],
+    )
     return strat
 
 
@@ -648,3 +650,176 @@ def test_exit_close_position_no_such_position_journals_skip_not_check_error():
     ]
     assert len(skips) == 1
     assert "guardian race" in skips[0]["payload"]["reason"]
+
+
+# --- _compute_live_cap: gate scoped to the real-money broker in use --------
+
+
+def test_compute_live_cap_none_for_paper_broker():
+    orch = _make_orchestrator()
+    assert orch._compute_live_cap() is None
+
+
+def test_compute_live_cap_none_for_alpaca_paper_mode():
+    from ops.config import OpsConfig
+    orch = _make_orchestrator(config=OpsConfig(broker_mode="alpaca", alpaca_paper=True))
+    assert orch._compute_live_cap() is None
+
+
+def test_compute_live_cap_active_for_robinhood_under_fill_gate():
+    from ops.config import OpsConfig
+    cfg = OpsConfig(broker_mode="robinhood", live_max_position=Decimal("10"), live_fill_gate_count=20)
+    journal = _make_journal()
+    from ops.live_gate import record_flip_marker
+    record_flip_marker(journal)
+    orch = _make_orchestrator(config=cfg, journal=journal)
+    assert orch._compute_live_cap() == Decimal("10")
+
+
+def test_compute_live_cap_active_for_alpaca_live_mode():
+    from ops.config import OpsConfig
+    cfg = OpsConfig(broker_mode="alpaca", alpaca_paper=False, live_max_position=Decimal("10"), live_fill_gate_count=20)
+    journal = _make_journal()
+    from ops.live_gate import record_flip_marker
+    record_flip_marker(journal)
+    orch = _make_orchestrator(config=cfg, journal=journal)
+    assert orch._compute_live_cap() == Decimal("10")
+
+
+def test_compute_live_cap_robinhood_fills_dont_lift_alpaca_gate():
+    """Fill history from one live broker must not lift the live-gate cap
+    for a different live broker after switching broker_mode."""
+    from ops.config import OpsConfig
+    from ops.live_gate import record_flip_marker
+    journal = _make_journal()
+    record_flip_marker(journal)
+    for _ in range(25):
+        journal.record_event("fill", {"side": "BUY", "broker_mode": "robinhood"})
+    cfg = OpsConfig(broker_mode="alpaca", alpaca_paper=False, live_max_position=Decimal("10"), live_fill_gate_count=20)
+    orch = _make_orchestrator(config=cfg, journal=journal)
+    assert orch._compute_live_cap() == Decimal("10")
+
+
+def test_compute_live_cap_lifts_after_fill_gate_count_for_broker():
+    from ops.config import OpsConfig
+    from ops.live_gate import record_flip_marker
+    journal = _make_journal()
+    record_flip_marker(journal)
+    for _ in range(20):
+        journal.record_event("fill", {"side": "BUY", "broker_mode": "alpaca"})
+    cfg = OpsConfig(broker_mode="alpaca", alpaca_paper=False, live_max_position=Decimal("10"), live_fill_gate_count=20)
+    orch = _make_orchestrator(config=cfg, journal=journal)
+    assert orch._compute_live_cap() is None
+
+
+def test_compute_live_cap_none_for_ibkr_paper_mode():
+    from ops.config import OpsConfig
+    orch = _make_orchestrator(config=OpsConfig(broker_mode="ibkr", ibkr_paper=True))
+    assert orch._compute_live_cap() is None
+
+
+def test_compute_live_cap_active_for_ibkr_live_mode():
+    from ops.config import OpsConfig
+    from ops.live_gate import record_flip_marker
+    journal = _make_journal()
+    record_flip_marker(journal)
+    cfg = OpsConfig(broker_mode="ibkr", ibkr_paper=False, live_max_position=Decimal("10"), live_fill_gate_count=20)
+    orch = _make_orchestrator(config=cfg, journal=journal)
+    assert orch._compute_live_cap() == Decimal("10")
+
+
+def test_compute_live_cap_alpaca_fills_dont_lift_ibkr_gate():
+    from ops.config import OpsConfig
+    from ops.live_gate import record_flip_marker
+    journal = _make_journal()
+    record_flip_marker(journal)
+    for _ in range(25):
+        journal.record_event("fill", {"side": "BUY", "broker_mode": "alpaca"})
+    cfg = OpsConfig(broker_mode="ibkr", ibkr_paper=False, live_max_position=Decimal("10"), live_fill_gate_count=20)
+    orch = _make_orchestrator(config=cfg, journal=journal)
+    assert orch._compute_live_cap() == Decimal("10")
+
+
+# --- F3: daily LLM budget deferral wiring -----------------------------------
+
+
+def test_tick_passes_pending_deferred_symbols_as_priority(tmp_path):
+    from ops.events import KIND_ANALYSIS_DEFERRED, analysis_deferred_payload
+    journal = _make_journal()
+    journal.record_event(KIND_ANALYSIS_DEFERRED, analysis_deferred_payload(
+        symbol="NVDA", asof_date=date(2026, 7, 2), reason="budget exhausted",
+    ))
+    universe = _fake_universe([])
+    orch = _make_orchestrator(universe_builder=universe, journal=journal)
+    orch.tick()
+    kwargs = universe.call_args.kwargs
+    assert kwargs["priority_symbols"] == frozenset({"NVDA"})
+
+
+def test_tick_marks_pending_deferred_symbols_consumed(tmp_path):
+    from ops.events import (
+        KIND_ANALYSIS_DEFERRED,
+        KIND_ANALYSIS_DEFERRED_CONSUMED,
+        analysis_deferred_payload,
+    )
+    journal = _make_journal()
+    journal.record_event(KIND_ANALYSIS_DEFERRED, analysis_deferred_payload(
+        symbol="NVDA", asof_date=date(2026, 7, 2), reason="budget exhausted",
+    ))
+    orch = _make_orchestrator(universe_builder=_fake_universe([]), journal=journal)
+    orch.tick()
+    consumed = [
+        e for e in journal.read_events() if e["kind"] == KIND_ANALYSIS_DEFERRED_CONSUMED
+    ]
+    assert len(consumed) == 1
+    assert consumed[0]["payload"]["symbol"] == "NVDA"
+    # Bounded to one retry: no longer pending after this cycle.
+    assert journal.pending_kind_symbols(
+        KIND_ANALYSIS_DEFERRED, KIND_ANALYSIS_DEFERRED_CONSUMED,
+    ) == frozenset()
+
+
+def test_tick_leaves_deferred_symbol_pending_when_propose_orders_fails(tmp_path):
+    """Regression: KIND_ANALYSIS_DEFERRED_CONSUMED must not be recorded
+    until propose_orders actually succeeds. Recording it any earlier (e.g.
+    right after building candidates) would silently burn a symbol's one
+    retry on a tick that crashed before ever re-evaluating it — the
+    retry never actually happened, so it must still be pending next time."""
+    from ops.events import (
+        KIND_ANALYSIS_DEFERRED,
+        KIND_ANALYSIS_DEFERRED_CONSUMED,
+        analysis_deferred_payload,
+    )
+    journal = _make_journal()
+    journal.record_event(KIND_ANALYSIS_DEFERRED, analysis_deferred_payload(
+        symbol="NVDA", asof_date=date(2026, 7, 2), reason="budget exhausted",
+    ))
+    strategy = _fake_strategy([])
+    strategy.propose_orders.side_effect = RuntimeError("boom")
+    orch = _make_orchestrator(universe_builder=_fake_universe([]), strategy=strategy, journal=journal)
+    orch.tick()  # tick() swallows the RuntimeError as orchestrator_tick_error
+    assert [e for e in journal.read_events() if e["kind"] == KIND_ANALYSIS_DEFERRED_CONSUMED] == []
+    assert journal.pending_kind_symbols(
+        KIND_ANALYSIS_DEFERRED, KIND_ANALYSIS_DEFERRED_CONSUMED,
+    ) == frozenset({"NVDA"})
+
+
+def test_tick_journals_deferred_symbols_from_strategy_result(tmp_path):
+    from ops.events import KIND_ANALYSIS_DEFERRED
+    journal = _make_journal()
+    orch = _make_orchestrator(
+        strategy=_fake_strategy([], deferred_symbols=["MSFT", "AMD"]),
+        journal=journal,
+    )
+    orch.tick()
+    deferred = [e for e in journal.read_events() if e["kind"] == KIND_ANALYSIS_DEFERRED]
+    assert {e["payload"]["symbol"] for e in deferred} == {"MSFT", "AMD"}
+    assert deferred[0]["payload"]["reason"] == "daily_llm_budget_usd exhausted"
+
+
+def test_tick_no_deferred_events_when_strategy_defers_nothing(tmp_path):
+    from ops.events import KIND_ANALYSIS_DEFERRED
+    journal = _make_journal()
+    orch = _make_orchestrator(strategy=_fake_strategy([]), journal=journal)
+    orch.tick()
+    assert [e for e in journal.read_events() if e["kind"] == KIND_ANALYSIS_DEFERRED] == []

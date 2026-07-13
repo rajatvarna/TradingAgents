@@ -28,6 +28,40 @@ def test_journal_records_and_reads_event(tmp_path):
     assert isinstance(events[0]["at"], datetime)
 
 
+def test_record_event_defaults_to_real_wall_clock_time(tmp_path):
+    j = Journal(str(tmp_path / "j.sqlite"))
+    before = datetime.now(timezone.utc)
+    j.record_event("test_kind", {})
+    after = datetime.now(timezone.utc)
+    recorded = j.read_events()[0]["at"]
+    assert before <= recorded <= after
+
+
+def test_record_event_accepts_explicit_at(tmp_path):
+    """A caller with its own notion of "now" (e.g. Orchestrator's
+    injectable now_fn) can stamp an event with that time instead of real
+    wall-clock time — needed so has_event_today's day-boundary check
+    compares against the SAME clock the caller used to decide "today",
+    rather than silently desyncing once real time diverges from a
+    simulated/injected date (see KIND_DAILY_CYCLE_RUN)."""
+    j = Journal(str(tmp_path / "j.sqlite"))
+    simulated = datetime(2020, 1, 1, 12, tzinfo=timezone.utc)
+    j.record_event("test_kind", {}, at=simulated)
+    recorded = j.read_events()[0]["at"]
+    assert recorded == simulated
+
+
+def test_has_event_today_respects_explicit_at_not_real_time(tmp_path):
+    """Regression test for the daily_cycle_run desync bug: an event
+    journaled with an explicit simulated `at` in the past must not be
+    seen as "today" once real wall-clock time has moved past it."""
+    j = Journal(str(tmp_path / "j.sqlite"))
+    day1 = datetime(2026, 7, 6, 15, tzinfo=timezone.utc)
+    day2 = datetime(2026, 7, 7, 15, tzinfo=timezone.utc)
+    j.record_event("daily_cycle_run", {}, at=day1)
+    assert j.has_event_today("daily_cycle_run", now=day2) is False
+
+
 def test_journal_records_order_and_fill(tmp_path):
     j = Journal(str(tmp_path / "j.sqlite"))
     j.record_order(
@@ -432,3 +466,31 @@ def test_event_symbols_since(tmp_path):
     cutoff = datetime.now(timezone.utc)
     j.record_event("stop_hit", {"symbol": "NEW"})
     assert j.event_symbols_since("stop_hit", cutoff) == frozenset({"NEW"})
+
+
+# --- pending_kind_symbols (F3 deferral queue) --------------------------------
+
+
+def test_pending_kind_symbols_returns_deferred_without_consumed(tmp_path):
+    j = Journal(str(tmp_path / "j.sqlite"))
+    j.record_event("analysis_deferred", {"symbol": "AAPL"})
+    j.record_event("analysis_deferred", {"symbol": "MSFT"})
+    j.record_event("analysis_deferred_consumed", {"symbol": "MSFT"})
+    assert j.pending_kind_symbols("analysis_deferred", "analysis_deferred_consumed") == frozenset({"AAPL"})
+
+
+def test_pending_kind_symbols_empty_when_nothing_deferred(tmp_path):
+    j = Journal(str(tmp_path / "j.sqlite"))
+    assert j.pending_kind_symbols("analysis_deferred", "analysis_deferred_consumed") == frozenset()
+
+
+def test_pending_kind_symbols_reappears_after_a_later_deferral(tmp_path):
+    """A symbol deferred, consumed, then deferred AGAIN on a later cycle
+    must be pending again — consumption only resolves the deferral it
+    followed, not future ones."""
+    j = Journal(str(tmp_path / "j.sqlite"))
+    j.record_event("analysis_deferred", {"symbol": "AAPL"})
+    j.record_event("analysis_deferred_consumed", {"symbol": "AAPL"})
+    assert j.pending_kind_symbols("analysis_deferred", "analysis_deferred_consumed") == frozenset()
+    j.record_event("analysis_deferred", {"symbol": "AAPL"})
+    assert j.pending_kind_symbols("analysis_deferred", "analysis_deferred_consumed") == frozenset({"AAPL"})

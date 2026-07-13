@@ -5,7 +5,12 @@ min(daily_analysis_budget, free_slots).
 Every returned candidate costs a full TradingAgentsGraph (LLM) run, so with
 zero free slots this returns [] and the day costs zero pipeline runs —
 instead of budget-many analyses whose orders are all guaranteed rejects at
-the max-open-positions guardrail."""
+the max-open-positions guardrail.
+
+`priority_symbols` (F3) moves any still-eligible, still-merged symbol to
+the front of the list before the cap is applied — used to give a
+budget-deferred candidate from a prior cycle first crack at today's slots,
+recomputed fresh (never reconstructed from stale data)."""
 from __future__ import annotations
 
 import dataclasses
@@ -32,6 +37,7 @@ def build_composite_universe(
     free_slots: int | None = None,
     excluded_symbols: frozenset[str] = frozenset(),
     momentum_leaders: list[MomentumHit] | None = None,
+    priority_symbols: frozenset[str] = frozenset(),
     members_loader=None,
     earnings_finder=None,
     metrics_fetcher=None,
@@ -85,7 +91,14 @@ def build_composite_universe(
             momentum=hits_by_sym[sym],
         ))
 
-    # 5. Slot-aware cap.
+    # 5. Priority reorder (F3 deferral retry), then slot-aware cap.
+    # Stable partition — preserves relative order within each group — so a
+    # symbol that's merely still-eligible-but-unranked-high doesn't jump
+    # ahead of genuinely higher-ranked names within its own group.
+    if priority_symbols:
+        prioritized = [c for c in merged if c.symbol in priority_symbols]
+        rest = [c for c in merged if c.symbol not in priority_symbols]
+        merged = prioritized + rest
     cap = config.daily_analysis_budget
     if free_slots is not None:
         cap = max(0, min(cap, free_slots))

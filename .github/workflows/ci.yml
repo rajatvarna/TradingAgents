@@ -39,6 +39,16 @@ jobs:
           --deselect=tests/test_trace_callback.py::TestTradingAgentsGraphWiring::test_user_callbacks_appended_after_trace
           --deselect=tests/test_determinism.py::TestTradingGraphForwardsDeterminismKwargs::test_provider_kwargs_include_determinism
           --deselect=tests/test_risk_constraints.py::test_portfolio_manager_prompt_starts_with_constraints
+      - name: Run ops tests
+        # tests/ops/ (the live-trading ops layer: brokers, guardrails, journal,
+        # scheduler, orchestrator) predates the unit/integration/smoke marker
+        # convention and carries none of those markers, so `-m unit` above
+        # silently never collects it. Run it unconditionally instead of
+        # retrofitting markers onto ~100 pre-existing test files. No API keys
+        # or network needed — brokers/vendors are faked throughout; opt-in
+        # live tests (OPS_RH_LIVE_TESTS, OPS_NOTIFY_LIVE_TESTS) and
+        # platform-gated tests (e.g. macOS-only plutil) skip themselves.
+        run: python -m pytest tests/ops -q --tb=short
 
   smoke-install:
     name: clean-install smoke

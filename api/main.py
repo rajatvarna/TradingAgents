@@ -32,6 +32,7 @@ from fastapi.responses import (
 )
 
 from api.auth import require_auth
+from api.deployment_config import parse_cors_origins
 from api.reports import get_report as _get_persisted_report
 from api.reports import list_reports as _list_persisted_reports
 from api.db import (
@@ -494,14 +495,12 @@ app = FastAPI(
 
 # CORS: defaults to the global-screener local dev origin; set
 # ENGINE_API_CORS_ORIGINS (comma-separated) once a deployed frontend proxies
-# to this API (docs/DEPLOYMENT_INTEGRATION_PLAN.md Phase 2).
-_cors_origins_env = os.getenv("ENGINE_API_CORS_ORIGINS", "").strip()
-_cors_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()] or [
-    "http://localhost:3000"
-]
+# to this API (docs/DEPLOYMENT_INTEGRATION_PLAN.md Phase 2). Parsed eagerly so
+# a malformed origin fails loudly at startup rather than as a silent CORS
+# mismatch at request time.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
+    allow_origins=parse_cors_origins(os.getenv("ENGINE_API_CORS_ORIGINS", "")),
     allow_methods=["*"],
     allow_headers=["*"],
 )

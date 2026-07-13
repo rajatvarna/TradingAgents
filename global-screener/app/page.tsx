@@ -39,6 +39,7 @@ export default function Home() {
         <div className="flex items-center gap-3 text-xs text-slate-400">
           <Link href="/analyze" className="text-slate-400 hover:text-white transition-colors">Analyze</Link>
           <Link href="/reports" className="text-slate-400 hover:text-white transition-colors">Reports</Link>
+          <Link href="/runs" className="text-slate-400 hover:text-white transition-colors">Runs</Link>
           <span className="hidden md:block">Prices delayed 15 min · Free data</span>
           <PriceAlerts stocks={screenerStocks} />
           <ThemeToggle />

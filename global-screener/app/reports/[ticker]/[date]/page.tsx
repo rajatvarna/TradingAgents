@@ -53,6 +53,7 @@ export default function ReportDetailPage() {
           <Link href="/" className="text-slate-400 hover:text-white transition-colors">Screener</Link>
           <Link href="/analyze" className="text-slate-400 hover:text-white transition-colors">Analyze</Link>
           <Link href="/reports" className="text-white font-semibold">Reports</Link>
+          <Link href="/runs" className="text-slate-400 hover:text-white transition-colors">Runs</Link>
         </nav>
       </header>
 

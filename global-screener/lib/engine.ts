@@ -61,6 +61,26 @@ export type ReportDetail = {
   meta: Record<string, unknown>;
 };
 
+export type RequestListResponse = {
+  total: number;
+  requests: RequestStatus[];
+};
+
+export type ProviderUsage = {
+  llm_provider: string;
+  llm_calls: number;
+  tokens_in: number;
+  tokens_out: number;
+  total_tokens: number;
+};
+
+export type TodayLlmUsage = {
+  date_utc: string;
+  total_llm_calls: number;
+  providers: ProviderUsage[];
+  roles: unknown[];
+};
+
 const TERMINAL_STATUSES = new Set(["completed", "failed", "canceled"]);
 
 export function isTerminalStatus(status: string): boolean {
@@ -118,4 +138,19 @@ export async function getReport(ticker: string, date: string): Promise<ReportDet
     { cache: "no-store" }
   );
   return parseOrThrow<ReportDetail>(res);
+}
+
+export async function getOpenRequests(): Promise<RequestListResponse> {
+  const res = await fetch("/api/engine/requests/open", { cache: "no-store" });
+  return parseOrThrow<RequestListResponse>(res);
+}
+
+export async function getClosedRequests(): Promise<RequestListResponse> {
+  const res = await fetch("/api/engine/requests/closed", { cache: "no-store" });
+  return parseOrThrow<RequestListResponse>(res);
+}
+
+export async function getTodayLlmUsage(): Promise<TodayLlmUsage> {
+  const res = await fetch("/api/engine/metrics/llm-calls/today", { cache: "no-store" });
+  return parseOrThrow<TodayLlmUsage>(res);
 }

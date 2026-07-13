@@ -4,35 +4,30 @@
 // so this proxy can never be used to reach secret-touching engine endpoints
 // like /env or /vault/refresh. See docs/DEPLOYMENT_INTEGRATION_PLAN.md Phase 2.
 import { NextRequest, NextResponse } from "next/server";
+import { getEngineConfig } from "@/lib/engineConfig";
 
 // Only these top-level engine path segments are reachable through this proxy.
-const ALLOWED_PREFIXES = new Set(["analyze", "status", "reports"]);
+const ALLOWED_PREFIXES = new Set(["analyze", "status", "reports", "requests", "metrics"]);
 
-function engineBaseUrl(): string | null {
-  const url = process.env.ENGINE_API_URL?.trim();
-  return url ? url.replace(/\/+$/, "") : null;
-}
-
-function authHeaders(): HeadersInit {
-  const token = process.env.ENGINE_API_TOKEN?.trim();
+function authHeaders(token: string | null): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-function buildTarget(path: string[], search: string): { target: string } | { error: NextResponse } {
-  const base = engineBaseUrl();
-  if (!base) {
-    return {
-      error: NextResponse.json(
-        { error: "Engine API is not configured (ENGINE_API_URL is unset)." },
-        { status: 503 }
-      ),
-    };
+function buildTarget(path: string[], search: string):
+  | { target: string; token: string | null }
+  | { error: NextResponse } {
+  const result = getEngineConfig();
+  if (!result.ok) {
+    return { error: NextResponse.json({ error: result.error }, { status: 503 }) };
   }
   const prefix = path[0];
   if (!prefix || !ALLOWED_PREFIXES.has(prefix)) {
     return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
   }
-  return { target: `${base}/${path.map(encodeURIComponent).join("/")}${search}` };
+  return {
+    target: `${result.config.baseUrl}/${path.map(encodeURIComponent).join("/")}${search}`,
+    token: result.config.token,
+  };
 }
 
 async function proxy(target: string, init: RequestInit): Promise<NextResponse> {
@@ -53,7 +48,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
   const built = buildTarget(path, req.nextUrl.search);
   if ("error" in built) return built.error;
 
-  return proxy(built.target, { headers: authHeaders(), cache: "no-store" });
+  return proxy(built.target, { headers: authHeaders(built.token), cache: "no-store" });
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
@@ -64,7 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
   const bodyText = await req.text();
   return proxy(built.target, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
+    headers: { "Content-Type": "application/json", ...authHeaders(built.token) },
     body: bodyText,
     cache: "no-store",
   });

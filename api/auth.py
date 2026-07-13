@@ -15,10 +15,12 @@ import os
 
 from fastapi import HTTPException, Request
 
+from api.deployment_config import get_engine_token
+
 
 def require_auth(request: Request) -> None:
     """FastAPI dependency: enforce ``ENGINE_API_TOKEN`` if one is configured."""
-    token = os.getenv("ENGINE_API_TOKEN", "").strip()
+    token = get_engine_token(os.getenv("ENGINE_API_TOKEN", ""))
     if not token:
         return
 

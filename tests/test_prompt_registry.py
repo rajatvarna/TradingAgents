@@ -441,3 +441,102 @@ class TestConfiguredPromptVersionsReachState:
             list(ta.stream_run("AAPL", "2026-01-02"))
 
         assert captured["state"]["prompt_versions"] == cfg["prompt_versions"]
+
+
+# -------------------------------------------------------------------- #
+# render_with_shared (A1) — shared partial composition
+# -------------------------------------------------------------------- #
+
+
+@pytest.mark.unit
+class TestRenderWithShared:
+    def test_composes_shared_partial_into_main_template(self, tmp_path):
+        (tmp_path / "_shared").mkdir()
+        (tmp_path / "_shared" / "greeting.v1.txt").write_text("Hello, $name!")
+        (tmp_path / "agents").mkdir()
+        (tmp_path / "agents" / "demo.v1.txt").write_text("${greeting_block}\nBody text.")
+
+        registry = PromptRegistry(base_dir=tmp_path)
+        rendered, digest, shared_hashes = registry.render_with_shared(
+            "agents/demo",
+            shared={"greeting_block": ("_shared/greeting", "v1")},
+            name="World",
+        )
+
+        assert rendered == "Hello, World!\nBody text."
+        assert len(digest) == 64
+        assert set(shared_hashes) == {"_shared/greeting"}
+        assert len(shared_hashes["_shared/greeting"]) == 64
+
+    def test_shared_hash_is_the_shared_templates_own_hash(self, tmp_path):
+        (tmp_path / "_shared").mkdir()
+        (tmp_path / "_shared" / "block.v1.txt").write_text("SHARED TEXT")
+        (tmp_path / "agents").mkdir()
+        (tmp_path / "agents" / "demo.v1.txt").write_text("${block}")
+
+        registry = PromptRegistry(base_dir=tmp_path)
+        _, _, shared_hashes = registry.render_with_shared(
+            "agents/demo", shared={"block": ("_shared/block", "v1")}
+        )
+        _, expected_hash = registry.load("_shared/block", "v1")
+        assert shared_hashes["_shared/block"] == expected_hash
+
+    def test_multiple_shared_partials_compose_independently(self, tmp_path):
+        (tmp_path / "_shared").mkdir()
+        (tmp_path / "_shared" / "a.v1.txt").write_text("BLOCK_A")
+        (tmp_path / "_shared" / "b.v1.txt").write_text("BLOCK_B")
+        (tmp_path / "agents").mkdir()
+        (tmp_path / "agents" / "demo.v1.txt").write_text("${a_block}|${b_block}")
+
+        registry = PromptRegistry(base_dir=tmp_path)
+        rendered, _, shared_hashes = registry.render_with_shared(
+            "agents/demo",
+            shared={"a_block": ("_shared/a", "v1"), "b_block": ("_shared/b", "v1")},
+        )
+        assert rendered == "BLOCK_A|BLOCK_B"
+        assert set(shared_hashes) == {"_shared/a", "_shared/b"}
+
+    def test_no_shared_partials_behaves_like_plain_render(self, tmp_path):
+        (tmp_path / "agents").mkdir()
+        (tmp_path / "agents" / "demo.v1.txt").write_text("plain $name")
+
+        registry = PromptRegistry(base_dir=tmp_path)
+        rendered, digest, shared_hashes = registry.render_with_shared("agents/demo", name="X")
+        plain_rendered, plain_digest = registry.render("agents/demo", name="X")
+
+        assert rendered == plain_rendered == "plain X"
+        assert digest == plain_digest
+        assert shared_hashes == {}
+
+    def test_shared_partial_version_is_independently_selectable(self, tmp_path):
+        (tmp_path / "_shared").mkdir()
+        (tmp_path / "_shared" / "block.v1.txt").write_text("v1 text")
+        (tmp_path / "_shared" / "block.v2.txt").write_text("v2 text")
+        (tmp_path / "agents").mkdir()
+        (tmp_path / "agents" / "demo.v1.txt").write_text("${block}")
+
+        registry = PromptRegistry(base_dir=tmp_path)
+        rendered_v1, _, _ = registry.render_with_shared(
+            "agents/demo", shared={"block": ("_shared/block", "v1")}
+        )
+        rendered_v2, _, _ = registry.render_with_shared(
+            "agents/demo", shared={"block": ("_shared/block", "v2")}
+        )
+        assert rendered_v1 == "v1 text"
+        assert rendered_v2 == "v2 text"
+
+
+@pytest.mark.unit
+class TestSharedPartialsShipped:
+    """The two A1 shared partials exist, are non-empty, and read as intended."""
+
+    def test_data_integrity_partial_loads(self):
+        text, digest = default_registry().load("_shared/data_integrity", "v1")
+        assert "never invent" in text.lower()
+        assert len(digest) == 64
+
+    def test_calibration_partial_loads(self):
+        text, digest = default_registry().load("_shared/calibration", "v1")
+        assert "confidence" in text.lower()
+        assert "falsifier" in text.lower() or "change your conclusion" in text.lower()
+        assert len(digest) == 64

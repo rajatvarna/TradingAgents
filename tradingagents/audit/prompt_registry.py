@@ -183,6 +183,44 @@ class PromptRegistry:
             ) from e
         return rendered, digest
 
+    def render_with_shared(
+        self,
+        key: str,
+        *,
+        version: str = "v1",
+        shared: dict[str, tuple[str, str]] | None = None,
+        **variables,
+    ) -> tuple[str, str, dict[str, str]]:
+        """Render ``key`` after first rendering shared partials into it.
+
+        ``shared`` maps a template-variable name in ``key``'s template to
+        ``(shared_key, shared_version)`` — e.g.
+        ``{"data_integrity_block": ("_shared/data_integrity", "v1")}``.
+        Each shared partial is rendered first (against the same
+        ``variables``, so a shared block may itself use a caller-supplied
+        variable if one is ever needed) and the result is injected into
+        ``variables`` under the given name before rendering ``key``.
+
+        See ``docs/PROMPT_STYLE_GUIDE.md`` for the contract this composes
+        — the intent is one shared ``data_integrity``/``calibration`` block
+        reused across every agent template rather than the same paragraph
+        retyped and re-hashed a dozen times.
+
+        Returns ``(rendered_text, template_hash, shared_hashes)`` where
+        ``shared_hashes`` maps each shared partial's key to its own
+        template hash, so trace metadata can record provenance of both the
+        agent-specific template and every shared block composed into it.
+        """
+        shared_hashes: dict[str, str] = {}
+        merged_variables = dict(variables)
+        for var_name, (shared_key, shared_version) in (shared or {}).items():
+            shared_text, shared_hash = self.render(shared_key, version=shared_version, **variables)
+            merged_variables[var_name] = shared_text
+            shared_hashes[shared_key] = shared_hash
+
+        rendered, digest = self.render(key, version=version, **merged_variables)
+        return rendered, digest, shared_hashes
+
     def trace_metadata(
         self, key: str, version: str = "v1"
     ) -> dict:

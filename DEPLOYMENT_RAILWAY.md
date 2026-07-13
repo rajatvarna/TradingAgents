@@ -1,5 +1,15 @@
 # TradingAgents Web App - Railway.com Deployment Guide
 
+> **Note:** The `Procfile` now points at `api.main:app` (the consolidated
+> engine API — see `docs/DEPLOYMENT_INTEGRATION_PLAN.md`), not `web.app` as
+> described below. `web/app.py` remains in the repo but Railway deployments
+> using this repo's `Procfile` no longer launch it. This document describes
+> the previous `web/app.py`-based deployment (different endpoints, different
+> env var schema) and is kept for historical reference — it does not
+> describe the currently deployed configuration. See `VERCEL_DEPLOYMENT.md`
+> for the current architecture; `api/main.py`'s own endpoints are documented
+> in its module docstring.
+
 This guide explains how to deploy the TradingAgents web application on Railway.com.
 
 ## Overview

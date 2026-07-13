@@ -2,9 +2,10 @@
 
 **This doc describes the deployment that is actually live.** Two earlier
 generations of Vercel config (a stdlib-only Python health check, and a root
-Next.js "StrattonOak" dashboard) still have file fossils in this repo but are
-**not** what Vercel builds — see [`docs/DEPLOYMENT_INTEGRATION_PLAN.md`](docs/DEPLOYMENT_INTEGRATION_PLAN.md)
-for the full history and the plan to remove them.
+Next.js "StrattonOak" dashboard) used to have file fossils in this repo —
+they have since been removed (Phase 3 of
+[`docs/DEPLOYMENT_INTEGRATION_PLAN.md`](docs/DEPLOYMENT_INTEGRATION_PLAN.md))
+so there is now exactly one frontend in this repo.
 
 ## What's deployed
 
@@ -34,29 +35,17 @@ The TradingAgents engine is **not suitable for serverless**:
 The engine runs as a long-lived process instead — locally via `webui.py` /
 `streamlit run webui.py`, or as a container via `Dockerfile.api`
 (`api/main.py`, a FastAPI job API) on an always-on host (Railway, Fly.io, or
-similar). Connecting the Vercel frontend to that engine API is tracked as
-Phase 1–2 of `docs/DEPLOYMENT_INTEGRATION_PLAN.md`; until that lands, the
-deployed site is screener-only.
+similar).
 
-## Repo-root Vercel fossils (do not use)
-
-The following files at the repo root describe **earlier, no-longer-deployed**
-Vercel setups and are scheduled for removal (Phase 0/3 of the integration
-plan). Do not edit them expecting it to affect production:
-
-- Root `vercel.json` — described a `framework: null` + `api/health.py` /
-  `api/analyze.py` Python-functions setup. Never reflected in recent
-  deployments (`lambdaRuntimeStats` shows zero Python functions built).
-- `.vercelignore` — governs nothing once Root Directory is set to
-  `global-screener/`, since Vercel never looks outside that directory.
-- Root `pages/`, `components/`, `styles/`, `package.json`, `next.config.js`,
-  `tailwind.config.js`, `postcss.config.js` — a Next.js 14 Pages Router app
-  ("StrattonOak") whose one API route (`pages/api/analyze.ts`) proxies to a
-  hardcoded `http://localhost:8000` and was never deployed anywhere.
-- `api/health.py`, `api/analyze.py` — Vercel Python serverless handlers.
-  `api/analyze.py` imports `tradingagents/`, which the old `.vercelignore`
-  explicitly excluded from the build, so this handler could never have
-  worked on Vercel even if it had been picked up.
+`global-screener/` now has the frontend half of that connection:
+`app/api/engine/[...path]/route.ts` proxies to `ENGINE_API_URL` (adding the
+`ENGINE_API_TOKEN` bearer header server-side), and `/analyze` + `/reports`
+use it. What's still needed is the other half — actually deploying
+`api/main.py` somewhere and pointing `ENGINE_API_URL`/`ENGINE_API_TOKEN` at
+it in the Vercel project's environment variables (Phase 2, remaining steps,
+in `docs/DEPLOYMENT_INTEGRATION_PLAN.md`). Until that's done, `ENGINE_API_URL`
+is unset in production, `/analyze` and `/reports` show a clear
+"engine not configured" message, and the rest of the site is unaffected.
 
 ## Deployment Protection
 

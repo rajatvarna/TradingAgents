@@ -279,24 +279,53 @@ elsewhere and are out of scope here.
 
 *Goal: one obvious way to do everything; ~9k fewer lines of dead UI.*
 
-Delete (each with a CHANGELOG "Removed" entry; anything sentimental goes to an
-`archive/legacy-uis` branch first):
+**Done**, with two corrections found during execution:
 
-- Root Next app: `pages/`, `components/`, `styles/`, `app/*.jsx`, root
-  `package.json`, `next.config.js`, `tailwind.config.js`, `postcss.config.js`,
-  `tsconfig.json`, `public/index.html`
-- Vercel python functions: `api/health.py`, `api/analyze.py` (+ their
-  `vercel.json` function config if any remains from Phase 0)
-- `webui/` (older Streamlit), `web/static/` + `web/app.py` (after confirming
-  no Railway deployment still points at the Procfile), `frontend/`,
-  `web-ui/`
-- Docs describing them: fold `WEB_APP_SUMMARY.md`, `WEB_QUICKSTART.md`,
-  `DASHBOARD_DEPLOYMENT.md`, `RAILWAY_FIX.md` into two docs:
-  `DEPLOYMENT.md` (product: Vercel + engine API) and `ops/README.md`
-  (daemon), leaving redirect stubs.
+- Deleted: root Next app (`pages/`, `components/`, `styles/`, root
+  `package.json`, `next.config.js`, `tailwind.config.js`,
+  `postcss.config.js`, `tsconfig.json`, `public/index.html`, plus the root
+  `test_api.py` smoke script that only existed to assert these files'
+  presence), the Vercel Python functions (`api/health.py`, `api/analyze.py`
+  — `api/completed_requests.html` was *not* touched, it's a real asset
+  `api/main.py` serves), `webui/` (the older, redundant Streamlit UI —
+  distinct from the actively-maintained root `webui.py`, which stays),
+  `frontend/` (one orphaned, unbuilt `Chart.tsx`), and `web-ui/` (an
+  unrelated "the-bazaar" static site with zero references anywhere in the
+  repo). Verified via cross-reference grep against Dockerfiles,
+  `docker-compose.yml`, `mkdocs.yml`, and `README.md` before each deletion —
+  nothing else in the repo pointed at any of them.
+- **Correction: `app/*.jsx` (`App.jsx`, `Hub.jsx`, `StoryView.jsx`,
+  `data.jsx`, `ui.jsx`, `tweaks-panel.jsx`) was misclassified as a fossil in
+  the original version of this plan and was *not* deleted.** It's the
+  report-archive viewer, and `docs/superpowers/specs/2026-05-25-real-data-wiring-design.md`
+  is an active design spec that builds directly on top of it (`app/data.jsx`,
+  `app/App.jsx`, `app/StoryView.jsx` are named as the files still to be
+  updated). Deleting it would have destroyed in-progress design work, not
+  dead code.
+- **Correction: `web/app.py` and `web/static/` were *not* deleted**, per an
+  explicit decision when this phase was executed — a live Railway (or
+  similar) deployment was still running off this repo's `Procfile`
+  (`web: python -m web.app`). Instead, the `Procfile` was repointed to
+  `uvicorn api.main:app --host 0.0.0.0 --port 9000` (the consolidated engine
+  API), and `DEPLOYMENT_RAILWAY.md`/`WEB_APP_SUMMARY.md`/`WEB_QUICKSTART.md`
+  were updated to say so. The `web/` source stays until its SSE streaming is
+  ported into `api/main.py` (still deferred, see Phase 1) and a deploy cycle
+  confirms nothing regressed — then it can actually be deleted.
+- Docs: added/updated deprecation banners on `DASHBOARD_DEPLOYMENT.md`,
+  `WEB_APP_SUMMARY.md`, `WEB_QUICKSTART.md`, and `VERCEL_DEPLOYMENT.md`
+  rather than the originally-planned full fold into `DEPLOYMENT.md` +
+  `ops/README.md` — the banners were enough to stop the docs from
+  describing a config that no longer exists, and a full restructure wasn't
+  needed to achieve that. `RAILWAY_FIX.md` was left alone: it's a dated
+  postmortem note about an already-applied fix, not a description of
+  current setup, so it wasn't misleading.
 
-*Acceptance:* `git grep -l "strattonoak\|BACKEND_URL"` returns nothing;
-repo-root `ls` shows one frontend, one engine API, one local power UI.
+*Acceptance:* `git grep -l "strattonoak\|BACKEND_URL"` returns nothing except
+this plan document and the (intentionally historical) deprecation-banner
+docs; repo root has one frontend (`global-screener/`), one canonical engine
+API (`api/main.py`), and one local power UI (`webui.py`) — `web/app.py`
+remains as a not-currently-deployed second local option pending its own
+removal once Phase 1's SSE port lands.
 
 ### Phase 4 — Core features on the unified platform
 

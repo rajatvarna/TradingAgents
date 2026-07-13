@@ -459,7 +459,7 @@ B3 prompt CLI                B5 structured outputs
 | A7 token hygiene | ⬜ Not started |
 | B1 typed config | ⬜ Not started |
 | B2 intraday data | ⬜ Not started |
-| B3 prompt CLI | ⬜ Not started |
+| B3 prompt CLI | ✅ Done — `python -m tradingagents.audit.prompt_registry {list,diff,verify}` |
 | B4 reliability priors | 🟡 Partially superseded — `research_manager.py::_format_analyst_weights_block` already injects per-analyst accuracy weights into the prompt (shipped earlier as "Confidence-Weighted Analyst Voting", unconditionally when ≥2 analysts have a non-neutral weight, no config flag). What A4 didn't yet do: extend the same reliability-prior treatment to the Portfolio Manager, and decide whether the always-on behavior should gain the `use_analyst_reliability_priors` flag this plan originally specified |
 | B5 structured-output completion | 🟡 Partially done — Trader/PM already had structured `action`/`rating`, numeric `win_probability`, entry/stop/target, and evidence IDs before this plan; A4 added `conviction`/`horizon` to the Research Manager and `dissent` to the PM. Still missing: an explicit falsifiers list field (researchers state theirs in prose; managers don't have a structured field for it) |
 

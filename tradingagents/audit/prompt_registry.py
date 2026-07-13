@@ -64,6 +64,7 @@ import hashlib
 import logging
 import re
 import string
+import sys
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -287,3 +288,179 @@ def reset_default_registry() -> None:
     """Reset the singleton — for tests that swap the registry mid-run."""
     global _default_registry
     _default_registry = None
+
+
+# -------------------------------------------------------------------- #
+# CLI (B3): make the registry usable by humans, not just the trace writer.
+# -------------------------------------------------------------------- #
+
+_TEMPLATE_FILENAME_RE = re.compile(r"^(?P<stem>.+)\.(?P<version>v[^.]+)\.txt$")
+
+# A leading '$identifier' or '${identifier}' reference, used to discover
+# what variables a template needs without a separate per-agent manifest.
+_TEMPLATE_VAR_RE = re.compile(r"\$\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)\}|\$(?P<bare>[A-Za-z_][A-Za-z0-9_]*)")
+
+
+def _extract_template_vars(text: str) -> set[str]:
+    """Return every ``$var``/``${var}`` name referenced in template text."""
+    names = set()
+    for match in _TEMPLATE_VAR_RE.finditer(text):
+        names.add(match.group("braced") or match.group("bare"))
+    return names
+
+
+def discover_templates(base_dir: Path | None = None) -> dict[str, list[str]]:
+    """Return ``{key: [versions...]}`` for every template file on disk.
+
+    ``key`` mirrors the ``PromptRegistry.render()`` key convention (e.g.
+    ``analysts/fundamentals``, ``_shared/calibration``); versions are sorted
+    for stable, deterministic CLI output.
+    """
+    root = Path(base_dir) if base_dir is not None else DEFAULT_PROMPTS_DIR
+    found: dict[str, list[str]] = {}
+    for path in sorted(root.rglob("*.txt")):
+        match = _TEMPLATE_FILENAME_RE.match(path.name)
+        if not match:
+            continue
+        rel_dir = path.parent.relative_to(root)
+        key = match.group("stem") if str(rel_dir) == "." else f"{rel_dir.as_posix()}/{match.group('stem')}"
+        found.setdefault(key, []).append(match.group("version"))
+    for versions in found.values():
+        versions.sort()
+    return found
+
+
+def _cmd_list(registry: PromptRegistry, active_versions: dict[str, str], as_json: bool) -> int:
+    templates = discover_templates(registry.base_dir)
+    rows = []
+    for key in sorted(templates):
+        active = active_versions.get(key)
+        active_hash = None
+        if active is not None:
+            try:
+                active_hash = registry.load(key, active)[1]
+            except PromptNotFoundError:
+                active_hash = "MISSING"
+        rows.append({
+            "key": key,
+            "versions": templates[key],
+            "active_version": active,
+            "active_hash": active_hash,
+        })
+
+    if as_json:
+        import json
+        print(json.dumps(rows, indent=2))
+        return 0
+
+    for row in rows:
+        active = row["active_version"] or "(not in default_config)"
+        hash_display = f" [{row['active_hash'][:12]}]" if row["active_hash"] else ""
+        versions = ", ".join(row["versions"])
+        print(f"{row['key']:<40} versions=[{versions}]  active={active}{hash_display}")
+    return 0
+
+
+def _cmd_diff(registry: PromptRegistry, key: str, v1: str, v2: str) -> int:
+    import difflib
+
+    try:
+        text1, _ = registry.load(key, v1)
+        text2, _ = registry.load(key, v2)
+    except PromptNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    diff = difflib.unified_diff(
+        text1.splitlines(keepends=True),
+        text2.splitlines(keepends=True),
+        fromfile=f"{key}.{v1}.txt",
+        tofile=f"{key}.{v2}.txt",
+    )
+    sys.stdout.writelines(diff)
+    return 0
+
+
+def _cmd_verify(registry: PromptRegistry, active_versions: dict[str, str], as_json: bool) -> int:
+    problems: list[str] = []
+
+    for key, version in active_versions.items():
+        try:
+            registry.load(key, version)
+        except PromptNotFoundError:
+            problems.append(f"{key}: configured version {version!r} has no template file")
+
+    templates = discover_templates(registry.base_dir)
+    for key, versions in templates.items():
+        for version in versions:
+            text, _ = registry.load(key, version)
+            var_names = _extract_template_vars(text)
+            dummy = {name: f"<{name}>" for name in var_names}
+            try:
+                rendered, _ = registry.render(key, version=version, **dummy)
+            except Exception as exc:  # noqa: BLE001 - report any render failure as a verify problem
+                problems.append(f"{key}.{version}: failed to render ({exc})")
+                continue
+            if "${" in rendered:
+                problems.append(f"{key}.{version}: unresolved ${{...}} placeholder after render")
+
+    if as_json:
+        import json
+        print(json.dumps({"ok": not problems, "problems": problems}, indent=2))
+    else:
+        if not problems:
+            print(f"OK — {sum(len(v) for v in templates.values())} template(s) across {len(templates)} key(s) verified.")
+        else:
+            print(f"FAILED — {len(problems)} problem(s):")
+            for p in problems:
+                print(f"  - {p}")
+    return 0 if not problems else 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point: ``python -m tradingagents.audit.prompt_registry``."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="python -m tradingagents.audit.prompt_registry",
+        description="Inspect, diff, and verify TradingAgents prompt templates.",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    list_parser = subparsers.add_parser("list", help="List every template key, its versions, and the active one.")
+    list_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
+    diff_parser = subparsers.add_parser("diff", help="Unified diff of two versions of one template.")
+    diff_parser.add_argument("key", help="Template key, e.g. analysts/fundamentals")
+    diff_parser.add_argument("v1", help="First version, e.g. v1")
+    diff_parser.add_argument("v2", help="Second version, e.g. v2")
+
+    verify_parser = subparsers.add_parser(
+        "verify",
+        help="Confirm every configured version resolves and every template renders without missing variables.",
+    )
+    verify_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
+    parser.add_argument(
+        "--registry-dir", default=None,
+        help="Override prompt template directory (default: packaged prompts).",
+    )
+
+    args = parser.parse_args(argv)
+
+    registry = PromptRegistry(base_dir=Path(args.registry_dir)) if args.registry_dir else default_registry()
+
+    from tradingagents.default_config import DEFAULT_CONFIG
+    active_versions = DEFAULT_CONFIG.get("prompt_versions", {})
+
+    if args.command == "list":
+        return _cmd_list(registry, active_versions, args.json)
+    if args.command == "diff":
+        return _cmd_diff(registry, args.key, args.v1, args.v2)
+    if args.command == "verify":
+        return _cmd_verify(registry, active_versions, args.json)
+    return 2  # unreachable — argparse enforces `command` via subparsers
+
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { PortfolioFill, PortfolioPosition, PortfolioStatus, getPortfolioStatus } from "@/lib/engine";
+import { EngineError, PortfolioFill, PortfolioPosition, PortfolioStatus, getPortfolioStatus } from "@/lib/engine";
 import { cn } from "@/lib/utils";
 
 const POLL_INTERVAL_MS = 15000;
@@ -59,11 +59,12 @@ export default function PortfolioPage() {
         }
       } catch (err) {
         if (cancelled) return;
-        const message = err instanceof Error ? err.message : "Failed to load portfolio";
-        if (message.toLowerCase().includes("not configured")) {
+        if (err instanceof EngineError && err.status === 503) {
           setNotConfigured(true);
+          setError(null);
         } else {
-          setError(message);
+          setError(err instanceof Error ? err.message : "Failed to load portfolio");
+          setNotConfigured(false);
         }
       }
     };

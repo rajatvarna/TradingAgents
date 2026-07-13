@@ -47,8 +47,10 @@ def test_parse_cors_origins_rejects_path_suffix():
 
 
 @pytest.mark.unit
-def test_parse_cors_origins_allows_bare_trailing_slash():
-    assert parse_cors_origins("https://example.com/") == ["https://example.com/"]
+def test_parse_cors_origins_normalizes_bare_trailing_slash():
+    # Browsers never send a trailing slash in the Origin header, so the
+    # entry must be normalized or CORSMiddleware's exact match never fires.
+    assert parse_cors_origins("https://example.com/") == ["https://example.com"]
 
 
 @pytest.mark.unit

@@ -97,7 +97,7 @@ langchain/pandas/backtrader dependency set; multi-minute `propagate()` runs vs.
 serverless timeouts — see `VERCEL_DEPLOYMENT.md`'s original analysis, which
 remains correct). So the integration is a **split deployment with one seam**:
 
-```
+```text
 ┌────────────────────────── Vercel (auto-deploy from main) ─────────────────────────┐
 │  global-screener/  (Next.js 16, single frontend)                                  │
 │    /                → screener (exists today)                                     │

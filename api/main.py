@@ -1049,24 +1049,33 @@ def _safe_path_segment(value: str) -> str:
 # ---------------------------------------------------------------------------
 # GET /reports — persisted per-ticker analysis report archive
 # ---------------------------------------------------------------------------
-@app.get("/reports", response_class=JSONResponse)
+@app.get("/reports", response_class=JSONResponse, dependencies=[Depends(require_auth)])
 async def list_persisted_reports():
     """List all persisted analysis reports (most recent date first)."""
-    return JSONResponse(content=_list_persisted_reports())
+    reports = await asyncio.to_thread(_list_persisted_reports)
+    return JSONResponse(content=reports)
 
 
-@app.get("/reports/{ticker}/{date}", response_class=JSONResponse)
+@app.get(
+    "/reports/{ticker}/{date}",
+    response_class=JSONResponse,
+    dependencies=[Depends(require_auth)],
+)
 async def get_persisted_report(ticker: str, date: str):
     """Return one persisted analysis report's parsed sections and metadata."""
     cleaned_ticker = _safe_path_segment(ticker.strip().upper())
     cleaned_date = _safe_path_segment(date.strip())
-    report = _get_persisted_report(cleaned_ticker, cleaned_date)
+    report = await asyncio.to_thread(_get_persisted_report, cleaned_ticker, cleaned_date)
     if report is None:
         raise HTTPException(status_code=404, detail="Report not found")
     return JSONResponse(content=report)
 
 
-@app.get("/reports/{ticker}/{date}/outcome", response_class=JSONResponse)
+@app.get(
+    "/reports/{ticker}/{date}/outcome",
+    response_class=JSONResponse,
+    dependencies=[Depends(require_auth)],
+)
 async def get_persisted_report_outcome(ticker: str, date: str):
     """Return whether a persisted report's call was directionally correct.
 
@@ -1076,7 +1085,7 @@ async def get_persisted_report_outcome(ticker: str, date: str):
     """
     cleaned_ticker = _safe_path_segment(ticker.strip().upper())
     cleaned_date = _safe_path_segment(date.strip())
-    outcome = _get_persisted_report_outcome(cleaned_ticker, cleaned_date)
+    outcome = await asyncio.to_thread(_get_persisted_report_outcome, cleaned_ticker, cleaned_date)
     if outcome is None:
         raise HTTPException(status_code=404, detail="Report not found or has no parseable rating")
     return JSONResponse(content=outcome)

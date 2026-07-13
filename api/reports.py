@@ -76,6 +76,33 @@ def list_reports(logs_dir: Path = LOGS_DIR) -> list[dict]:
     return sorted(results, key=lambda r: r["date"], reverse=True)
 
 
+def get_report(ticker: str, date: str, logs_dir: Path = LOGS_DIR) -> dict | None:
+    """Return the full parsed report for one ticker/date, or ``None`` if absent."""
+    reports_dir = logs_dir / ticker / date / "reports"
+    final_path = reports_dir / _REPORT_FILES["final_decision"]
+    if not final_path.exists():
+        return None
+
+    def read(key: str) -> str:
+        path = reports_dir / _REPORT_FILES[key]
+        return path.read_text(encoding="utf-8") if path.exists() else ""
+
+    sections = {key: read(key) for key in _REPORT_FILES}
+
+    return {
+        "ticker": ticker,
+        "date": date,
+        "rating": _rx(sections["final_decision"], r"\*\*Rating\*\*[:\s]+(.+)"),
+        "price_target": _rx(sections["final_decision"], r"\*\*Price Target\*\*[:\s]+\$?([\d,.]+)"),
+        "time_horizon": _rx(sections["final_decision"], r"\*\*Time Horizon\*\*[:\s]+(.+)"),
+        "action": _rx(sections["trader_plan"], r"\*\*Action\*\*[:\s]+(.+)"),
+        "entry_price": _rx(sections["trader_plan"], r"\*\*Entry Price\*\*[:\s]+\$?([\d,.]+)"),
+        "stop_loss": _rx(sections["trader_plan"], r"\*\*Stop Loss\*\*[:\s]+\$?([\d,.]+)"),
+        "sections": sections,
+        "meta": _read_meta(reports_dir),
+    }
+
+
 def get_report_outcome(ticker: str, date: str, logs_dir: Path = LOGS_DIR) -> dict | None:
     """Compute whether a persisted report's call was directionally correct.
 
@@ -112,31 +139,4 @@ def get_report_outcome(ticker: str, date: str, logs_dir: Path = LOGS_DIR) -> dic
         "ret_60d": returns["ret_60d"],
         "correct_20d": _correct(returns["ret_20d"]),
         "correct_60d": _correct(returns["ret_60d"]),
-    }
-
-
-def get_report(ticker: str, date: str, logs_dir: Path = LOGS_DIR) -> dict | None:
-    """Return the full parsed report for one ticker/date, or ``None`` if absent."""
-    reports_dir = logs_dir / ticker / date / "reports"
-    final_path = reports_dir / _REPORT_FILES["final_decision"]
-    if not final_path.exists():
-        return None
-
-    def read(key: str) -> str:
-        path = reports_dir / _REPORT_FILES[key]
-        return path.read_text(encoding="utf-8") if path.exists() else ""
-
-    sections = {key: read(key) for key in _REPORT_FILES}
-
-    return {
-        "ticker": ticker,
-        "date": date,
-        "rating": _rx(sections["final_decision"], r"\*\*Rating\*\*[:\s]+(.+)"),
-        "price_target": _rx(sections["final_decision"], r"\*\*Price Target\*\*[:\s]+\$?([\d,.]+)"),
-        "time_horizon": _rx(sections["final_decision"], r"\*\*Time Horizon\*\*[:\s]+(.+)"),
-        "action": _rx(sections["trader_plan"], r"\*\*Action\*\*[:\s]+(.+)"),
-        "entry_price": _rx(sections["trader_plan"], r"\*\*Entry Price\*\*[:\s]+\$?([\d,.]+)"),
-        "stop_loss": _rx(sections["trader_plan"], r"\*\*Stop Loss\*\*[:\s]+\$?([\d,.]+)"),
-        "sections": sections,
-        "meta": _read_meta(reports_dir),
     }

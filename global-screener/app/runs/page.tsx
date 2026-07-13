@@ -94,6 +94,7 @@ export default function RunsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     const refresh = async () => {
       try {
@@ -109,14 +110,18 @@ export default function RunsPage() {
         setError(null);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load run data");
+      } finally {
+        // Recursive setTimeout (not setInterval) so the next poll only
+        // starts after this one finishes — avoids overlapping requests and
+        // out-of-order responses racing each other if the API is slow.
+        if (!cancelled) timeoutId = setTimeout(refresh, POLL_INTERVAL_MS);
       }
     };
 
     refresh();
-    const id = setInterval(refresh, POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
-      clearInterval(id);
+      clearTimeout(timeoutId);
     };
   }, []);
 

@@ -61,19 +61,30 @@ function AnalyzeForm() {
     };
   }, []);
 
+  const isRunning = status ? !isTerminalStatus(status.status) : submitting;
+
+  // A transient network blip must not permanently strand the user on an
+  // error state while the backend keeps running a multi-minute analysis —
+  // only give up after several consecutive failures.
+  const MAX_CONSECUTIVE_POLL_FAILURES = 3;
+
   const startPolling = (id: string) => {
     if (pollRef.current) clearInterval(pollRef.current);
+    let consecutiveFailures = 0;
     const poll = async () => {
       try {
         const s = await getStatus(id);
         setStatus(s);
+        setError(null);
+        consecutiveFailures = 0;
         if (isTerminalStatus(s.status) && pollRef.current) {
           clearInterval(pollRef.current);
           pollRef.current = null;
         }
       } catch (err) {
+        consecutiveFailures += 1;
         setError(err instanceof Error ? err.message : "Failed to fetch status");
-        if (pollRef.current) {
+        if (consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES && pollRef.current) {
           clearInterval(pollRef.current);
           pollRef.current = null;
         }
@@ -85,6 +96,7 @@ function AnalyzeForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting || isRunning) return;
     const cleanTicker = ticker.trim().toUpperCase();
     if (!cleanTicker) {
       setError("Ticker is required.");
@@ -103,8 +115,6 @@ function AnalyzeForm() {
       setSubmitting(false);
     }
   };
-
-  const isRunning = status ? !isTerminalStatus(status.status) : submitting;
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">

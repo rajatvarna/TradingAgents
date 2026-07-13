@@ -30,6 +30,7 @@ def parse_cors_origins(raw: str, default: str = "http://localhost:3000") -> list
     if not entries:
         return [default]
 
+    normalized: list[str] = []
     for entry in entries:
         parsed = urlparse(entry)
         if not parsed.scheme or not parsed.netloc:
@@ -42,7 +43,10 @@ def parse_cors_origins(raw: str, default: str = "http://localhost:3000") -> list
                 f"ENGINE_API_CORS_ORIGINS entry {entry!r} must be an origin only, "
                 "with no path (expected scheme://host, e.g. https://example.com)"
             )
-    return entries
+        # Browsers never send a trailing slash in the Origin header, so
+        # CORSMiddleware's exact-match check would never match "scheme://host/".
+        normalized.append(entry[:-1] if entry.endswith("/") else entry)
+    return normalized
 
 
 def get_engine_token(raw: str) -> str | None:

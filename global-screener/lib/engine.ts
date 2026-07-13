@@ -138,6 +138,20 @@ const SUPPORTED_PROVIDERS = ["ollama", "google", "openrouter"] as const;
 export type EngineProvider = (typeof SUPPORTED_PROVIDERS)[number];
 export { SUPPORTED_PROVIDERS };
 
+// Thrown by fetchJson on a non-OK response. Carries the HTTP status so
+// callers can branch on it directly (e.g. 503 "not configured") instead of
+// matching on message text, which breaks if the backend's wording changes.
+export class EngineError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "EngineError";
+    this.status = status;
+  }
+}
+
+const DEFAULT_TIMEOUT_MS = 15_000;
+
 async function parseOrThrow<T>(res: Response): Promise<T> {
   const text = await res.text();
   let data: unknown;
@@ -148,12 +162,32 @@ async function parseOrThrow<T>(res: Response): Promise<T> {
   }
   if (!res.ok) {
     const detail =
-      data && typeof data === "object" && data !== null && ("detail" in data || "error" in data)
+      data && typeof data === "object" && ("detail" in data || "error" in data)
         ? String((data as { detail?: string; error?: string }).detail ?? (data as { error?: string }).error)
         : `Engine request failed (${res.status})`;
-    throw new Error(detail);
+    throw new EngineError(detail, res.status);
   }
   return data as T;
+}
+
+// Shared fetch wrapper: applies a bounded timeout (so a hung proxy/backend
+// can't stall callers indefinitely, e.g. the 3s poll loop in analyze/page.tsx)
+// and routes every response through parseOrThrow.
+async function fetchJson<T>(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new EngineError(`Request to ${url} timed out after ${timeoutMs}ms`, 504);
+    }
+    throw err;
+  }
+  return parseOrThrow<T>(res);
 }
 
 export async function submitAnalysis(body: {
@@ -161,56 +195,49 @@ export async function submitAnalysis(body: {
   date?: string;
   llm_provider?: EngineProvider;
 }): Promise<SubmitResponse> {
-  const res = await fetch("/api/engine/analyze", {
+  return fetchJson<SubmitResponse>("/api/engine/analyze", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  return parseOrThrow<SubmitResponse>(res);
 }
 
 export async function getStatus(requestId: string): Promise<RequestStatus> {
-  const res = await fetch(`/api/engine/status/${encodeURIComponent(requestId)}`, { cache: "no-store" });
-  return parseOrThrow<RequestStatus>(res);
+  return fetchJson<RequestStatus>(`/api/engine/status/${encodeURIComponent(requestId)}`, {
+    cache: "no-store",
+  });
 }
 
 export async function listReports(): Promise<ReportSummary[]> {
-  const res = await fetch("/api/engine/reports", { cache: "no-store" });
-  return parseOrThrow<ReportSummary[]>(res);
+  return fetchJson<ReportSummary[]>("/api/engine/reports", { cache: "no-store" });
 }
 
 export async function getReport(ticker: string, date: string): Promise<ReportDetail> {
-  const res = await fetch(
+  return fetchJson<ReportDetail>(
     `/api/engine/reports/${encodeURIComponent(ticker)}/${encodeURIComponent(date)}`,
     { cache: "no-store" }
   );
-  return parseOrThrow<ReportDetail>(res);
 }
 
 export async function getReportOutcome(ticker: string, date: string): Promise<ReportOutcome> {
-  const res = await fetch(
+  return fetchJson<ReportOutcome>(
     `/api/engine/reports/${encodeURIComponent(ticker)}/${encodeURIComponent(date)}/outcome`,
     { cache: "no-store" }
   );
-  return parseOrThrow<ReportOutcome>(res);
 }
 
 export async function getPortfolioStatus(): Promise<PortfolioStatus> {
-  const res = await fetch("/api/engine/portfolio", { cache: "no-store" });
-  return parseOrThrow<PortfolioStatus>(res);
+  return fetchJson<PortfolioStatus>("/api/engine/portfolio", { cache: "no-store" });
 }
 
 export async function getOpenRequests(): Promise<RequestListResponse> {
-  const res = await fetch("/api/engine/requests/open", { cache: "no-store" });
-  return parseOrThrow<RequestListResponse>(res);
+  return fetchJson<RequestListResponse>("/api/engine/requests/open", { cache: "no-store" });
 }
 
 export async function getClosedRequests(): Promise<RequestListResponse> {
-  const res = await fetch("/api/engine/requests/closed", { cache: "no-store" });
-  return parseOrThrow<RequestListResponse>(res);
+  return fetchJson<RequestListResponse>("/api/engine/requests/closed", { cache: "no-store" });
 }
 
 export async function getTodayLlmUsage(): Promise<TodayLlmUsage> {
-  const res = await fetch("/api/engine/metrics/llm-calls/today", { cache: "no-store" });
-  return parseOrThrow<TodayLlmUsage>(res);
+  return fetchJson<TodayLlmUsage>("/api/engine/metrics/llm-calls/today", { cache: "no-store" });
 }

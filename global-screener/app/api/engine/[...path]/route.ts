@@ -9,6 +9,10 @@ import { getEngineConfig } from "@/lib/engineConfig";
 // Only these top-level engine path segments are reachable through this proxy.
 const ALLOWED_PREFIXES = new Set(["analyze", "status", "reports", "requests", "metrics", "portfolio"]);
 
+// Generous enough for report-outcome's live yfinance call server-side, but
+// bounded so a hung engine host can't stall this route handler indefinitely.
+const UPSTREAM_TIMEOUT_MS = 30_000;
+
 function authHeaders(token: string | null): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
@@ -32,13 +36,19 @@ function buildTarget(path: string[], search: string):
 
 async function proxy(target: string, init: RequestInit): Promise<NextResponse> {
   try {
-    const upstream = await fetch(target, init);
+    const upstream = await fetch(target, { ...init, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
     const body = await upstream.text();
     return new NextResponse(body, {
       status: upstream.status,
       headers: { "Content-Type": upstream.headers.get("content-type") ?? "application/json" },
     });
   } catch (err) {
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      return NextResponse.json(
+        { error: `Engine request timed out after ${UPSTREAM_TIMEOUT_MS}ms` },
+        { status: 502 }
+      );
+    }
     return NextResponse.json({ error: `Engine request failed: ${String(err)}` }, { status: 502 });
   }
 }

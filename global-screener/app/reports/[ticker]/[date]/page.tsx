@@ -54,13 +54,15 @@ export default function ReportDetailPage() {
 
   useEffect(() => {
     if (!ticker || !date) return;
+    let cancelled = false;
     setReport(null);
     setError(null);
     setOutcome(null);
     setOutcomeError(null);
     getReport(ticker, date)
-      .then(setReport)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load report"));
+      .then((r) => { if (!cancelled) setReport(r); })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load report"); });
+    return () => { cancelled = true; };
   }, [ticker, date]);
 
   const checkOutcome = () => {

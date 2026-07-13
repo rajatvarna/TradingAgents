@@ -368,3 +368,76 @@ class TestPromptVersionOverride:
         assert t1 != t2
         assert "v1" in t1
         assert "v2" in t2
+
+
+@pytest.mark.unit
+class TestConfiguredPromptVersionsReachState:
+    """``default_config['prompt_versions']`` must be threaded into agent
+    state by ``TradingAgentsGraph``, or every registry-backed agent's
+    ``state.get("prompt_versions", {})`` call returns ``{}`` and silently
+    falls back to its hardcoded "v1" default — meaning the versions declared
+    in config (v2 researchers, v2 portfolio manager, v3 trader) never take
+    effect. Regression test for that bug."""
+
+    def _build_graph(self, tmp_path, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from tradingagents.graph import trading_graph as tg
+
+        monkeypatch.setattr(
+            tg, "create_llm_client",
+            lambda **kw: MagicMock(get_llm=lambda: MagicMock()),
+        )
+        monkeypatch.setattr(
+            tg.GraphSetup, "setup_graph",
+            lambda self, selected_analysts=None, **kw: MagicMock(),
+        )
+
+        cfg = dict(tg.DEFAULT_CONFIG)
+        cfg["audit_dir"] = str(tmp_path)
+        cfg["audit_full_trace_enabled"] = False
+        cfg["checkpoint_enabled"] = False
+
+        return tg.TradingAgentsGraph(config=cfg), cfg
+
+    def test_propagate_injects_configured_prompt_versions(self, tmp_path, monkeypatch):
+        ta, cfg = self._build_graph(tmp_path, monkeypatch)
+
+        captured = {}
+
+        class _Probe(Exception):
+            pass
+
+        def _capture_invoke(state, **kwargs):
+            captured["state"] = state
+            raise _Probe()
+
+        ta.graph.invoke = _capture_invoke
+
+        with pytest.raises(_Probe):
+            ta.propagate("AAPL", "2026-01-02")
+
+        assert captured["state"]["prompt_versions"] == cfg["prompt_versions"]
+        # Sanity: the configured versions are the fork's improved templates,
+        # not the bare "v1" every agent falls back to when this key is missing.
+        assert captured["state"]["prompt_versions"]["trader/trader_system"] == "v3"
+        assert captured["state"]["prompt_versions"]["researchers/bull_researcher"] == "v2"
+
+    def test_stream_run_injects_configured_prompt_versions(self, tmp_path, monkeypatch):
+        ta, cfg = self._build_graph(tmp_path, monkeypatch)
+
+        captured = {}
+
+        class _Probe(Exception):
+            pass
+
+        def _capture_stream(state, **kwargs):
+            captured["state"] = state
+            raise _Probe()
+
+        ta.graph.stream = _capture_stream
+
+        with pytest.raises(_Probe):
+            list(ta.stream_run("AAPL", "2026-01-02"))
+
+        assert captured["state"]["prompt_versions"] == cfg["prompt_versions"]

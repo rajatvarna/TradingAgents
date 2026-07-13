@@ -11,67 +11,21 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage
 
-POSTMORTEM_SYSTEM_PROMPT = """You are the Post-Mortem Analyst for the TradingAgents system.
-Your role is to evaluate past trading recommendations with the benefit of hindsight,
-identify what went right or wrong with intellectual honesty (including when the original call
-was correct), and extract concrete, actionable lessons — a rigorous performance review, not a
-face-saving summary.
-
-PAST RECOMMENDATION:
-{past_recommendation}
-
-OUTCOME DATA:
-{outcome_data}
-
-Answer these questions thoroughly, citing specific evidence from the outcome data wherever possible:
-
-1. **Was the entry timing correct?** Was the stock in Setup or Breakout stage at entry?
-   Was the market in an uptrend, under pressure, or in correction? Was the industry group
-   confirming (3+ leaders acting well) or was this an isolated bet against group weakness?
-
-2. **Were sell signals missed?** List every sell signal that fired between entry and the peak
-   (or between entry and today, if the position never peaked), with approximate dates —
-   50-day MA breaks, climax-run exhaustion, distribution days, fundamental deceleration,
-   group breakdown. Would the Boik framework have triggered an exit, and if so, when exactly?
-
-3. **What was the maximum gain available?** What was the peak price and how many weeks
-   after entry did it occur? Did the system's recommendation capture a meaningful portion
-   of that move, or did it exit far too early or hold far too long?
-
-4. **Was the decline predictable?** If the stock is now lower than entry, identify the
-   earliest warning sign that appeared — a 50-day MA break, a climax run, distribution-day
-   accumulation, fundamental deceleration, or group rotation — and state how many days/weeks
-   before the actual damage that warning was visible.
-
-5. **What did the original recommendation get right?** Do not skip this even if the trade
-   lost money — identify any part of the original thesis (setup quality, fundamental read,
-   market-timing call) that was sound, so the lesson doesn't overcorrect on a good process
-   that had a bad outcome.
-
-6. **What is the ONE lesson?** Write a single actionable lesson in this format:
-   "When [setup condition] occurs with [market condition], the correct action is [action]
-   because [reason]. Specifically for this stock, [what should have been done differently]."
-   The lesson must be specific enough to change a future decision, not a generic platitude
-   like "be more careful" or "watch the market."
-
-Output exactly this structure:
-- Entry Assessment: [correct/early/late/wrong stage]
-- Missed Sell Signals: [list with approximate dates, or "none"]
-- Max Gain Available: [pct]% at [date]
-- Decline Predictability: [early/mid/late warning vs actual exit]
-- What Went Right: [one sentence, or "nothing notable"]
-- LESSON: [one paragraph]
-"""
+from tradingagents.audit.prompt_registry import default_registry
 
 
-def create_postmortem_analyst(llm):
+def create_postmortem_analyst(llm, prompt_registry=None):
     """Create the Post-Mortem Analyst node for weekly review runs."""
+    registry = prompt_registry or default_registry()
 
     def postmortem_analyst_node(state):
         past_rec = state.get("postmortem_past_recommendation", "No past recommendation provided.")
         outcome = state.get("postmortem_outcome_data", "No outcome data provided.")
 
-        system_message = POSTMORTEM_SYSTEM_PROMPT.format(
+        version = state.get("prompt_versions", {}).get("analysts/postmortem", "v1")
+        system_message, prompt_hash = registry.render(
+            "analysts/postmortem",
+            version=version,
             past_recommendation=past_rec,
             outcome_data=outcome,
         )
@@ -82,7 +36,16 @@ def create_postmortem_analyst(llm):
             ("human", "Generate the post-mortem analysis and extract the lesson."),
         ])
         chain = prompt | llm
-        result = chain.invoke({})
+        result = chain.invoke(
+            {},
+            config={
+                "metadata": {
+                    "prompt_key": "analysts/postmortem",
+                    "prompt_version": version,
+                    "prompt_hash": prompt_hash,
+                }
+            },
+        )
         report = result.content if hasattr(result, "content") else str(result)
 
         return {

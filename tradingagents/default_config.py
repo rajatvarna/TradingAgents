@@ -282,9 +282,8 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # selects which ``.v{N}.txt`` file the agent renders.  To roll out
     # a new prompt: ship ``researchers/bull_researcher.v2.txt`` next
     # to ``v1.txt`` (NEVER delete v1 — historical traces must remain
-    # replayable), then bump this dict.  The legacy 4 analyst agents
-    # (market/sentiment/news/fundamentals) use ChatPromptTemplate and
-    # are not yet on the registry — they will be added in T1.4b.
+    # replayable), then bump this dict.  T1.4b migrates the analyst
+    # layer onto the registry one agent group at a time.
     "prompt_versions": {
         "researchers/bull_researcher": "v2",
         "researchers/bear_researcher": "v2",
@@ -295,6 +294,9 @@ DEFAULT_CONFIG = _apply_env_overrides({
         "risk/aggressive": "v1",
         "risk/conservative": "v1",
         "risk/neutral": "v1",
+        "analysts/group_sector": "v1",
+        "analysts/market_phase": "v1",
+        "analysts/postmortem": "v1",
     },
     # Output language for analyst reports and final decision
     # Internal agent debate stays in English for reasoning quality

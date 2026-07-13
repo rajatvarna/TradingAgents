@@ -33,4 +33,6 @@ ${history}
 
 ---
 
-${calibration_block}${language_instruction}
+${calibration_block}
+Note: the conviction field in step 6 is on a 0-100 scale, not the [0, 1] scale referenced just above — apply the same calibration discipline described there (anchor on base rates, name falsifiers, don't round to a comfortable number) when picking it.
+${language_instruction}

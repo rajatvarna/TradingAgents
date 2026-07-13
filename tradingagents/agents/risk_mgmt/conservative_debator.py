@@ -1,4 +1,4 @@
-from tradingagents.agents.risk_mgmt.aggressive_debator import _SHARED_BLOCKS
+from tradingagents.agents.risk_mgmt._shared_blocks import _SHARED_BLOCKS
 from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     format_risk_constraints,

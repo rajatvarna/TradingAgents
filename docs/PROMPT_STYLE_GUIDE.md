@@ -120,12 +120,18 @@ a specific one instead of always using `"v1"`.
 
 ## Adoption status
 
-This guide and `render_with_shared` are infrastructure only as of this
-commit — no agent has been rewired onto the shared partials yet. Per-agent
-adoption happens as each analyst/debate/decision prompt gets its A2/A3/A4
-rewrite (see `docs/PROMPT_AND_CORE_FEATURES_PLAN.md`); each rewrite PR
-should compose `_shared/data_integrity` and `_shared/calibration` rather
-than re-deriving equivalent instructions inline.
+Several agents already compose these shared partials (e.g. the A2 analyst
+rewrites, the A3 researcher/risk rewrites, and the A4 `research_manager.v2`/
+`portfolio_manager.v3` rewrites, via `_shared/data_integrity`,
+`_shared/calibration`, and `_shared/rating_scale`) — but every one of them
+is shipped **available, not default**: `default_config.py`'s
+`prompt_versions` still selects the pre-rewrite version for each until an
+A6 scorecard justifies flipping it (see
+`docs/PROMPT_AND_CORE_FEATURES_PLAN.md`). Per-agent adoption continues as
+each remaining analyst/debate/decision prompt gets its rewrite; each
+rewrite PR should compose `_shared/data_integrity` and `_shared/calibration`
+(and `_shared/rating_scale` where a rating tier is involved) rather than
+re-deriving equivalent instructions inline.
 
 ## Cache-friendliness
 

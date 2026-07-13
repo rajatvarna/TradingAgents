@@ -215,7 +215,7 @@ class TestAgentToTraceToReplayer:
         assert c.prompt_version == "v2"
         assert c.matches, (
             f"recorded hash {c.recorded_hash} did not match current "
-            f"registry hash {c.current_hash} — bull_researcher.v1.txt may "
+            f"registry hash {c.current_hash} — bull_researcher.v2.txt may "
             f"have drifted, or the agent isn't passing config.metadata "
             f"correctly"
         )

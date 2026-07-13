@@ -1,17 +1,10 @@
+from tradingagents.agents.risk_mgmt._shared_blocks import _SHARED_BLOCKS
 from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     format_risk_constraints,
     get_language_instruction,
 )
 from tradingagents.audit.prompt_registry import default_registry
-
-# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md). See
-# researchers/bull_researcher.py's _SHARED_BLOCKS for why this is passed
-# unconditionally regardless of which template version is selected.
-_SHARED_BLOCKS = {
-    "data_integrity_block": ("_shared/data_integrity", "v1"),
-    "calibration_block": ("_shared/calibration", "v1"),
-}
 
 
 def create_aggressive_debator(llm, prompt_registry=None):

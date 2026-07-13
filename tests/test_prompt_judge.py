@@ -10,6 +10,7 @@ from tradingagents.evaluation.prompt_judge import (
     PromptQualityScore,
     aggregate_scores,
     reports_from_final_state,
+    required_sections_for_reports,
     score_report,
     score_reports,
 )
@@ -75,6 +76,28 @@ class TestScoreReport:
         assert "News Analyst" in combined
         assert "UNIQUE_REPORT_MARKER" in combined
 
+    def test_required_sections_included_when_provided(self):
+        """covers_required_sections needs the agent's actual instructions to
+        grade against, or it can't tell 'skipped a required section' apart
+        from 'was never asked for that section' — see CodeRabbit review."""
+        expected = _score()
+        llm, structured = _llm_returning(expected)
+        score_report(
+            llm, "some report", "Market Analyst",
+            required_sections="UNIQUE_INSTRUCTIONS_MARKER",
+        )
+        args, _ = structured.invoke.call_args
+        combined = "\n".join(m["content"] for m in args[0])
+        assert "UNIQUE_INSTRUCTIONS_MARKER" in combined
+
+    def test_required_sections_omitted_when_not_provided(self):
+        expected = _score()
+        llm, structured = _llm_returning(expected)
+        score_report(llm, "some report", "Market Analyst")
+        args, _ = structured.invoke.call_args
+        combined = "\n".join(m["content"] for m in args[0])
+        assert "actual instructions" not in combined
+
 
 @pytest.mark.unit
 class TestScoreReports:
@@ -86,6 +109,41 @@ class TestScoreReports:
         )
         assert set(result) == {"Market Analyst", "News Analyst"}
         assert structured.invoke.call_count == 2
+
+    def test_passes_required_sections_per_report(self):
+        expected = _score()
+        llm, structured = _llm_returning(expected)
+        score_reports(
+            llm,
+            {"Market Analyst": "report one"},
+            required_sections={"Market Analyst": "UNIQUE_SECTIONS_MARKER"},
+        )
+        args, _ = structured.invoke.call_args
+        combined = "\n".join(m["content"] for m in args[0])
+        assert "UNIQUE_SECTIONS_MARKER" in combined
+
+
+@pytest.mark.unit
+class TestRequiredSectionsForReports:
+    def test_loads_actual_template_text_for_known_labels(self):
+        result = required_sections_for_reports(
+            {"Fundamentals Analyst": "some report"},
+            prompt_versions={"analysts/fundamentals": "v2"},
+        )
+        assert "Fundamentals Analyst" in result
+        assert "market is already pricing in" in result["Fundamentals Analyst"].lower()
+
+    def test_falls_back_to_default_config_versions(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        result = required_sections_for_reports({"Market Analyst": "some report"})
+        assert "Market Analyst" in result
+        expected_version = DEFAULT_CONFIG["prompt_versions"]["analysts/market"]
+        assert expected_version in ("v1", "v2")  # sanity: a real version string
+
+    def test_unknown_label_omitted(self):
+        result = required_sections_for_reports({"Some New Agent": "text"})
+        assert "Some New Agent" not in result
 
 
 @pytest.mark.unit

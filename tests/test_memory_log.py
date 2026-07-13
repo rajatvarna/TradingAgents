@@ -97,7 +97,7 @@ def _structured_pm_llm(captured: dict, decision: PortfolioDecision | None = None
         )
     structured = MagicMock()
     structured.invoke.side_effect = lambda prompt, **kwargs: (
-        captured.__setitem__("prompt", prompt) or decision
+        captured.__setitem__("prompt", prompt) or captured.__setitem__("config", kwargs.get("config")) or decision
     )
     llm = MagicMock()
     llm.with_structured_output.return_value = structured
@@ -927,6 +927,7 @@ class TestPortfolioManagerInjection:
 
     # A4 — v3 (dissent record + shared rating scale), available-not-default
 
+    @pytest.mark.unit
     def test_pm_v3_prompt_carries_dissent_and_consistency_instructions(self):
         captured = {}
         llm = _structured_pm_llm(captured)
@@ -938,7 +939,13 @@ class TestPortfolioManagerInjection:
         assert "dissent record" in prompt.lower()
         assert "consistency rule" in prompt.lower()
         assert "${" not in prompt
+        # Assert the shared rating-scale block itself composed in (not just
+        # v3-specific prose), so this test still fails if render_with_shared
+        # regresses even though the v3-only text stays intact.
+        assert "score +2" in prompt.lower()
+        assert set(captured["config"]["metadata"]["shared_prompt_hashes"]) == {"_shared/rating_scale"}
 
+    @pytest.mark.unit
     def test_pm_render_includes_dissent_when_present(self):
         decision = PortfolioDecision(
             rating=PortfolioRating.HOLD,
@@ -952,6 +959,7 @@ class TestPortfolioManagerInjection:
         result = pm_node(_make_pm_state())
         assert "**Dissent**: The aggressive analyst argued" in result["final_trade_decision"]
 
+    @pytest.mark.unit
     def test_pm_default_config_still_selects_v2(self):
         from tradingagents.default_config import DEFAULT_CONFIG
 

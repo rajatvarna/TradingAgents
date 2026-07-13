@@ -34,6 +34,7 @@ from tradingagents.evaluation.benchmark import run_benchmark
 from tradingagents.evaluation.prompt_judge import (
     aggregate_scores,
     reports_from_final_state,
+    required_sections_for_reports,
     score_reports,
 )
 from tradingagents.spend_tracker import SpendTracker
@@ -152,7 +153,10 @@ def _run_judge_sample(
                 logger.warning("Judge sample run failed for %s %s: %s", ticker, trade_date, exc)
                 continue
             reports = reports_from_final_state(final_state)
-            scores = score_reports(judge_llm, reports)
+            required_sections = required_sections_for_reports(
+                reports, config.get("prompt_versions")
+            )
+            scores = score_reports(judge_llm, reports, required_sections)
             for agent_name, score in scores.items():
                 all_scores[f"{ticker}_{trade_date}_{agent_name}"] = score
             n_runs += 1

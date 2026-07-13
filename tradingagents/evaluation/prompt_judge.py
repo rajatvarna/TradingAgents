@@ -47,6 +47,27 @@ REPORT_STATE_FIELDS: dict[str, str] = {
     "final_trade_decision": "Portfolio Manager",
 }
 
+# Same labels, mapped to the PromptRegistry key that produced the report —
+# lets callers look up the *actual* rendered instructions for a run (rather
+# than a hand-maintained, driftable summary) and pass them into score_report
+# so covers_required_sections has something real to grade against.
+REPORT_LABEL_TO_PROMPT_KEY: dict[str, str] = {
+    "Market Analyst": "analysts/market",
+    "Fundamentals Analyst": "analysts/fundamentals",
+    "News Analyst": "analysts/news",
+    "Sentiment Analyst": "analysts/sentiment",
+    "Valuation Analyst": "analysts/valuation",
+    "Technical Analyst": "analysts/technical",
+    "Quant Analyst": "analysts/quant",
+    "ESG Analyst": "analysts/esg",
+    "Derivative Analyst": "analysts/derivative",
+    "Options Analyst": "analysts/options",
+    "Alternative Data Analyst": "analysts/alternative_data",
+    "Research Manager": "managers/research_manager",
+    "Trader": "trader/trader_system",
+    "Portfolio Manager": "managers/portfolio_manager",
+}
+
 
 class PromptQualityScore(BaseModel):
     """Structured 1-5 rubric score for one rendered agent report."""
@@ -122,8 +143,16 @@ def score_report(
     judge_llm: Any,
     report_text: str,
     agent_name: str = "unknown agent",
+    required_sections: str | None = None,
 ) -> PromptQualityScore | None:
     """Score one rendered report against the A1 contract rubric.
+
+    ``required_sections`` should be the agent's actual instructions (or a
+    compact excerpt of them) so ``covers_required_sections`` can be graded
+    against what the agent was actually asked to produce, rather than the
+    judge guessing at an implied structure. Omitting it falls back to the
+    judge's own guess — better than nothing, but unable to tell "the agent
+    wasn't asked for this" apart from "the agent skipped this".
 
     Returns ``None`` if the judge call fails or the provider doesn't
     support structured output — callers should treat a ``None`` score as
@@ -137,14 +166,19 @@ def score_report(
     if structured is None:
         return None
 
+    user_content = f"Agent: {agent_name}\n\n"
+    if required_sections and required_sections.strip():
+        user_content += (
+            "This agent's actual instructions (use this, not a guess, to judge "
+            f"covers_required_sections):\n\n{required_sections}\n\n"
+        )
+    user_content += f"Report to score:\n\n{report_text}"
+
     try:
         return structured.invoke(
             [
                 {"role": "system", "content": _JUDGE_SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": f"Agent: {agent_name}\n\nReport to score:\n\n{report_text}",
-                },
+                {"role": "user", "content": user_content},
             ]
         )
     except Exception as exc:
@@ -153,14 +187,53 @@ def score_report(
 
 
 def score_reports(
-    judge_llm: Any, reports: dict[str, str]
+    judge_llm: Any,
+    reports: dict[str, str],
+    required_sections: dict[str, str] | None = None,
 ) -> dict[str, PromptQualityScore | None]:
-    """Score a ``{agent_name: report_text}`` dict, one judge call per report."""
+    """Score a ``{agent_name: report_text}`` dict, one judge call per report.
+
+    ``required_sections`` is an optional parallel ``{agent_name: instructions}``
+    dict — see :func:`score_report`.
+    """
+    required_sections = required_sections or {}
     return {
-        name: score_report(judge_llm, text, name)
+        name: score_report(judge_llm, text, name, required_sections.get(name))
         for name, text in reports.items()
         if text and text.strip()
     }
+
+
+def required_sections_for_reports(
+    reports: dict[str, str], prompt_versions: dict[str, str] | None = None
+) -> dict[str, str]:
+    """Look up each report's actual rendered template text for the judge.
+
+    Uses ``REPORT_LABEL_TO_PROMPT_KEY`` plus ``prompt_versions`` (typically a
+    run's ``config["prompt_versions"]``) to load the exact template that
+    produced each report from :class:`~tradingagents.audit.prompt_registry.PromptRegistry`
+    — the source of truth, not a hand-maintained summary that can drift from
+    the real prompt. A label with no known prompt key (or whose lookup
+    fails) is simply omitted; :func:`score_reports` falls back to an
+    unguided judge guess for it.
+    """
+    from tradingagents.audit.prompt_registry import PromptNotFoundError, default_registry
+    from tradingagents.default_config import DEFAULT_CONFIG
+
+    versions = prompt_versions or DEFAULT_CONFIG.get("prompt_versions", {})
+    registry = default_registry()
+    sections: dict[str, str] = {}
+    for label in reports:
+        key = REPORT_LABEL_TO_PROMPT_KEY.get(label)
+        if key is None:
+            continue
+        version = versions.get(key, "v1")
+        try:
+            text, _ = registry.load(key, version)
+        except PromptNotFoundError:
+            continue
+        sections[label] = text
+    return sections
 
 
 def reports_from_final_state(final_state: dict[str, Any]) -> dict[str, str]:

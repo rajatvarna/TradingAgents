@@ -351,6 +351,61 @@ def trim_debate_history(history: str, max_turns: int = 4) -> str:
     return truncated
 
 
+# Lines carrying the report's bottom-line signal — kept verbatim in the
+# digest even when everything else is dropped, since a debater's whole job
+# in later rounds is reacting to the verdict, not re-deriving it.
+_DIGEST_VERDICT_MARKERS = (
+    "confidence:", "p(", "verdict", "pass", "warn", "fail",
+    "**rating**", "recommendation", "final transaction proposal",
+)
+
+
+def summarize_for_debate(report_text: str, max_words: int = 150) -> str:
+    """Compress a full analyst report into a short digest for later debate rounds.
+
+    Round 1 of a debate re-injects every analyst's full report so each
+    debater has complete context; every round after that re-injects the
+    *same* text again, for every remaining speaker — the redundant cost A7
+    exists to cut (see docs/PROMPT_AND_CORE_FEATURES_PLAN.md). Deliberately
+    extractive rather than LLM-summarized: no extra LLM call, so a digest
+    costs nothing beyond the string processing itself and can't introduce a
+    provider outage into the debate's critical path.
+
+    Keeps the report's opening paragraph (the headline context) plus any
+    line carrying its bottom-line signal (a stated confidence, probability,
+    verdict, or rating), then truncates to ``max_words``. Short reports
+    that are already under the budget pass through unchanged.
+    """
+    text = (report_text or "").strip()
+    if not text:
+        return ""
+
+    words = text.split()
+    if len(words) <= max_words:
+        return text
+
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    headline = paragraphs[0] if paragraphs else ""
+
+    candidate_lines = [
+        line.strip() for line in text.splitlines()
+        if line.strip() and any(marker in line.lower() for marker in _DIGEST_VERDICT_MARKERS)
+    ]
+    # Preserve order, drop duplicates, exclude anything already in the headline.
+    seen = {headline}
+    verdict_lines = []
+    for line in candidate_lines:
+        if line not in seen:
+            verdict_lines.append(line)
+            seen.add(line)
+
+    digest = "\n".join([headline, *verdict_lines]).strip()
+    digest_words = digest.split()
+    if len(digest_words) > max_words:
+        digest = " ".join(digest_words[:max_words]) + " …"
+    return digest
+
+
 def build_scope_guard(ticker: str) -> str:
     """Instruction that keeps reports scoped to the requested instrument."""
     return (

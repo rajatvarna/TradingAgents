@@ -418,6 +418,10 @@ DEFAULT_CONFIG = _apply_env_overrides({
     },
     "earnings_lookahead_days": 7,  # Days ahead to check for earnings events
     "analyst_weights_lookback": 20,  # Number of resolved memory entries to use for analyst accuracy weights (Item 6)
+    "debate_context_mode": "full",  # "full" | "digest" — A7 token hygiene; digest re-injects a short extractive
+                                     # summary of each analyst report (not the full text) on every debate round
+                                     # after a speaker's own first turn. Default "full" until an A6 scorecard
+                                     # shows "digest" is non-inferior on hit-rate/calibration.
     "state_compression_enabled": False,
     "trader_tools_enabled": True,
     "trade_filter_enabled": False,

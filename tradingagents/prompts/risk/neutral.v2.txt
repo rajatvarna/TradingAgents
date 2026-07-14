@@ -23,4 +23,4 @@ Company Fundamentals Report: ${fundamentals_report}
 Scope guard: ${scope_guard}
 Here is the current conversation history: ${history} Here is the last response from the aggressive analyst: ${current_aggressive_response} Here is the last response from the conservative analyst: ${current_conservative_response}. If there are no responses from the other viewpoints yet, present your own analysis based on the available data.
 
-Do not default to "both sides have a point" as a conclusion — your job is to actually adjudicate, even if the honest adjudication is that one side is substantially more right than the other.${language_instruction}
+Do not default to "both sides have a point" as a conclusion — your job is to actually adjudicate, even if the honest adjudication is that one side is substantially more right than the other. Keep this round to 300 words or fewer — win on evidence density, not length.${language_instruction}

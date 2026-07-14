@@ -456,7 +456,7 @@ B3 prompt CLI                B5 structured outputs
 | A3 debate redesign | ✅ Landed as available-not-default — `researchers/*.v3.txt`, `risk/*.v2.txt`; needs an A6 scorecard before any default flips |
 | A4 decision layer + A5 rating scale | ✅ Landed as available-not-default — `managers/research_manager.v2.txt` (synthesis rubric: load-bearing claims, factual-dispute resolution, per-theme scorecard, P(thesis) reconciliation, past-mistake check, rating+conviction+horizon), `trader/trader_system.v4.txt` (EV framing + calibration block), `trader/trader_user.v2.txt` (capital context + risk-constraint budget flags — wires up the previously-unused `build_capital_context` helper), `managers/portfolio_manager.v3.txt` (dissent record + rating/target/stop consistency rule); A5's `_shared/rating_scale.v1.txt` composed into both managers via `render_with_shared`. `ResearchPlan` gained optional `conviction`/`horizon` fields, `PortfolioDecision` gained optional `dissent` — additive, so v1/v2 templates and existing callers are unaffected. Needs an A6 scorecard before any default flips |
 | A6 A/B harness + judge | ✅ Done — `tradingagents/evaluation/prompt_ab.py`, `prompt_judge.py`; no scorecard has been run yet (needs live API keys) |
-| A7 token hygiene | ⬜ Not started |
+| A7 token hygiene | ✅ Done — `debate_context_mode` config flag (default `full`), `summarize_for_debate()` extractive digest, wired into both researchers and all three risk debators; A3 templates gained explicit 300-word round caps |
 | B1 typed config | ⬜ Not started |
 | B2 intraday data | ⬜ Not started |
 | B3 prompt CLI | ✅ Done — `python -m tradingagents.audit.prompt_registry {list,diff,verify}` |

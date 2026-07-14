@@ -3,8 +3,10 @@ from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     format_risk_constraints,
     get_language_instruction,
+    summarize_for_debate,
 )
 from tradingagents.audit.prompt_registry import default_registry
+from tradingagents.dataflows.config import get_config
 
 
 def create_conservative_debator(llm, prompt_registry=None):
@@ -18,10 +20,15 @@ def create_conservative_debator(llm, prompt_registry=None):
         current_aggressive_response = risk_debate_state.get("current_aggressive_response", "")
         current_neutral_response = risk_debate_state.get("current_neutral_response", "")
 
-        market_research_report = state["market_report"]
-        sentiment_report = state["sentiment_report"]
-        news_report = state["news_report"]
-        fundamentals_report = state["fundamentals_report"]
+        # A7 token hygiene — see researchers/bull_researcher.py's identical comment.
+        is_first_turn = not conservative_history.strip()
+        digest_mode = get_config().get("debate_context_mode", "full") == "digest" and not is_first_turn
+        _ctx = summarize_for_debate if digest_mode else (lambda t: t)
+
+        market_research_report = _ctx(state["market_report"])
+        sentiment_report = _ctx(state["sentiment_report"])
+        news_report = _ctx(state["news_report"])
+        fundamentals_report = _ctx(state["fundamentals_report"])
 
         scope_guard = build_scope_guard(state.get("company_of_interest", "the requested instrument"))
         constraints_block = format_risk_constraints(state.get("risk_constraints", {}))

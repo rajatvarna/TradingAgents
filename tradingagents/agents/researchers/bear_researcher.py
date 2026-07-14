@@ -5,9 +5,11 @@ from tradingagents.agents.researchers.bull_researcher import (
 from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     get_language_instruction,
+    summarize_for_debate,
     trim_debate_history,
 )
 from tradingagents.audit.prompt_registry import default_registry
+from tradingagents.dataflows.config import get_config
 
 
 def create_bear_researcher(llm, prompt_registry=None):
@@ -24,15 +26,21 @@ def create_bear_researcher(llm, prompt_registry=None):
         bear_history = investment_debate_state.get("bear_history", "")
 
         current_response = investment_debate_state.get("current_response", "")
-        market_research_report = state["market_report"]
-        sentiment_report = state["sentiment_report"]
-        news_report = state["news_report"]
-        fundamentals_report = state["fundamentals_report"]
-        esg_report = state.get("esg_report", "")
-        derivatives_report = state.get("derivatives_report", "")
+
+        # A7 token hygiene — see create_bull_researcher's identical comment.
+        is_first_turn = not bear_history.strip()
+        digest_mode = get_config().get("debate_context_mode", "full") == "digest" and not is_first_turn
+        _ctx = summarize_for_debate if digest_mode else (lambda t: t)
+
+        market_research_report = _ctx(state["market_report"])
+        sentiment_report = _ctx(state["sentiment_report"])
+        news_report = _ctx(state["news_report"])
+        fundamentals_report = _ctx(state["fundamentals_report"])
+        esg_report = _ctx(state.get("esg_report", ""))
+        derivatives_report = _ctx(state.get("derivatives_report", ""))
         user_research_report = state.get("user_research_report", "")
-        group_sector_report = state.get("group_sector_report", "")
-        market_phase_report = state.get("market_phase_report", "")
+        group_sector_report = _ctx(state.get("group_sector_report", ""))
+        market_phase_report = _ctx(state.get("market_phase_report", ""))
 
         user_research_block = ""
         if user_research_report.strip():

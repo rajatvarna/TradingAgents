@@ -22,4 +22,4 @@ Company Fundamentals Report: ${fundamentals_report}
 Scope guard: ${scope_guard}
 Here is the current conversation history: ${history} Here is the last response from the aggressive analyst: ${current_aggressive_response} Here is the last response from the neutral analyst: ${current_neutral_response}. If there are no responses from the other viewpoints yet, present your own analysis based on the available data.
 
-Engage with the specific numbers the aggressive and neutral analysts raised — do not simply reassert that risk exists. If their optimism is well-evidenced, acknowledge it explicitly rather than arguing past it.${language_instruction}
+Engage with the specific numbers the aggressive and neutral analysts raised — do not simply reassert that risk exists. If their optimism is well-evidenced, acknowledge it explicitly rather than arguing past it. Keep this round to 300 words or fewer — win on evidence density, not length.${language_instruction}

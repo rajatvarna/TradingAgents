@@ -213,15 +213,30 @@ def required_sections_for_reports(
     run's ``config["prompt_versions"]``) to load the exact template that
     produced each report from :class:`~tradingagents.audit.prompt_registry.PromptRegistry`
     — the source of truth, not a hand-maintained summary that can drift from
-    the real prompt. A label with no known prompt key (or whose lookup
-    fails) is simply omitted; :func:`score_reports` falls back to an
-    unguided judge guess for it.
+    the real prompt. The A1 shared partials (``_shared/data_integrity``,
+    ``_shared/calibration``, ``_shared/rating_scale``) are rendered with
+    their real content rather than left as unresolved ``${...}`` tokens, so
+    the judge actually sees the data-integrity/calibration instructions the
+    agent received — every other variable (the run's own market data, ticker
+    context, etc.) is filled with an inert placeholder, since the judge only
+    needs the *structural* requirements, not this run's actual figures. A
+    label with no known prompt key (or whose lookup fails) is simply
+    omitted; :func:`score_reports` falls back to an unguided judge guess for it.
     """
-    from tradingagents.audit.prompt_registry import PromptNotFoundError, default_registry
+    from tradingagents.audit.prompt_registry import (
+        PromptNotFoundError,
+        _extract_template_vars,
+        default_registry,
+    )
     from tradingagents.default_config import DEFAULT_CONFIG
 
-    versions = prompt_versions or DEFAULT_CONFIG.get("prompt_versions", {})
+    versions = DEFAULT_CONFIG.get("prompt_versions", {}) if prompt_versions is None else prompt_versions
     registry = default_registry()
+    shared_blocks = {
+        "data_integrity_block": ("_shared/data_integrity", "v1"),
+        "calibration_block": ("_shared/calibration", "v1"),
+        "rating_scale_block": ("_shared/rating_scale", "v1"),
+    }
     sections: dict[str, str] = {}
     for label in reports:
         key = REPORT_LABEL_TO_PROMPT_KEY.get(label)
@@ -229,10 +244,22 @@ def required_sections_for_reports(
             continue
         version = versions.get(key, "v1")
         try:
-            text, _ = registry.load(key, version)
+            template_text, _ = registry.load(key, version)
         except PromptNotFoundError:
             continue
-        sections[label] = text
+        var_names = _extract_template_vars(template_text)
+        dummy_vars = {
+            name: "[run-specific data omitted for judge context]"
+            for name in var_names
+            if name not in shared_blocks
+        }
+        try:
+            rendered, _, _ = registry.render_with_shared(
+                key, version=version, shared=shared_blocks, **dummy_vars,
+            )
+        except Exception:  # noqa: BLE001 - fall back to raw template text on any render failure
+            rendered = template_text
+        sections[label] = rendered
     return sections
 
 

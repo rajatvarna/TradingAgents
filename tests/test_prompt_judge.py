@@ -145,6 +145,38 @@ class TestRequiredSectionsForReports:
         result = required_sections_for_reports({"Some New Agent": "text"})
         assert "Some New Agent" not in result
 
+    def test_shared_blocks_are_rendered_not_left_as_placeholders(self):
+        """Regression: registry.load() returns the raw template with
+        ${data_integrity_block}/${calibration_block} unresolved, so the judge
+        never actually saw those instructions' real text — see CodeRabbit
+        review. Fundamentals v2 composes both shared blocks."""
+        result = required_sections_for_reports(
+            {"Fundamentals Analyst": "some report"},
+            prompt_versions={"analysts/fundamentals": "v2"},
+        )
+        rendered = result["Fundamentals Analyst"]
+        assert "${data_integrity_block}" not in rendered
+        assert "${calibration_block}" not in rendered
+        assert "never invent" in rendered.lower()  # actual data_integrity content
+
+    def test_explicit_empty_prompt_versions_is_not_treated_as_missing(self):
+        """Regression: `prompt_versions or DEFAULT_CONFIG[...]` silently
+        discarded a caller's explicit {} (falsy) in favor of the default
+        config's versions — see CodeRabbit review. managers/portfolio_manager
+        is "v2" in DEFAULT_CONFIG but the registry's own per-key fallback is
+        "v1" — an explicit {} must resolve to v1, not silently pick up v2."""
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["managers/portfolio_manager"] == "v2"
+
+        result = required_sections_for_reports(
+            {"Portfolio Manager": "some report"}, prompt_versions={},
+        )
+        assert "Price Target Guidance" not in result["Portfolio Manager"]  # v2-only text
+
+        result_default = required_sections_for_reports({"Portfolio Manager": "some report"})
+        assert "Price Target Guidance" in result_default["Portfolio Manager"]  # picks up DEFAULT_CONFIG's v2
+
 
 @pytest.mark.unit
 class TestReportsFromFinalState:

@@ -392,18 +392,24 @@ def summarize_for_debate(report_text: str, max_words: int = 150) -> str:
         if line.strip() and any(marker in line.lower() for marker in _DIGEST_VERDICT_MARKERS)
     ]
     # Preserve order, drop duplicates, exclude anything already in the headline.
-    seen = {headline}
+    seen = {line.strip() for line in headline.splitlines() if line.strip()}
     verdict_lines = []
     for line in candidate_lines:
         if line not in seen:
             verdict_lines.append(line)
             seen.add(line)
 
-    digest = "\n".join([headline, *verdict_lines]).strip()
-    digest_words = digest.split()
-    if len(digest_words) > max_words:
-        digest = " ".join(digest_words[:max_words]) + " …"
-    return digest
+    # Truncate only the headline, never the verdict lines — they're the
+    # whole point of the digest (see docstring), so they must survive the
+    # word budget even if the headline gets cut down to make room.
+    verdict_text = "\n".join(verdict_lines)
+    verdict_word_count = len(verdict_text.split())
+    headline_words = headline.split()
+    if len(headline_words) + verdict_word_count > max_words:
+        allowed_headline_words = max(0, max_words - verdict_word_count)
+        headline = " ".join(headline_words[:allowed_headline_words]) + " …"
+
+    return "\n".join(filter(None, [headline, verdict_text])).strip()
 
 
 def build_scope_guard(ticker: str) -> str:

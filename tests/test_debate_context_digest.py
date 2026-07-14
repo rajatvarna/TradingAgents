@@ -56,6 +56,26 @@ class TestSummarizeForDebate:
         digest = summarize_for_debate(_LONG_REPORT, max_words=20)
         assert len(digest.split()) <= 21
 
+    def test_verdict_lines_survive_even_with_a_tiny_word_budget(self):
+        """Regression: truncation used to cut from the end of the combined
+        digest, which could remove the verdict lines entirely — the whole
+        point of the digest. Truncation must only ever shorten the headline."""
+        digest = summarize_for_debate(_LONG_REPORT, max_words=5)
+        assert "Confidence: 0.72" in digest
+        assert "**Rating**: Buy" in digest
+
+    def test_verdict_line_repeated_in_headline_is_not_duplicated(self):
+        """Regression: deduping against the whole headline as one string
+        never matched individual lines, so a verdict line already present
+        in the headline paragraph got appended a second time."""
+        report = (
+            "Confidence: 0.80\n"
+            + ("Filler sentence describing supporting detail. " * 30)
+            + "\n\nConfidence: 0.80\n"
+        )
+        digest = summarize_for_debate(report)
+        assert digest.count("Confidence: 0.80") == 1
+
 
 def _long_market_state(own_history: str) -> dict:
     return {

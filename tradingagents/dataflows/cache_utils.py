@@ -9,6 +9,7 @@ quota use.  Callers should cache successful, deterministic payloads only.
 from __future__ import annotations
 
 import hashlib
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -35,10 +36,21 @@ def cache_path(namespace: str, *parts: str) -> Path:
     return base.joinpath(*safe_parts).with_suffix(".txt")
 
 
-def read_text_cache(namespace: str, *parts: str) -> str | None:
+def read_text_cache(namespace: str, *parts: str, ttl_minutes: float | None = None) -> str | None:
+    """Read a cached value, or ``None`` on a miss.
+
+    ``ttl_minutes=None`` (the default, matching every existing caller) means
+    no expiry — a cache entry is valid forever once written, same as before
+    this parameter existed. Pass a real value to treat an entry older than
+    that many minutes as a miss (e.g. intraday data, which stales quickly).
+    """
     path = cache_path(namespace, *parts)
     try:
         if path.exists():
+            if ttl_minutes is not None:
+                age_minutes = (time.time() - path.stat().st_mtime) / 60.0
+                if age_minutes > ttl_minutes:
+                    return None
             return path.read_text(encoding="utf-8")
     except OSError:
         return None
@@ -57,8 +69,14 @@ def write_text_cache(namespace: str, value: str, *parts: str) -> str:
     return value
 
 
-def cache_text(namespace: str, parts: tuple[str, ...], fetch: Callable[[], str]) -> str:
-    cached = read_text_cache(namespace, *parts)
+def cache_text(
+    namespace: str,
+    parts: tuple[str, ...],
+    fetch: Callable[[], str],
+    *,
+    ttl_minutes: float | None = None,
+) -> str:
+    cached = read_text_cache(namespace, *parts, ttl_minutes=ttl_minutes)
     if cached is not None:
         return cached
     value = fetch()

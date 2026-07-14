@@ -7,10 +7,20 @@ from tradingagents.agents.utils.agent_utils import (
     get_language_instruction,
 )
 from tradingagents.agents.utils.esg_data_tools import get_esg_news, get_esg_scores
+from tradingagents.audit.prompt_registry import default_registry
+
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
+# render_with_shared skips any block a given template version doesn't
+# reference, so this is safe to pass regardless of which version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
 
 
-def create_esg_analyst(llm):
+def create_esg_analyst(llm, prompt_registry=None):
     """Create an ESG analyst node for the trading graph."""
+    registry = prompt_registry or default_registry()
 
     def esg_analyst_node(state):
         current_date = state["trade_date"]
@@ -20,39 +30,13 @@ def create_esg_analyst(llm):
 
         tools = [get_esg_scores, get_esg_news]
 
-        system_message = (
-            "You are a senior ESG (Environmental, Social, Governance) analyst tasked "
-            f"with analyzing a {asset_label}'s sustainability profile and ESG risk "
-            "factors with the rigor of an institutional ESG research desk — your job is to "
-            "identify financially material ESG risks, not to produce a generic CSR summary.\n\n"
-            "Your report must cover, in order:\n"
-            "1. **Environmental** — carbon footprint / emissions trend, environmental regulatory exposure "
-            "(e.g. carbon pricing, emissions standards), physical climate risk (supply chain, facilities), "
-            "and any environmental litigation or fines.\n"
-            "2. **Social** — labor practices, supply chain/human rights exposure, product safety record, "
-            "data privacy and cybersecurity posture, and community/customer relations.\n"
-            "3. **Governance** — board independence and composition, executive compensation alignment with "
-            "performance, ownership/control structure (dual-class shares, insider ownership), audit quality "
-            "history, and related-party transaction risk.\n"
-            "4. **Controversies** — any specific, dated controversies (lawsuits, investigations, scandals, "
-            "recalls, greenwashing accusations) found in the news, with a materiality assessment for each.\n"
-            "5. **Regulatory exposure** — pending or enacted regulation (environmental, labor, data privacy, "
-            "antitrust) that could raise costs or restrict operations.\n"
-            "6. **Trend direction** — is the ESG risk profile improving, stable, or deteriorating relative to "
-            "the recent past, and why.\n"
-            "7. **Materiality to valuation** — explicitly connect each major ESG finding to a plausible "
-            "financial impact (cost of capital, regulatory fines, reputational/revenue risk, litigation "
-            "exposure) rather than treating ESG as a separate, non-financial narrative.\n\n"
-            "Use the available tools: "
-            "`get_esg_scores` for current ESG ratings where point-in-time safe, and "
-            "`get_esg_news` for ESG-related news and controversies up to the analysis "
-            "date. If point-in-time ESG scores are unavailable, say so explicitly and "
-            "do not infer current scores into historical analysis — reason instead from the news and "
-            "controversy data available. Do not fabricate specific scores, ratings, or incidents that are "
-            "not supported by tool output. Append a Markdown "
-            "table summarizing key ESG signals, risk direction, evidence, materiality, and trading "
-            "relevance."
-            + get_language_instruction()
+        version = state.get("prompt_versions", {}).get("analysts/esg", "v1")
+        system_message, prompt_hash, shared_hashes = registry.render_with_shared(
+            "analysts/esg",
+            version=version,
+            shared=_SHARED_BLOCKS,
+            asset_label=asset_label,
+            language_instruction=get_language_instruction(),
         )
 
         prompt = ChatPromptTemplate.from_messages(
@@ -78,7 +62,17 @@ def create_esg_analyst(llm):
         prompt = prompt.partial(instrument_context=instrument_context)
 
         chain = prompt | llm.bind_tools(tools)
-        result = chain.invoke(state["messages"])
+        result = chain.invoke(
+            state["messages"],
+            config={
+                "metadata": {
+                    "prompt_key": "analysts/esg",
+                    "prompt_version": version,
+                    "prompt_hash": prompt_hash,
+                    "shared_prompt_hashes": shared_hashes,
+                }
+            },
+        )
 
         report = ""
         if not result.tool_calls:

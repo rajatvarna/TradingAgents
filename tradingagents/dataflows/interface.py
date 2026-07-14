@@ -12,6 +12,7 @@ from .alpha_vantage import (
     get_insider_transactions as get_alpha_vantage_insider_transactions,
     get_news as get_alpha_vantage_news,
     get_stock as get_alpha_vantage_stock,
+    get_stock_intraday as get_alpha_vantage_stock_intraday,
 )
 from .b3 import (
     get_balance_sheet as get_b3_balance_sheet,
@@ -41,6 +42,7 @@ from .polygon import (
     get_options_chain as get_polygon_options_chain,
     get_options_overview as get_polygon_options_overview,
     get_stock_data as get_polygon_stock,
+    get_stock_data_intraday as get_polygon_stock_intraday,
 )
 from .polymarket import get_prediction_markets as get_polymarket_prediction_markets
 from .searxng import (
@@ -120,6 +122,7 @@ except ImportError:
 from .config import get_config
 from .errors import (
     NoMarketDataError,
+    VendorCapabilityError,
     VendorNotConfiguredError,
     VendorRateLimitError,
 )
@@ -192,6 +195,13 @@ TOOLS_CATEGORIES = {
         "description": "OHLCV stock price data",
         "tools": [
             "get_stock_data"
+        ]
+    },
+    "intraday_stock_apis": {
+        "description": "Sub-daily OHLCV bars (1m/5m/15m/30m/1h) — B2, ops/live-monitoring "
+                        "concern first; not used by any agent-facing analyst tool",
+        "tools": [
+            "get_stock_data_intraday"
         ]
     },
     "technical_indicators": {
@@ -283,6 +293,14 @@ VENDOR_METHODS = {
         "futu": get_futu_stock,
         "ibkr": get_ibkr_stock,
         "akshare": get_akshare_stock_data,
+    },
+    # intraday_stock_apis (B2) — deliberately separate from get_stock_data:
+    # only vendors with a real sub-daily endpoint are registered here, so
+    # _resolve_vendor_chain never calls a daily-only vendor function with an
+    # unexpected `interval` kwarg. See errors.VendorCapabilityError.
+    "get_stock_data_intraday": {
+        "alpha_vantage": get_alpha_vantage_stock_intraday,
+        "polygon": get_polygon_stock_intraday,
     },
     # technical_indicators
     "get_indicators": {
@@ -527,6 +545,11 @@ def route_to_vendor(method: str, *args, **kwargs):
             if first_error is None:
                 first_error = e
             continue
+        except VendorCapabilityError as e:
+            logger.info("Vendor %r can't serve this %s request; trying next.", vendor, method)
+            if first_error is None:
+                first_error = e
+            continue
         except NoMarketDataError as e:
             last_no_data = e
             continue
@@ -556,3 +579,35 @@ def route_to_vendor(method: str, *args, **kwargs):
         raise first_error
 
     raise RuntimeError(f"No available vendor for '{method}'")
+
+
+def get_intraday_stock_data(
+    symbol: str,
+    start_date: str,
+    end_date: str,
+    interval: str = "1h",
+) -> str:
+    """Fetch sub-daily OHLCV bars, routed through the configured intraday
+    vendor chain with a short-TTL disk cache (B2).
+
+    Deliberately a separate entry point from the ``get_stock_data`` agent
+    tool (``agents/utils/core_stock_tools.py``) rather than a parameter on
+    it: intraday is an ops/live-monitoring concern first, and every
+    analyst-facing tool stays on daily data, completely unaffected by this
+    function's existence — see docs/CORE_FEATURES_PLAN.md F6.
+
+    ``interval``: one of "1m", "5m", "15m", "30m", "1h". Cache TTL is config
+    ``intraday_cache_ttl_minutes`` (default 15) — short relative to the
+    daily-data caches in this module, since intraday bars go stale fast.
+    """
+    from .cache_utils import cache_text
+
+    ttl_minutes = get_config().get("intraday_cache_ttl_minutes", 15)
+    return cache_text(
+        "intraday_stock_data",
+        (symbol, start_date, end_date, interval),
+        lambda: route_to_vendor(
+            "get_stock_data_intraday", symbol, start_date, end_date, interval=interval,
+        ),
+        ttl_minutes=ttl_minutes,
+    )

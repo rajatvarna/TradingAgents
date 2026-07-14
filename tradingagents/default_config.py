@@ -141,7 +141,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "project_dir": os.path.abspath(os.path.join(os.path.dirname(__file__), ".")),
     "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR", os.path.join(_TRADINGAGENTS_HOME, "logs")),
     "data_cache_dir": os.getenv("TRADINGAGENTS_CACHE_DIR", os.path.join(_TRADINGAGENTS_HOME, "cache")),
-    "memory_log_path": os.getenv("TRADINGAGENTS_MEMORY_LOG_PATH", os.path.join(os.path.dirname(os.path.dirname(__file__)), "memory", "trading_memory.md")),
+    "memory_log_path": os.getenv("TRADINGAGENTS_MEMORY_LOG_PATH", os.path.join(_TRADINGAGENTS_HOME, "memory", "trading_memory.md")),
     # IIC-FORGE F1 — persistence + data layout
     "iic_db_path": os.path.join(_TRADINGAGENTS_HOME, "iic.db"),
     "iic_data_dir": os.path.join(_TRADINGAGENTS_HOME, "data"),
@@ -282,9 +282,8 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # selects which ``.v{N}.txt`` file the agent renders.  To roll out
     # a new prompt: ship ``researchers/bull_researcher.v2.txt`` next
     # to ``v1.txt`` (NEVER delete v1 — historical traces must remain
-    # replayable), then bump this dict.  The legacy 4 analyst agents
-    # (market/sentiment/news/fundamentals) use ChatPromptTemplate and
-    # are not yet on the registry — they will be added in T1.4b.
+    # replayable), then bump this dict.  T1.4b migrates the analyst
+    # layer onto the registry one agent group at a time.
     "prompt_versions": {
         "researchers/bull_researcher": "v2",
         "researchers/bear_researcher": "v2",
@@ -295,6 +294,20 @@ DEFAULT_CONFIG = _apply_env_overrides({
         "risk/aggressive": "v1",
         "risk/conservative": "v1",
         "risk/neutral": "v1",
+        "analysts/group_sector": "v1",
+        "analysts/market_phase": "v1",
+        "analysts/postmortem": "v1",
+        "analysts/esg": "v1",
+        "analysts/derivative": "v1",
+        "analysts/alternative_data": "v1",
+        "analysts/quant": "v1",
+        "analysts/technical": "v1",
+        "analysts/options": "v1",
+        "analysts/market": "v1",
+        "analysts/fundamentals": "v1",
+        "analysts/news": "v1",
+        "analysts/valuation": "v1",
+        "analysts/sentiment": "v1",
     },
     # Output language for analyst reports and final decision
     # Internal agent debate stays in English for reasoning quality
@@ -405,8 +418,14 @@ DEFAULT_CONFIG = _apply_env_overrides({
     },
     "earnings_lookahead_days": 7,  # Days ahead to check for earnings events
     "analyst_weights_lookback": 20,  # Number of resolved memory entries to use for analyst accuracy weights (Item 6)
+    "debate_context_mode": "full",  # "full" | "digest" — A7 token hygiene; digest re-injects a short extractive
+                                     # summary of each analyst report (not the full text) on every debate round
+                                     # after a speaker's own first turn. Default "full" until an A6 scorecard
+                                     # shows "digest" is non-inferior on hit-rate/calibration.
     "state_compression_enabled": False,
     "trader_tools_enabled": True,
+    "intraday_cache_ttl_minutes": 15,  # B2 — TTL for interface.get_intraday_stock_data's disk cache;
+                                        # short relative to the daily-data caches since intraday bars stale fast.
     "trade_filter_enabled": False,
     "trade_filter_threshold": 0.65,
     "futu_opend_host": "127.0.0.1",

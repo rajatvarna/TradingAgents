@@ -8,8 +8,10 @@ from langchain_core.messages import AIMessage
 
 from tradingagents.agents.schemas import TraderProposal, render_trader_proposal
 from tradingagents.agents.utils.agent_utils import (
+    build_capital_context,
     build_instrument_context,
     build_scope_guard,
+    format_risk_constraints,
     get_language_instruction,
 )
 from tradingagents.agents.utils.structured import (
@@ -46,6 +48,9 @@ def create_trader(llm, cache=None, prompt_registry=None, tools=None):
                 f"opinion among many, NOT ground truth):\n{user_research_report}"
             )
 
+        capital_context = build_capital_context(state.get("holdings_info"))
+        risk_constraints_block = format_risk_constraints(state.get("risk_constraints", {}))
+
         # Trader uses two templates (system + user) rather than one
         # combined prompt. Record both hashes in metadata so the trace
         # can reconstruct either side independently.
@@ -53,9 +58,10 @@ def create_trader(llm, cache=None, prompt_registry=None, tools=None):
         sys_v = versions.get("trader/trader_system", "v1")
         usr_v = versions.get("trader/trader_user", "v1")
 
-        system_content, system_hash = registry.render(
+        system_content, system_hash, shared_hashes = registry.render_with_shared(
             "trader/trader_system",
             version=sys_v,
+            shared={"calibration_block": ("_shared/calibration", "v1")},
             language_instruction=get_language_instruction(),
         )
         user_content, user_hash = registry.render(
@@ -64,6 +70,8 @@ def create_trader(llm, cache=None, prompt_registry=None, tools=None):
             company_name=company_name,
             instrument_context=instrument_context,
             scope_guard=scope_guard,
+            capital_context=capital_context,
+            risk_constraints_block=risk_constraints_block,
             user_research_block=user_research_block,
             investment_plan=investment_plan,
         )
@@ -107,6 +115,7 @@ def create_trader(llm, cache=None, prompt_registry=None, tools=None):
                     "prompt_version": f"system={sys_v},user={usr_v}",
                     "prompt_hash_system": system_hash,
                     "prompt_hash_user": user_hash,
+                    "shared_prompt_hashes": shared_hashes,
                 }
             },
         )

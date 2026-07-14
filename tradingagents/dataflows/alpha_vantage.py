@@ -8,7 +8,7 @@ from .alpha_vantage_fundamentals import (
 )
 from .alpha_vantage_indicator import get_indicator
 from .alpha_vantage_news import get_global_news, get_insider_transactions, get_news
-from .alpha_vantage_stock import get_stock
+from .alpha_vantage_stock import get_stock, get_stock_intraday
 
 # `dataflows/interface.py` consumes this shim via
 # `from .alpha_vantage import get_X as get_alpha_vantage_X`. Declaring
@@ -25,4 +25,5 @@ __all__ = [
     "get_insider_transactions",
     "get_news",
     "get_stock",
+    "get_stock_intraday",
 ]

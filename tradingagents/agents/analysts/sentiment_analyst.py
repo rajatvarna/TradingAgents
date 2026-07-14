@@ -51,6 +51,7 @@ from tradingagents.agents.utils.structured import (
     bind_structured,
     invoke_structured_or_freetext,
 )
+from tradingagents.audit.prompt_registry import default_registry
 from tradingagents.dataflows.agentkey_client import is_configured as agentkey_configured
 from tradingagents.dataflows.agentkey_social import build_agentkey_social_section
 from tradingagents.dataflows.bluesky import fetch_bluesky_posts
@@ -60,12 +61,20 @@ from tradingagents.dataflows.reddit import fetch_reddit_posts
 from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
 from tradingagents.dataflows.y_finance import get_instrument_profile
 
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
+# render_with_shared skips any block a given template version doesn't
+# reference, so this is safe to pass regardless of which version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
+
 
 def _seven_days_back(trade_date: str) -> str:
     return (datetime.strptime(trade_date, "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
 
 
-def create_sentiment_analyst(llm):
+def create_sentiment_analyst(llm, prompt_registry=None):
     """Create a sentiment analyst node for the trading graph.
 
     Pre-fetches news + StockTwits + Reddit + Bluesky + Mastodon + Fear &
@@ -74,6 +83,7 @@ def create_sentiment_analyst(llm):
     a free-text fallback for providers that do not support it).
     """
     structured_llm = bind_structured(llm, SentimentReport, "Sentiment Analyst")
+    registry = prompt_registry or default_registry()
 
     def sentiment_analyst_node(state):
         ticker = state["company_of_interest"]
@@ -105,10 +115,20 @@ def create_sentiment_analyst(llm):
                 ticker, profile["name"], profile["sector"], profile["industry"]
             )
 
-        system_message = build_cacheable_system_content(
-            _build_system_message(),
-            llm,
+        version = state.get("prompt_versions", {}).get("analysts/sentiment", "v1")
+        rendered_message, prompt_hash, shared_hashes = registry.render_with_shared(
+            "analysts/sentiment",
+            version=version,
+            shared=_SHARED_BLOCKS,
+            language_instruction=get_language_instruction(),
         )
+        system_message = build_cacheable_system_content(rendered_message, llm)
+        prompt_metadata = {
+            "prompt_key": "analysts/sentiment",
+            "prompt_version": version,
+            "prompt_hash": prompt_hash,
+            "shared_prompt_hashes": shared_hashes,
+        }
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -159,6 +179,7 @@ def create_sentiment_analyst(llm):
             formatted_messages,
             render_sentiment_report,
             "Sentiment Analyst",
+            config={"metadata": prompt_metadata},
         )
 
         return {
@@ -167,42 +188,6 @@ def create_sentiment_analyst(llm):
         }
 
     return sentiment_analyst_node
-
-
-def _build_system_message() -> str:
-    """Build the static sentiment-analyst system message."""
-    return (
-        "You are a senior financial market sentiment analyst with deep experience separating genuine retail/"
-        " institutional signal from noise, hype, and coordinated narrative-pushing."
-        " Analyze the provided data sources carefully and write a balanced, rigorously evidence-based report —"
-        " every claim about sentiment direction or intensity must be traceable to specific posts, headlines, or"
-        " data points shown to you, not to your prior beliefs about the ticker."
-        "\n\nAnalytical approach:"
-        " Read StockTwits and Bluesky sentiment as leading retail signals that often move ahead of price."
-        " Look for cross-source divergences (e.g. bullish retail chatter vs. bearish news, or vice versa) and treat"
-        " divergence itself as an important, reportable signal rather than something to average away."
-        " Weight Reddit posts by engagement (upvotes/comments) rather than treating every post equally, and"
-        " distinguish a post reacting to a confirmed event from one that is pure opinion or speculation."
-        " Identify recurring narratives and themes across sources — if the same thesis (bullish or bearish) appears"
-        " independently across multiple platforms, that convergence is meaningful; if it appears to originate from"
-        " a single viral post being reposted, note that it is not independent confirmation."
-        " Weight the Chinese / international platforms by relevance (Weibo and Zhihu capture China-market"
-        " and China-exposed sentiment; Xiaohongshu / Douyin capture consumer-demand alt-data) and only lean on them"
-        " when the company has real China/consumer exposure."
-        " Use the Fear & Greed Index as an aggregate market-mood anchor to contextualize whether ticker-specific"
-        " sentiment is swimming with or against the broader tape."
-        " Explicitly flag data limitations (thin sample size, stale posts, platform outages) rather than presenting"
-        " a sparse or unavailable source as if it were conclusive."
-        "\n\nProduce the report in this order: (1) overall sentiment direction and intensity with a confidence"
-        " level, (2) source-by-source breakdown with concrete supporting excerpts/evidence, (3) cross-source"
-        " divergences and the recurring narratives driving sentiment, (4) potential catalysts (earnings, product"
-        " launches, macro events) and risks (over-extended hype, negative catalysts) that could shift sentiment,"
-        " (5) a contrarian check — is current sentiment already extreme in a way that historically precedes a"
-        " reversal, and (6) a markdown table summarizing source, sentiment label, intensity, and key evidence."
-        " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
-        " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
-        + get_language_instruction()
-    )
 
 
 # ---------------------------------------------------------------------------

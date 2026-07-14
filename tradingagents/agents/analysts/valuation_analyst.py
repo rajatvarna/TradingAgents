@@ -14,6 +14,15 @@ from tradingagents.agents.utils.agent_utils import (
     get_language_instruction,
 )
 from tradingagents.agents.utils.tool_fallback import bind_tools_or_none, safe_tool_text
+from tradingagents.audit.prompt_registry import default_registry
+
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
+# render_with_shared skips any block a given template version doesn't
+# reference, so this is safe to pass regardless of which version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tool definitions
@@ -846,7 +855,7 @@ def _prefetch_valuation_data(ticker: str) -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def create_valuation_analyst(llm, toolkit=None):
+def create_valuation_analyst(llm, toolkit=None, prompt_registry=None):
     """Create a Valuation Analyst node function.
 
     Follows the exact same pattern as create_fundamentals_analyst.
@@ -858,12 +867,13 @@ def create_valuation_analyst(llm, toolkit=None):
     Returns:
         A LangGraph node function (state -> state_update dict).
     """
+    registry = prompt_registry or default_registry()
 
     def valuation_analyst_node(state):
         current_date = state["trade_date"]
         ticker = str(state["company_of_interest"])
         asset_type = state.get("asset_type", "stock")
-        subject_label = "company" if asset_type == "stock" else "asset or protocol"
+        subject_label = "companies" if asset_type == "stock" else "assets or protocols"
         instrument_context = get_instrument_context_from_state(state)
 
         tools = [
@@ -878,46 +888,20 @@ def create_valuation_analyst(llm, toolkit=None):
             get_football_field,
         ]
 
-        system_message = (
-            f"You are a senior Valuation Analyst specializing in intrinsic value estimation "
-            f"for {subject_label}s, working to the standard of an investment-bank equity "
-            f"research valuation section — every number must be explained, every assumption "
-            f"must be stated, and the reader must be able to see how each figure was derived. "
-            f"Your analytical framework is grounded in economic "
-            f"value creation: ROIC versus WACC (the value spread). "
-            f"Your report must: "
-            f"(1) call get_wacc_components and get_roic_analysis first to establish the "
-            f"value-creation verdict — is ROIC above WACC (value-creating) or below (value-destroying)? "
-            f"(2) call get_dcf_valuation for quantitative intrinsic value estimates from both "
-            f"ROIC-DCF and Revenue-DCF perspectives, "
-            f"(3) call get_ddm_valuation to assess dividend-based value if applicable, "
-            f"(4) call get_scenario_analysis for a bear / base / bull valuation range, "
-            f"(5) call get_financial_model to build a detailed 5-year financial projection "
-            f"showing year-by-year revenue, EBITDA, EBIT, NOPAT, and unlevered free cash flow, "
-            f"(6) call get_sensitivity_analysis to show how the intrinsic value changes "
-            f"across different revenue growth rate and WACC assumptions, "
-            f"(7) call get_reverse_dcf to determine what revenue growth rate is priced into "
-            f"the current stock price — this answers the key question: what does the market expect? "
-            f"(8) call get_football_field to combine the methods above into one low/high "
-            f"valuation range and see where the current price falls within it, "
-            f"(9) explicitly state and justify the key assumptions behind each method — growth rate, "
-            f"terminal growth, margin trajectory, discount rate — and note which assumptions the "
-            f"conclusion is most sensitive to, "
-            f"(10) synthesize into a valuation memo covering: value spread verdict, intrinsic "
-            f"value triangulation across methods (and why methods that disagree do so), margin of "
-            f"safety, scenario range, detailed financial projection, sensitivity to key drivers, the "
-            f"implied growth analysis, and the overall football-field range. "
-            f"Conclude with an OVERVALUED / FAIRLY VALUED / UNDERVALUED verdict, the "
-            f"primary driver of that verdict, and the specific assumption that would most easily "
-            f"overturn it. "
-            f"Include as much quantitative detail as possible — cite actual figures from the tools, "
-            f"not qualitative labels. Provide specific, actionable insights "
-            f"with supporting evidence, and be explicit about which inputs are estimates versus "
-            f"directly observed data."
-            + " Make sure to append a Markdown table at the end of the report to organize "
-            "key points in the report, organized and easy to read."
-            + get_language_instruction()
+        version = state.get("prompt_versions", {}).get("analysts/valuation", "v1")
+        system_message, prompt_hash, shared_hashes = registry.render_with_shared(
+            "analysts/valuation",
+            version=version,
+            shared=_SHARED_BLOCKS,
+            subject_label=subject_label,
+            language_instruction=get_language_instruction(),
         )
+        prompt_metadata = {
+            "prompt_key": "analysts/valuation",
+            "prompt_version": version,
+            "shared_prompt_hashes": shared_hashes,
+            "prompt_hash": prompt_hash,
+        }
 
         bound_llm = bind_tools_or_none(llm, tools, "Valuation Analyst")
 
@@ -946,7 +930,7 @@ def create_valuation_analyst(llm, toolkit=None):
 
             chain = prompt | bound_llm
 
-            result = chain.invoke(state["messages"])
+            result = chain.invoke(state["messages"], config={"metadata": prompt_metadata})
 
             report = ""
             if len(result.tool_calls) == 0:
@@ -984,7 +968,7 @@ def create_valuation_analyst(llm, toolkit=None):
         prompt = prompt.partial(valuation_data=valuation_data)
 
         formatted_messages = prompt.format_messages(messages=state["messages"])
-        result = llm.invoke(formatted_messages)
+        result = llm.invoke(formatted_messages, config={"metadata": prompt_metadata})
 
         return {
             "messages": [result],

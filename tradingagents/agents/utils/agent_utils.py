@@ -351,6 +351,67 @@ def trim_debate_history(history: str, max_turns: int = 4) -> str:
     return truncated
 
 
+# Lines carrying the report's bottom-line signal — kept verbatim in the
+# digest even when everything else is dropped, since a debater's whole job
+# in later rounds is reacting to the verdict, not re-deriving it.
+_DIGEST_VERDICT_MARKERS = (
+    "confidence:", "p(", "verdict", "pass", "warn", "fail",
+    "**rating**", "recommendation", "final transaction proposal",
+)
+
+
+def summarize_for_debate(report_text: str, max_words: int = 150) -> str:
+    """Compress a full analyst report into a short digest for later debate rounds.
+
+    Round 1 of a debate re-injects every analyst's full report so each
+    debater has complete context; every round after that re-injects the
+    *same* text again, for every remaining speaker — the redundant cost A7
+    exists to cut (see docs/PROMPT_AND_CORE_FEATURES_PLAN.md). Deliberately
+    extractive rather than LLM-summarized: no extra LLM call, so a digest
+    costs nothing beyond the string processing itself and can't introduce a
+    provider outage into the debate's critical path.
+
+    Keeps the report's opening paragraph (the headline context) plus any
+    line carrying its bottom-line signal (a stated confidence, probability,
+    verdict, or rating), then truncates to ``max_words``. Short reports
+    that are already under the budget pass through unchanged.
+    """
+    text = (report_text or "").strip()
+    if not text:
+        return ""
+
+    words = text.split()
+    if len(words) <= max_words:
+        return text
+
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    headline = paragraphs[0] if paragraphs else ""
+
+    candidate_lines = [
+        line.strip() for line in text.splitlines()
+        if line.strip() and any(marker in line.lower() for marker in _DIGEST_VERDICT_MARKERS)
+    ]
+    # Preserve order, drop duplicates, exclude anything already in the headline.
+    seen = {line.strip() for line in headline.splitlines() if line.strip()}
+    verdict_lines = []
+    for line in candidate_lines:
+        if line not in seen:
+            verdict_lines.append(line)
+            seen.add(line)
+
+    # Truncate only the headline, never the verdict lines — they're the
+    # whole point of the digest (see docstring), so they must survive the
+    # word budget even if the headline gets cut down to make room.
+    verdict_text = "\n".join(verdict_lines)
+    verdict_word_count = len(verdict_text.split())
+    headline_words = headline.split()
+    if len(headline_words) + verdict_word_count > max_words:
+        allowed_headline_words = max(0, max_words - verdict_word_count)
+        headline = " ".join(headline_words[:allowed_headline_words]) + " …"
+
+    return "\n".join(filter(None, [headline, verdict_text])).strip()
+
+
 def build_scope_guard(ticker: str) -> str:
     """Instruction that keeps reports scoped to the requested instrument."""
     return (
@@ -396,6 +457,31 @@ def build_capital_context(holdings_info: dict | None) -> str:
         + ". Size every entry / add / take-profit / stop in absolute share counts AND as a percent of NAV; "
         "do not propose orders whose dollar value exceeds available NAV."
     )
+
+
+def format_analyst_weights_block(weights: dict[str, float]) -> str:
+    """Render analyst accuracy weights (from past decisions, Item 6) as a prompt block.
+
+    Shared between the Research Manager and Portfolio Manager (B4) — both
+    read the same trailing-accuracy signal when synthesising a debate. Only
+    shown when at least two analysts have a non-neutral weight (>0.55 or
+    <0.45) so the block adds real signal rather than noise.
+    """
+    if not weights:
+        return ""
+    informative = {k: v for k, v in weights.items() if abs(v - 0.5) >= 0.05}
+    if len(informative) < 2:
+        return ""
+    lines = ["\n\n---\n**Analyst historical accuracy (past predictions vs outcomes):**"]
+    for analyst, w in sorted(informative.items(), key=lambda x: -x[1]):
+        bar = "▓" * int(w * 10) + "░" * (10 - int(w * 10))
+        lines.append(f"- {analyst}: {w:.0%} accuracy [{bar}]")
+    lines.append(
+        "Higher-accuracy analysts have a stronger directional track record. "
+        "You may weight their inputs accordingly, but do not mechanically override lower-accuracy analysts—"
+        "consider the quality of their specific arguments first."
+    )
+    return "\n".join(lines)
 
 
 def create_force_finalize(llm, report_key: str, analyst_label: str):
@@ -530,8 +616,10 @@ def create_msg_delete(concurrency_limit: int = 1):
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=30), reraise=True)
-def invoke_with_retry(chain, prompt):
+def invoke_with_retry(chain, prompt, config=None):
     """Invoke a LangChain model/chain with exponential backoff for transient errors."""
+    if config is not None:
+        return chain.invoke(prompt, config=config)
     return chain.invoke(prompt)
 
 

@@ -168,6 +168,25 @@ def _filter_csv_by_date_range(csv_data: str, start_date: str, end_date: str) -> 
     Returns:
         Filtered CSV string
     """
+    return _filter_csv_by_range(csv_data, start_date, end_date, end_of_day=False)
+
+
+def _filter_csv_by_datetime_range(csv_data: str, start_date: str, end_date: str) -> str:
+    """Like :func:`_filter_csv_by_date_range`, but treats ``end_date`` as the
+    end of that calendar day (23:59:59) rather than midnight.
+
+    ``_filter_csv_by_date_range`` parses ``end_date`` to midnight, which is
+    correct for daily bars (one row per day, timestamped at market close) but
+    wrong for intraday bars: every sub-daily row on ``end_date`` itself has a
+    time component after midnight, so a plain ``<= midnight`` comparison would
+    silently drop the entire end date. This still enforces real look-ahead
+    protection at timestamp (not just date) granularity for callers passing an
+    intraday interval.
+    """
+    return _filter_csv_by_range(csv_data, start_date, end_date, end_of_day=True)
+
+
+def _filter_csv_by_range(csv_data: str, start_date: str, end_date: str, *, end_of_day: bool) -> str:
     if not csv_data or csv_data.strip() == "":
         return csv_data
 
@@ -182,6 +201,8 @@ def _filter_csv_by_date_range(csv_data: str, start_date: str, end_date: str) -> 
         # Filter by date range
         start_dt = pd.to_datetime(start_date)
         end_dt = pd.to_datetime(end_date)
+        if end_of_day:
+            end_dt += pd.Timedelta(hours=23, minutes=59, seconds=59)
 
         filtered_df = df[(df[date_col] >= start_dt) & (df[date_col] <= end_dt)]
 
@@ -190,5 +211,5 @@ def _filter_csv_by_date_range(csv_data: str, start_date: str, end_date: str) -> 
 
     except Exception as e:
         # If filtering fails, return original data with a warning
-        print(f"Warning: Failed to filter CSV data by date range: {e}")
+        print(f"Warning: Failed to filter CSV data by range: {e}")
         return csv_data

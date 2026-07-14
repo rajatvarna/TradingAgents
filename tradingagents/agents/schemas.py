@@ -105,15 +105,56 @@ class ResearchPlan(BaseModel):
             "including position sizing guidance consistent with the rating."
         ),
     )
+    conviction: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=100.0,
+        description=(
+            "Numeric conviction (0-100) in the recommendation, reconciling "
+            "the bull/bear researchers' stated P(thesis) probabilities with "
+            "your own read of which claims were actually evidenced. Do not "
+            "default to 50 — commit to a considered estimate."
+        ),
+    )
+    horizon: str | None = Field(
+        default=None,
+        description=(
+            "The timeframe this recommendation is over, e.g. '2-4 weeks' or "
+            "'3-6 months', so it can later be checked against forward returns."
+        ),
+    )
+    falsifiers: list[str] = Field(
+        default_factory=list,
+        description=(
+            "The top 1-3 specific, observable conditions that would flip this "
+            "recommendation — drawn from the bull/bear researchers' own stated "
+            "falsifiers where they apply, plus anything else that would change "
+            "your conclusion. Not generic hedges like 'if the market changes'."
+        ),
+    )
+
+    @field_validator("conviction", mode="before")
+    @classmethod
+    def _nullish_float_to_none(cls, v):
+        return _coerce_optional_float(v)
+
+
 def render_research_plan(plan: ResearchPlan) -> str:
     """Render a ResearchPlan to markdown for storage and the trader's prompt context."""
-    return "\n".join([
+    parts = [
         f"**Recommendation**: {plan.recommendation.value}",
         "",
         f"**Rationale**: {plan.rationale}",
         "",
         f"**Strategic Actions**: {plan.strategic_actions}",
-    ])
+    ]
+    if plan.conviction is not None:
+        parts.extend(["", f"**Conviction**: {plan.conviction:.0f}"])
+    if plan.horizon:
+        parts.extend(["", f"**Horizon**: {plan.horizon}"])
+    if plan.falsifiers:
+        parts.extend(["", "**Falsifiers**: " + "; ".join(plan.falsifiers)])
+    return "\n".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -181,6 +222,14 @@ class TraderProposal(BaseModel):
     position_sizing: str | None = Field(
         default=None,
         description="Optional sizing guidance, e.g. '5% of portfolio'.",
+    )
+    falsifiers: list[str] = Field(
+        default_factory=list,
+        description=(
+            "The top 1-3 specific, observable conditions that would flip this "
+            "action — e.g. a level breaking, a data point reversing. Not "
+            "generic hedges like 'if the market changes'."
+        ),
     )
 
     @field_validator("entry_price", "stop_loss", "target_price", mode="before")
@@ -257,6 +306,8 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
         parts.extend(["", f"**Target Price**: {proposal.target_price}"])
     if proposal.position_sizing:
         parts.extend(["", f"**Position Sizing**: {proposal.position_sizing}"])
+    if proposal.falsifiers:
+        parts.extend(["", "**Falsifiers**: " + "; ".join(proposal.falsifiers)])
     parts.extend(["", _render_trade_review(proposal)])
     parts.extend([
         "",
@@ -319,6 +370,24 @@ class PortfolioDecision(BaseModel):
             "the final decision. Use an empty list only when no evidence IDs were provided."
         ),
     )
+    dissent: str | None = Field(
+        default=None,
+        description=(
+            "One sentence stating the single strongest argument against the "
+            "chosen rating from the risk debate — recorded so a later "
+            "post-mortem can score whether this dissent turned out to be "
+            "prescient. Do not omit this if the debate raised a real objection."
+        ),
+    )
+    falsifiers: list[str] = Field(
+        default_factory=list,
+        description=(
+            "The top 1-3 specific, observable conditions that would flip this "
+            "rating — carried forward from the research plan / trader proposal "
+            "where they still apply, plus anything the risk debate surfaced. "
+            "Not generic hedges like 'if the market changes'."
+        ),
+    )
 
     @field_validator("price_target", mode="before")
     @classmethod
@@ -347,6 +416,10 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
         parts.extend(["", f"**Time Horizon**: {decision.time_horizon}"])
     evidence_ids = ", ".join(decision.supporting_evidence_ids) or "None"
     parts.extend(["", f"**Supporting Evidence IDs**: {evidence_ids}"])
+    if decision.dissent:
+        parts.extend(["", f"**Dissent**: {decision.dissent}"])
+    if decision.falsifiers:
+        parts.extend(["", "**Falsifiers**: " + "; ".join(decision.falsifiers)])
     return "\n".join(parts)
 
 

@@ -1,9 +1,21 @@
 from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     get_language_instruction,
+    summarize_for_debate,
     trim_debate_history,
 )
 from tradingagents.audit.prompt_registry import default_registry
+from tradingagents.dataflows.config import get_config
+
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md) composed into whichever
+# template version is selected. Templates that don't reference
+# ${data_integrity_block}/${calibration_block} (v1, v2) simply leave the
+# rendered blocks unused — string.Template.substitute ignores extra
+# variables, so this is safe to pass unconditionally.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
 
 
 def _format_monster_block_for_researcher(mss: dict) -> str:
@@ -48,15 +60,24 @@ def create_bull_researcher(llm, prompt_registry=None):
         bull_history = investment_debate_state.get("bull_history", "")
 
         current_response = investment_debate_state.get("current_response", "")
-        market_research_report = state["market_report"]
-        sentiment_report = state["sentiment_report"]
-        news_report = state["news_report"]
-        fundamentals_report = state["fundamentals_report"]
-        esg_report = state.get("esg_report", "")
-        derivatives_report = state.get("derivatives_report", "")
+
+        # A7 token hygiene: round 1 (this speaker's own first turn) always
+        # gets full reports; every round after that gets a short extractive
+        # digest instead, when debate_context_mode="digest" is configured.
+        # Default stays "full" until an A6 scorecard shows non-inferiority.
+        is_first_turn = not bull_history.strip()
+        digest_mode = get_config().get("debate_context_mode", "full") == "digest" and not is_first_turn
+        _ctx = summarize_for_debate if digest_mode else (lambda t: t)
+
+        market_research_report = _ctx(state["market_report"])
+        sentiment_report = _ctx(state["sentiment_report"])
+        news_report = _ctx(state["news_report"])
+        fundamentals_report = _ctx(state["fundamentals_report"])
+        esg_report = _ctx(state.get("esg_report", ""))
+        derivatives_report = _ctx(state.get("derivatives_report", ""))
         user_research_report = state.get("user_research_report", "")
-        group_sector_report = state.get("group_sector_report", "")
-        market_phase_report = state.get("market_phase_report", "")
+        group_sector_report = _ctx(state.get("group_sector_report", ""))
+        market_phase_report = _ctx(state.get("market_phase_report", ""))
 
         user_research_block = ""
         if user_research_report.strip():
@@ -79,10 +100,11 @@ def create_bull_researcher(llm, prompt_registry=None):
             else "Asset fundamentals report (may be unavailable for crypto)"
         )
 
-        version = state.get("prompt_versions", {}).get("researchers/bull_researcher", "v1")
-        prompt, prompt_hash = registry.render(
+        version = state.get("prompt_versions", {}).get("researchers/bull_researcher", "v2")
+        prompt, prompt_hash, shared_hashes = registry.render_with_shared(
             "researchers/bull_researcher",
             version=version,
+            shared=_SHARED_BLOCKS,
             target_label=target_label,
             fundamentals_label=fundamentals_label,
             market_research_report=market_research_report,
@@ -111,6 +133,7 @@ def create_bull_researcher(llm, prompt_registry=None):
                     "prompt_key": "researchers/bull_researcher",
                     "prompt_version": version,
                     "prompt_hash": prompt_hash,
+                    "shared_prompt_hashes": shared_hashes,
                 }
             },
         )

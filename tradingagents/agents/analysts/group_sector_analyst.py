@@ -12,59 +12,21 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage
 
-GROUP_SECTOR_SYSTEM_PROMPT = """You are the Group & Sector Leadership Analyst for the TradingAgents system.
-You operate on the principle that approximately 50% of a stock's price performance is
-driven by its sector and industry group (the Boik 50% rule).
+from tradingagents.agents.utils.agent_utils import get_language_instruction
+from tradingagents.audit.prompt_registry import default_registry
 
-Your job is to evaluate the group dynamics and determine whether the stock's group
-environment supports or undermines the trading thesis.
-
-PRE-COMPUTED GROUP DATA (from the scoring engine):
-{group_context}
-
-MARKET ENVIRONMENT:
-{market_context}
-
-Your analysis MUST cover these five points:
-
-1. **GROUP ENVIRONMENT RATING** — Rate as: Strong / Neutral / Weak and explain why.
-
-2. **GROUP CONFIRMATION CHECK** — Are there 3 or more high-RS, high-quality stocks
-   in the same industry group acting well simultaneously? Name specific tickers if
-   available. This is the most important signal.
-
-3. **THEME IDENTIFICATION** — What is the underlying catalyst or theme driving this
-   group (e.g., AI infrastructure, GLP-1 drugs, energy transition, cloud security)?
-   Assess whether this is an early-stage theme (high potential) or a late-stage
-   theme (consensus already priced in).
-
-4. **GROUP MATURITY** — How long has this group been in leadership?
-   - Early stage (0-8 weeks): Maximum opportunity window
-   - Mid stage (8-20 weeks): Still viable but watch for rotation
-   - Late stage (20+ weeks): Beware of rotation risk; groups rarely lead >6 months
-
-5. **ROTATION RISK** — Are any other sectors or groups showing early leadership
-   rotation that could pull buying power away from this group?
-
-6. **CONFIDENCE & DISCONFIRMING EVIDENCE** — State your confidence in this rating
-   (low/medium/high) and name the single data point that would most quickly change it
-   (e.g. a specific leader breaking down, or a new leadership group emerging).
-
-CONCLUSION: Rate the group environment as:
-- **PASS**: Group is in top third, theme is confirmed, 3+ leaders acting well → supports the trade
-- **WARN**: Mixed signals — group partially leading or confirmation limited
-- **FAIL**: Group not in top third, fewer than 3 leaders, or active rotation away
-
-HARD RULE from the framework: If the group is not in the top third AND there are
-fewer than 3 group leaders acting well, the stock has a significantly reduced
-probability of being a monster stock regardless of individual fundamentals.
-
-Append a summary table with: Group Name | RS Rank Percentile | Leader Count | Confirmation | Rating
-"""
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
+# render_with_shared skips any block a given template version doesn't
+# reference, so this is safe to pass regardless of which version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
 
 
-def create_group_sector_analyst(llm):
+def create_group_sector_analyst(llm, prompt_registry=None):
     """Create the Group & Sector Leadership Analyst node."""
+    registry = prompt_registry or default_registry()
 
     def group_sector_analyst_node(state):
         from tradingagents.dataflows.market_health import fetch_market_health
@@ -97,9 +59,14 @@ def create_group_sector_analyst(llm):
         except Exception as e:
             market_context = f"Market health data unavailable: {e}"
 
-        system_message = GROUP_SECTOR_SYSTEM_PROMPT.format(
+        version = state.get("prompt_versions", {}).get("analysts/group_sector", "v1")
+        system_message, prompt_hash, shared_hashes = registry.render_with_shared(
+            "analysts/group_sector",
+            version=version,
+            shared=_SHARED_BLOCKS,
             group_context=group_context,
             market_context=market_context,
+            language_instruction=get_language_instruction(),
         )
 
         prompt_messages = [
@@ -111,7 +78,17 @@ def create_group_sector_analyst(llm):
         from langchain_core.prompts import ChatPromptTemplate
         prompt = ChatPromptTemplate.from_messages(prompt_messages)
         chain = prompt | llm
-        result = chain.invoke({})
+        result = chain.invoke(
+            {},
+            config={
+                "metadata": {
+                    "prompt_key": "analysts/group_sector",
+                    "prompt_version": version,
+                    "prompt_hash": prompt_hash,
+                    "shared_prompt_hashes": shared_hashes,
+                }
+            },
+        )
 
         report = result.content if hasattr(result, "content") else str(result)
 

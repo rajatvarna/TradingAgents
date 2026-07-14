@@ -13,11 +13,22 @@ from tradingagents.agents.utils.tool_call_recovery import (
     log_tool_call_failure,
     recover_tool_calls,
 )
+from tradingagents.audit.prompt_registry import default_registry
 
 logger = logging.getLogger(__name__)
 
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
+# render_with_shared skips any block a given template version doesn't
+# reference, so this is safe to pass regardless of which version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
 
-def create_technical_analyst(llm):
+
+def create_technical_analyst(llm, prompt_registry=None):
+    registry = prompt_registry or default_registry()
+
     def technical_analyst_node(state):
         current_date = state["trade_date"]
         ticker = state.get("company_of_interest", "UNKNOWN")
@@ -25,38 +36,14 @@ def create_technical_analyst(llm):
 
         tools = [get_technical_indicators]
 
-        system_message = (
-            "You are a senior Technical Analyst. Your goal is to evaluate the technical momentum, trend, "
-            "and volatility of the given instrument to determine the optimal entry or exit timing, with the "
-            "precision a professional trader would demand — vague statements like 'looks bullish' without "
-            "numeric support are not acceptable.\n\n"
-            "STEP 1 — Call get_technical_indicators with:\n"
-            "  ticker = the ticker symbol\n"
-            f"  curr_date = {current_date}   ← use this EXACT date, do not use any other date\n\n"
-            "STEP 2 — Write a detailed report that MUST include ALL of the following sections, each with "
-            "specific numbers pulled from the tool output:\n"
-            "1. **Trend Analysis** — SMA50/SMA200 position and slope, ADX strength and what it implies about "
-            "trend conviction (weak/moderate/strong), and whether shorter and longer averages are aligned "
-            "(stacked bullish/bearish) or conflicting.\n"
-            "2. **Momentum** — exact RSI value and whether it is overbought/oversold/neutral, MACD line vs. "
-            "signal line relationship and any recent crossover, and whether momentum confirms or diverges from "
-            "price (call out bullish/bearish divergence explicitly if present).\n"
-            "3. **Volatility** — Bollinger Band width (expanding = trending, contracting = potential breakout "
-            "setup) and the current ATR value relative to its typical range, with implications for expected "
-            "price swings.\n"
-            "4. **Support & Buy Zone** — specific price level(s) derived from indicators/recent lows, stated as "
-            "concrete numbers, not descriptions.\n"
-            "5. **Resistance & Target Prices** — specific price level(s) from indicators/recent highs, again as "
-            "concrete numbers.\n"
-            "6. **Stop Loss Level** — ATR-based stop loss (e.g., Close - 1.5×ATR), computed explicitly with the "
-            "actual numbers from the data.\n"
-            "7. **Risk/Reward Ratio** — using the entry zone, target, and stop loss above, compute an explicit "
-            "risk/reward ratio (e.g. 1:2.5) and state whether it meets a reasonable minimum threshold (~1:2).\n"
-            "8. **Overall Technical Signal** — Bullish / Bearish / Neutral with a rationale that ties together "
-            "trend, momentum, and volatility, and a confidence level (low/medium/high).\n"
-            "9. **Summary Table** — Markdown table: Metric | Value | Interpretation"
-            + get_strict_data_instruction()
-            + get_language_instruction()
+        version = state.get("prompt_versions", {}).get("analysts/technical", "v1")
+        system_message, prompt_hash, shared_hashes = registry.render_with_shared(
+            "analysts/technical",
+            version=version,
+            shared=_SHARED_BLOCKS,
+            current_date=current_date,
+            strict_data_instruction=get_strict_data_instruction(),
+            language_instruction=get_language_instruction(),
         )
 
         prompt = ChatPromptTemplate.from_messages([
@@ -75,7 +62,17 @@ def create_technical_analyst(llm):
         prompt = prompt.partial(instrument_context=instrument_context)
 
         chain = prompt | llm.bind_tools(tools)
-        result = chain.invoke(state["messages"])
+        result = chain.invoke(
+            state["messages"],
+            config={
+                "metadata": {
+                    "prompt_key": "analysts/technical",
+                    "prompt_version": version,
+                    "prompt_hash": prompt_hash,
+                    "shared_prompt_hashes": shared_hashes,
+                }
+            },
+        )
 
         result, recovered = recover_tool_calls(result, tools, logger)
         log_tool_call_failure("Technical Analyst", ticker, [t.name for t in tools], result, logger)

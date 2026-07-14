@@ -294,3 +294,22 @@ class TestResearchManagerWeightsBlock:
         block = fh(True)
         assert "HIGH UNCERTAINTY" in block
         assert "extra debate round" in block.lower()
+
+
+@pytest.mark.unit
+class TestAnalystWeightsBlockSharedAcrossManagers:
+    """B4: the formatting helper moved to agent_utils.py so both the
+    Research Manager and Portfolio Manager render it identically — this
+    guards against the two managers' imports silently drifting apart."""
+
+    def test_research_manager_and_portfolio_manager_use_the_same_function(self):
+        from tradingagents.agents.managers.portfolio_manager import (
+            format_analyst_weights_block as pm_fw,
+        )
+        from tradingagents.agents.managers.research_manager import (
+            _format_analyst_weights_block as rm_fw,
+        )
+        from tradingagents.agents.utils.agent_utils import format_analyst_weights_block as shared_fw
+
+        assert rm_fw is shared_fw
+        assert pm_fw is shared_fw

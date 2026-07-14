@@ -1,7 +1,11 @@
 # Deployment Integration & Core Features Plan
 
-**Status:** Proposed
-**Last updated:** 2026-07-13
+**Status:** Phases 0–3 and Phase 4 D-1/D-2/D-5/D-6 done (see each section for
+execution notes and scope corrections found along the way). Phase 4 D-3 and
+D-4 are the only remaining items — both explicitly deferred pending review by
+whoever operates the live `ops/` trading daemon, since both would change or
+depend on that system's behavior (see §4's "Why D-3/D-4 are not started" note).
+**Last updated:** 2026-07-14
 **Companion doc:** [CORE_FEATURES_PLAN.md](CORE_FEATURES_PLAN.md) (engine/ops features F1–F6)
 **Scope:** Explain why the Vercel deployment looks nothing like the locally-run
 app, inventory every UI/API surface in the repo, and lay out a phased plan to

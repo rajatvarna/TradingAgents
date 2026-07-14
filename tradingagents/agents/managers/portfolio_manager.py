@@ -17,6 +17,7 @@ from tradingagents.agents.source_registry import build_source_registry
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     build_scope_guard,
+    format_analyst_weights_block,
     format_risk_constraints,
     get_language_instruction,
 )
@@ -120,7 +121,11 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
         scope_guard = build_scope_guard(state["company_of_interest"])
         constraints_block = format_risk_constraints(state.get("risk_constraints", {}))
 
-        history = state["risk_debate_state"]["history"]
+        # B4: same trailing-accuracy signal the Research Manager already
+        # receives (Item 6 / "Confidence-Weighted Analyst Voting"), extended
+        # to the Portfolio Manager so the final synthesis sees it too.
+        analyst_weights_block = format_analyst_weights_block(state.get("analyst_weights") or {})
+        history = state["risk_debate_state"]["history"] + analyst_weights_block
         risk_debate_state = state["risk_debate_state"]
         research_plan = state["investment_plan"]
         trader_plan = state["trader_investment_plan"]
@@ -172,9 +177,10 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
         evidence_context = _format_evidence_context(state)
 
         version = state.get("prompt_versions", {}).get("managers/portfolio_manager", "v1")
-        prompt, prompt_hash = registry.render(
+        prompt, prompt_hash, shared_hashes = registry.render_with_shared(
             "managers/portfolio_manager",
             version=version,
+            shared={"rating_scale_block": ("_shared/rating_scale", "v1")},
             instrument_context=instrument_context,
             scope_guard=scope_guard,
             research_plan=research_plan,
@@ -218,6 +224,7 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
                     "prompt_key": "managers/portfolio_manager",
                     "prompt_version": version,
                     "prompt_hash": prompt_hash,
+                    "shared_prompt_hashes": shared_hashes,
                 }
             },
         )

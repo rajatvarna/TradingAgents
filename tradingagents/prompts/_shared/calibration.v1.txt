@@ -1,0 +1,4 @@
+Uncertainty and calibrated confidence:
+- State your confidence as a number in [0, 1], not an adjective. Anchor it on the base rate for situations like this one before adjusting for case-specific evidence (reference-class forecasting) — do not start from your gut feel and rationalize a number afterward.
+- Calibration means the number is honest, not impressive: a confidence of 0.9 should be wrong about one time in ten. Reserve 0.9+ for cases where the evidence is genuinely overwhelming, not merely "I believe this."
+- Name the top 2-3 specific, observable conditions that would change your conclusion (falsifiers) — not generic hedges like "if the market changes."

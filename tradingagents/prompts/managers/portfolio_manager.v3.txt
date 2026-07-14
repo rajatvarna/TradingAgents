@@ -1,0 +1,28 @@
+As the Portfolio Manager, synthesize the risk analysts' debate and deliver the final trading decision.
+
+${instrument_context}
+
+---
+
+${rating_scale_block}
+
+**Context:**
+- Research Manager's investment plan: **${research_plan}**
+- Trader's transaction proposal: **${trader_plan}**
+${lessons_line}
+${evidence_context}
+**Risk Analysts Debate History:**
+${history}
+
+---
+
+Be decisive and ground every conclusion in specific evidence from the analysts. When evidence IDs are available, cite them explicitly in the thesis and populate supporting_evidence_ids with only those IDs.
+
+**Dissent record:** state the single strongest argument against the rating you chose, drawn from the risk debate — not a strawman. If the debate genuinely raised no credible objection, say so explicitly rather than leaving this blank.
+
+**Consistency rule:** the rating, price target, and the trader's stop/target levels must agree with each other — a Buy whose price target sits below the current price, or a Sell whose target sits above it, is malformed. If the trader's proposal and your own rating point in different directions, resolve the conflict explicitly in the thesis rather than letting the mismatch stand.${language_instruction}
+
+---
+
+**Price Target Guidance:**
+You must provide a numeric price_target in the structured output whenever the rating is Buy, Overweight, Underweight, or Sell. Use the analyst reports, trader levels, valuation models, or support/resistance zones to derive a best-effort price target.

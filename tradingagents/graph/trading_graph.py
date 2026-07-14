@@ -199,6 +199,11 @@ class TradingAgentsGraph:
         self.config = config or DEFAULT_CONFIG
         self.selected_analysts = selected_analysts
 
+        # B1 — typed config validation. Warn-only unless config["strict_config"]
+        # or TRADINGAGENTS_STRICT_CONFIG is set; see tradingagents/config_schema.py.
+        from tradingagents.config_schema import validate_config
+        validate_config(self.config)
+
         # T1.2 — when full-trace audit is enabled (default), prepend a
         # TraceCallback to whatever callbacks the caller supplied.
         user_callbacks = list(callbacks) if callbacks else []
@@ -669,6 +674,7 @@ class TradingAgentsGraph:
             init_agent_state["monster_stock_score"] = monster_score
         if forensic_score:
             init_agent_state["forensic_score"] = forensic_score
+        init_agent_state["prompt_versions"] = self.config.get("prompt_versions", {})
 
         from tradingagents.dataflows.earnings_calendar import get_earnings_warning
         earnings_warning = get_earnings_warning(
@@ -1046,6 +1052,10 @@ class TradingAgentsGraph:
             init_agent_state["monster_stock_score"] = monster_score
         if forensic_score:
             init_agent_state["forensic_score"] = forensic_score
+        # Without this, every registry-backed agent's state.get("prompt_versions", {})
+        # returns {} and silently falls back to its hardcoded "v1" default, so the
+        # versions declared here never take effect (see CHANGELOG for the bug this fixes).
+        init_agent_state["prompt_versions"] = self.config.get("prompt_versions", {})
 
         # Earnings calendar awareness — warn before analysis if earnings are near.
         from tradingagents.dataflows.earnings_calendar import get_earnings_warning

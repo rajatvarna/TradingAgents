@@ -14,8 +14,17 @@ from tradingagents.agents.utils.agent_utils import (
     get_prediction_markets,
 )
 from tradingagents.agents.utils.tool_fallback import bind_tools_or_none, safe_tool_text
+from tradingagents.audit.prompt_registry import default_registry
 
 logger = logging.getLogger(__name__)
+
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
+# render_with_shared skips any block a given template version doesn't
+# reference, so this is safe to pass regardless of which version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
 
 
 def _tool_call_id(tool_call):
@@ -149,7 +158,9 @@ def _prefetch_news_data(ticker: str, current_date: str) -> str:
     )
 
 
-def create_news_analyst(llm):
+def create_news_analyst(llm, prompt_registry=None):
+    registry = prompt_registry or default_registry()
+
     def news_analyst_node(state):
         current_date = state["trade_date"]
         ticker = str(state["company_of_interest"])
@@ -164,40 +175,21 @@ def create_news_analyst(llm):
             get_prediction_markets,
         ]
 
-        system_message = build_cacheable_system_content(
-            f"You are a senior news and macro researcher tasked with analyzing recent news, macroeconomic data, and "
-            f"forward-looking market expectations over the past week and their implications for trading this "
-            f"{asset_label}. Please write a comprehensive, well-sourced report of the current state of the world "
-            f"that is relevant for trading and macroeconomics — do not simply list headlines, synthesize them into "
-            f"a coherent narrative with explicit trading implications.\n\n"
-            f"Use the available tools: get_news(ticker, start_date, end_date) for {asset_label}-specific news by "
-            f"ticker symbol, get_global_news(curr_date, look_back_days, limit) for broader macroeconomic news, "
-            f"get_macro_indicators(indicator, curr_date, look_back_days) to ground macro commentary in actual data "
-            f"from FRED (e.g. 'cpi', 'core_pce', 'unemployment', 'fed_funds_rate', '10y_treasury', 'yield_curve'), "
-            f"and get_prediction_markets(topic, limit) for live market-implied probabilities of forward-looking "
-            f"events (e.g. 'Fed rate cut', 'recession 2026', geopolitical or sector events).\n\n"
-            f"Your report must cover, in order:\n"
-            f"1. **Company/asset-specific news** — material headlines from the lookback window (earnings, guidance, "
-            f"M&A, regulatory, litigation, management changes, product news), each with the date and why it matters.\n"
-            f"2. **Sector and competitive news** — anything affecting peers, suppliers, or customers that could "
-            f"spill over onto this ticker.\n"
-            f"3. **Macroeconomic backdrop** — pull concrete figures via get_macro_indicators (inflation, employment, "
-            f"rates, yield curve shape) rather than describing the economy in vague terms; state whether the "
-            f"backdrop is a tailwind, headwind, or neutral for this instrument.\n"
-            f"4. **Monetary policy and rate expectations** — current Fed stance and what prediction markets imply "
-            f"about near-term policy moves.\n"
-            f"5. **Geopolitical and event risk** — any pending catalysts (elections, referenda, conflicts, "
-            f"regulatory decisions) with prediction-market-implied probabilities where available.\n"
-            f"6. **Net assessment** — reconcile company-specific news against the macro backdrop: does the macro "
-            f"environment amplify or offset the company-specific story?\n\n"
-            f"Distinguish clearly between confirmed facts (with dates and sources), consensus expectations, and "
-            f"speculation — never present rumor as fact. If data for a section is unavailable, say so explicitly "
-            f"rather than fabricating headlines or statistics. Provide specific, actionable insights with "
-            f"supporting evidence to help traders make informed decisions."
-            + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
-            + get_language_instruction(),
-            llm,
+        version = state.get("prompt_versions", {}).get("analysts/news", "v1")
+        rendered_message, prompt_hash, shared_hashes = registry.render_with_shared(
+            "analysts/news",
+            version=version,
+            shared=_SHARED_BLOCKS,
+            asset_label=asset_label,
+            language_instruction=get_language_instruction(),
         )
+        system_message = build_cacheable_system_content(rendered_message, llm)
+        prompt_metadata = {
+            "prompt_key": "analysts/news",
+            "prompt_version": version,
+            "prompt_hash": prompt_hash,
+            "shared_prompt_hashes": shared_hashes,
+        }
 
         bound_llm = bind_tools_or_none(llm, tools, "News Analyst")
 
@@ -227,7 +219,7 @@ def create_news_analyst(llm):
             prompt = prompt.partial(instrument_context=instrument_context)
 
             chain = prompt | bound_llm
-            result = chain.invoke(state["messages"])
+            result = chain.invoke(state["messages"], config={"metadata": prompt_metadata})
             invalid_tool_calls = list(getattr(result, "invalid_tool_calls", []) or [])
 
             if invalid_tool_calls:
@@ -240,7 +232,8 @@ def create_news_analyst(llm):
                 retry_result = chain.invoke(
                     _retry_messages_for_invalid_tool_calls(
                         state["messages"], result, invalid_tool_calls
-                    )
+                    ),
+                    config={"metadata": prompt_metadata},
                 )
                 retry_invalid_tool_calls = list(
                     getattr(retry_result, "invalid_tool_calls", []) or []
@@ -293,7 +286,7 @@ def create_news_analyst(llm):
         prompt = prompt.partial(news_data=news_data)
 
         formatted_messages = prompt.format_messages(messages=state["messages"])
-        result = llm.invoke(formatted_messages)
+        result = llm.invoke(formatted_messages, config={"metadata": prompt_metadata})
 
         return {
             "messages": [result],

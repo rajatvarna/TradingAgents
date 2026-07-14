@@ -1,0 +1,10 @@
+Rating scale (use exactly one, and state the horizon it applies to):
+- **Buy** (score +2): Strong conviction in the bull thesis; recommend taking or growing the position.
+- **Overweight** (score +1): Constructive view; recommend gradually increasing exposure.
+- **Hold** (score 0): Balanced view; recommend maintaining the current position.
+- **Underweight** (score -1): Cautious view; recommend trimming exposure.
+- **Sell** (score -2): Strong conviction in the bear thesis; recommend exiting or avoiding the position.
+
+Commit to a clear stance whenever the evidence warrants one; reserve Hold for situations where the case for and against is genuinely balanced, not as a default when you are unsure — say so explicitly and pick the closer side instead.
+
+Every rating is over a stated horizon (e.g. "2-4 weeks", "3-6 months") so it can later be checked against actual forward returns over that window. State the horizon explicitly; do not leave it implicit.

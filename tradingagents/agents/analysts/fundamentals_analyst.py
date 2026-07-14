@@ -11,6 +11,15 @@ from tradingagents.agents.utils.agent_utils import (
     get_language_instruction,
 )
 from tradingagents.agents.utils.tool_fallback import bind_tools_or_none, safe_tool_text
+from tradingagents.audit.prompt_registry import default_registry
+
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
+# render_with_shared skips any block a given template version doesn't
+# reference, so this is safe to pass regardless of which version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
 
 
 def _format_fundamental_monster_context(mss: dict) -> str:
@@ -148,7 +157,9 @@ def _prefetch_fundamentals_data(ticker: str, current_date: str) -> str:
     )
 
 
-def create_fundamentals_analyst(llm):
+def create_fundamentals_analyst(llm, prompt_registry=None):
+    registry = prompt_registry or default_registry()
+
     def fundamentals_analyst_node(state):
         current_date = state["trade_date"]
         asset_type = state.get("asset_type", "stock")
@@ -165,43 +176,23 @@ def create_fundamentals_analyst(llm):
             get_income_statement,
         ]
 
-        system_message = build_cacheable_system_content(
-            monster_context
-            + forensic_context
-            + f"You are a senior Fundamentals Analyst trained on the TraderLion / Boik Monster Stock methodology, "
-            f"with the rigor of a sell-side equity research analyst. "
-            f"Analyze fundamental information about this {subject_label} against the scored criteria shown above — "
-            f"do not merely restate the scores, independently verify them against the raw financial statements. "
-            f"Your report must cover, in order and in depth:\n"
-            f"(1) **Criterion-by-criterion review** — confirm or challenge each scored criterion above with additional "
-            f"context and the specific numbers behind it (do not just repeat the pass/fail label); "
-            f"(2) **Primary fundamental story** — identify whether this is an EPS story, a revenue story, or a theme "
-            f"story, and state the evidence for that classification; "
-            f"(3) **Growth trajectory** — quarter-over-quarter and year-over-year revenue and EPS growth trends over "
-            f"the last several reported quarters, explicitly flagging any deceleration in the most recent quarter "
-            f"(a critical red flag) or any reacceleration; "
-            f"(4) **Margin analysis** — gross, operating, and net margin trends, and whether margin expansion or "
-            f"compression is structural (mix shift, pricing power, cost discipline) or cyclical; "
-            f"(5) **Balance sheet health** — liquidity (current ratio, cash position), leverage (debt/equity, "
-            f"interest coverage), and any red flags such as rising receivables or inventory relative to revenue; "
-            f"(6) **Cash flow quality** — operating cash flow vs. net income, free cash flow trend, and capital "
-            f"allocation (buybacks, dividends, capex, M&A); "
-            f"(7) **Forward outlook** — assess whether analysts/guidance expect growth to continue, plateau, or slow "
-            f"over the next two fiscal years, and whether current valuation multiples appear to price that in; "
-            f"(8) **Earnings-quality red flags** — if a forensic accounting score is shown above, address it "
-            f"explicitly: flag any cash-flow/net-income divergence, aggressive accruals, rising days-sales-outstanding, "
-            f"or SG&A growth outpacing revenue; if no forensic score is shown, perform this check yourself from the "
-            f"raw statements; "
-            f"(9) **Peer/sector context** — briefly note how these metrics compare to sector norms if the data permits; "
-            f"(10) conclude with an explicit **PASS / WARN / FAIL** verdict on the fundamental case and the single "
-            f"most important reason behind that verdict. "
-            f"Include as much quantitative detail as possible — cite specific figures, not just qualitative labels. "
-            f"Provide specific, actionable insights with supporting evidence, and be candid about data limitations."
-            + " Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."
-            + " Use the available tools: `get_fundamentals` for comprehensive company analysis, `get_balance_sheet`, `get_cashflow`, and `get_income_statement` for specific financial statements. Cross-check figures across statements where they should reconcile (e.g. net income on the income statement vs. the cash flow statement's starting line)."
-            + get_language_instruction(),
-            llm,
+        version = state.get("prompt_versions", {}).get("analysts/fundamentals", "v1")
+        rendered_message, prompt_hash, shared_hashes = registry.render_with_shared(
+            "analysts/fundamentals",
+            version=version,
+            shared=_SHARED_BLOCKS,
+            monster_context=monster_context,
+            forensic_context=forensic_context,
+            subject_label=subject_label,
+            language_instruction=get_language_instruction(),
         )
+        system_message = build_cacheable_system_content(rendered_message, llm)
+        prompt_metadata = {
+            "prompt_key": "analysts/fundamentals",
+            "prompt_version": version,
+            "prompt_hash": prompt_hash,
+            "shared_prompt_hashes": shared_hashes,
+        }
 
         bound_llm = bind_tools_or_none(llm, tools, "Fundamentals Analyst")
 
@@ -232,7 +223,7 @@ def create_fundamentals_analyst(llm):
 
             chain = prompt | bound_llm
 
-            result = chain.invoke(state["messages"])
+            result = chain.invoke(state["messages"], config={"metadata": prompt_metadata})
 
             report = ""
             if len(result.tool_calls) == 0:
@@ -272,7 +263,7 @@ def create_fundamentals_analyst(llm):
         prompt = prompt.partial(fundamentals_data=fundamentals_data)
 
         formatted_messages = prompt.format_messages(messages=state["messages"])
-        result = llm.invoke(formatted_messages)
+        result = llm.invoke(formatted_messages, config={"metadata": prompt_metadata})
 
         return {
             "messages": [result],

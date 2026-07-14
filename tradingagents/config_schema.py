@@ -330,6 +330,9 @@ def generate_config_reference_markdown() -> str:
             else:
                 default_display = f"`{default!r}`"
         type_display = getattr(field.annotation, "__name__", None) or str(field.annotation).replace("typing.", "")
+        # Union types render as e.g. "int | None" — an unescaped `|` reads as
+        # an extra markdown table column divider, so escape it before rendering.
+        type_display = type_display.replace("|", "\\|")
         env_var = f"`{env_by_key[name]}`" if name in env_by_key else ""
         lines.append(f"| `{name}` | `{type_display}` | {default_display} | {env_var} |")
 

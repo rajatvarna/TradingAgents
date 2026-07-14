@@ -168,30 +168,7 @@ def _filter_csv_by_date_range(csv_data: str, start_date: str, end_date: str) -> 
     Returns:
         Filtered CSV string
     """
-    if not csv_data or csv_data.strip() == "":
-        return csv_data
-
-    try:
-        # Parse CSV data
-        df = pd.read_csv(StringIO(csv_data))
-
-        # Assume the first column is the date column (timestamp)
-        date_col = df.columns[0]
-        df[date_col] = pd.to_datetime(df[date_col])
-
-        # Filter by date range
-        start_dt = pd.to_datetime(start_date)
-        end_dt = pd.to_datetime(end_date)
-
-        filtered_df = df[(df[date_col] >= start_dt) & (df[date_col] <= end_dt)]
-
-        # Convert back to CSV string
-        return filtered_df.to_csv(index=False)
-
-    except Exception as e:
-        # If filtering fails, return original data with a warning
-        print(f"Warning: Failed to filter CSV data by date range: {e}")
-        return csv_data
+    return _filter_csv_by_range(csv_data, start_date, end_date, end_of_day=False)
 
 
 def _filter_csv_by_datetime_range(csv_data: str, start_date: str, end_date: str) -> str:
@@ -206,20 +183,33 @@ def _filter_csv_by_datetime_range(csv_data: str, start_date: str, end_date: str)
     protection at timestamp (not just date) granularity for callers passing an
     intraday interval.
     """
+    return _filter_csv_by_range(csv_data, start_date, end_date, end_of_day=True)
+
+
+def _filter_csv_by_range(csv_data: str, start_date: str, end_date: str, *, end_of_day: bool) -> str:
     if not csv_data or csv_data.strip() == "":
         return csv_data
 
     try:
+        # Parse CSV data
         df = pd.read_csv(StringIO(csv_data))
+
+        # Assume the first column is the date column (timestamp)
         date_col = df.columns[0]
         df[date_col] = pd.to_datetime(df[date_col])
 
+        # Filter by date range
         start_dt = pd.to_datetime(start_date)
-        end_dt = pd.to_datetime(end_date) + pd.Timedelta(hours=23, minutes=59, seconds=59)
+        end_dt = pd.to_datetime(end_date)
+        if end_of_day:
+            end_dt += pd.Timedelta(hours=23, minutes=59, seconds=59)
 
         filtered_df = df[(df[date_col] >= start_dt) & (df[date_col] <= end_dt)]
+
+        # Convert back to CSV string
         return filtered_df.to_csv(index=False)
 
     except Exception as e:
-        print(f"Warning: Failed to filter CSV data by datetime range: {e}")
+        # If filtering fails, return original data with a warning
+        print(f"Warning: Failed to filter CSV data by range: {e}")
         return csv_data

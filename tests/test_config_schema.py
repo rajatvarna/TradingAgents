@@ -140,6 +140,23 @@ class TestConfigReferenceDoc:
         assert doc_path.is_file(), "docs/CONFIG_REFERENCE.md is missing; run generate-docs"
         assert doc_path.read_text(encoding="utf-8") == generate_config_reference_markdown()
 
+    def test_union_type_pipe_is_escaped_so_table_columns_stay_aligned(self):
+        """A raw `|` in a union type string (e.g. "int | None") reads as an
+        extra markdown table column divider; it must be escaped as `\\|`."""
+        import re
+
+        markdown = generate_config_reference_markdown()
+        assert re.search(r"(?<!\\)\| None`", markdown) is None, (
+            "unescaped union-type pipe would corrupt the table"
+        )
+        assert "\\| None`" in markdown, "expected at least one escaped union type in the generated doc"
+        for line in markdown.splitlines():
+            if line.startswith("| `") and line.endswith(" |"):
+                # Every real data row must have exactly 4 columns (5 pipes);
+                # an unescaped `|` inside a cell would silently add a column.
+                cells = re.split(r"(?<!\\)\|", line)
+                assert len(cells) == 6, f"row has wrong column count: {line!r}"
+
 
 @pytest.mark.unit
 class TestCLI:

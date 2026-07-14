@@ -10,6 +10,14 @@ from tradingagents.agents.utils.derivatives_tools import (
 )
 from tradingagents.audit.prompt_registry import default_registry
 
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
+# render_with_shared skips any block a given template version doesn't
+# reference, so this is safe to pass regardless of which version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
+
 
 def create_derivative_analyst(llm, prompt_registry=None):
     registry = prompt_registry or default_registry()
@@ -24,9 +32,10 @@ def create_derivative_analyst(llm, prompt_registry=None):
         tools = [get_options_overview, get_options_chain]
 
         version = state.get("prompt_versions", {}).get("analysts/derivative", "v1")
-        system_message, prompt_hash = registry.render(
+        system_message, prompt_hash, shared_hashes = registry.render_with_shared(
             "analysts/derivative",
             version=version,
+            shared=_SHARED_BLOCKS,
             language_instruction=get_language_instruction(),
         )
 
@@ -61,6 +70,7 @@ def create_derivative_analyst(llm, prompt_registry=None):
                     "prompt_key": "analysts/derivative",
                     "prompt_version": version,
                     "prompt_hash": prompt_hash,
+                    "shared_prompt_hashes": shared_hashes,
                 }
             },
         )

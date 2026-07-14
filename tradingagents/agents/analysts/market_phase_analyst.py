@@ -16,6 +16,14 @@ from langchain_core.messages import HumanMessage
 from tradingagents.agents.utils.agent_utils import get_language_instruction
 from tradingagents.audit.prompt_registry import default_registry
 
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
+# render_with_shared skips any block a given template version doesn't
+# reference, so this is safe to pass regardless of which version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
+
 
 def create_market_phase_analyst(llm, prompt_registry=None):
     """Create the Market Phase Analyst node."""
@@ -45,9 +53,10 @@ def create_market_phase_analyst(llm, prompt_registry=None):
             market_context = f"Market health data unavailable: {e}\nDefaulting to neutral assessment."
 
         version = state.get("prompt_versions", {}).get("analysts/market_phase", "v1")
-        system_message, prompt_hash = registry.render(
+        system_message, prompt_hash, shared_hashes = registry.render_with_shared(
             "analysts/market_phase",
             version=version,
+            shared=_SHARED_BLOCKS,
             market_context=market_context,
             language_instruction=get_language_instruction(),
         )
@@ -65,6 +74,7 @@ def create_market_phase_analyst(llm, prompt_registry=None):
                     "prompt_key": "analysts/market_phase",
                     "prompt_version": version,
                     "prompt_hash": prompt_hash,
+                    "shared_prompt_hashes": shared_hashes,
                 }
             },
         )

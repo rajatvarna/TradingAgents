@@ -15,6 +15,14 @@ from langchain_core.messages import HumanMessage
 from tradingagents.agents.utils.agent_utils import get_language_instruction
 from tradingagents.audit.prompt_registry import default_registry
 
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
+# render_with_shared skips any block a given template version doesn't
+# reference, so this is safe to pass regardless of which version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
+
 
 def create_group_sector_analyst(llm, prompt_registry=None):
     """Create the Group & Sector Leadership Analyst node."""
@@ -52,9 +60,10 @@ def create_group_sector_analyst(llm, prompt_registry=None):
             market_context = f"Market health data unavailable: {e}"
 
         version = state.get("prompt_versions", {}).get("analysts/group_sector", "v1")
-        system_message, prompt_hash = registry.render(
+        system_message, prompt_hash, shared_hashes = registry.render_with_shared(
             "analysts/group_sector",
             version=version,
+            shared=_SHARED_BLOCKS,
             group_context=group_context,
             market_context=market_context,
             language_instruction=get_language_instruction(),
@@ -76,6 +85,7 @@ def create_group_sector_analyst(llm, prompt_registry=None):
                     "prompt_key": "analysts/group_sector",
                     "prompt_version": version,
                     "prompt_hash": prompt_hash,
+                    "shared_prompt_hashes": shared_hashes,
                 }
             },
         )

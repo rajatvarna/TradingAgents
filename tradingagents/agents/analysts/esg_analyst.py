@@ -9,6 +9,14 @@ from tradingagents.agents.utils.agent_utils import (
 from tradingagents.agents.utils.esg_data_tools import get_esg_news, get_esg_scores
 from tradingagents.audit.prompt_registry import default_registry
 
+# A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
+# render_with_shared skips any block a given template version doesn't
+# reference, so this is safe to pass regardless of which version is selected.
+_SHARED_BLOCKS = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
+
 
 def create_esg_analyst(llm, prompt_registry=None):
     """Create an ESG analyst node for the trading graph."""
@@ -23,9 +31,10 @@ def create_esg_analyst(llm, prompt_registry=None):
         tools = [get_esg_scores, get_esg_news]
 
         version = state.get("prompt_versions", {}).get("analysts/esg", "v1")
-        system_message, prompt_hash = registry.render(
+        system_message, prompt_hash, shared_hashes = registry.render_with_shared(
             "analysts/esg",
             version=version,
+            shared=_SHARED_BLOCKS,
             asset_label=asset_label,
             language_instruction=get_language_instruction(),
         )
@@ -60,6 +69,7 @@ def create_esg_analyst(llm, prompt_registry=None):
                     "prompt_key": "analysts/esg",
                     "prompt_version": version,
                     "prompt_hash": prompt_hash,
+                    "shared_prompt_hashes": shared_hashes,
                 }
             },
         )

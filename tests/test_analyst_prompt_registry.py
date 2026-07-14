@@ -1112,3 +1112,326 @@ class TestQuantV2Content:
         md = llm.last_config["metadata"]
         assert md["prompt_version"] == "v2"
         assert set(md["shared_prompt_hashes"]) == {"_shared/data_integrity", "_shared/calibration"}
+
+
+# --------------------------------------------------------------------- #
+# A2 (remaining 8) — v2 content tests, available-not-default
+# --------------------------------------------------------------------- #
+
+_SHARED_V1 = {
+    "data_integrity_block": ("_shared/data_integrity", "v1"),
+    "calibration_block": ("_shared/calibration", "v1"),
+}
+
+
+@pytest.mark.unit
+class TestTechnicalV2Content:
+    def test_carries_a2_additions(self):
+        rendered, _, shared_hashes = default_registry().render_with_shared(
+            "analysts/technical",
+            version="v2",
+            shared=_SHARED_V1,
+            current_date="2026-01-02",
+            strict_data_instruction="",
+            language_instruction="",
+        )
+        assert "chart pattern recognition" in rendered.lower()
+        assert "confirmation-grade precision" in rendered.lower()
+        assert "confidence:" in rendered.lower()
+        assert set(shared_hashes) == {"_shared/data_integrity", "_shared/calibration"}
+        assert "${" not in rendered
+
+    def test_default_config_unchanged(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["analysts/technical"] == "v1"
+
+    def test_node_honors_explicit_v2_override(self):
+        from tradingagents.agents.analysts.technical_analyst import create_technical_analyst
+
+        llm = _RecordingLLM()
+        node = create_technical_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "prompt_versions": {"analysts/technical": "v2"},
+            "messages": [HumanMessage(content="Analyze")],
+        }
+        node(state)
+
+        md = llm.last_config["metadata"]
+        assert md["prompt_version"] == "v2"
+        assert set(md["shared_prompt_hashes"]) == {"_shared/data_integrity", "_shared/calibration"}
+
+
+@pytest.mark.unit
+class TestEsgV2Content:
+    def test_carries_a2_additions(self):
+        rendered, _, shared_hashes = default_registry().render_with_shared(
+            "analysts/esg",
+            version="v2",
+            shared=_SHARED_V1,
+            asset_label="company",
+            language_instruction="",
+        )
+        assert "overall esg risk verdict" in rendered.lower()
+        assert "confidence:" in rendered.lower()
+        assert set(shared_hashes) == {"_shared/data_integrity", "_shared/calibration"}
+        assert "${" not in rendered
+
+    def test_default_config_unchanged(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["analysts/esg"] == "v1"
+
+    def test_node_honors_explicit_v2_override(self):
+        from tradingagents.agents.analysts.esg_analyst import create_esg_analyst
+
+        llm = _RecordingLLM()
+        node = create_esg_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "prompt_versions": {"analysts/esg": "v2"},
+            "messages": [HumanMessage(content="Analyze")],
+        }
+        node(state)
+
+        md = llm.last_config["metadata"]
+        assert md["prompt_version"] == "v2"
+        assert set(md["shared_prompt_hashes"]) == {"_shared/data_integrity", "_shared/calibration"}
+
+
+@pytest.mark.unit
+class TestDerivativeV2Content:
+    def test_carries_a2_additions(self):
+        rendered, _, shared_hashes = default_registry().render_with_shared(
+            "analysts/derivative",
+            version="v2",
+            shared=_SHARED_V1,
+            language_instruction="",
+        )
+        assert "dealer positioning and gamma rubric" in rendered.lower()
+        assert "confidence:" in rendered.lower()
+        assert set(shared_hashes) == {"_shared/data_integrity", "_shared/calibration"}
+        assert "${" not in rendered
+
+    def test_default_config_unchanged(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["analysts/derivative"] == "v1"
+
+    def test_node_honors_explicit_v2_override(self):
+        from tradingagents.agents.analysts.derivative_analyst import create_derivative_analyst
+
+        llm = _RecordingLLM()
+        node = create_derivative_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "prompt_versions": {"analysts/derivative": "v2"},
+            "messages": [HumanMessage(content="Analyze")],
+        }
+        node(state)
+
+        md = llm.last_config["metadata"]
+        assert md["prompt_version"] == "v2"
+        assert set(md["shared_prompt_hashes"]) == {"_shared/data_integrity", "_shared/calibration"}
+
+
+@pytest.mark.unit
+class TestAlternativeDataV2Content:
+    def test_carries_a2_additions(self):
+        rendered, _, shared_hashes = default_registry().render_with_shared(
+            "analysts/alternative_data",
+            version="v2",
+            shared=_SHARED_V1,
+            strict_data_instruction="",
+            language_instruction="",
+        )
+        assert "trajectory" in rendered.lower()
+        assert "crowding heuristic" in rendered.lower()
+        assert set(shared_hashes) == {"_shared/data_integrity", "_shared/calibration"}
+        assert "${" not in rendered
+
+    def test_default_config_unchanged(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["analysts/alternative_data"] == "v1"
+
+    def test_node_honors_explicit_v2_override(self):
+        from tradingagents.agents.analysts.alternative_data_analyst import (
+            create_alternative_data_analyst,
+        )
+
+        llm = _RecordingLLM()
+        node = create_alternative_data_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "prompt_versions": {"analysts/alternative_data": "v2"},
+            "messages": [HumanMessage(content="Analyze")],
+        }
+        node(state)
+
+        md = llm.last_config["metadata"]
+        assert md["prompt_version"] == "v2"
+        assert set(md["shared_prompt_hashes"]) == {"_shared/data_integrity", "_shared/calibration"}
+
+
+@pytest.mark.unit
+class TestGroupSectorV2Content:
+    def test_carries_a2_additions(self):
+        rendered, _, shared_hashes = default_registry().render_with_shared(
+            "analysts/group_sector",
+            version="v2",
+            shared=_SHARED_V1,
+            group_context="GROUP_CTX",
+            market_context="MARKET_CTX",
+            language_instruction="",
+        )
+        assert "do not invent peer tickers" in rendered.lower()
+        assert "confidence:" in rendered.lower()
+        assert set(shared_hashes) == {"_shared/data_integrity", "_shared/calibration"}
+        assert "${" not in rendered
+
+    def test_default_config_unchanged(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["analysts/group_sector"] == "v1"
+
+    def test_node_honors_explicit_v2_override(self, monkeypatch):
+        from tradingagents.agents.analysts import group_sector_analyst as gsa
+
+        monkeypatch.setattr(
+            "tradingagents.dataflows.sector_groups.fetch_group_leadership",
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no data")),
+        )
+        monkeypatch.setattr(
+            "tradingagents.dataflows.market_health.fetch_market_health",
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no data")),
+        )
+        llm = _RecordingLLM()
+        node = gsa.create_group_sector_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "prompt_versions": {"analysts/group_sector": "v2"},
+        }
+        node(state)
+
+        md = llm.last_config["metadata"]
+        assert md["prompt_version"] == "v2"
+        assert set(md["shared_prompt_hashes"]) == {"_shared/data_integrity", "_shared/calibration"}
+
+
+@pytest.mark.unit
+class TestMarketPhaseV2Content:
+    def test_carries_a2_additions(self):
+        rendered, _, shared_hashes = default_registry().render_with_shared(
+            "analysts/market_phase",
+            version="v2",
+            shared=_SHARED_V1,
+            market_context="MKT_CTX",
+            language_instruction="",
+        )
+        assert "confidence:" in rendered.lower()
+        assert "data-integrity rules" in rendered.lower()
+        assert set(shared_hashes) == {"_shared/data_integrity", "_shared/calibration"}
+        assert "${" not in rendered
+
+    def test_default_config_unchanged(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["analysts/market_phase"] == "v1"
+
+    def test_node_honors_explicit_v2_override(self, monkeypatch):
+        from tradingagents.agents.analysts import market_phase_analyst as mpa
+
+        monkeypatch.setattr(
+            "tradingagents.dataflows.market_health.fetch_market_health",
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no data")),
+        )
+        llm = _RecordingLLM()
+        node = mpa.create_market_phase_analyst(llm)
+        state = {"trade_date": "2026-01-02", "prompt_versions": {"analysts/market_phase": "v2"}}
+        node(state)
+
+        md = llm.last_config["metadata"]
+        assert md["prompt_version"] == "v2"
+        assert set(md["shared_prompt_hashes"]) == {"_shared/data_integrity", "_shared/calibration"}
+
+
+@pytest.mark.unit
+class TestPostmortemV2Content:
+    def test_carries_a2_additions(self):
+        rendered, _, shared_hashes = default_registry().render_with_shared(
+            "analysts/postmortem",
+            version="v2",
+            shared=_SHARED_V1,
+            past_recommendation="PAST_REC",
+            outcome_data="OUTCOME",
+            language_instruction="",
+        )
+        assert "lesson_tags:" in rendered.lower()
+        assert "confidence:" in rendered.lower()
+        assert set(shared_hashes) == {"_shared/data_integrity", "_shared/calibration"}
+        assert "${" not in rendered
+
+    def test_default_config_unchanged(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["analysts/postmortem"] == "v1"
+
+    def test_node_honors_explicit_v2_override(self):
+        from tradingagents.agents.analysts.postmortem_analyst import create_postmortem_analyst
+
+        llm = _RecordingLLM()
+        node = create_postmortem_analyst(llm)
+        state = {
+            "postmortem_past_recommendation": "PAST",
+            "postmortem_outcome_data": "OUTCOME",
+            "prompt_versions": {"analysts/postmortem": "v2"},
+        }
+        node(state)
+
+        md = llm.last_config["metadata"]
+        assert md["prompt_version"] == "v2"
+        assert set(md["shared_prompt_hashes"]) == {"_shared/data_integrity", "_shared/calibration"}
+
+
+@pytest.mark.unit
+class TestOptionsV2Content:
+    def test_carries_a2_additions(self):
+        rendered, _, shared_hashes = default_registry().render_with_shared(
+            "analysts/options",
+            version="v2",
+            shared=_SHARED_V1,
+            language_instruction="",
+        )
+        assert "dealer positioning rubric" in rendered.lower()
+        assert "confidence:" in rendered.lower()
+        assert set(shared_hashes) == {"_shared/data_integrity", "_shared/calibration"}
+        assert "${" not in rendered
+
+    def test_default_config_unchanged(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+
+        assert DEFAULT_CONFIG["prompt_versions"]["analysts/options"] == "v1"
+
+    def test_node_honors_explicit_v2_override(self):
+        from tradingagents.agents.analysts.options_analyst import create_options_analyst
+
+        llm = _RecordingLLM()
+        node = create_options_analyst(llm)
+        state = {
+            "company_of_interest": "AAPL",
+            "trade_date": "2026-01-02",
+            "prompt_versions": {"analysts/options": "v2"},
+            "messages": [HumanMessage(content="Analyze")],
+        }
+        node(state)
+
+        md = llm.last_config["metadata"]
+        assert md["prompt_version"] == "v2"
+        assert set(md["shared_prompt_hashes"]) == {"_shared/data_integrity", "_shared/calibration"}

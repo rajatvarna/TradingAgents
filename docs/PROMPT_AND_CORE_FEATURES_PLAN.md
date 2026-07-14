@@ -1,9 +1,10 @@
 # Prompt Improvement & Core Features Plan
 
-**Status:** In progress — A0, A1, A6 complete; A2 (5/13 analysts) and A3
-(researchers + risk team) landed as available-not-default versions; see §4
-for the up-to-date progress table.
-**Last updated:** 2026-07-13
+**Status:** A0-A7 and B1-B5 all landed as available-not-default versions
+(no A6 scorecard has run yet — needs live API keys this environment
+doesn't have, so no default has flipped). See §4 for the up-to-date
+progress table.
+**Last updated:** 2026-07-14
 **Scope:** (A) a systematic upgrade of every agent prompt in the analysis and
 decision pipeline, with measurable before/after evaluation; (B) the remaining
 core features carried over from `docs/CORE_FEATURES_PLAN.md` plus the new
@@ -452,7 +453,7 @@ B3 prompt CLI                B5 structured outputs
 |---|---|
 | A0 registry unification | ✅ Done — all 14 analysts on `PromptRegistry`; `prompts/loader.py` and all 13 dead YAML files deleted; the `prompt_versions` → agent-state wiring bug found during this work is also fixed |
 | A1 shared prompt contract | ✅ Done — `docs/PROMPT_STYLE_GUIDE.md` + `PromptRegistry.render_with_shared()` + two shared partials; infrastructure only, no agent forced onto it |
-| A2 analyst v2 prompts | 🟡 In progress — fundamentals/news/sentiment/valuation/quant have v2 templates (available, not default); technical/ESG/derivative/alt-data/group-sector/market-phase/postmortem/options remain |
+| A2 analyst v2 prompts | ✅ Done — all 13 analysts with a v2-eligible prompt now have one (available, not default): fundamentals/news/sentiment/valuation/quant landed earlier; technical/ESG/derivative/alt-data/group-sector/market-phase/postmortem/options landed in this pass. `technical.v2` explicitly narrows scope to confirmation-grade entry/exit timing (vs. the Market analyst's primary trend/stage call) and adds chart-pattern recognition; `derivative.v2`/`options.v2` gained a reconciled "Dealer Positioning Rubric" tying skew + max-pain + OI concentration into one thesis; `postmortem.v2` adds a machine-readable `LESSON_TAGS:` line for future memory-layer indexing; all eight compose the A1 shared partials via `render_with_shared`. `market.v1` (the Market/Technical analyst) has no v2 — it already carried the 8-section depth the plan wanted ported to `technical`, and its own rewrite was judged lower-priority than closing the remaining-8 gap |
 | A3 debate redesign | ✅ Landed as available-not-default — `researchers/*.v3.txt`, `risk/*.v2.txt`; needs an A6 scorecard before any default flips |
 | A4 decision layer + A5 rating scale | ✅ Landed as available-not-default — `managers/research_manager.v2.txt` (synthesis rubric: load-bearing claims, factual-dispute resolution, per-theme scorecard, P(thesis) reconciliation, past-mistake check, rating+conviction+horizon), `trader/trader_system.v4.txt` (EV framing + calibration block), `trader/trader_user.v2.txt` (capital context + risk-constraint budget flags — wires up the previously-unused `build_capital_context` helper), `managers/portfolio_manager.v3.txt` (dissent record + rating/target/stop consistency rule); A5's `_shared/rating_scale.v1.txt` composed into both managers via `render_with_shared`. `ResearchPlan` gained optional `conviction`/`horizon` fields, `PortfolioDecision` gained optional `dissent` — additive, so v1/v2 templates and existing callers are unaffected. Needs an A6 scorecard before any default flips |
 | A6 A/B harness + judge | ✅ Done — `tradingagents/evaluation/prompt_ab.py`, `prompt_judge.py`; no scorecard has been run yet (needs live API keys) |

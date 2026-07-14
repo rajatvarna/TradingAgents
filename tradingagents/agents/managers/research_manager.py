@@ -5,30 +5,6 @@ from __future__ import annotations
 from tradingagents.agents.schemas import ResearchPlan, render_research_plan
 
 
-def _format_analyst_weights_block(weights: dict[str, float]) -> str:
-    """Render analyst accuracy weights as a prompt block.
-
-    Weights are derived from past decisions (Item 6).  Only shown when at least
-    two analysts have a non-neutral weight (>0.55 or <0.45) so the block adds
-    real signal rather than noise.
-    """
-    if not weights:
-        return ""
-    informative = {k: v for k, v in weights.items() if abs(v - 0.5) >= 0.05}
-    if len(informative) < 2:
-        return ""
-    lines = ["\n\n---\n**Analyst historical accuracy (past predictions vs outcomes):**"]
-    for analyst, w in sorted(informative.items(), key=lambda x: -x[1]):
-        bar = "▓" * int(w * 10) + "░" * (10 - int(w * 10))
-        lines.append(f"- {analyst}: {w:.0%} accuracy [{bar}]")
-    lines.append(
-        "Higher-accuracy analysts have a stronger directional track record. "
-        "You may weight their inputs accordingly, but do not mechanically override lower-accuracy analysts—"
-        "consider the quality of their specific arguments first."
-    )
-    return "\n".join(lines)
-
-
 def _format_high_uncertainty_block(high_uncertainty: bool) -> str:
     """Return a caution block when analyst signals are severely conflicted (Item 8)."""
     if not high_uncertainty:
@@ -45,6 +21,7 @@ def _format_high_uncertainty_block(high_uncertainty: bool) -> str:
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     build_scope_guard,
+    format_analyst_weights_block as _format_analyst_weights_block,
     get_language_instruction,
 )
 from tradingagents.agents.utils.structured import (

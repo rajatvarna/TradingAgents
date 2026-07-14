@@ -459,6 +459,31 @@ def build_capital_context(holdings_info: dict | None) -> str:
     )
 
 
+def format_analyst_weights_block(weights: dict[str, float]) -> str:
+    """Render analyst accuracy weights (from past decisions, Item 6) as a prompt block.
+
+    Shared between the Research Manager and Portfolio Manager (B4) — both
+    read the same trailing-accuracy signal when synthesising a debate. Only
+    shown when at least two analysts have a non-neutral weight (>0.55 or
+    <0.45) so the block adds real signal rather than noise.
+    """
+    if not weights:
+        return ""
+    informative = {k: v for k, v in weights.items() if abs(v - 0.5) >= 0.05}
+    if len(informative) < 2:
+        return ""
+    lines = ["\n\n---\n**Analyst historical accuracy (past predictions vs outcomes):**"]
+    for analyst, w in sorted(informative.items(), key=lambda x: -x[1]):
+        bar = "▓" * int(w * 10) + "░" * (10 - int(w * 10))
+        lines.append(f"- {analyst}: {w:.0%} accuracy [{bar}]")
+    lines.append(
+        "Higher-accuracy analysts have a stronger directional track record. "
+        "You may weight their inputs accordingly, but do not mechanically override lower-accuracy analysts—"
+        "consider the quality of their specific arguments first."
+    )
+    return "\n".join(lines)
+
+
 def create_force_finalize(llm, report_key: str, analyst_label: str):
     """Build a node that forces an analyst to emit its final report without tools.
 

@@ -959,11 +959,75 @@ class TestPortfolioManagerInjection:
         result = pm_node(_make_pm_state())
         assert "**Dissent**: The aggressive analyst argued" in result["final_trade_decision"]
 
+    # B5 — structured falsifiers field
+
+    @pytest.mark.unit
+    def test_pm_render_includes_falsifiers_when_present(self):
+        decision = PortfolioDecision(
+            rating=PortfolioRating.HOLD,
+            executive_summary="Hold pending confirmation.",
+            investment_thesis="Balanced case.",
+            falsifiers=["Guidance cut at next earnings", "Loses top-3 market share position"],
+        )
+        captured = {}
+        llm = _structured_pm_llm(captured, decision)
+        pm_node = create_portfolio_manager(llm)
+        result = pm_node(_make_pm_state())
+        assert (
+            "**Falsifiers**: Guidance cut at next earnings; Loses top-3 market share position"
+            in result["final_trade_decision"]
+        )
+
+    @pytest.mark.unit
+    def test_pm_render_omits_falsifiers_when_absent(self):
+        decision = PortfolioDecision(
+            rating=PortfolioRating.HOLD,
+            executive_summary="Hold pending confirmation.",
+            investment_thesis="Balanced case.",
+        )
+        captured = {}
+        llm = _structured_pm_llm(captured, decision)
+        pm_node = create_portfolio_manager(llm)
+        result = pm_node(_make_pm_state())
+        assert "Falsifiers" not in result["final_trade_decision"]
+
     @pytest.mark.unit
     def test_pm_default_config_still_selects_v2(self):
         from tradingagents.default_config import DEFAULT_CONFIG
 
         assert DEFAULT_CONFIG["prompt_versions"]["managers/portfolio_manager"] == "v2"
+
+    # B4 — analyst-reliability weights extended from the Research Manager to the PM
+
+    @pytest.mark.unit
+    def test_pm_prompt_includes_analyst_weights_when_informative(self):
+        captured = {}
+        llm = _structured_pm_llm(captured)
+        pm_node = create_portfolio_manager(llm)
+        state = _make_pm_state()
+        state["analyst_weights"] = {"market": 0.85, "sentiment": 0.62}
+        pm_node(state)
+        prompt = captured["prompt"]
+        assert "analyst historical accuracy" in prompt.lower()
+        assert "market" in prompt
+
+    @pytest.mark.unit
+    def test_pm_prompt_omits_analyst_weights_when_not_informative(self):
+        captured = {}
+        llm = _structured_pm_llm(captured)
+        pm_node = create_portfolio_manager(llm)
+        state = _make_pm_state()
+        state["analyst_weights"] = {"market": 0.51}  # only one informative weight
+        pm_node(state)
+        assert "analyst historical accuracy" not in captured["prompt"].lower()
+
+    @pytest.mark.unit
+    def test_pm_prompt_omits_analyst_weights_when_absent(self):
+        captured = {}
+        llm = _structured_pm_llm(captured)
+        pm_node = create_portfolio_manager(llm)
+        pm_node(_make_pm_state())
+        assert "analyst historical accuracy" not in captured["prompt"].lower()
 
     # get_past_context ordering and limits
 

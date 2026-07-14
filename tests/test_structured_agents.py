@@ -138,6 +138,36 @@ class TestRenderTraderProposal:
         assert "(unfavorable)" in md
         assert "below breakeven" in md
 
+    def test_falsifiers_render_before_final_transaction_line(self):
+        p = TraderProposal(
+            action=TraderAction.BUY,
+            reasoning="Clean breakout.",
+            bull_case="Trend + volume.",
+            bear_case="Thin liquidity.",
+            win_probability=60,
+            falsifiers=["Volume dries up below 20-day average", "Breaks back below entry on a close"],
+        )
+        md = render_trader_proposal(p)
+        assert (
+            "**Falsifiers**: Volume dries up below 20-day average; "
+            "Breaks back below entry on a close" in md
+        )
+        # Falsifiers must precede the trailing stop-signal line, which must
+        # remain the literal last line for external grep-ability.
+        assert md.index("**Falsifiers**") < md.index("FINAL TRANSACTION PROPOSAL")
+        assert md.rstrip().endswith("FINAL TRANSACTION PROPOSAL: **BUY**")
+
+    def test_falsifiers_omitted_when_absent(self):
+        p = TraderProposal(
+            action=TraderAction.HOLD,
+            reasoning="Balanced setup; no edge.",
+            bull_case="Margins resilient.",
+            bear_case="Cash flow deteriorating.",
+            win_probability=50,
+        )
+        md = render_trader_proposal(p)
+        assert "Falsifiers" not in md
+
 
 @pytest.mark.unit
 class TestNullishFloatCoercion:
@@ -494,6 +524,21 @@ class TestResearchManagerV2Content:
         md = render_research_plan(plan)
         assert "Conviction" not in md
         assert "Horizon" not in md
+
+    def test_falsifiers_render_when_present(self):
+        plan = ResearchPlan(
+            recommendation=PortfolioRating.BUY,
+            rationale="r",
+            strategic_actions="s",
+            falsifiers=["Revenue growth decelerates below 20%", "Group leadership breaks down"],
+        )
+        md = render_research_plan(plan)
+        assert "**Falsifiers**: Revenue growth decelerates below 20%; Group leadership breaks down" in md
+
+    def test_falsifiers_omitted_when_absent(self):
+        plan = ResearchPlan(recommendation=PortfolioRating.HOLD, rationale="r", strategic_actions="s")
+        md = render_research_plan(plan)
+        assert "Falsifiers" not in md
 
 
 @pytest.mark.unit

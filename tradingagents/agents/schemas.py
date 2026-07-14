@@ -123,6 +123,15 @@ class ResearchPlan(BaseModel):
             "'3-6 months', so it can later be checked against forward returns."
         ),
     )
+    falsifiers: list[str] = Field(
+        default_factory=list,
+        description=(
+            "The top 1-3 specific, observable conditions that would flip this "
+            "recommendation — drawn from the bull/bear researchers' own stated "
+            "falsifiers where they apply, plus anything else that would change "
+            "your conclusion. Not generic hedges like 'if the market changes'."
+        ),
+    )
 
     @field_validator("conviction", mode="before")
     @classmethod
@@ -143,6 +152,8 @@ def render_research_plan(plan: ResearchPlan) -> str:
         parts.extend(["", f"**Conviction**: {plan.conviction:.0f}"])
     if plan.horizon:
         parts.extend(["", f"**Horizon**: {plan.horizon}"])
+    if plan.falsifiers:
+        parts.extend(["", "**Falsifiers**: " + "; ".join(plan.falsifiers)])
     return "\n".join(parts)
 
 
@@ -211,6 +222,14 @@ class TraderProposal(BaseModel):
     position_sizing: str | None = Field(
         default=None,
         description="Optional sizing guidance, e.g. '5% of portfolio'.",
+    )
+    falsifiers: list[str] = Field(
+        default_factory=list,
+        description=(
+            "The top 1-3 specific, observable conditions that would flip this "
+            "action — e.g. a level breaking, a data point reversing. Not "
+            "generic hedges like 'if the market changes'."
+        ),
     )
 
     @field_validator("entry_price", "stop_loss", "target_price", mode="before")
@@ -287,6 +306,8 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
         parts.extend(["", f"**Target Price**: {proposal.target_price}"])
     if proposal.position_sizing:
         parts.extend(["", f"**Position Sizing**: {proposal.position_sizing}"])
+    if proposal.falsifiers:
+        parts.extend(["", "**Falsifiers**: " + "; ".join(proposal.falsifiers)])
     parts.extend(["", _render_trade_review(proposal)])
     parts.extend([
         "",
@@ -358,6 +379,15 @@ class PortfolioDecision(BaseModel):
             "prescient. Do not omit this if the debate raised a real objection."
         ),
     )
+    falsifiers: list[str] = Field(
+        default_factory=list,
+        description=(
+            "The top 1-3 specific, observable conditions that would flip this "
+            "rating — carried forward from the research plan / trader proposal "
+            "where they still apply, plus anything the risk debate surfaced. "
+            "Not generic hedges like 'if the market changes'."
+        ),
+    )
 
     @field_validator("price_target", mode="before")
     @classmethod
@@ -388,6 +418,8 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
     parts.extend(["", f"**Supporting Evidence IDs**: {evidence_ids}"])
     if decision.dissent:
         parts.extend(["", f"**Dissent**: {decision.dissent}"])
+    if decision.falsifiers:
+        parts.extend(["", "**Falsifiers**: " + "; ".join(decision.falsifiers)])
     return "\n".join(parts)
 
 

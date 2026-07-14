@@ -17,6 +17,7 @@ from tradingagents.agents.source_registry import build_source_registry
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     build_scope_guard,
+    format_analyst_weights_block,
     format_risk_constraints,
     get_language_instruction,
 )
@@ -120,7 +121,11 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
         scope_guard = build_scope_guard(state["company_of_interest"])
         constraints_block = format_risk_constraints(state.get("risk_constraints", {}))
 
-        history = state["risk_debate_state"]["history"]
+        # B4: same trailing-accuracy signal the Research Manager already
+        # receives (Item 6 / "Confidence-Weighted Analyst Voting"), extended
+        # to the Portfolio Manager so the final synthesis sees it too.
+        analyst_weights_block = format_analyst_weights_block(state.get("analyst_weights") or {})
+        history = state["risk_debate_state"]["history"] + analyst_weights_block
         risk_debate_state = state["risk_debate_state"]
         research_plan = state["investment_plan"]
         trader_plan = state["trader_investment_plan"]

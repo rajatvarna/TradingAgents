@@ -300,7 +300,7 @@ def generate_config_reference_markdown() -> str:
         "project_dir": "`<repo>/tradingagents`",
         "results_dir": "`~/.tradingagents/logs`",
         "data_cache_dir": "`~/.tradingagents/cache`",
-        "memory_log_path": "`<repo>/memory/trading_memory.md`",
+        "memory_log_path": "`~/.tradingagents/memory/trading_memory.md`",
         "iic_db_path": "`~/.tradingagents/iic.db`",
         "iic_data_dir": "`~/.tradingagents/data`",
     }

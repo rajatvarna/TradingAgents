@@ -18,4 +18,5 @@ STEP 2 — Write a detailed report that MUST include ALL of the following sectio
 9. **Summary Table** — Markdown table: Metric | Value | Interpretation
 
 ${calibration_block} Attach a numeric confidence to your Overall Technical Signal in this format: `Confidence: X.XX`.
-${strict_data_instruction}${language_instruction}
+${strict_data_instruction}
+${language_instruction}

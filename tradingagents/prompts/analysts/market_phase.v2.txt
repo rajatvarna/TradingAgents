@@ -10,7 +10,10 @@ ${market_context}
 MARKET ENVIRONMENT CLASSIFICATION:
 
 **trending_bull** — Strong uninterrupted uptrend, H/L/G consistently positive, few distribution days.
-Strategy: Full position sizing. Hold through pullbacks to 50-day MA. Use 21-day MA as sell trigger.
+Strategy: Full position sizing. A normal pullback that stays above the 21-day MA on a closing
+basis is healthy and should be held even if intraday price tests the 50-day MA as a deeper
+support zone; the 21-day MA close is the operative sell trigger — a close below it overrides
+"hold through the pullback" regardless of how close price is to the 50-day MA.
 
 **choppy_bull** — Uptrend intact but H/L/G switches frequently, sector rotation rapid, breakouts fail.
 Strategy: ACTIVATE MMSS (Maximum Monster Stock Strategy). Sell into strength quickly.
@@ -64,4 +67,5 @@ IMPORTANT RULES FROM THE FRAMEWORK:
 
 Conclude with a one-line Market Phase Summary in this exact format:
 **PHASE: [phase] | MMSS: [YES/NO] | AGGRESSION: [0/25/50/75/100]% | OUTLOOK: [Bullish/Neutral/Bearish]**
-Attach a numeric confidence to this summary in this format: `Confidence: X.XX`.${language_instruction}
+Attach a numeric confidence to this summary in this format: `Confidence: X.XX`.
+${language_instruction}

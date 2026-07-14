@@ -120,6 +120,45 @@ class TestStrictMode:
 
 
 @pytest.mark.unit
+class TestPathDefaultsUseTradingAgentsHome:
+    """CLAUDE.md: "~/.tradingagents/ for all cache/log paths — not the
+    project directory." CodeRabbit caught memory_log_path defaulting into
+    the repo tree while its neighbors (results_dir, data_cache_dir,
+    iic_db_path, iic_data_dir) already used ~/.tradingagents/ — guard
+    against that one drifting back or a new path key repeating it."""
+
+    _HOME_ROOTED_PATH_KEYS = (
+        "results_dir",
+        "data_cache_dir",
+        "memory_log_path",
+        "iic_db_path",
+        "iic_data_dir",
+    )
+
+    def test_defaults_live_under_tradingagents_home(self):
+        import os
+
+        home = os.path.join(os.path.expanduser("~"), ".tradingagents")
+        for key in self._HOME_ROOTED_PATH_KEYS:
+            assert DEFAULT_CONFIG[key].startswith(home), (
+                f"{key} default {DEFAULT_CONFIG[key]!r} is not under ~/.tradingagents/"
+            )
+
+    def test_memory_log_path_env_override_still_honored(self, monkeypatch):
+        monkeypatch.setenv("TRADINGAGENTS_MEMORY_LOG_PATH", "/tmp/custom/mem.md")
+        import importlib
+
+        from tradingagents import default_config as dc
+
+        importlib.reload(dc)
+        try:
+            assert dc.DEFAULT_CONFIG["memory_log_path"] == "/tmp/custom/mem.md"
+        finally:
+            monkeypatch.delenv("TRADINGAGENTS_MEMORY_LOG_PATH", raising=False)
+            importlib.reload(dc)
+
+
+@pytest.mark.unit
 class TestConfigReferenceDoc:
     def test_generates_a_row_per_schema_field(self):
         markdown = generate_config_reference_markdown()

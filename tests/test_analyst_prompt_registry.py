@@ -1339,6 +1339,10 @@ class TestMarketPhaseV2Content:
         assert "data-integrity rules" in rendered.lower()
         assert set(shared_hashes) == {"_shared/data_integrity", "_shared/calibration"}
         assert "${" not in rendered
+        # Fixed CodeRabbit finding: trending_bull's "hold through pullbacks to
+        # 50-day MA" vs. "21-day MA as sell trigger" read as contradictory —
+        # the rendered text must now state which one is operative.
+        assert "operative sell trigger" in rendered.lower()
 
     def test_default_config_unchanged(self):
         from tradingagents.default_config import DEFAULT_CONFIG
@@ -1377,6 +1381,15 @@ class TestPostmortemV2Content:
         assert "confidence:" in rendered.lower()
         assert set(shared_hashes) == {"_shared/data_integrity", "_shared/calibration"}
         assert "${" not in rendered
+        # Fixed CodeRabbit finding: "entry and today" drifts across replay
+        # runs; the sell-signal window must now be pinned to the outcome
+        # data's own as-of date instead of the real-world clock.
+        assert "as-of date" in rendered.lower()
+        assert " today" not in rendered.lower()
+        # The LESSON_TAGS line must stay parseable on its own line, not have
+        # the language instruction run on immediately after it.
+        lesson_tags_line = next(line for line in rendered.splitlines() if "LESSON_TAGS:" in line)
+        assert lesson_tags_line.rstrip().endswith("`."), "LESSON_TAGS line should not have trailing instruction text appended"
 
     def test_default_config_unchanged(self):
         from tradingagents.default_config import DEFAULT_CONFIG

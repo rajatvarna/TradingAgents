@@ -47,4 +47,5 @@ fewer than 3 group leaders acting well, the stock has a significantly reduced
 probability of being a monster stock regardless of individual fundamentals.
 
 Append a summary table with: Group Name | RS Rank Percentile | Leader Count | Confirmation | Rating
-Attach a numeric confidence to your GROUP ENVIRONMENT RATING in this format: `Confidence: X.XX`.${language_instruction}
+Attach a numeric confidence to your GROUP ENVIRONMENT RATING in this format: `Confidence: X.XX`.
+${language_instruction}

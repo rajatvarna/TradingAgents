@@ -424,6 +424,8 @@ DEFAULT_CONFIG = _apply_env_overrides({
                                      # shows "digest" is non-inferior on hit-rate/calibration.
     "state_compression_enabled": False,
     "trader_tools_enabled": True,
+    "intraday_cache_ttl_minutes": 15,  # B2 — TTL for interface.get_intraday_stock_data's disk cache;
+                                        # short relative to the daily-data caches since intraday bars stale fast.
     "trade_filter_enabled": False,
     "trade_filter_threshold": 0.65,
     "futu_opend_host": "127.0.0.1",

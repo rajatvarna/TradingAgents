@@ -9,7 +9,8 @@ these (or a thin vendor-named subclass) and needs no new ``except`` clause.
     ├── DataVendorError            fork custom exception for vendor fallback
     ├── NoMarketDataError          no usable rows (empty result OR stale data)
     ├── VendorRateLimitError       transient throttle -> skip to next vendor
-    └── VendorNotConfiguredError   missing API key/config -> vendor unavailable
+    ├── VendorNotConfiguredError   missing API key/config -> vendor unavailable
+    └── VendorCapabilityError      vendor can't serve this request shape -> skip to next vendor
 """
 
 from __future__ import annotations
@@ -55,4 +56,16 @@ class VendorNotConfiguredError(VendorError, ValueError):
 
     Also a ``ValueError`` so existing callers that catch ``ValueError`` keep
     working while the routing layer can treat it as "vendor unavailable".
+    """
+
+
+class VendorCapabilityError(VendorError):
+    """A vendor was selected but cannot serve this specific request shape
+    (e.g. an intraday ``interval`` it has no endpoint for).
+
+    Distinct from ``VendorNotConfiguredError`` (missing credentials) and from
+    the transient failures ``CircuitBreaker`` exists to protect against — a
+    capability gap is permanent for this request shape, not a flaky vendor,
+    so raising it does not trip the circuit breaker. The router treats it the
+    same as "vendor unavailable": skip to the next vendor in the chain.
     """

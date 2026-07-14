@@ -23,9 +23,18 @@ from typing import Any
 
 import requests
 
-from .errors import DataVendorError
+from .errors import DataVendorError, VendorCapabilityError
 
 _BASE = "https://api.polygon.io"
+
+# Our interval vocabulary -> Polygon's {multiplier}/{timespan} path segments.
+_INTERVAL_TO_POLYGON = {
+    "1m": (1, "minute"),
+    "5m": (5, "minute"),
+    "15m": (15, "minute"),
+    "30m": (30, "minute"),
+    "1h": (1, "hour"),
+}
 
 
 def _key() -> str:
@@ -72,6 +81,53 @@ def get_stock_data(symbol: str, start_date: str, end_date: str) -> str:
         date = datetime.utcfromtimestamp(bar["t"] / 1000).strftime("%Y-%m-%d")
         lines.append(
             f"| {date} | {bar['o']} | {bar['h']} | {bar['l']} | {bar['c']} | {int(bar['v'])} |"
+        )
+    return header + "\n".join(lines)
+
+
+def get_stock_data_intraday(symbol: str, start_date: str, end_date: str, interval: str = "1h") -> str:
+    """Intraday OHLCV bars via /v2/aggs/ticker/{symbol}/range/{multiplier}/{timespan}/{start}/{end}.
+
+    A separate function from :func:`get_stock_data` (not a parameter on it),
+    matching ``alpha_vantage_stock.get_stock_intraday``'s split for the same
+    reason — the daily fetch stays untouched by intraday support.
+
+    Raises:
+        VendorCapabilityError: if interval is not one of the supported values.
+    """
+    mapped = _INTERVAL_TO_POLYGON.get(interval)
+    if mapped is None:
+        raise VendorCapabilityError(
+            f"Polygon intraday does not support interval={interval!r}; "
+            f"supported: {sorted(_INTERVAL_TO_POLYGON)}"
+        )
+    multiplier, timespan = mapped
+
+    data = _get(
+        f"/v2/aggs/ticker/{symbol}/range/{multiplier}/{timespan}/{start_date}/{end_date}",
+        adjusted="true",
+        sort="asc",
+        limit=50000,
+    )
+    results = data.get("results") or []
+    if not results:
+        return (
+            f"NOTICE: No intraday price data returned by Polygon for {symbol} "
+            f"in {start_date}…{end_date} at interval={interval}."
+        )
+
+    # Polygon's `to` path segment is the as-of upper bound for the request
+    # itself (the vendor never returns bars past it), so no additional
+    # client-side look-ahead filtering is needed here.
+    header = f"# {symbol} {interval} OHLCV ({start_date} → {end_date})\n\n"
+    lines = [
+        "| Timestamp | Open | High | Low | Close | Volume |",
+        "|-----------|------|------|-----|-------|--------|",
+    ]
+    for bar in results:
+        ts = datetime.utcfromtimestamp(bar["t"] / 1000).strftime("%Y-%m-%d %H:%M")
+        lines.append(
+            f"| {ts} | {bar['o']} | {bar['h']} | {bar['l']} | {bar['c']} | {int(bar['v'])} |"
         )
     return header + "\n".join(lines)
 

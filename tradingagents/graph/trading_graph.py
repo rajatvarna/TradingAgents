@@ -199,6 +199,11 @@ class TradingAgentsGraph:
         self.config = config or DEFAULT_CONFIG
         self.selected_analysts = selected_analysts
 
+        # B1 — typed config validation. Warn-only unless config["strict_config"]
+        # or TRADINGAGENTS_STRICT_CONFIG is set; see tradingagents/config_schema.py.
+        from tradingagents.config_schema import validate_config
+        validate_config(self.config)
+
         # T1.2 — when full-trace audit is enabled (default), prepend a
         # TraceCallback to whatever callbacks the caller supplied.
         user_callbacks = list(callbacks) if callbacks else []

@@ -120,6 +120,7 @@ class TradingAgentsConfig(BaseModel):
     vertex_location: str | None = None
     openai_reasoning_effort: str | None = "max"
     anthropic_effort: str | None = None
+    anthropic_prompt_caching: bool = False
     llm_timeout: float | None = Field(default=None, ge=0)
     deepseek_reasoning_effort: str | None = "max"
     temperature: float | None = Field(default=None, ge=0, le=2)

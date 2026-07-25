@@ -61,6 +61,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_VERTEX_LOCATION":         "vertex_location",
     "TRADINGAGENTS_OPENAI_REASONING_EFFORT": "openai_reasoning_effort",
     "TRADINGAGENTS_ANTHROPIC_EFFORT":        "anthropic_effort",
+    "TRADINGAGENTS_ANTHROPIC_PROMPT_CACHING": "anthropic_prompt_caching",
     # LLM response cache
     "TRADINGAGENTS_LLM_CACHE_ENABLED":    "llm_cache_enabled",
     "TRADINGAGENTS_LLM_CACHE_TTL_HOURS":  "llm_cache_ttl_hours",
@@ -227,6 +228,12 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "vertex_location": None,            # Vertex AI region, e.g. "us-central1"
     "openai_reasoning_effort": "max",    # "medium", "high", "low"
     "anthropic_effort": None,           # "high", "medium", "low"
+    # Opt-in: mark the request cacheable (Anthropic prompt caching) via
+    # model_kwargs={"cache_control": {"type": "ephemeral"}}, which the direct
+    # Anthropic API accepts as a top-level request field. Off by default —
+    # shipped available, not default, per this fork's usual rollout
+    # convention for new provider-request behavior. See anthropic_client.py.
+    "anthropic_prompt_caching": False,
     "llm_timeout": None,
     "deepseek_reasoning_effort": "max",
     # Sampling temperature, forwarded to every provider when set. None leaves

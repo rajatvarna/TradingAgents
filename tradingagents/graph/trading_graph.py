@@ -351,6 +351,8 @@ class TradingAgentsGraph:
             effort = self.config.get("anthropic_effort")
             if effort:
                 kwargs["effort"] = effort
+            if self.config.get("anthropic_prompt_caching"):
+                kwargs["anthropic_prompt_caching"] = True
 
         # Sampling temperature is cross-provider: forward it whenever set.
         # float() here so a value coming from a TRADINGAGENTS_TEMPERATURE env

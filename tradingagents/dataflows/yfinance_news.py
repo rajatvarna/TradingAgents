@@ -1,7 +1,7 @@
 """yfinance-based news data fetching functions."""
 
 import contextlib
-from datetime import datetime
+from datetime import datetime, timezone
 
 import yfinance as yf
 from dateutil.relativedelta import relativedelta
@@ -55,7 +55,11 @@ def _extract_article_data(article: dict, max_summary_chars: int = 500) -> dict:
         ts = article.get("providerPublishTime")
         if ts:
             with contextlib.suppress(ValueError, OSError, TypeError):
-                pub_date = datetime.fromtimestamp(ts)
+                # tz-aware UTC, matching the nested-content path below — a
+                # naive datetime.fromtimestamp() call here would produce a
+                # host-timezone-dependent wall-clock time, which drifts the
+                # news window filter by up to a day near local midnight.
+                pub_date = datetime.fromtimestamp(ts, tz=timezone.utc)
 
         summary = article.get("summary", "")
         if max_summary_chars > 0 and summary and len(summary) > max_summary_chars:
@@ -77,15 +81,24 @@ def _extract_article_data(article: dict, max_summary_chars: int = 500) -> dict:
 def _in_news_window(pub_date, start_dt, end_dt) -> bool:
     """Whether an article belongs in the [start_dt, end_dt] window.
 
-    Dated articles are kept only if they fall in the window. An undated article
-    is kept only when the window reaches the present (live run) — in a
-    historical/backtest window it's excluded, since we can't prove it isn't
-    future news (look-ahead safety, #992/#1007).
+    Dated articles are kept only if they fall in the window. Comparison is
+    done in UTC (tz-aware pub_dates are converted, not just stripped of
+    tzinfo) and the upper bound is end-exclusive — the window covers all of
+    ``end_dt``'s calendar day but not the instant of midnight starting the
+    next day, closing an off-by-one leak that let an article published at
+    exactly that instant slip into a historical window (upstream #1126).
+
+    An undated article is kept only when the window reaches the present
+    (live run) — in a historical/backtest window it's excluded, since we
+    can't prove it isn't future news (look-ahead safety, #992/#1007).
     """
     if pub_date is not None:
-        naive = pub_date.replace(tzinfo=None) if hasattr(pub_date, "replace") else pub_date
-        return start_dt <= naive <= end_dt + relativedelta(days=1)
-    return end_dt >= datetime.now() - relativedelta(days=1)
+        if pub_date.tzinfo is not None:
+            naive = pub_date.astimezone(timezone.utc).replace(tzinfo=None)
+        else:
+            naive = pub_date
+        return start_dt <= naive < end_dt + relativedelta(days=1)
+    return end_dt >= datetime.now(timezone.utc).replace(tzinfo=None) - relativedelta(days=1)
 
 
 def get_news_yfinance(

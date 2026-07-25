@@ -26,6 +26,19 @@ from .b3 import (
     get_stock_data as get_b3_stock,
 )
 from .eastmoney_news import get_news_eastmoney, is_ashare
+from .finnhub_fundamentals import (
+    get_fundamentals as get_finnhub_fundamentals,
+    get_insider_transactions as get_finnhub_insider_transactions,
+)
+from .finnhub_news import get_global_news as get_finnhub_global_news, get_news as get_finnhub_news
+from .fmp_fundamentals import (
+    get_balance_sheet as get_fmp_balance_sheet,
+    get_cashflow as get_fmp_cashflow,
+    get_fundamentals as get_fmp_fundamentals,
+    get_income_statement as get_fmp_income_statement,
+)
+from .fmp_news import get_global_news as get_fmp_global_news, get_news as get_fmp_news
+from .fmp_stock import get_stock as get_fmp_stock
 from .fred import get_macro_data as get_fred_macro_data
 from .futu import (
     get_options_chain as get_futu_options_chain,
@@ -37,6 +50,7 @@ from .ibkr import (
     get_options_overview as get_ibkr_options_overview,
     get_stock_data as get_ibkr_stock,
 )
+from .marketstack_stock import get_stock as get_marketstack_stock
 from .polygon import (
     get_news as get_polygon_news,
     get_options_chain as get_polygon_options_chain,
@@ -78,12 +92,12 @@ from .yfinance_options import (
 )
 
 try:
-    from .akshare_stock import (
-        get_balance_sheet as _ak_balance_sheet,
-        get_cashflow as _ak_cashflow,
-        get_fundamentals as _ak_fundamentals,
-        get_income_statement as _ak_income,
-        get_stock_data as _ak_stock_data,
+    from .akshare_utils import (
+        get_balance_sheet_akshare as _ak_balance_sheet,
+        get_cashflow_akshare as _ak_cashflow,
+        get_fundamentals_akshare as _ak_fundamentals,
+        get_income_statement_akshare as _ak_income,
+        get_stock_data_akshare as _ak_stock_data,
     )
     _akshare_available = True
 except ImportError:
@@ -257,6 +271,9 @@ TOOLS_CATEGORIES = {
 }
 
 VENDOR_LIST = [
+    "fmp",
+    "finnhub",
+    "marketstack",
     "yfinance",
     "fred",
     "polymarket",
@@ -285,6 +302,8 @@ OPTIONAL_CATEGORIES = {"macro_data", "prediction_markets"}
 VENDOR_METHODS = {
     # core_stock_apis
     "get_stock_data": {
+        "fmp": get_fmp_stock,
+        "marketstack": get_marketstack_stock,
         "alpha_vantage": get_alpha_vantage_stock,
         "yfinance": get_YFin_data_online,
         "b3": get_b3_stock,
@@ -311,6 +330,8 @@ VENDOR_METHODS = {
     },
     # fundamental_data
     "get_fundamentals": {
+        "fmp": get_fmp_fundamentals,
+        "finnhub": get_finnhub_fundamentals,
         "alpha_vantage": get_alpha_vantage_fundamentals,
         "yfinance": get_yfinance_fundamentals,
         "b3": get_b3_fundamentals,
@@ -318,6 +339,7 @@ VENDOR_METHODS = {
         "akshare": get_akshare_fundamentals,
     },
     "get_balance_sheet": {
+        "fmp": get_fmp_balance_sheet,
         "alpha_vantage": get_alpha_vantage_balance_sheet,
         "yfinance": get_yfinance_balance_sheet,
         "b3": get_b3_balance_sheet,
@@ -325,6 +347,7 @@ VENDOR_METHODS = {
         "akshare": get_akshare_balance_sheet,
     },
     "get_cashflow": {
+        "fmp": get_fmp_cashflow,
         "alpha_vantage": get_alpha_vantage_cashflow,
         "yfinance": get_yfinance_cashflow,
         "b3": get_b3_cashflow,
@@ -332,6 +355,7 @@ VENDOR_METHODS = {
         "akshare": get_akshare_cashflow,
     },
     "get_income_statement": {
+        "fmp": get_fmp_income_statement,
         "alpha_vantage": get_alpha_vantage_income_statement,
         "yfinance": get_yfinance_income_statement,
         "b3": get_b3_income_statement,
@@ -340,6 +364,8 @@ VENDOR_METHODS = {
     },
     # news_data
     "get_news": {
+        "finnhub": get_finnhub_news,
+        "fmp": get_fmp_news,
         "alpha_vantage": get_alpha_vantage_news,
         "yfinance": get_news_yfinance,
         "google_news": get_news_google,
@@ -350,6 +376,8 @@ VENDOR_METHODS = {
         "eastmoney": get_news_eastmoney,
     },
     "get_global_news": {
+        "finnhub": get_finnhub_global_news,
+        "fmp": get_fmp_global_news,
         "yfinance": get_global_news_yfinance,
         "google_news": get_global_news_google,
         "alpha_vantage": get_alpha_vantage_global_news,
@@ -439,16 +467,15 @@ def _resolve_vendor_chain(method: str, category: str, *args) -> list[str]:
     # news on Shanghai/Shenzhen tickers, matching the framework's "resolve
     # automatically per market" behaviour. Honoured only when not already
     # overridden by an explicit vendor config.
-    if (
-        method == "get_news"
-        and args
-        and isinstance(args[0], str)
-        and is_ashare(args[0])
-        and vendor_config in ("default", "yfinance")
-    ):
-        primary_vendors = ["eastmoney"] + [
-            v for v in primary_vendors if v != "eastmoney"
-        ]
+    if args and isinstance(args[0], str) and is_ashare(args[0]):
+        if method == "get_news" and vendor_config in ("default", "yfinance"):
+            primary_vendors = ["eastmoney"] + [
+                v for v in primary_vendors if v != "eastmoney"
+            ]
+        elif "akshare" in VENDOR_METHODS.get(method, {}):
+            primary_vendors = ["akshare"] + [
+                v for v in primary_vendors if v != "akshare"
+            ]
 
     all_available_vendors = list(VENDOR_METHODS[method].keys())
 

@@ -22,14 +22,22 @@ def test_alpha_vantage_fundamentals_prefixes_caveat_for_past_date(monkeypatch):
     # Mock cache_text if it is present (PR-10)
     if hasattr(avf, "cache_text"):
         monkeypatch.setattr(avf, "cache_text", lambda namespace, parts, fetch: fetch())
-    monkeypatch.setattr(avf, "_make_api_request", lambda function, params: '{"PERatio":"20"}')
+    monkeypatch.setattr(
+        avf, "_make_api_request",
+        lambda function, params: '{"PERatio":"20","EPS":"6.5"}',
+    )
 
     out = avf.get_fundamentals("AAPL", curr_date="2020-01-02")
     data = json.loads(out)
 
     assert "_lookahead_caveat" in data
     assert "LATEST snapshot" in data["_lookahead_caveat"]
-    assert data["PERatio"] == "20"
+    # PERatio is a snapshot-only, price-derived field -- it only ever
+    # reflects today's price, so it's stripped rather than leaked into a
+    # historical/backtest response (upstream #1163). Statement-derived
+    # fields like EPS are unaffected.
+    assert "PERatio" not in data
+    assert data["EPS"] == "6.5"
 
 
 @pytest.mark.unit

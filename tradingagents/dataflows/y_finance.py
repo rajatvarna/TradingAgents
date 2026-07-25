@@ -6,7 +6,7 @@ import yfinance as yf
 from dateutil.relativedelta import relativedelta
 
 from ._indicator_descriptions import INDICATOR_DESCRIPTIONS
-from .point_in_time import historical_snapshot_caveat
+from .point_in_time import historical_snapshot_caveat, is_historical_date
 from .snapshots import snapshot
 from .stockstats_utils import (
     StockstatsUtils,
@@ -231,6 +231,18 @@ def get_instrument_profile(ticker: Annotated[str, "ticker symbol of the company"
     }
 
 
+# Fields derived from the current stock price (market cap, valuation
+# ratios, moving averages, 52-week range) rather than a financial
+# statement — yfinance's ``Ticker.info`` only ever reflects today's value
+# for these, so they're dropped on a historical ``curr_date`` rather than
+# just captioned, to prevent look-ahead bias in backtests (upstream #1163).
+_SNAPSHOT_ONLY_LABELS = frozenset({
+    "Market Cap", "PE Ratio (TTM)", "Forward PE", "PEG Ratio",
+    "Price to Book", "Beta", "52 Week High", "52 Week Low",
+    "50 Day Average", "200 Day Average",
+})
+
+
 @snapshot(
     kind="fundamentals", source="yfinance",
     scope_arg="ticker", date_arg="curr_date",
@@ -286,10 +298,14 @@ def get_fundamentals(
             ("Free Cash Flow", info.get("freeCashflow")),
         ]
 
+        historical = is_historical_date(curr_date)
         lines = []
         for label, value in fields:
-            if value is not None:
-                lines.append(f"{label}: {value}")
+            if value is None:
+                continue
+            if historical and label in _SNAPSHOT_ONLY_LABELS:
+                continue
+            lines.append(f"{label}: {value}")
 
         # yfinance returns a stub dict (e.g. {"trailingPegRatio": None}) for
         # unknown symbols, so `info` is truthy but every field is empty. Treat

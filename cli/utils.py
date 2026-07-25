@@ -361,6 +361,72 @@ def _fetch_openrouter_models() -> list[tuple[str, str]]:
         return []
 
 
+def _fetch_requesty_models() -> list[tuple[str, str]]:
+    """Fetch available models from the Requesty router API.
+
+    Requesty's ``/v1/models`` endpoint requires authentication (unlike
+    OpenRouter's public one), so this returns early without making a
+    request when no API key is configured -- otherwise every call would
+    be a guaranteed 401 with the associated network round-trip delay.
+    """
+    import requests
+
+    key = os.environ.get("REQUESTY_API_KEY")
+    if not key:
+        console.print("\n[yellow]REQUESTY_API_KEY is not set; cannot list Requesty models.[/yellow]")
+        return []
+    try:
+        resp = requests.get(
+            "https://router.requesty.ai/v1/models",
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        models = resp.json().get("data", [])
+        if not isinstance(models, list):
+            return []
+        models = [m for m in models if isinstance(m, dict) and isinstance(m.get("id"), str) and m["id"]]
+        # Newest first, mirroring the OpenRouter picker's ordering guarantee.
+        models.sort(key=lambda m: m.get("created") or 0, reverse=True)
+        return [(m.get("name") or m["id"], m["id"]) for m in models]
+    except Exception as e:
+        console.print(f"\n[yellow]Could not fetch Requesty models: {e}[/yellow]")
+        return []
+
+
+def select_requesty_model(mode: str) -> str:
+    """Select a Requesty model from the newest available, or enter a custom ID.
+
+    ``mode`` ("quick"/"deep") labels the prompt so the two consecutive
+    Requesty selections are distinguishable, matching the OpenRouter picker.
+    """
+    models = _fetch_requesty_models()[:5]
+
+    choices = [questionary.Choice(name, value=mid) for name, mid in models]
+    choices.append(questionary.Choice("Custom model ID", value="custom"))
+
+    choice = questionary.select(
+        f"Select Your [{mode.title()}-Thinking] Requesty Model (latest available):",
+        choices=choices,
+        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        style=questionary.Style([
+            ("selected", "fg:magenta noinherit"),
+            ("highlighted", "fg:magenta noinherit"),
+            ("pointer", "fg:magenta noinherit"),
+        ]),
+    ).ask()
+
+    if choice is None:
+        console.print("\n[red]No model selected. Exiting...[/red]")
+        exit(1)
+    if choice == "custom":
+        return _require_text(
+            "Enter Requesty model ID (e.g. openai/gpt-5.4):",
+            "Please enter a model ID.",
+        )
+    return choice
+
+
 def _require_text(message: str, hint: str) -> str:
     """Prompt for a required value; exit cleanly if the user cancels.
 
@@ -478,6 +544,8 @@ def _select_model(provider: str, mode: str) -> str:
     """Select a model for the given provider and mode (quick/deep)."""
     if provider.lower() == "openrouter":
         return select_openrouter_model(mode)
+    if provider.lower() == "requesty":
+        return select_requesty_model(mode)
     if provider.lower() == "custom_openai":
         saved_key = "shallow_thinker" if mode == "quick" else "deep_thinker"
         saved_model = _prefs.get(saved_key, "")
@@ -603,6 +671,7 @@ def _llm_provider_table() -> list[tuple[str, str, str | None]]:
         ("MiniMax", "minimax", "https://api.minimax.io/v1"),
         ("NVIDIA NIM", "nvidia_nim", "https://integrate.api.nvidia.com/v1"),
         ("OpenRouter", "openrouter", "https://openrouter.ai/api/v1"),
+        ("Requesty", "requesty", "https://router.requesty.ai/v1"),
         ("Mistral", "mistral", "https://api.mistral.ai/v1"),
         ("Groq", "groq", "https://api.groq.com/openai/v1"),
         ("Opencode", "opencode", os.environ.get("OPENCODE_BASE_URL") or "https://opencode.ai/zen/go/v1"),

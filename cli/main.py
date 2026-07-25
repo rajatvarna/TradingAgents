@@ -932,16 +932,28 @@ def run_analysis(
         console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
     console.print(f"[dim]{analyst_wall_time_tracker.format_summary()}[/dim]")
 
-    # Prompt to save report
-    save_choice = typer.prompt("Save report?", default="Y").strip().upper()
-    if save_choice in ("Y", "YES", ""):
+    # Prompt to save report (skipped when TRADINGAGENTS_SAVE_REPORT is set)
+    env_save_report = os.environ.get("TRADINGAGENTS_SAVE_REPORT")
+    if env_save_report is not None:
+        save_report = should_save_report(env_save_report)
+        console.print(f"[green]✓ Save report from environment:[/green] {save_report}")
+    else:
+        save_choice = typer.prompt("Save report?", default="Y").strip().upper()
+        save_report = save_choice in ("Y", "YES", "")
+
+    if save_report:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         default_path = Path.cwd() / "reports" / f"{selections['ticker']}_{timestamp}"
-        save_path_str = typer.prompt(
-            "Save path (press Enter for default)",
-            default=str(default_path)
-        ).strip()
-        save_path = Path(save_path_str)
+        if env_save_report is not None:
+            save_path = resolve_report_save_path(
+                os.environ.get("TRADINGAGENTS_SAVE_REPORT_PATH"), default_path,
+            )
+        else:
+            save_path_str = typer.prompt(
+                "Save path (press Enter for default)",
+                default=str(default_path)
+            ).strip()
+            save_path = Path(save_path_str)
         try:
             report_file = save_report_to_disk(
                 final_state,
@@ -961,9 +973,16 @@ def run_analysis(
         except Exception as e:
             console.print(f"[red]Error saving report: {e}[/red]")
 
-    # Prompt to display full report
-    display_choice = typer.prompt("\nDisplay full report on screen?", default="Y").strip().upper()
-    if display_choice in ("Y", "YES", ""):
+    # Prompt to display full report (skipped when TRADINGAGENTS_DISPLAY_REPORT is set)
+    env_display_report = os.environ.get("TRADINGAGENTS_DISPLAY_REPORT")
+    if env_display_report is not None:
+        display_report = should_display_report(env_display_report)
+        console.print(f"[green]✓ Display report from environment:[/green] {display_report}")
+    else:
+        display_choice = typer.prompt("\nDisplay full report on screen?", default="Y").strip().upper()
+        display_report = display_choice in ("Y", "YES", "")
+
+    if display_report:
         display_complete_report(final_state, config.get("metrics_config"))
 
 

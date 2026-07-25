@@ -28,7 +28,6 @@ from .b3 import (
 from .eastmoney_news import get_news_eastmoney, is_ashare
 from .finnhub_fundamentals import (
     get_fundamentals as get_finnhub_fundamentals,
-    get_insider_transactions as get_finnhub_insider_transactions,
 )
 from .finnhub_news import get_global_news as get_finnhub_global_news, get_news as get_finnhub_news
 from .fmp_fundamentals import (

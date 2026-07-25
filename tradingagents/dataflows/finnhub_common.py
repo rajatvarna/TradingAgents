@@ -2,7 +2,6 @@ import os
 
 import requests
 
-
 API_BASE_URL = "https://finnhub.io/api/v1"
 
 

@@ -248,6 +248,7 @@ class TestDailyPathUnaffected:
     def test_get_stock_data_registry_unchanged(self):
         assert set(interface.VENDOR_METHODS["get_stock_data"].keys()) == {
             "alpha_vantage", "yfinance", "b3", "twelve_data", "polygon", "futu", "ibkr", "akshare",
+            "fmp", "marketstack",
         }
 
     def test_intraday_method_is_a_separate_registry_entry(self):

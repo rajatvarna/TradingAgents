@@ -50,6 +50,8 @@ from cli.utils import (
     get_analysis_date,
     get_ticker,
     prompt_openai_compatible_url,
+    resolve_analysis_date_from_env,
+    resolve_analysts_from_env,
     resolve_backend_url,
     select_analysts,
     select_deep_thinking_agent,
@@ -82,6 +84,17 @@ from cli.live import (
     MessageStore,
     ReportBuilder,
 )
+
+try:
+    # Windows-only; prompt_toolkit asserts sys.platform == "win32" at import
+    # time, so importing this on any other platform raises AssertionError
+    # (not ImportError) — catch broadly rather than platform-gating the
+    # import, so this stays correct if prompt_toolkit's internals change.
+    from prompt_toolkit.output.win32 import NoConsoleScreenBufferError
+except Exception:  # noqa: BLE001 - deliberately broad, see comment above
+    class NoConsoleScreenBufferError(Exception):
+        """Fallback used on non-Windows platforms, where the real
+        prompt_toolkit exception class isn't importable."""
 
 
 def get_user_selections():
@@ -155,16 +168,21 @@ def get_user_selections():
             f"[green]Detected asset type:[/green] {asset_type.value}"
         )
 
-    # Step 2: Analysis date
-    default_date = datetime.datetime.now().strftime("%Y-%m-%d")
-    console.print(
-        create_question_box(
-            "Step 2: Analysis Date",
-            "Enter the analysis date (YYYY-MM-DD)",
-            default_date,
+    # Step 2: Analysis date (skipped when set via TRADINGAGENTS_ANALYSIS_DATE)
+    env_analysis_date = os.environ.get("TRADINGAGENTS_ANALYSIS_DATE")
+    if env_analysis_date:
+        analysis_date = resolve_analysis_date_from_env(env_analysis_date)
+        console.print(f"[green]✓ Analysis date from environment:[/green] {analysis_date}")
+    else:
+        default_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        console.print(
+            create_question_box(
+                "Step 2: Analysis Date",
+                "Enter the analysis date (YYYY-MM-DD)",
+                default_date,
+            )
         )
-    )
-    analysis_date = get_analysis_date()
+        analysis_date = get_analysis_date()
 
     # Step 3: Output language (skipped when set via TRADINGAGENTS_OUTPUT_LANGUAGE)
     if os.environ.get("TRADINGAGENTS_OUTPUT_LANGUAGE"):
@@ -181,16 +199,24 @@ def get_user_selections():
         )
         output_language = ask_output_language()
 
-    # Step 4: Select analysts
-    console.print(
-        create_question_box(
-            "Step 4: Analysts Team", "Select your LLM analyst agents for the analysis"
+    # Step 4: Select analysts (skipped when set via TRADINGAGENTS_ANALYSTS)
+    env_analysts = os.environ.get("TRADINGAGENTS_ANALYSTS")
+    if env_analysts:
+        selected_analysts = resolve_analysts_from_env(env_analysts, asset_type)
+        console.print(
+            f"[green]✓ Analysts from environment:[/green] "
+            f"{', '.join(analyst.value for analyst in selected_analysts)}"
         )
-    )
-    selected_analysts = select_analysts(asset_type)
-    console.print(
-        f"[green]Selected analysts:[/green] {', '.join(analyst.value for analyst in selected_analysts)}"
-    )
+    else:
+        console.print(
+            create_question_box(
+                "Step 4: Analysts Team", "Select your LLM analyst agents for the analysis"
+            )
+        )
+        selected_analysts = select_analysts(asset_type)
+        console.print(
+            f"[green]Selected analysts:[/green] {', '.join(analyst.value for analyst in selected_analysts)}"
+        )
 
     # Step 5: Research depth (skipped when both round counts are set via env).
     # Research depth maps to the debate + risk round counts; when both are
@@ -991,7 +1017,18 @@ def analyze(
         from tradingagents.graph.checkpointer import clear_all_checkpoints
         n = clear_all_checkpoints(DEFAULT_CONFIG["data_cache_dir"])
         console.print(f"[yellow]Cleared {n} checkpoint(s).[/yellow]")
-    run_analysis(checkpoint=checkpoint, metrics_config=metrics_config, max_cost=max_cost)
+    try:
+        run_analysis(checkpoint=checkpoint, metrics_config=metrics_config, max_cost=max_cost)
+    except NoConsoleScreenBufferError as exc:
+        # prompt_toolkit can't attach to a real console (e.g. launched via
+        # pythonw, a non-interactive Windows shell, or a GUI wrapper) — show
+        # a friendly message instead of a raw traceback (upstream #1139).
+        console.print(f"[red]{exc}[/red]")
+        console.print(
+            "[yellow]Run TradingAgents from an interactive terminal such as "
+            "Windows Terminal, PowerShell, or cmd.exe.[/yellow]"
+        )
+        raise typer.Exit(code=1) from exc
 
 
 @app.command()

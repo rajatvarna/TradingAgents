@@ -164,26 +164,29 @@ def get_batch_tickers() -> list[str]:
     return unique_tickers
 
 
-def get_analysis_date() -> str:
-    """Prompt the user to enter a date in YYYY-MM-DD format."""
+def _validate_analysis_date(date_str: str) -> bool | str:
     import re
     from datetime import datetime
 
-    def validate_date(date_str: str) -> bool | str:
-        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
-            return "Please enter a valid date in YYYY-MM-DD format."
-        try:
-            analysis_date = datetime.strptime(date_str, "%Y-%m-%d")
-            if analysis_date.date() > datetime.today().date():
-                return "Analysis date cannot be in the future."
-            return True
-        except ValueError:
-            return "Please enter a valid date in YYYY-MM-DD format."
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+        return "Please enter a valid date in YYYY-MM-DD format."
+    try:
+        analysis_date = datetime.strptime(date_str, "%Y-%m-%d")
+        if analysis_date.date() > datetime.today().date():
+            return "Analysis date cannot be in the future."
+        return True
+    except ValueError:
+        return "Please enter a valid date in YYYY-MM-DD format."
+
+
+def get_analysis_date() -> str:
+    """Prompt the user to enter a date in YYYY-MM-DD format."""
+    from datetime import datetime
 
     date = questionary.text(
         "Enter the analysis date (YYYY-MM-DD):",
         default=datetime.today().strftime("%Y-%m-%d"),
-        validate=lambda x: validate_date(x.strip()),
+        validate=lambda x: _validate_analysis_date(x.strip()),
         style=questionary.Style(
             [
                 ("text", "fg:green"),
@@ -197,6 +200,26 @@ def get_analysis_date() -> str:
         exit(1)
 
     return date.strip()
+
+
+def resolve_analysis_date_from_env(value: str) -> str:
+    """Resolve TRADINGAGENTS_ANALYSIS_DATE to a YYYY-MM-DD string.
+
+    Accepts "today" (case-insensitive) as shorthand for the current date, or
+    an explicit YYYY-MM-DD date no later than today. Exits with an error
+    message on an invalid value, matching the interactive prompt's behavior.
+    """
+    from datetime import datetime
+
+    value = value.strip()
+    if value.lower() == "today":
+        return datetime.today().strftime("%Y-%m-%d")
+
+    result = _validate_analysis_date(value)
+    if result is not True:
+        console.print(f"\n[red]Invalid TRADINGAGENTS_ANALYSIS_DATE: {result}[/red]")
+        exit(1)
+    return value
 
 
 def select_analysts(asset_type: AssetType = AssetType.STOCK) -> list[AnalystType]:
@@ -238,6 +261,40 @@ def select_analysts(asset_type: AssetType = AssetType.STOCK) -> list[AnalystType
         console.print("\n[red]No analysts selected. Exiting...[/red]")
         exit(1)
 
+    if AnalystType.DERIVATIVES not in choices:
+        choices.append(AnalystType.DERIVATIVES)
+
+    return choices
+
+
+def resolve_analysts_from_env(value: str, asset_type: AssetType = AssetType.STOCK) -> list[AnalystType]:
+    """Resolve TRADINGAGENTS_ANALYSTS (comma-separated analyst values) to a
+    validated analyst list, applying the same asset-type filtering and
+    mandatory-Derivatives-analyst rule as the interactive selector.
+
+    Exits with an error message on an unknown analyst name, matching the
+    interactive prompt's fail-fast behavior.
+    """
+    requested = [v.strip().lower() for v in value.split(",") if v.strip()]
+    if not requested:
+        console.print("\n[red]TRADINGAGENTS_ANALYSTS is set but empty. Exiting...[/red]")
+        exit(1)
+
+    known = {analyst.value: analyst for analyst in AnalystType}
+    choices = []
+    for name in requested:
+        analyst = known.get(name)
+        if analyst is None:
+            valid = ", ".join(sorted(known))
+            console.print(
+                f"\n[red]Unknown analyst '{name}' in TRADINGAGENTS_ANALYSTS. "
+                f"Valid values: {valid}[/red]"
+            )
+            exit(1)
+        if analyst not in choices:
+            choices.append(analyst)
+
+    choices = filter_analysts_for_asset_type(choices, asset_type)
     if AnalystType.DERIVATIVES not in choices:
         choices.append(AnalystType.DERIVATIVES)
 

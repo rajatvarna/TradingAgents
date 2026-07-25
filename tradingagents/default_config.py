@@ -398,10 +398,10 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # routed to vendors you didn't choose. For ordered fallback, list several,
     # e.g. "yfinance,alpha_vantage". "default" uses all available vendors.
     "data_vendors": {
-        "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance, b3
+        "core_stock_apis": "fmp,alpha_vantage,marketstack,yfinance",       # Options: alpha_vantage, yfinance, b3
         "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance, b3
-        "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance, b3
-        "news_data": "google_news",          # Options: yfinance, google_news, alpha_vantage, searxng, b3
+        "fundamental_data": "fmp,alpha_vantage,finnhub,yfinance",      # Options: alpha_vantage, yfinance, b3
+        "news_data": "finnhub,fmp,alpha_vantage,yfinance",          # Options: yfinance, google_news, alpha_vantage, searxng, b3
         "macro_data": "fred",                # Options: fred (needs FRED_API_KEY)
         "prediction_markets": "polymarket",  # Options: polymarket (keyless)
         "options_data": "yfinance",          # Options: yfinance (Polygon/Futu via Epic B fallback chain)

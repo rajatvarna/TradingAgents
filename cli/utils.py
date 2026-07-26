@@ -22,7 +22,7 @@ console = Console()
 
 _prefs = load_preferences()
 
-TICKER_INPUT_EXAMPLES = "Examples: SPY, PETR4, VALE3, CNC.TO, 7203.T, 0700.HK, BTC-USD"
+TICKER_INPUT_EXAMPLES = "Examples: SPY, PETR4, VALE3, CNC.TO, 7203.T, 0700.HK, BTC-USD, ES=F"
 
 ANALYST_ORDER = [
     ("Market Analyst", AnalystType.MARKET),
@@ -94,18 +94,27 @@ def normalize_ticker_symbol(ticker: str) -> str:
 
 def detect_asset_type(ticker: str) -> AssetType:
     """Classify on the canonical symbol so e.g. BTCUSD and BTC-USDT both read as
-    crypto (#981/#982), matching what the data path will actually fetch."""
+    crypto (#981/#982), matching what the data path will actually fetch.
+
+    Futures detection covers both a directly-typed Yahoo futures symbol
+    (``ES=F``, ``CL=F``) and a broker-style commodity/forex alias that
+    ``normalize_symbol`` resolves to one (``GOLD``/``XAUUSD`` -> ``GC=F``) —
+    upstream #1155.
+    """
     canonical = normalize_ticker_symbol(ticker)
     if canonical.endswith(CRYPTO_SUFFIXES):
         return AssetType.CRYPTO
+    if canonical.endswith("=F"):
+        return AssetType.FUTURES
     return AssetType.STOCK
 
 
 def filter_analysts_for_asset_type(
     analysts: list[AnalystType], asset_type: AssetType
 ) -> list[AnalystType]:
-    """Filter out fundamentals analyst for crypto assets."""
-    if asset_type != AssetType.CRYPTO:
+    """Filter out the Fundamentals Analyst for non-equity assets (crypto,
+    futures) — neither has company financials to analyze."""
+    if asset_type not in (AssetType.CRYPTO, AssetType.FUTURES):
         return analysts
     return [
         analyst

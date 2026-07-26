@@ -42,14 +42,14 @@ def test_ticker_input_validation(value, ok):
     assert is_valid_ticker_input(value) is ok
 
 
-# --- #981/#982: asset-type classified on the canonical symbol ---
+# --- #981/#982/#1155: asset-type classified on the canonical symbol ---
 @pytest.mark.parametrize("raw,expected", [
     ("BTCUSD", AssetType.CRYPTO),
     ("BTC-USDT", AssetType.CRYPTO),
     ("BTC-USD", AssetType.CRYPTO),
     ("ETHUSD", AssetType.CRYPTO),
     ("AAPL", AssetType.STOCK),
-    ("GC=F", AssetType.STOCK),
+    ("GC=F", AssetType.FUTURES),
     ("600519.SS", AssetType.STOCK),
 ])
 def test_detect_asset_type(raw, expected):

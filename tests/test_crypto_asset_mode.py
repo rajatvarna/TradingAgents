@@ -1,10 +1,13 @@
 import unittest
 
+import pytest
+
 from cli.models import AnalystType, AssetType
 from cli.utils import detect_asset_type, filter_analysts_for_asset_type
 from tradingagents.graph.propagation import Propagator
 
 
+@pytest.mark.unit
 class CryptoAssetModeTests(unittest.TestCase):
     def test_detects_crypto_pair_symbols(self):
         self.assertEqual(detect_asset_type("BTC-USD"), AssetType.CRYPTO)
@@ -50,6 +53,48 @@ class CryptoAssetModeTests(unittest.TestCase):
         )
 
         self.assertEqual(state["asset_type"], AssetType.CRYPTO.value)
+
+
+@pytest.mark.unit
+class FuturesAssetModeTests(unittest.TestCase):
+    """Futures detection and analyst filtering (upstream #1155), reusing the
+    existing AssetType extension point rather than a separate module."""
+
+    def test_detects_directly_typed_futures_symbols(self):
+        self.assertEqual(detect_asset_type("ES=F"), AssetType.FUTURES)
+        self.assertEqual(detect_asset_type("cl=f"), AssetType.FUTURES)
+        self.assertEqual(detect_asset_type("GC=F"), AssetType.FUTURES)
+
+    def test_detects_commodity_alias_resolved_to_futures(self):
+        # normalize_symbol maps these broker-style aliases to Yahoo futures
+        # tickers (GOLD -> GC=F, WTI -> CL=F) before detect_asset_type sees them.
+        self.assertEqual(detect_asset_type("GOLD"), AssetType.FUTURES)
+        self.assertEqual(detect_asset_type("XAUUSD"), AssetType.FUTURES)
+        self.assertEqual(detect_asset_type("WTI"), AssetType.FUTURES)
+
+    def test_filters_out_fundamentals_analyst_for_futures(self):
+        analysts = [
+            AnalystType.MARKET,
+            AnalystType.SOCIAL,
+            AnalystType.NEWS,
+            AnalystType.FUNDAMENTALS,
+        ]
+
+        self.assertEqual(
+            filter_analysts_for_asset_type(analysts, AssetType.FUTURES),
+            [
+                AnalystType.MARKET,
+                AnalystType.SOCIAL,
+                AnalystType.NEWS,
+            ],
+        )
+
+    def test_propagator_includes_futures_asset_type_in_initial_state(self):
+        state = Propagator().create_initial_state(
+            "ES=F", "2026-04-18", asset_type=AssetType.FUTURES.value
+        )
+
+        self.assertEqual(state["asset_type"], AssetType.FUTURES.value)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     build_scope_guard,
     format_risk_constraints,
+    get_horizon_instruction,
     get_language_instruction,
 )
 from tradingagents.agents.utils.structured import (
@@ -63,6 +64,7 @@ def create_trader(llm, cache=None, prompt_registry=None, tools=None):
             version=sys_v,
             shared={"calibration_block": ("_shared/calibration", "v1")},
             language_instruction=get_language_instruction(),
+            horizon_instruction=get_horizon_instruction(),
         )
         user_content, user_hash = registry.render(
             "trader/trader_user",

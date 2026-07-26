@@ -9,8 +9,14 @@ on:
   workflow_dispatch: # Allows manual trigger from Actions tab
 
 jobs:
-  update-holdings:
+  fetch-holdings:
+    # Installs and runs third-party PyPI packages, so this job intentionally
+    # keeps the default read-only token — it never touches git write access.
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -30,7 +36,43 @@ jobs:
         run: |
           python scripts/fetch_holdings.py
 
-      - name: Commit changes if data has updated
+      - name: Check whether holdings data changed
+        id: diff
+        run: |
+          if git diff --quiet -- data/holdings.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload updated holdings
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: holdings-json
+          path: data/holdings.json
+          retention-days: 1
+
+  commit-holdings:
+    # Only this job needs push access, and it never installs third-party
+    # dependencies or runs untrusted code — it just writes back the artifact
+    # the read-only fetch job already produced.
+    needs: fetch-holdings
+    if: needs.fetch-holdings.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download updated holdings
+        uses: actions/download-artifact@v4
+        with:
+          name: holdings-json
+          path: data
+
+      - name: Commit and push changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"

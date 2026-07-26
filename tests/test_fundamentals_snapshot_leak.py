@@ -55,6 +55,7 @@ class TestYFinanceFundamentalsSnapshotFiltering:
             "forwardPE": 28.0,
             "pegRatio": 2.1,
             "priceToBook": 45.0,
+            "dividendYield": 0.005,
             "beta": 1.2,
             "fiftyTwoWeekHigh": 250.0,
             "fiftyTwoWeekLow": 150.0,
@@ -81,6 +82,7 @@ class TestYFinanceFundamentalsSnapshotFiltering:
         assert "Forward PE" not in out
         assert "PEG Ratio" not in out
         assert "Price to Book" not in out
+        assert "Dividend Yield" not in out
         assert "Beta" not in out
         assert "52 Week High" not in out
         assert "52 Week Low" not in out
@@ -137,6 +139,7 @@ class TestAlphaVantageFundamentalsSnapshotFiltering:
             "TrailingPE": "30.5",
             "PEGRatio": "2.1",
             "PriceToBookRatio": "45.0",
+            "DividendYield": "0.005",
             "PriceToSalesRatioTTM": "8.0",
             "EVToRevenue": "8.5",
             "EVToEBITDA": "22.0",
@@ -163,9 +166,10 @@ class TestAlphaVantageFundamentalsSnapshotFiltering:
 
         for key in (
             "MarketCapitalization", "PERatio", "ForwardPE", "TrailingPE",
-            "PEGRatio", "PriceToBookRatio", "PriceToSalesRatioTTM",
-            "EVToRevenue", "EVToEBITDA", "Beta", "52WeekHigh", "52WeekLow",
-            "50DayMovingAverage", "200DayMovingAverage", "AnalystTargetPrice",
+            "PEGRatio", "PriceToBookRatio", "DividendYield",
+            "PriceToSalesRatioTTM", "EVToRevenue", "EVToEBITDA", "Beta",
+            "52WeekHigh", "52WeekLow", "50DayMovingAverage",
+            "200DayMovingAverage", "AnalystTargetPrice",
         ):
             assert key not in data, f"{key} should have been stripped"
 

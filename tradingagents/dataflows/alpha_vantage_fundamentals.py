@@ -17,8 +17,9 @@ from .point_in_time import historical_snapshot_caveat, is_historical_date
 _SNAPSHOT_ONLY_KEYS = frozenset({
     "MarketCapitalization", "PERatio", "ForwardPE", "TrailingPE",
     "PEGRatio", "PriceToBookRatio", "PriceToSalesRatioTTM",
-    "EVToRevenue", "EVToEBITDA", "Beta", "52WeekHigh", "52WeekLow",
-    "50DayMovingAverage", "200DayMovingAverage", "AnalystTargetPrice",
+    "EVToRevenue", "EVToEBITDA", "Beta", "DividendYield", "52WeekHigh",
+    "52WeekLow", "50DayMovingAverage", "200DayMovingAverage",
+    "AnalystTargetPrice",
 })
 
 

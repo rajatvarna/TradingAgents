@@ -7,10 +7,14 @@ from datetime import date, datetime
 LOOKAHEAD_CAVEAT_TEMPLATE = (
     "NOTE: OVERVIEW/company-info metrics reflect the LATEST snapshot, "
     "not point-in-time as of {date}. Snapshot-only, price-derived fields "
-    "(market cap, P/E and other valuation ratios, 52-week range, moving "
-    "averages) have been removed from this report to prevent look-ahead "
-    "bias in historical backtests; only fundamentals-statement-derived "
-    "figures are shown.\n\n"
+    "(market cap, P/E and other valuation ratios, dividend yield, "
+    "52-week range, moving averages) have been removed from this report "
+    "to prevent look-ahead bias in historical backtests. The remaining "
+    "financial-statement-derived figures (revenue, margins, EPS, etc.) "
+    "still reflect the company's most recently reported quarter as of "
+    "TODAY, not as of {date} — for figures verified against a specific "
+    "historical filing date, use get_balance_sheet/get_cashflow/"
+    "get_income_statement instead, which filter reports by date.\n\n"
 )
 
 

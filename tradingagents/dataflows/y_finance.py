@@ -238,8 +238,8 @@ def get_instrument_profile(ticker: Annotated[str, "ticker symbol of the company"
 # just captioned, to prevent look-ahead bias in backtests (upstream #1163).
 _SNAPSHOT_ONLY_LABELS = frozenset({
     "Market Cap", "PE Ratio (TTM)", "Forward PE", "PEG Ratio",
-    "Price to Book", "Beta", "52 Week High", "52 Week Low",
-    "50 Day Average", "200 Day Average",
+    "Price to Book", "Dividend Yield", "Beta", "52 Week High",
+    "52 Week Low", "50 Day Average", "200 Day Average",
 })
 
 

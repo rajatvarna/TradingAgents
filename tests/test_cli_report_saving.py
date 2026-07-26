@@ -1,3 +1,4 @@
+import pytest
 
 from cli.main import (
     resolve_report_save_path,
@@ -7,6 +8,7 @@ from cli.main import (
 )
 
 
+@pytest.mark.unit
 def test_should_save_report_accepts_yes_values():
     assert should_save_report("y") is True
     assert should_save_report("Y") is True
@@ -16,12 +18,14 @@ def test_should_save_report_accepts_yes_values():
     assert should_save_report(None) is True
 
 
+@pytest.mark.unit
 def test_should_save_report_rejects_no_values():
     assert should_save_report("n") is False
     assert should_save_report("no") is False
     assert should_save_report("random") is False
 
 
+@pytest.mark.unit
 def test_should_display_report_uses_same_yes_no_rules():
     assert should_display_report("y") is True
     assert should_display_report("YES") is True
@@ -31,6 +35,7 @@ def test_should_display_report_uses_same_yes_no_rules():
     assert should_display_report("no") is False
 
 
+@pytest.mark.unit
 def test_resolve_report_save_path_uses_default_for_empty_input(tmp_path):
     default_path = tmp_path / "reports" / "SPY_20260529"
 
@@ -39,6 +44,7 @@ def test_resolve_report_save_path_uses_default_for_empty_input(tmp_path):
     assert resolve_report_save_path(None, default_path) == default_path
 
 
+@pytest.mark.unit
 def test_resolve_report_save_path_uses_custom_input(tmp_path):
     custom_path = tmp_path / "custom-report-path"
     default_path = tmp_path / "reports" / "SPY_20260529"
@@ -46,6 +52,7 @@ def test_resolve_report_save_path_uses_custom_input(tmp_path):
     assert resolve_report_save_path(str(custom_path), default_path) == custom_path
 
 
+@pytest.mark.unit
 def test_save_report_to_disk_writes_complete_report(tmp_path):
     final_state = {
         "market_report": "Market report content",

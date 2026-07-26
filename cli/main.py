@@ -50,6 +50,8 @@ from cli.utils import (
     get_analysis_date,
     get_ticker,
     prompt_openai_compatible_url,
+    resolve_analysis_date_from_env,
+    resolve_analysts_from_env,
     resolve_backend_url,
     select_analysts,
     select_deep_thinking_agent,
@@ -82,6 +84,17 @@ from cli.live import (
     MessageStore,
     ReportBuilder,
 )
+
+try:
+    # Windows-only; prompt_toolkit asserts sys.platform == "win32" at import
+    # time, so importing this on any other platform raises AssertionError
+    # (not ImportError) — catch broadly rather than platform-gating the
+    # import, so this stays correct if prompt_toolkit's internals change.
+    from prompt_toolkit.output.win32 import NoConsoleScreenBufferError
+except Exception:  # noqa: BLE001 - deliberately broad, see comment above
+    class NoConsoleScreenBufferError(Exception):
+        """Fallback used on non-Windows platforms, where the real
+        prompt_toolkit exception class isn't importable."""
 
 
 def get_user_selections():
@@ -142,7 +155,7 @@ def get_user_selections():
     console.print(
         create_question_box(
             "Step 1: Ticker Symbol",
-            "Enter the ticker, with exchange suffix when needed (e.g. SPY, 0700.HK, BTC-USD)",
+            "Enter the ticker, with exchange suffix when needed (e.g. SPY, 0700.HK, BTC-USD, ES=F)",
             "SPY",
         )
     )
@@ -155,16 +168,21 @@ def get_user_selections():
             f"[green]Detected asset type:[/green] {asset_type.value}"
         )
 
-    # Step 2: Analysis date
-    default_date = datetime.datetime.now().strftime("%Y-%m-%d")
-    console.print(
-        create_question_box(
-            "Step 2: Analysis Date",
-            "Enter the analysis date (YYYY-MM-DD)",
-            default_date,
+    # Step 2: Analysis date (skipped when set via TRADINGAGENTS_ANALYSIS_DATE)
+    env_analysis_date = os.environ.get("TRADINGAGENTS_ANALYSIS_DATE")
+    if env_analysis_date:
+        analysis_date = resolve_analysis_date_from_env(env_analysis_date)
+        console.print(f"[green]✓ Analysis date from environment:[/green] {analysis_date}")
+    else:
+        default_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        console.print(
+            create_question_box(
+                "Step 2: Analysis Date",
+                "Enter the analysis date (YYYY-MM-DD)",
+                default_date,
+            )
         )
-    )
-    analysis_date = get_analysis_date()
+        analysis_date = get_analysis_date()
 
     # Step 3: Output language (skipped when set via TRADINGAGENTS_OUTPUT_LANGUAGE)
     if os.environ.get("TRADINGAGENTS_OUTPUT_LANGUAGE"):
@@ -181,16 +199,24 @@ def get_user_selections():
         )
         output_language = ask_output_language()
 
-    # Step 4: Select analysts
-    console.print(
-        create_question_box(
-            "Step 4: Analysts Team", "Select your LLM analyst agents for the analysis"
+    # Step 4: Select analysts (skipped when set via TRADINGAGENTS_ANALYSTS)
+    env_analysts = os.environ.get("TRADINGAGENTS_ANALYSTS")
+    if env_analysts:
+        selected_analysts = resolve_analysts_from_env(env_analysts, asset_type)
+        console.print(
+            f"[green]✓ Analysts from environment:[/green] "
+            f"{', '.join(analyst.value for analyst in selected_analysts)}"
         )
-    )
-    selected_analysts = select_analysts(asset_type)
-    console.print(
-        f"[green]Selected analysts:[/green] {', '.join(analyst.value for analyst in selected_analysts)}"
-    )
+    else:
+        console.print(
+            create_question_box(
+                "Step 4: Analysts Team", "Select your LLM analyst agents for the analysis"
+            )
+        )
+        selected_analysts = select_analysts(asset_type)
+        console.print(
+            f"[green]Selected analysts:[/green] {', '.join(analyst.value for analyst in selected_analysts)}"
+        )
 
     # Step 5: Research depth (skipped when both round counts are set via env).
     # Research depth maps to the debate + risk round counts; when both are
@@ -542,8 +568,9 @@ def classify_message_type(message) -> tuple[str, str | None]:
     return ("System", content)
 
 
-def should_save_report(value: str | None) -> bool:
-    """Return True when the user wants to save the report."""
+def _parse_yes_no(value: str | None) -> bool:
+    """Shared Y/N parsing for the report save/display prompts and their
+    TRADINGAGENTS_* env-var overrides. None or blank defaults to yes."""
     if value is None:
         return True
 
@@ -553,19 +580,16 @@ def should_save_report(value: str | None) -> bool:
         return True
 
     return normalized in {"y", "yes"}
+
+
+def should_save_report(value: str | None) -> bool:
+    """Return True when the user wants to save the report."""
+    return _parse_yes_no(value)
 
 
 def should_display_report(value: str | None) -> bool:
     """Return True when the user wants to display the report."""
-    if value is None:
-        return True
-
-    normalized = str(value).strip().lower()
-
-    if normalized == "":
-        return True
-
-    return normalized in {"y", "yes"}
+    return _parse_yes_no(value)
 
 
 def resolve_report_save_path(value: str | None, default_path: Path) -> Path:
@@ -906,16 +930,27 @@ def run_analysis(
         console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
     console.print(f"[dim]{analyst_wall_time_tracker.format_summary()}[/dim]")
 
-    # Prompt to save report
-    save_choice = typer.prompt("Save report?", default="Y").strip().upper()
-    if save_choice in ("Y", "YES", ""):
+    # Prompt to save report (skipped when TRADINGAGENTS_SAVE_REPORT is set)
+    env_save_report = os.environ.get("TRADINGAGENTS_SAVE_REPORT")
+    if env_save_report is not None:
+        save_report = should_save_report(env_save_report)
+        console.print(f"[green]✓ Save report from environment:[/green] {save_report}")
+    else:
+        save_report = should_save_report(typer.prompt("Save report?", default="Y"))
+
+    if save_report:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         default_path = Path.cwd() / "reports" / f"{selections['ticker']}_{timestamp}"
-        save_path_str = typer.prompt(
-            "Save path (press Enter for default)",
-            default=str(default_path)
-        ).strip()
-        save_path = Path(save_path_str)
+        if env_save_report is not None:
+            save_path = resolve_report_save_path(
+                os.environ.get("TRADINGAGENTS_SAVE_REPORT_PATH"), default_path,
+            )
+        else:
+            save_path_str = typer.prompt(
+                "Save path (press Enter for default)",
+                default=str(default_path)
+            ).strip()
+            save_path = Path(save_path_str)
         try:
             report_file = save_report_to_disk(
                 final_state,
@@ -935,9 +970,17 @@ def run_analysis(
         except Exception as e:
             console.print(f"[red]Error saving report: {e}[/red]")
 
-    # Prompt to display full report
-    display_choice = typer.prompt("\nDisplay full report on screen?", default="Y").strip().upper()
-    if display_choice in ("Y", "YES", ""):
+    # Prompt to display full report (skipped when TRADINGAGENTS_DISPLAY_REPORT is set)
+    env_display_report = os.environ.get("TRADINGAGENTS_DISPLAY_REPORT")
+    if env_display_report is not None:
+        display_report = should_display_report(env_display_report)
+        console.print(f"[green]✓ Display report from environment:[/green] {display_report}")
+    else:
+        display_report = should_display_report(
+            typer.prompt("\nDisplay full report on screen?", default="Y")
+        )
+
+    if display_report:
         display_complete_report(final_state, config.get("metrics_config"))
 
 
@@ -991,7 +1034,18 @@ def analyze(
         from tradingagents.graph.checkpointer import clear_all_checkpoints
         n = clear_all_checkpoints(DEFAULT_CONFIG["data_cache_dir"])
         console.print(f"[yellow]Cleared {n} checkpoint(s).[/yellow]")
-    run_analysis(checkpoint=checkpoint, metrics_config=metrics_config, max_cost=max_cost)
+    try:
+        run_analysis(checkpoint=checkpoint, metrics_config=metrics_config, max_cost=max_cost)
+    except NoConsoleScreenBufferError as exc:
+        # prompt_toolkit can't attach to a real console (e.g. launched via
+        # pythonw, a non-interactive Windows shell, or a GUI wrapper) — show
+        # a friendly message instead of a raw traceback (upstream #1139).
+        console.print(f"[red]{exc}[/red]")
+        console.print(
+            "[yellow]Run TradingAgents from an interactive terminal such as "
+            "Windows Terminal, PowerShell, or cmd.exe.[/yellow]"
+        )
+        raise typer.Exit(code=1) from exc
 
 
 @app.command()

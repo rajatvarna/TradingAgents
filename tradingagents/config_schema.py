@@ -120,6 +120,7 @@ class TradingAgentsConfig(BaseModel):
     vertex_location: str | None = None
     openai_reasoning_effort: str | None = "max"
     anthropic_effort: str | None = None
+    anthropic_prompt_caching: bool = False
     llm_timeout: float | None = Field(default=None, ge=0)
     deepseek_reasoning_effort: str | None = "max"
     temperature: float | None = Field(default=None, ge=0, le=2)
@@ -182,6 +183,7 @@ class TradingAgentsConfig(BaseModel):
     analyst_weights_lookback: int = Field(default=20, ge=0)
     state_compression_enabled: bool = False
     trader_tools_enabled: bool = True
+    ibkr_portfolio_context_enabled: bool = False
     intraday_cache_ttl_minutes: float = Field(default=15, ge=0)
     trade_filter_enabled: bool = False
     trade_filter_threshold: float = Field(default=0.65, ge=0, le=1)

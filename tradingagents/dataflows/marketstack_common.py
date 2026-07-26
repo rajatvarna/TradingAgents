@@ -2,7 +2,6 @@ import os
 
 import requests
 
-
 API_BASE_URL = "https://api.marketstack.com/v1"
 
 

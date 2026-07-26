@@ -28,7 +28,7 @@ class TestDiscoverTemplates:
 
     def test_versions_sorted(self):
         templates = discover_templates()
-        assert templates["trader/trader_system"] == ["v1", "v2", "v3", "v4"]
+        assert templates["trader/trader_system"] == ["v1", "v2", "v3", "v4", "v5"]
 
 
 @pytest.mark.unit

@@ -209,6 +209,14 @@ Popular models:
 - `gpt-oss:latest` (20B, higher quality)
 - `glm-4.7-flash:latest` (30B, best reasoning)
 
+### Tuning with a Custom Modelfile
+
+To pre-tune a local model's context length, quantization, and temperature
+for TradingAgents' analyst/trader prompts (instead of relying on Ollama's
+defaults), see the example Modelfiles in
+[`examples/ollama`](../examples/ollama/README.md) — a fast profile for
+quick iteration and an accurate profile for deep-thinker passes.
+
 ---
 
 ## Comparison

@@ -22,7 +22,7 @@ console = Console()
 
 _prefs = load_preferences()
 
-TICKER_INPUT_EXAMPLES = "Examples: SPY, PETR4, VALE3, CNC.TO, 7203.T, 0700.HK, BTC-USD"
+TICKER_INPUT_EXAMPLES = "Examples: SPY, PETR4, VALE3, CNC.TO, 7203.T, 0700.HK, BTC-USD, ES=F"
 
 ANALYST_ORDER = [
     ("Market Analyst", AnalystType.MARKET),
@@ -94,18 +94,27 @@ def normalize_ticker_symbol(ticker: str) -> str:
 
 def detect_asset_type(ticker: str) -> AssetType:
     """Classify on the canonical symbol so e.g. BTCUSD and BTC-USDT both read as
-    crypto (#981/#982), matching what the data path will actually fetch."""
+    crypto (#981/#982), matching what the data path will actually fetch.
+
+    Futures detection covers both a directly-typed Yahoo futures symbol
+    (``ES=F``, ``CL=F``) and a broker-style commodity/forex alias that
+    ``normalize_symbol`` resolves to one (``GOLD``/``XAUUSD`` -> ``GC=F``) —
+    upstream #1155.
+    """
     canonical = normalize_ticker_symbol(ticker)
     if canonical.endswith(CRYPTO_SUFFIXES):
         return AssetType.CRYPTO
+    if canonical.endswith("=F"):
+        return AssetType.FUTURES
     return AssetType.STOCK
 
 
 def filter_analysts_for_asset_type(
     analysts: list[AnalystType], asset_type: AssetType
 ) -> list[AnalystType]:
-    """Filter out fundamentals analyst for crypto assets."""
-    if asset_type != AssetType.CRYPTO:
+    """Filter out the Fundamentals Analyst for non-equity assets (crypto,
+    futures) — neither has company financials to analyze."""
+    if asset_type not in (AssetType.CRYPTO, AssetType.FUTURES):
         return analysts
     return [
         analyst
@@ -164,26 +173,29 @@ def get_batch_tickers() -> list[str]:
     return unique_tickers
 
 
-def get_analysis_date() -> str:
-    """Prompt the user to enter a date in YYYY-MM-DD format."""
+def _validate_analysis_date(date_str: str) -> bool | str:
     import re
     from datetime import datetime
 
-    def validate_date(date_str: str) -> bool | str:
-        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
-            return "Please enter a valid date in YYYY-MM-DD format."
-        try:
-            analysis_date = datetime.strptime(date_str, "%Y-%m-%d")
-            if analysis_date.date() > datetime.today().date():
-                return "Analysis date cannot be in the future."
-            return True
-        except ValueError:
-            return "Please enter a valid date in YYYY-MM-DD format."
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+        return "Please enter a valid date in YYYY-MM-DD format."
+    try:
+        analysis_date = datetime.strptime(date_str, "%Y-%m-%d")
+        if analysis_date.date() > datetime.today().date():
+            return "Analysis date cannot be in the future."
+        return True
+    except ValueError:
+        return "Please enter a valid date in YYYY-MM-DD format."
+
+
+def get_analysis_date() -> str:
+    """Prompt the user to enter a date in YYYY-MM-DD format."""
+    from datetime import datetime
 
     date = questionary.text(
         "Enter the analysis date (YYYY-MM-DD):",
         default=datetime.today().strftime("%Y-%m-%d"),
-        validate=lambda x: validate_date(x.strip()),
+        validate=lambda x: _validate_analysis_date(x.strip()),
         style=questionary.Style(
             [
                 ("text", "fg:green"),
@@ -197,6 +209,26 @@ def get_analysis_date() -> str:
         exit(1)
 
     return date.strip()
+
+
+def resolve_analysis_date_from_env(value: str) -> str:
+    """Resolve TRADINGAGENTS_ANALYSIS_DATE to a YYYY-MM-DD string.
+
+    Accepts "today" (case-insensitive) as shorthand for the current date, or
+    an explicit YYYY-MM-DD date no later than today. Exits with an error
+    message on an invalid value, matching the interactive prompt's behavior.
+    """
+    from datetime import datetime
+
+    value = value.strip()
+    if value.lower() == "today":
+        return datetime.today().strftime("%Y-%m-%d")
+
+    result = _validate_analysis_date(value)
+    if result is not True:
+        console.print(f"\n[red]Invalid TRADINGAGENTS_ANALYSIS_DATE: {result}[/red]")
+        exit(1)
+    return value
 
 
 def select_analysts(asset_type: AssetType = AssetType.STOCK) -> list[AnalystType]:
@@ -238,6 +270,40 @@ def select_analysts(asset_type: AssetType = AssetType.STOCK) -> list[AnalystType
         console.print("\n[red]No analysts selected. Exiting...[/red]")
         exit(1)
 
+    if AnalystType.DERIVATIVES not in choices:
+        choices.append(AnalystType.DERIVATIVES)
+
+    return choices
+
+
+def resolve_analysts_from_env(value: str, asset_type: AssetType = AssetType.STOCK) -> list[AnalystType]:
+    """Resolve TRADINGAGENTS_ANALYSTS (comma-separated analyst values) to a
+    validated analyst list, applying the same asset-type filtering and
+    mandatory-Derivatives-analyst rule as the interactive selector.
+
+    Exits with an error message on an unknown analyst name, matching the
+    interactive prompt's fail-fast behavior.
+    """
+    requested = [v.strip().lower() for v in value.split(",") if v.strip()]
+    if not requested:
+        console.print("\n[red]TRADINGAGENTS_ANALYSTS is set but empty. Exiting...[/red]")
+        exit(1)
+
+    known = {analyst.value: analyst for analyst in AnalystType}
+    choices = []
+    for name in requested:
+        analyst = known.get(name)
+        if analyst is None:
+            valid = ", ".join(sorted(known))
+            console.print(
+                f"\n[red]Unknown analyst '{name}' in TRADINGAGENTS_ANALYSTS. "
+                f"Valid values: {valid}[/red]"
+            )
+            exit(1)
+        if analyst not in choices:
+            choices.append(analyst)
+
+    choices = filter_analysts_for_asset_type(choices, asset_type)
     if AnalystType.DERIVATIVES not in choices:
         choices.append(AnalystType.DERIVATIVES)
 
@@ -302,6 +368,72 @@ def _fetch_openrouter_models() -> list[tuple[str, str]]:
     except Exception as e:
         console.print(f"\n[yellow]Could not fetch OpenRouter models: {e}[/yellow]")
         return []
+
+
+def _fetch_requesty_models() -> list[tuple[str, str]]:
+    """Fetch available models from the Requesty router API.
+
+    Requesty's ``/v1/models`` endpoint requires authentication (unlike
+    OpenRouter's public one), so this returns early without making a
+    request when no API key is configured -- otherwise every call would
+    be a guaranteed 401 with the associated network round-trip delay.
+    """
+    import requests
+
+    key = os.environ.get("REQUESTY_API_KEY")
+    if not key:
+        console.print("\n[yellow]REQUESTY_API_KEY is not set; cannot list Requesty models.[/yellow]")
+        return []
+    try:
+        resp = requests.get(
+            "https://router.requesty.ai/v1/models",
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        models = resp.json().get("data", [])
+        if not isinstance(models, list):
+            return []
+        models = [m for m in models if isinstance(m, dict) and isinstance(m.get("id"), str) and m["id"]]
+        # Newest first, mirroring the OpenRouter picker's ordering guarantee.
+        models.sort(key=lambda m: m.get("created") or 0, reverse=True)
+        return [(m.get("name") or m["id"], m["id"]) for m in models]
+    except Exception as e:
+        console.print(f"\n[yellow]Could not fetch Requesty models: {e}[/yellow]")
+        return []
+
+
+def select_requesty_model(mode: str) -> str:
+    """Select a Requesty model from the newest available, or enter a custom ID.
+
+    ``mode`` ("quick"/"deep") labels the prompt so the two consecutive
+    Requesty selections are distinguishable, matching the OpenRouter picker.
+    """
+    models = _fetch_requesty_models()[:5]
+
+    choices = [questionary.Choice(name, value=mid) for name, mid in models]
+    choices.append(questionary.Choice("Custom model ID", value="custom"))
+
+    choice = questionary.select(
+        f"Select Your [{mode.title()}-Thinking] Requesty Model (latest available):",
+        choices=choices,
+        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        style=questionary.Style([
+            ("selected", "fg:magenta noinherit"),
+            ("highlighted", "fg:magenta noinherit"),
+            ("pointer", "fg:magenta noinherit"),
+        ]),
+    ).ask()
+
+    if choice is None:
+        console.print("\n[red]No model selected. Exiting...[/red]")
+        exit(1)
+    if choice == "custom":
+        return _require_text(
+            "Enter Requesty model ID (e.g. openai/gpt-5.4):",
+            "Please enter a model ID.",
+        )
+    return choice
 
 
 def _require_text(message: str, hint: str) -> str:
@@ -421,6 +553,8 @@ def _select_model(provider: str, mode: str) -> str:
     """Select a model for the given provider and mode (quick/deep)."""
     if provider.lower() == "openrouter":
         return select_openrouter_model(mode)
+    if provider.lower() == "requesty":
+        return select_requesty_model(mode)
     if provider.lower() == "custom_openai":
         saved_key = "shallow_thinker" if mode == "quick" else "deep_thinker"
         saved_model = _prefs.get(saved_key, "")
@@ -546,6 +680,7 @@ def _llm_provider_table() -> list[tuple[str, str, str | None]]:
         ("MiniMax", "minimax", "https://api.minimax.io/v1"),
         ("NVIDIA NIM", "nvidia_nim", "https://integrate.api.nvidia.com/v1"),
         ("OpenRouter", "openrouter", "https://openrouter.ai/api/v1"),
+        ("Requesty", "requesty", "https://router.requesty.ai/v1"),
         ("Mistral", "mistral", "https://api.mistral.ai/v1"),
         ("Groq", "groq", "https://api.groq.com/openai/v1"),
         ("Opencode", "opencode", os.environ.get("OPENCODE_BASE_URL") or "https://opencode.ai/zen/go/v1"),

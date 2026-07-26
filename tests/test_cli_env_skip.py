@@ -151,5 +151,127 @@ class TestReasoningEffortSkippedFromEnv(unittest.TestCase):
         self.assertEqual(sel["openai_reasoning_effort"], "high")
 
 
+@pytest.mark.unit
+class TestAnalysisDateSkippedFromEnv(unittest.TestCase):
+    def _base_env(self):
+        return {
+            "TRADINGAGENTS_LLM_PROVIDER": "openai",
+            "TRADINGAGENTS_QUICK_THINK_LLM": "gpt-5.4-mini",
+            "TRADINGAGENTS_DEEP_THINK_LLM": "gpt-5.5",
+            "TRADINGAGENTS_OUTPUT_LANGUAGE": "English",
+            "TRADINGAGENTS_MAX_DEBATE_ROUNDS": "1",
+            "TRADINGAGENTS_MAX_RISK_ROUNDS": "1",
+        }
+
+    def _run(self, env):
+        import cli.main as m
+
+        fake_cfg = dict(m.DEFAULT_CONFIG)
+        fake_cfg.update({
+            "llm_provider": "openai",
+            "backend_url": None,
+            "quick_think_llm": "gpt-5.4-mini",
+            "deep_think_llm": "gpt-5.5",
+            "output_language": "English",
+            "max_debate_rounds": 1,
+            "max_risk_discuss_rounds": 1,
+        })
+        with mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch.object(m, "DEFAULT_CONFIG", fake_cfg), \
+             mock.patch.object(m, "fetch_announcements", return_value=None), \
+             mock.patch.object(m, "display_announcements"), \
+             mock.patch.object(m, "get_ticker", return_value="AAPL"), \
+             mock.patch.object(m, "get_analysis_date") as prompt_date, \
+             mock.patch.object(m, "select_analysts", return_value=[]), \
+             mock.patch.object(m, "ensure_api_key"):
+            sel = m.get_user_selections()
+        return sel, prompt_date
+
+    def test_explicit_date_skips_prompt(self):
+        env = dict(self._base_env(), TRADINGAGENTS_ANALYSIS_DATE="2026-05-29")
+        sel, prompt_date = self._run(env)
+        prompt_date.assert_not_called()
+        self.assertEqual(sel["analysis_date"], "2026-05-29")
+
+    def test_today_keyword_resolves_to_current_date(self):
+        import datetime as dt
+        env = dict(self._base_env(), TRADINGAGENTS_ANALYSIS_DATE="today")
+        sel, prompt_date = self._run(env)
+        prompt_date.assert_not_called()
+        self.assertEqual(sel["analysis_date"], dt.datetime.today().strftime("%Y-%m-%d"))
+
+    def test_invalid_date_exits(self):
+        from cli.utils import resolve_analysis_date_from_env
+        with self.assertRaises(SystemExit):
+            resolve_analysis_date_from_env("not-a-date")
+
+    def test_future_date_exits(self):
+        from cli.utils import resolve_analysis_date_from_env
+        with self.assertRaises(SystemExit):
+            resolve_analysis_date_from_env("2099-01-01")
+
+
+@pytest.mark.unit
+class TestAnalystsSkippedFromEnv(unittest.TestCase):
+    def test_env_analysts_skip_prompt_and_include_mandatory_derivatives(self):
+        import cli.main as m
+        from cli.models import AnalystType
+
+        env = {
+            "TRADINGAGENTS_LLM_PROVIDER": "openai",
+            "TRADINGAGENTS_QUICK_THINK_LLM": "gpt-5.4-mini",
+            "TRADINGAGENTS_DEEP_THINK_LLM": "gpt-5.5",
+            "TRADINGAGENTS_OUTPUT_LANGUAGE": "English",
+            "TRADINGAGENTS_MAX_DEBATE_ROUNDS": "1",
+            "TRADINGAGENTS_MAX_RISK_ROUNDS": "1",
+            "TRADINGAGENTS_ANALYSIS_DATE": "2026-05-29",
+            "TRADINGAGENTS_ANALYSTS": "market,news",
+        }
+        fake_cfg = dict(m.DEFAULT_CONFIG)
+        fake_cfg.update({
+            "llm_provider": "openai",
+            "backend_url": None,
+            "quick_think_llm": "gpt-5.4-mini",
+            "deep_think_llm": "gpt-5.5",
+            "output_language": "English",
+            "max_debate_rounds": 1,
+            "max_risk_discuss_rounds": 1,
+        })
+        with mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch.object(m, "DEFAULT_CONFIG", fake_cfg), \
+             mock.patch.object(m, "fetch_announcements", return_value=None), \
+             mock.patch.object(m, "display_announcements"), \
+             mock.patch.object(m, "get_ticker", return_value="AAPL"), \
+             mock.patch.object(m, "select_analysts") as prompt_analysts, \
+             mock.patch.object(m, "ensure_api_key"):
+            sel = m.get_user_selections()
+
+        prompt_analysts.assert_not_called()
+        self.assertEqual(
+            set(sel["analysts"]),
+            {AnalystType.MARKET, AnalystType.NEWS, AnalystType.DERIVATIVES},
+        )
+
+    def test_unknown_analyst_name_exits(self):
+        from cli.models import AssetType
+        from cli.utils import resolve_analysts_from_env
+        with self.assertRaises(SystemExit):
+            resolve_analysts_from_env("market,not-a-real-analyst", AssetType.STOCK)
+
+    def test_empty_value_exits(self):
+        from cli.models import AssetType
+        from cli.utils import resolve_analysts_from_env
+        with self.assertRaises(SystemExit):
+            resolve_analysts_from_env("", AssetType.STOCK)
+
+    def test_crypto_asset_type_drops_fundamentals(self):
+        from cli.models import AnalystType, AssetType
+        from cli.utils import resolve_analysts_from_env
+        result = resolve_analysts_from_env("fundamentals,market", AssetType.CRYPTO)
+        self.assertNotIn(AnalystType.FUNDAMENTALS, result)
+        self.assertIn(AnalystType.MARKET, result)
+        self.assertIn(AnalystType.DERIVATIVES, result)  # mandatory
+
+
 if __name__ == "__main__":
     unittest.main()

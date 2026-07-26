@@ -6,7 +6,21 @@ import json
 
 from .alpha_vantage_common import _make_api_request
 from .cache_utils import cache_text
-from .point_in_time import historical_snapshot_caveat
+from .point_in_time import historical_snapshot_caveat, is_historical_date
+
+# OVERVIEW fields derived from the current stock price (market cap,
+# valuation ratios, moving averages, 52-week range) rather than a
+# financial statement — Alpha Vantage's OVERVIEW endpoint only ever
+# reflects today's value for these, so they're dropped on a historical
+# curr_date rather than just captioned, to prevent look-ahead bias in
+# backtests (upstream #1163).
+_SNAPSHOT_ONLY_KEYS = frozenset({
+    "MarketCapitalization", "PERatio", "ForwardPE", "TrailingPE",
+    "PEGRatio", "PriceToBookRatio", "PriceToSalesRatioTTM",
+    "EVToRevenue", "EVToEBITDA", "Beta", "DividendYield", "52WeekHigh",
+    "52WeekLow", "50DayMovingAverage", "200DayMovingAverage",
+    "AnalystTargetPrice",
+})
 
 
 def _filter_reports_by_date(result, curr_date: str):
@@ -45,12 +59,13 @@ def get_fundamentals(ticker: str, curr_date: str = None) -> str:
     def fetch() -> str:
         import json
         payload = _make_api_request("OVERVIEW", {"symbol": ticker})
-        caveat = historical_snapshot_caveat(curr_date)
-        if caveat:
+        if is_historical_date(curr_date):
             try:
                 data = json.loads(payload)
                 if isinstance(data, dict):
-                    data["_lookahead_caveat"] = caveat.strip()
+                    for key in _SNAPSHOT_ONLY_KEYS:
+                        data.pop(key, None)
+                    data["_lookahead_caveat"] = historical_snapshot_caveat(curr_date).strip()
                     return json.dumps(data)
             except Exception:
                 pass

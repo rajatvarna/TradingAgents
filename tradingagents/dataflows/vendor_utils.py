@@ -1,7 +1,7 @@
 import csv
 import json
+from collections.abc import Iterable
 from io import StringIO
-from typing import Iterable
 
 
 def rows_to_csv(rows: Iterable[dict], columns: list[str]) -> str:

@@ -53,6 +53,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_OUTCOME_HOLDING_DAYS":        "outcome_holding_days",
     "TRADINGAGENTS_STATE_COMPRESSION_ENABLED":  "state_compression_enabled",
     "TRADINGAGENTS_TRADER_TOOLS_ENABLED":       "trader_tools_enabled",
+    "TRADINGAGENTS_IBKR_PORTFOLIO_CONTEXT_ENABLED": "ibkr_portfolio_context_enabled",
     # Provider-specific reasoning/thinking knobs (None = each provider's own
     # default). Settable here for non-interactive runs; the CLI also offers an
     # interactive choice, which is skipped when the matching var is set.
@@ -61,6 +62,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_VERTEX_LOCATION":         "vertex_location",
     "TRADINGAGENTS_OPENAI_REASONING_EFFORT": "openai_reasoning_effort",
     "TRADINGAGENTS_ANTHROPIC_EFFORT":        "anthropic_effort",
+    "TRADINGAGENTS_ANTHROPIC_PROMPT_CACHING": "anthropic_prompt_caching",
     # LLM response cache
     "TRADINGAGENTS_LLM_CACHE_ENABLED":    "llm_cache_enabled",
     "TRADINGAGENTS_LLM_CACHE_TTL_HOURS":  "llm_cache_ttl_hours",
@@ -227,6 +229,12 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "vertex_location": None,            # Vertex AI region, e.g. "us-central1"
     "openai_reasoning_effort": "max",    # "medium", "high", "low"
     "anthropic_effort": None,           # "high", "medium", "low"
+    # Opt-in: mark the request cacheable (Anthropic prompt caching) via
+    # model_kwargs={"cache_control": {"type": "ephemeral"}}, which the direct
+    # Anthropic API accepts as a top-level request field. Off by default —
+    # shipped available, not default, per this fork's usual rollout
+    # convention for new provider-request behavior. See anthropic_client.py.
+    "anthropic_prompt_caching": False,
     "llm_timeout": None,
     "deepseek_reasoning_effort": "max",
     # Sampling temperature, forwarded to every provider when set. None leaves
@@ -325,6 +333,8 @@ DEFAULT_CONFIG = _apply_env_overrides({
         ".KL": "^KLSE",     # Malaysia (FTSE Bursa Malaysia KLCI)
         ".L":  "^FTSE",     # FTSE 100 (London)
         ".TO": "^GSPTSE",   # TSX Composite (Toronto)
+        ".TW": "^TWII",     # Taiwan Weighted Index (TWSE)
+        ".TWO": "^TWOII",   # Taiwan OTC Index (TPEx)
         "":    "SPY",       # default for US-listed tickers
     },
     # Portfolio propagation settings
@@ -398,10 +408,10 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # routed to vendors you didn't choose. For ordered fallback, list several,
     # e.g. "yfinance,alpha_vantage". "default" uses all available vendors.
     "data_vendors": {
-        "core_stock_apis": "fmp,alpha_vantage,marketstack,yfinance",       # Options: alpha_vantage, yfinance, b3
-        "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance, b3
-        "fundamental_data": "fmp,alpha_vantage,finnhub,yfinance",      # Options: alpha_vantage, yfinance, b3
-        "news_data": "finnhub,fmp,alpha_vantage,yfinance",          # Options: yfinance, google_news, alpha_vantage, searxng, b3
+        "core_stock_apis": "fmp,alpha_vantage,marketstack,yfinance",       # Options: alpha_vantage, yfinance, b3, taiwan
+        "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance, b3, taiwan
+        "fundamental_data": "fmp,alpha_vantage,finnhub,yfinance",      # Options: alpha_vantage, yfinance, b3, taiwan
+        "news_data": "finnhub,fmp,alpha_vantage,yfinance",          # Options: yfinance, google_news, alpha_vantage, searxng, b3, taiwan
         "macro_data": "fred",                # Options: fred (needs FRED_API_KEY)
         "prediction_markets": "polymarket",  # Options: polymarket (keyless)
         "options_data": "yfinance",          # Options: yfinance (Polygon/Futu via Epic B fallback chain)
@@ -424,6 +434,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
                                      # shows "digest" is non-inferior on hit-rate/calibration.
     "state_compression_enabled": False,
     "trader_tools_enabled": True,
+    "ibkr_portfolio_context_enabled": False,  # opt-in: requires a running TWS/IB Gateway
     "intraday_cache_ttl_minutes": 15,  # B2 — TTL for interface.get_intraday_stock_data's disk cache;
                                         # short relative to the daily-data caches since intraday bars stale fast.
     "trade_filter_enabled": False,

@@ -568,8 +568,9 @@ def classify_message_type(message) -> tuple[str, str | None]:
     return ("System", content)
 
 
-def should_save_report(value: str | None) -> bool:
-    """Return True when the user wants to save the report."""
+def _parse_yes_no(value: str | None) -> bool:
+    """Shared Y/N parsing for the report save/display prompts and their
+    TRADINGAGENTS_* env-var overrides. None or blank defaults to yes."""
     if value is None:
         return True
 
@@ -579,19 +580,16 @@ def should_save_report(value: str | None) -> bool:
         return True
 
     return normalized in {"y", "yes"}
+
+
+def should_save_report(value: str | None) -> bool:
+    """Return True when the user wants to save the report."""
+    return _parse_yes_no(value)
 
 
 def should_display_report(value: str | None) -> bool:
     """Return True when the user wants to display the report."""
-    if value is None:
-        return True
-
-    normalized = str(value).strip().lower()
-
-    if normalized == "":
-        return True
-
-    return normalized in {"y", "yes"}
+    return _parse_yes_no(value)
 
 
 def resolve_report_save_path(value: str | None, default_path: Path) -> Path:
@@ -938,8 +936,7 @@ def run_analysis(
         save_report = should_save_report(env_save_report)
         console.print(f"[green]✓ Save report from environment:[/green] {save_report}")
     else:
-        save_choice = typer.prompt("Save report?", default="Y").strip().upper()
-        save_report = save_choice in ("Y", "YES", "")
+        save_report = should_save_report(typer.prompt("Save report?", default="Y"))
 
     if save_report:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -979,8 +976,9 @@ def run_analysis(
         display_report = should_display_report(env_display_report)
         console.print(f"[green]✓ Display report from environment:[/green] {display_report}")
     else:
-        display_choice = typer.prompt("\nDisplay full report on screen?", default="Y").strip().upper()
-        display_report = display_choice in ("Y", "YES", "")
+        display_report = should_display_report(
+            typer.prompt("\nDisplay full report on screen?", default="Y")
+        )
 
     if display_report:
         display_complete_report(final_state, config.get("metrics_config"))

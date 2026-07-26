@@ -1,7 +1,7 @@
 FROM qwen3:8b-q8_0
 
 # Accurate profile: higher-precision quantization, smaller context window to
-# keep memory/latency in check. See ../README.md for the tradeoffs against
+# keep memory/latency in check. See README.md for the tradeoffs against
 # the fast profile.
 PARAMETER num_ctx 4096
 PARAMETER temperature 0.2

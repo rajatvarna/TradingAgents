@@ -52,6 +52,7 @@ export TRADINGAGENTS_DEEP_THINK_LLM=trading-accurate
   raise `num_ctx`, but expect proportionally higher memory use and latency.
 - **More deterministic output:** lower `temperature` further (e.g. `0.0`–`0.1`).
 
-Run `ollama pull qwen3:8b` first if you don't already have the base model —
-`ollama create` builds the custom tag from a local base image, it doesn't
-download one.
+Run `ollama pull qwen3:8b-q4_K_M` and `ollama pull qwen3:8b-q8_0` first if
+you don't already have those base images — `ollama create` builds each
+custom tag from its matching local base image (the exact `FROM` line in
+the Modelfile), it doesn't download one.

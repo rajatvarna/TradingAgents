@@ -16,7 +16,7 @@ class _DummyLive:
         return False
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 def test_run_analysis_routes_through_propagate(monkeypatch, tmp_path):
     import cli.main as m
 
@@ -123,7 +123,7 @@ def _base_run_analysis_setup(monkeypatch, tmp_path):
     return m
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 def test_save_and_display_report_env_vars_skip_both_prompts(monkeypatch, tmp_path):
     m = _base_run_analysis_setup(monkeypatch, tmp_path)
     monkeypatch.setenv("TRADINGAGENTS_SAVE_REPORT", "N")
@@ -140,7 +140,7 @@ def test_save_and_display_report_env_vars_skip_both_prompts(monkeypatch, tmp_pat
     fake_graph.propagate.assert_called()
 
 
-@pytest.mark.integration
+@pytest.mark.unit
 def test_save_report_env_var_true_saves_to_default_path(monkeypatch, tmp_path):
     m = _base_run_analysis_setup(monkeypatch, tmp_path)
     monkeypatch.setenv("TRADINGAGENTS_SAVE_REPORT", "Y")

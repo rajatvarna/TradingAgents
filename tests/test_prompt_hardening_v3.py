@@ -107,7 +107,7 @@ class TestResearchManagerHardenedVersion:
     def test_default_v1_does_not_include_it(self):
         llm, captured = _captured_prompt_rm()
         rm = create_research_manager(llm)
-        rm(_rm_state())  # no override -> default (v1)
+        rm(_rm_state("v1"))
         assert _NO_TOOLS_LINE not in captured["prompt"]
 
     def test_default_config_still_selects_v1(self):
@@ -127,7 +127,7 @@ class TestPortfolioManagerHardenedVersion:
     def test_default_v2_does_not_include_it(self):
         llm, captured = _captured_prompt_pm()
         pm = create_portfolio_manager(llm)
-        pm(_pm_state())  # no override -> default (v2)
+        pm(_pm_state("v2"))
         assert _NO_TOOLS_LINE not in captured["prompt"]
 
     def test_default_config_still_selects_v2(self):

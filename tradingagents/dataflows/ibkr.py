@@ -18,15 +18,28 @@ provided), and add ``"ibkr"`` to the relevant vendor list in config
 Config keys (all optional — defaults shown):
   ibkr_host       = "127.0.0.1"
   ibkr_port       = 7497
-  ibkr_client_id  = 10
+  ibkr_client_id  = unset (a random id is chosen per connection to avoid
+                    colliding with another still-active session; set this
+                    explicitly to always use the same client id instead)
 """
 
 import contextlib
+import random
 from collections.abc import Generator
 from datetime import date, datetime
 
 from .config import get_config
 from .errors import DataVendorError
+
+# Bounds blocking ib_insync RPCs (accountSummary(), positions(),
+# reqHistoricalData(), ...) that otherwise wait indefinitely — ib_insync's
+# default IB.RequestTimeout is 0, meaning "no timeout", and connect(...,
+# timeout=...) only covers the initial socket handshake, not later calls.
+_REQUEST_TIMEOUT_SECONDS = 15
+# TWS/Gateway rejects a second connection reusing a clientId it still
+# considers active, which a fixed default would risk under concurrent
+# tool/graph calls. Only used when the user hasn't set ibkr_client_id.
+_RANDOM_CLIENT_ID_RANGE = (1000, 65000)
 
 
 @contextlib.contextmanager
@@ -47,7 +60,12 @@ def _ctx() -> Generator:
     cfg = get_config()
     host = cfg.get("ibkr_host", "127.0.0.1")
     port = int(cfg.get("ibkr_port", 7497))
-    client_id = int(cfg.get("ibkr_client_id", 10))
+    configured_client_id = cfg.get("ibkr_client_id")
+    client_id = (
+        int(configured_client_id)
+        if configured_client_id is not None
+        else random.randint(*_RANDOM_CLIENT_ID_RANGE)
+    )
 
     ib = IB()
     try:
@@ -56,6 +74,7 @@ def _ctx() -> Generator:
         raise DataVendorError(
             f"Cannot connect to IBKR TWS/Gateway at {host}:{port} — {exc}"
         ) from exc
+    ib.RequestTimeout = _REQUEST_TIMEOUT_SECONDS
 
     try:
         yield ib

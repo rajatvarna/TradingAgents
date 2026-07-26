@@ -123,6 +123,15 @@ class TestRouting:
             result = interface.route_to_vendor("get_news", "AAPL", "2026-05-01", "2026-06-02")
         assert result == "YFINANCE"
 
+    def test_ashare_whitespace_padded_yfinance_still_prefers_eastmoney(self):
+        """A configured value like " yfinance " must still be recognized as
+        the plain "yfinance" case, not silently skip East Money prioritization."""
+        interface, patched = self._patched_vendors()
+        with patch.dict(interface.VENDOR_METHODS, {"get_news": patched}), \
+             patch.object(interface, "get_vendor", return_value=" yfinance "):
+            result = interface.route_to_vendor("get_news", "600519.SS", "2026-05-01", "2026-06-02")
+        assert result == "EASTMONEY"
+
     def test_ashare_default_chain_keeps_fallback_vendors(self):
         """The "default" sentinel must still resolve to every available
         vendor (eastmoney preferred first) -- not collapse into a single

@@ -182,6 +182,81 @@ class TestTraderGetIbkrPortfolioTool:
         assert "ib_insync is not installed" in result
 
 
+class _FakeIBConnection:
+    """Stands in for ib_insync.IB: records connect() args, RequestTimeout."""
+
+    def __init__(self):
+        self.connect_kwargs = None
+        self.RequestTimeout = 0
+        self.disconnected = False
+
+    def connect(self, host, port, clientId, timeout):  # noqa: N803 — matches ib_insync's signature
+        self.connect_kwargs = {
+            "host": host, "port": port, "clientId": clientId, "timeout": timeout,
+        }
+
+    def disconnect(self):
+        self.disconnected = True
+
+
+def _install_fake_ib_insync(monkeypatch, fake_ib: _FakeIBConnection):
+    """Inject a fake ib_insync module so ``_ctx()``'s lazy imports resolve
+    without the real package installed, and capture the IB() it constructs."""
+    import sys
+    import types
+
+    fake_module = types.ModuleType("ib_insync")
+    fake_module.IB = lambda: fake_ib
+    monkeypatch.setitem(sys.modules, "ib_insync", fake_module)
+
+
+@pytest.mark.unit
+class TestCtxConnectionSetup:
+    """_ctx()'s connect() call: client-id collision avoidance + RequestTimeout
+    (CodeRabbit finding on PR #35 — accountSummary()/positions() otherwise
+    wait indefinitely, and a fixed default clientId can collide under
+    concurrent tool/graph calls)."""
+
+    def test_sets_request_timeout_after_connect(self, monkeypatch):
+        from tradingagents.dataflows import ibkr as ibkr_mod
+
+        fake_ib = _FakeIBConnection()
+        _install_fake_ib_insync(monkeypatch, fake_ib)
+
+        with ibkr_mod._ctx() as ib:
+            assert ib is fake_ib
+        assert fake_ib.RequestTimeout == ibkr_mod._REQUEST_TIMEOUT_SECONDS
+        assert fake_ib.RequestTimeout > 0
+        assert fake_ib.disconnected is True
+
+    def test_uses_configured_client_id_when_set(self, monkeypatch):
+        from tradingagents.dataflows import ibkr as ibkr_mod
+        from tradingagents.dataflows.config import set_config
+
+        set_config({"ibkr_client_id": 42})
+        fake_ib = _FakeIBConnection()
+        _install_fake_ib_insync(monkeypatch, fake_ib)
+
+        with ibkr_mod._ctx():
+            pass
+
+        assert fake_ib.connect_kwargs["clientId"] == 42
+
+    def test_picks_random_client_id_when_unset(self, monkeypatch):
+        from tradingagents.dataflows import ibkr as ibkr_mod
+        from tradingagents.dataflows.config import set_config
+
+        set_config({"ibkr_client_id": None})
+        fake_ib = _FakeIBConnection()
+        _install_fake_ib_insync(monkeypatch, fake_ib)
+        monkeypatch.setattr(ibkr_mod.random, "randint", lambda lo, hi: 54321)
+
+        with ibkr_mod._ctx():
+            pass
+
+        assert fake_ib.connect_kwargs["clientId"] == 54321
+
+
 @pytest.mark.unit
 class TestGraphSetupWiring:
     """Drives the real GraphSetup._build_fixed_nodes wiring (not a reimplementation

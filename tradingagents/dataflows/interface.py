@@ -481,8 +481,9 @@ def _resolve_vendor_chain(method: str, category: str, *args) -> list[str]:
         raise ValueError(f"Method '{method}' not supported")
 
     vendor_config = get_vendor(category, method)
+    normalized_vendor_config = vendor_config.strip()
     primary_vendors = [v.strip() for v in vendor_config.split(",")]
-    is_default_chain = vendor_config.strip() == "default"
+    is_default_chain = normalized_vendor_config == "default"
 
     all_available_vendors = list(VENDOR_METHODS[method].keys())
 
@@ -500,7 +501,7 @@ def _resolve_vendor_chain(method: str, category: str, *args) -> list[str]:
     # config, silently dropping every other default vendor as a fallback
     # (contradicting "the 'default' sentinel uses all available vendors").
     if args and isinstance(args[0], str) and is_ashare(args[0]):
-        if method == "get_news" and vendor_config in ("default", "yfinance"):
+        if method == "get_news" and normalized_vendor_config in ("default", "yfinance"):
             if is_default_chain:
                 all_available_vendors = ["eastmoney"] + [
                     v for v in all_available_vendors if v != "eastmoney"

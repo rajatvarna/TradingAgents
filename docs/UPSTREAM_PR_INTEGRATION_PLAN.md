@@ -24,9 +24,9 @@ Of the 40 PRs opened in the window:
 | Category | Count |
 |---|---|
 | Adopt directly (small, low-risk, real fix/feature) | 7 |
-| Adapt / reimplement (right idea, needs rework for our architecture) | 13 |
-| Skip — we already have equal or better | 7 |
-| Reject — spam, off-topic, mis-filed, or broken as submitted | 13 |
+| Adapt / reimplement (right idea, needs rework for our architecture) | 14 |
+| Skip — we already have equal or better | 8 |
+| Reject — spam, off-topic, mis-filed, or broken as submitted | 11 |
 
 The "reject" bucket is unusually large for a 3-week window. Several PRs are
 wholesale dumps of unrelated personal projects (a "premium trading terminal"
@@ -42,20 +42,24 @@ fork's integration work.
 ## 1. Methodology
 
 - Full list of 40 PRs pulled via `search_pull_requests` (`is:pr
-  created:>=2026-07-04`) and cross-checked against `is:pr is:merged` (0
-  results in-window; last merge was #579 on 2026-04-25).
+  created:2026-07-04..2026-07-25`, bounding the cohort to the review
+  window) and cross-checked against `is:pr is:merged
+  merged:2026-07-04..2026-07-25` (0 results in-window; last merge was
+  `#579` on 2026-04-25).
 - Each PR's description, file list, and (where feasible) diff was reviewed
   against this fork's current code to check for (a) whether the underlying
   bug/gap actually exists here, (b) whether we've already built equivalent
   or superior functionality under our own architecture, and (c) any
   correctness/security issues in the PR's own diff.
-- This fork has diverged substantially from upstream's original shape — we
-  have `agents/`, `audit/`, `dataflows/`, `evaluation/`, `evidence/`,
-  `experiments/`, `graph/`, `guardrails/`, `llm_clients/`, `notifications/`,
-  `orchestrator/`, `persistence/`, `personas/`, `prompts/`, `reports/`,
-  `scoring/`, `secretary/`, `sensing/`, `valuation/`, plus `ops/`, `web/`,
-  `dashboard/`, and `webui.py` at the top level. Several upstream PRs
-  duplicate capability we've already built, sometimes more completely.
+- This fork has diverged substantially from upstream's original shape — the
+  `tradingagents/` package has grown `audit/`, `evaluation/`, `evidence/`,
+  `experiments/`, `guardrails/`, `notifications/`, `orchestrator/`,
+  `persistence/`, `personas/`, `prompts/`, `reports/`, `scoring/`,
+  `secretary/`, `sensing/`, and `valuation/` alongside its original
+  `agents/`, `dataflows/`, `graph/`, and `llm_clients/`, plus top-level
+  `ops/`, `web/`, `dashboard/`, and `webui.py` outside the package. Several
+  upstream PRs duplicate capability we've already built, sometimes more
+  completely.
   **No PR in this batch should be cherry-picked as a raw diff/patch** —
   everything here is a port of an idea into our existing structure, verified
   against our conventions (`encoding="utf-8"`, `~/.tradingagents/` paths, no
@@ -67,7 +71,9 @@ fork's integration work.
 
 Small, low-risk, real fixes or additions with no architectural conflict.
 Each should land as its own branch/PR per the one-branch-one-PR convention,
-with a `CHANGELOG.md` entry and unit test.
+with a `CHANGELOG.md` entry — plus a unit test for any code change
+(`#1173` and `#1149` are docs-only, so a rendering/link check stands in
+for a unit test there).
 
 | # | Title | Author | Action |
 |---|---|---|---|
@@ -75,7 +81,7 @@ with a `CHANGELOG.md` entry and unit test.
 | [#1126](https://github.com/TauricResearch/TradingAgents/pull/1126) | fix(dataflows): make Yahoo news windows UTC and end-exclusive | blankerLi | `yfinance_news.py::_in_news_window` uses naive, host-timezone-dependent datetimes with an inclusive upper bound; `_extract_article_data`'s flat-timestamp path never applies `tz=timezone.utc`. Real look-ahead/timezone leak. Port the UTC-aware, end-exclusive comparison; add boundary tests to `tests/test_news_lookahead.py` (currently has none). |
 | [#1152](https://github.com/TauricResearch/TradingAgents/pull/1152) | feat(llm): add xAI Grok 4.5 to the model catalog | akparmar-xai | Our `model_catalog.py` xai entry tops out at grok-4.3. Bump the catalog + smoke-test default. **Verify "grok-4.5" is a real released model ID independently** before merging — PR author is xAI-affiliated but that's not independent confirmation. |
 | [#1128](https://github.com/TauricResearch/TradingAgents/pull/1128) | feat(cli): env-var overrides for analysis date and analyst selection | SingTheCode | Adds `TRADINGAGENTS_ANALYSIS_DATE` (with "today"/future-date validation) and `TRADINGAGENTS_ANALYSTS` to `cli/main.py`, consistent with our existing `TRADINGAGENTS_*` override convention. Cleanest, most self-contained PR in the batch. Add `@pytest.mark.unit` coverage (the PR itself doesn't ship any). |
-| [#1139](https://github.com/TauricResearch/TradingAgents/pull/1139) | Handle missing Windows console in CLI | HUAN2022A | Catches `NoConsoleScreenBufferError` from `prompt_toolkit.output.win32` at CLI entry and prints a friendly message instead of a traceback. Confirmed absent from our `cli/`. Use the PR author's own follow-up fix (`sys.platform` guard, not a bare `except`) for clean 3.10 cross-platform behavior. |
+| [#1139](https://github.com/TauricResearch/TradingAgents/pull/1139) | Handle missing Windows console in CLI | HUAN2022A | Catches `NoConsoleScreenBufferError` from `prompt_toolkit.output.win32` at CLI entry and prints a friendly message instead of a traceback. Confirmed absent from our `cli/`. Use the PR author's own follow-up fix (`sys.platform` guard, not a bare `except`) for clean cross-platform behavior. |
 | [#1173](https://github.com/TauricResearch/TradingAgents/pull/1173) | docs: add uv setup workflow | CadeYu | 12-line README addition for `uv sync`/`uv run` setup. Trivial, well-tested (576 tests passed per author). |
 | [#1149](https://github.com/TauricResearch/TradingAgents/pull/1149) | docs(ollama): custom Modelfile guide + fast/accurate profiles | meticulo3366 | Adds example Ollama Modelfiles + tuning guide. Fix the one flagged nonexistent model name (`qwen3.5:9b`) before adopting. |
 
@@ -125,7 +131,7 @@ own architecture; do not merge the diff as-is.
   `cache_control` at the top level, which 400s the Anthropic API) before
   porting; drop the stray `.vscode/settings.json` the diff includes.
 - **[#1135](https://github.com/TauricResearch/TradingAgents/pull/1135) — env-var overrides to skip report save/display prompts** (SingTheCode).
-  Cherry-pick only the net-new piece: `TRADINGAGENTS_SAVE_REPORT` /
+  Port only the net-new piece: `TRADINGAGENTS_SAVE_REPORT` /
   `TRADINGAGENTS_DISPLAY_REPORT` in `cli/main.py`. The PR's diff is inflated
   because it's stacked on #1128 and the closed #1131 — do not pull in the
   bundled sentiment/web-search changes.
@@ -240,36 +246,36 @@ Proposed workstream order, each item its own branch → PR against `origin`,
 per this repo's one-branch-one-PR convention:
 
 **W1 — Quick wins (Tier 1, ~1-2 days total).**
-#1124, #1126, #1152, #1128, #1139, #1173, #1149. Independent, low-risk,
+`#1124`, `#1126`, `#1152`, `#1128`, `#1139`, `#1173`, `#1149`. Independent, low-risk,
 parallelizable across branches.
 
 **W2 — Data correctness (Tier 2a, do right after W1).**
-#1163 (fundamentals leak — fixes a real point-in-time integrity bug),
-#1159 (Taiwan vendor, after fixing its flagged bugs), #1146 (docs line only).
+`#1163` (fundamentals leak — fixes a real point-in-time integrity bug),
+`#1159` (Taiwan vendor, after fixing its flagged bugs), `#1146` (docs line only).
 These affect backtest/analysis correctness, so prioritize above new
 features.
 
 **W3 — LLM providers & CLI (Tier 2b).**
-#1140, #1136, #1135, #1134, #1131 (prompt-hardening half), #1137/#1120
+`#1140`, `#1136`, `#1135`, `#1134`, `#1131` (prompt-hardening half), `#1137`/`#1120`
 comparison-and-port. Independent of each other; sequence by whichever
 unblocks current work first.
 
 **W4 — Core graph/state features (Tier 2c, needs extra review).**
-#1155 (futures asset type), #1147 (trade-horizon prompt context). Both
+`#1155` (futures asset type), `#1147` (trade-horizon prompt context). Both
 touch `trading_graph.py`/`propagation.py`/prompt templates — run our full
 unit suite plus a manual smoke run after each, given how much this fork has
 customized the graph.
 
 **W5 — New-capability design work (largest effort, own design docs first).**
-#1117 (position-exit engine) and #1125 (IBKR read-only portfolio context)
+`#1117` (position-exit engine) and `#1125` (IBKR read-only portfolio context)
 are genuinely new capabilities, not ports. Each should get its own short
 design doc (à la `docs/CORE_FEATURES_PLAN.md`) reviewing how it fits
 `orchestrator/`, `scoring/`, `persistence/`, and `evidence/` before any
 code lands.
 
 **Ongoing / opportunistic — Tier 3 audit items.**
-Dashboard CSP/auth hardening (prompted by #1160), evaluation-harness
-div-by-zero check (prompted by #1123). Not blocking, pick up alongside
+Dashboard CSP/auth hardening (prompted by `#1160`), evaluation-harness
+div-by-zero check (prompted by `#1123`). Not blocking, pick up alongside
 other dashboard/evaluation work.
 
 No action for Tier 4 — listed for completeness only.
@@ -280,7 +286,8 @@ No action for Tier 4 — listed for completeness only.
 
 Every item in Tiers 1-2 should go through the existing contribution
 checklist before landing: branch up to date with `upstream/main`, unit
-tests passing (`python -m pytest -m unit -v`), new behavior covered by a
-`@pytest.mark.unit` test, Python 3.10 compatibility, no secrets/`.env`
-committed, `CHANGELOG.md` updated under `[Unreleased]`, Conventional Commits
-message format.
+tests passing (`python -m pytest -m unit -v`), any code change covered by a
+`@pytest.mark.unit` test (a docs-only item substitutes a rendering/link
+check), Python 3.11+ compatibility (this fork's actual `requires-python`,
+per `pyproject.toml`), no secrets/`.env` committed, `CHANGELOG.md` updated
+under `[Unreleased]`, Conventional Commits message format.

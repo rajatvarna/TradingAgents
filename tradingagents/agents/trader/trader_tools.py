@@ -42,3 +42,15 @@ def trader_get_news_summary(
         return route_to_vendor("get_news", symbol, trade_date, trade_date)
     except Exception as exc:
         return tool_error_text(tool="trader_get_news_summary", error=exc)
+
+
+@tool
+def trader_get_ibkr_portfolio() -> str:
+    """Fetch current IBKR account cash/equity/buying-power and open positions
+    (read-only) to check exposure before proposing a new trade. Requires a
+    running TWS/IB Gateway; not available unless the user has IBKR configured."""
+    try:
+        from tradingagents.dataflows.ibkr import get_portfolio_context
+        return get_portfolio_context()
+    except Exception as exc:
+        return tool_error_text(tool="trader_get_ibkr_portfolio", error=exc)

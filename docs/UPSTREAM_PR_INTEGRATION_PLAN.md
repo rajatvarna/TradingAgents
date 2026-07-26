@@ -24,8 +24,8 @@ Of the 40 PRs opened in the window:
 | Category | Count |
 |---|---|
 | Adopt directly (small, low-risk, real fix/feature) | 7 |
-| Adapt / reimplement (right idea, needs rework for our architecture) | 14 |
-| Skip — we already have equal or better | 8 |
+| Adapt / reimplement (right idea, needs rework for our architecture) | 13 |
+| Skip — we already have equal or better | 9 |
 | Reject — spam, off-topic, mis-filed, or broken as submitted | 11 |
 
 The "reject" bucket is unusually large for a 3-week window. Several PRs are
@@ -177,28 +177,25 @@ own architecture; do not merge the diff as-is.
   like the PR does). Drop the PR's unrelated Reddit/StockTwits dataflow
   scope creep and its flagged bugs (unenforced timeouts, hardcoded currency
   symbols) entirely.
-- **[#1117](https://github.com/TauricResearch/TradingAgents/pull/1117) — momentum sleeve + position-exit engine (design only, reject the diff)** (CWFred).
-  The diff itself (162 commits, 143 files, an entire private `ops/` clone)
-  is not mergeable and should be rejected outright. But it identifies a
-  real gap: `tradingagents/orchestrator/` already has dispatch/worker/
-  guards/candidates/promoter and `scoring/entry_gate.py` already implements
-  deterministic buy-gates, but **we have no position-exit engine**
-  (`cli/backtester.py` has none). Worth a proper design doc (in the style
-  of `docs/CORE_FEATURES_PLAN.md`) borrowing the PR's exit design
-  (rank-decay / trend-break / max-hold, once-daily cost-gated cycle) built
-  against our own orchestrator + scoring stack. Treat as a new workstream,
-  not a quick port.
 - **[#1125](https://github.com/TauricResearch/TradingAgents/pull/1125) — read-only IBKR portfolio context (draft)** (crabbag3).
-  Genuinely new: our existing `dataflows/ibkr.py` (417 lines, `ib_insync`)
-  only fetches market data today, no account/positions capability. The
-  PR's design is safety-conscious (`readonly=True`, no order-placement
-  methods, credentials scrubbed from prompts). Extend our existing
-  `ibkr.py` rather than adding a parallel client — the PR uses `ib_async`
-  (a different fork of the same underlying library), so pick one and stay
-  consistent. **Before implementing, verify account IDs/positions never
-  leak into `persistence/`/`evidence/` serialized state** — the upstream
-  design wasn't built against those modules since we're the only fork that
-  has them.
+  Genuinely missing at the agent-facing layer: `dataflows/ibkr.py` (market
+  data only) had no account/positions read path. **Ported and implemented**
+  (`docs/CORE_FEATURES_PLAN.md`'s F2 write-up shows `ops/broker/ibkr.py` +
+  `ops/broker/ibkr_client.py` already prove the connection is safe and
+  simple for the live-trading daemon — this reuses that same
+  `ib_insync.accountSummary()`/`.positions()` shape, just as a separate,
+  strictly read-only function in `dataflows/ibkr.py` for the agent graph).
+  `get_portfolio_context()` returns cash/equity/buying-power and open
+  positions as Markdown; it never reads an account ID/number from
+  `accountSummary()`'s rows, so there is nothing account-identifying to
+  scrub or to leak into `persistence/`/`evidence/` — those modules don't
+  serialize tool output at all (verified: neither references `ToolMessage`
+  or tool_call state), so the upstream PR's leakage concern doesn't apply
+  here. Wired as `trader_get_ibkr_portfolio` in `trader_tools.py`, gated
+  off-by-default behind `ibkr_portfolio_context_enabled` (unlike the other
+  three trader tools, this one requires a running TWS/IB Gateway most users
+  won't have, so it stays opt-in rather than joining the always-on list).
+  Small enough not to need its own design doc.
 
 ---
 
@@ -216,6 +213,7 @@ No action needed beyond the specific audit item noted.
 | [#1164](https://github.com/TauricResearch/TradingAgents/pull/1164) | feat(dataflows): add Newsflash vendor | Author discloses they built/own this commercial API and is soliciting adoption of a keyless-but-throttled tier. Business/availability risk for an unproven personal service; poor fit for "would upstream accept this." |
 | [#1154](https://github.com/TauricResearch/TradingAgents/pull/1154) | Add trading-agent Copilot skill | Real but irrelevant to us — a GitHub Copilot skill config file; we don't use Copilot skills. |
 | [#1142](https://github.com/TauricResearch/TradingAgents/pull/1142) | Codex/deepseek multi agent research | Legitimate domain work (Tushare A-share data, DeepSeek multi-agent research, backtesting) but a 126-file, +19,540-line parallel subsystem dump — not reviewable or mergeable as a single PR. If ever pursued, would need re-proposal as a scoped, incremental series. |
+| [#1117](https://github.com/TauricResearch/TradingAgents/pull/1117) | momentum sleeve + position-exit engine | The diff itself (162 commits, 143 files, an entire private `ops/` clone) is not mergeable and was rejected outright — but its *idea* (rank-decay / trend-break / max-hold exit rules) was checked against this fork's own `ops/` and found **already built, more completely**: `ops/exits/engine.py::evaluate_exits` implements exactly those three rules, including the trend-break hysteresis (two consecutive closes below the 200d MA, not one) that the PR's own design calls for. `docs/CORE_FEATURES_PLAN.md` independently confirms this (§3 F1/§6) — no design doc or new workstream needed, the earlier "worth a design doc" note in this plan was written without checking `ops/exits/` first. |
 
 ---
 
@@ -261,22 +259,23 @@ comparison-and-port. Independent of each other; sequence by whichever
 unblocks current work first.
 
 **W4 — Core graph/state features (Tier 2c, needs extra review).**
-`#1155` (futures asset type), `#1147` (trade-horizon prompt context). Both
-touch `trading_graph.py`/`propagation.py`/prompt templates — run our full
-unit suite plus a manual smoke run after each, given how much this fork has
-customized the graph.
-
-**W5 — New-capability design work (largest effort, own design docs first).**
-`#1117` (position-exit engine) and `#1125` (IBKR read-only portfolio context)
-are genuinely new capabilities, not ports. Each should get its own short
-design doc (à la `docs/CORE_FEATURES_PLAN.md`) reviewing how it fits
-`orchestrator/`, `scoring/`, `persistence/`, and `evidence/` before any
-code lands.
+`#1155` (futures asset type), `#1147` (trade-horizon prompt context),
+`#1125` (IBKR read-only portfolio context — small, no design doc needed;
+see §3c). Touch `trading_graph.py`/`propagation.py`/prompt templates or add
+a new gated trader tool — run our full unit suite plus a manual smoke run
+after each, given how much this fork has customized the graph.
 
 **Ongoing / opportunistic — Tier 3 audit items.**
 Dashboard CSP/auth hardening (prompted by `#1160`), evaluation-harness
 div-by-zero check (prompted by `#1123`). Not blocking, pick up alongside
 other dashboard/evaluation work.
+
+**W5 retired.** The original plan called `#1117` and `#1125` a
+design-doc-first workstream. Checking `ops/` first (as
+`docs/CORE_FEATURES_PLAN.md`'s own revision note warns future work to do)
+found `#1117`'s idea already fully built (`ops/exits/engine.py`, now Tier
+3/Skip, §4) and `#1125` small enough to build directly (§3c) — no
+standalone design workstream remains.
 
 No action for Tier 4 — listed for completeness only.
 

@@ -211,6 +211,7 @@ class GraphSetup:
         """Add researcher, trader, risk analysts, and portfolio manager nodes."""
         from tradingagents.agents.trader.trader_tools import (
             trader_get_current_price,
+            trader_get_ibkr_portfolio,
             trader_get_news_summary,
             trader_get_options_overview,
         )
@@ -230,6 +231,11 @@ class GraphSetup:
                 trader_get_options_overview,
                 trader_get_news_summary,
             ]
+            # Off by default: unlike the tools above, this one requires a
+            # running TWS/IB Gateway most users won't have — an always-on
+            # entry would just add a failing tool call to every trader run.
+            if self.config.get("ibkr_portfolio_context_enabled", False):
+                trader_tools.append(trader_get_ibkr_portfolio)
 
         workflow.add_node("Trader", create_trader(
             self.quick_thinking_llm,

@@ -101,6 +101,58 @@ def _md_table(headers: list, rows: list) -> str:
 # Public API
 # ---------------------------------------------------------------------------
 
+def get_portfolio_context() -> str:
+    """Return a read-only snapshot of the connected IBKR account as Markdown.
+
+    Cash, net liquidation (equity), buying power, and open positions —
+    for the agent graph to see current exposure before proposing a new
+    trade. This function has no order-placement path reachable from it;
+    live-trading execution against IBKR lives entirely in
+    ``ops/broker/ibkr.py``, a separate module. It also never reads the
+    account ID/number out of ``accountSummary()``'s rows, so there is
+    nothing account-identifying in the returned text.
+    """
+    try:
+        with _ctx() as ib:
+            try:
+                summary_rows = ib.accountSummary()
+            except Exception as exc:
+                raise DataVendorError(f"IBKR accountSummary failed: {exc}") from exc
+            by_tag = {
+                r.tag: r.value for r in summary_rows if r.currency in ("BASE", "USD")
+            }
+            try:
+                position_rows = ib.positions()
+            except Exception as exc:
+                raise DataVendorError(f"IBKR positions failed: {exc}") from exc
+    except DataVendorError:
+        raise
+    except Exception as exc:
+        raise DataVendorError(f"IBKR get_portfolio_context RPC failed: {exc}") from exc
+
+    cash = by_tag.get("TotalCashValue", "N/A")
+    equity = by_tag.get("NetLiquidation", "N/A")
+    buying_power = by_tag.get("BuyingPower", "N/A")
+
+    if position_rows:
+        headers = ["Symbol", "Quantity", "Avg Cost"]
+        rows = [
+            (p.contract.symbol, f"{p.position:,.4f}", f"{p.avgCost:.4f}")
+            for p in position_rows
+        ]
+        positions_block = _md_table(headers, rows)
+    else:
+        positions_block = "_No open positions._"
+
+    return (
+        "# IBKR account snapshot (read-only)\n\n"
+        f"- Cash: {cash}\n"
+        f"- Net liquidation (equity): {equity}\n"
+        f"- Buying power: {buying_power}\n\n"
+        f"## Open positions\n{positions_block}\n"
+    )
+
+
 def get_stock_data(symbol: str, start_date: str, end_date: str) -> str:
     """Return daily OHLCV history for *symbol* as a Markdown table.
 

@@ -1,6 +1,6 @@
 import copy
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -54,12 +54,19 @@ class MarketDataVendorConfigTests(unittest.TestCase):
         self.assertIn("finnhub", interface.VENDOR_METHODS["get_fundamentals"])
         self.assertIn("fmp", interface.VENDOR_METHODS["get_news"])
 
+    def test_finnhub_insider_transactions_is_registered(self):
+        # finnhub_fundamentals.get_insider_transactions existed and was
+        # imported into interface.py but never registered in the
+        # get_insider_transactions vendor map, so it was silently
+        # unreachable even though "finnhub" is first in the default
+        # news_data vendor chain (which covers get_insider_transactions).
+        self.assertIn("finnhub", interface.VENDOR_METHODS["get_insider_transactions"])
+
 
 @pytest.mark.unit
 class FinancialModelingPrepAdapterTests(unittest.TestCase):
     def test_stock_history_requests_stable_eod_endpoint_and_returns_csv(self):
-        from tradingagents.dataflows import fmp_stock
-        from tradingagents.dataflows import fmp_common
+        from tradingagents.dataflows import fmp_common, fmp_stock
 
         payload = [
             {
@@ -90,8 +97,7 @@ class FinancialModelingPrepAdapterTests(unittest.TestCase):
 @pytest.mark.unit
 class FinnhubAdapterTests(unittest.TestCase):
     def test_fundamentals_merge_profile_metrics_and_earnings_calendar(self):
-        from tradingagents.dataflows import finnhub_fundamentals
-        from tradingagents.dataflows import finnhub_common
+        from tradingagents.dataflows import finnhub_common, finnhub_fundamentals
 
         responses = [
             _FakeResponse({"name": "Apple Inc", "marketCapitalization": 3000}),
@@ -117,8 +123,7 @@ class FinnhubAdapterTests(unittest.TestCase):
 @pytest.mark.unit
 class MarketstackAdapterTests(unittest.TestCase):
     def test_eod_history_requests_access_key_endpoint_and_returns_csv(self):
-        from tradingagents.dataflows import marketstack_stock
-        from tradingagents.dataflows import marketstack_common
+        from tradingagents.dataflows import marketstack_common, marketstack_stock
 
         payload = {
             "data": [

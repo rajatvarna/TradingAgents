@@ -141,6 +141,11 @@ uv sync
 source .venv/bin/activate
 ```
 
+`uv sync` creates `.venv` automatically, so activating it is optional — use
+`uv run <command>` to run any project command in that environment without
+activating it, for example `uv run tradingagents` or
+`uv run --extra dev python -m pytest` when working on the test suite.
+
 ### Docker
 
 Alternatively, run with Docker:

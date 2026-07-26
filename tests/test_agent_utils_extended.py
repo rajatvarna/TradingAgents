@@ -10,6 +10,7 @@ import pytest
 from tradingagents.agents.utils.agent_utils import (
     _clean_identity_value,
     create_msg_delete,
+    get_horizon_instruction,
     get_instrument_context_from_state,
     get_language_instruction,
 )
@@ -76,6 +77,41 @@ class TestGetLanguageInstruction:
     def test_missing_language_defaults_to_english(self, mock_config):
         mock_config.return_value = {}
         assert get_language_instruction() == ""
+
+
+# ---------------------------------------------------------------------------
+# get_horizon_instruction (upstream #1147's underlying idea, wired into
+# trader_system.v5 rather than left unused -- see test_structured_agents.py's
+# TestTraderV5HorizonInstruction for the prompt-integration coverage)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+class TestGetHorizonInstruction:
+    @patch("tradingagents.dataflows.config.get_config")
+    def test_known_horizon_returns_specific_guidance(self, mock_config):
+        mock_config.return_value = {"investment_horizon": "1_day"}
+        result = get_horizon_instruction()
+        assert "Investment Horizon: 1_day" in result
+        assert "intraday volatility" in result
+
+    @patch("tradingagents.dataflows.config.get_config")
+    def test_five_years_plus_ignores_short_term_technicals(self, mock_config):
+        mock_config.return_value = {"investment_horizon": "5_years_plus"}
+        result = get_horizon_instruction()
+        assert "structural demand drivers" in result
+        assert "Ignore short-term technical noise" in result
+
+    @patch("tradingagents.dataflows.config.get_config")
+    def test_unknown_horizon_falls_back_to_medium_term_guidance(self, mock_config):
+        mock_config.return_value = {"investment_horizon": "not-a-real-horizon"}
+        result = get_horizon_instruction()
+        assert "Balance technical and fundamental analysis equally" in result
+
+    @patch("tradingagents.dataflows.config.get_config")
+    def test_missing_horizon_defaults_to_medium_term(self, mock_config):
+        mock_config.return_value = {}
+        result = get_horizon_instruction()
+        assert "Balance technical and fundamental analysis equally" in result
 
 
 # ---------------------------------------------------------------------------

@@ -63,6 +63,17 @@ from .searxng import (
     get_global_news_searxng,
     get_news_searxng,
 )
+from .taiwan import (
+    get_balance_sheet as get_taiwan_balance_sheet,
+    get_cashflow as get_taiwan_cashflow,
+    get_fundamentals as get_taiwan_fundamentals,
+    get_global_news as get_taiwan_global_news,
+    get_income_statement as get_taiwan_income_statement,
+    get_indicators as get_taiwan_indicator,
+    get_insider_transactions as get_taiwan_insider_transactions,
+    get_news as get_taiwan_news,
+    get_stock_data as get_taiwan_stock,
+)
 from .telegram_osint import get_telegram_signals as get_telegram_signals_impl
 from .twelve_data import (
     get_balance_sheet as get_twelve_data_balance_sheet,
@@ -281,6 +292,7 @@ VENDOR_LIST = [
     "alpha_vantage",
     "searxng",
     "b3",
+    "taiwan",
     "twelve_data",
     "polygon",
     "futu",
@@ -307,6 +319,7 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_stock,
         "yfinance": get_YFin_data_online,
         "b3": get_b3_stock,
+        "taiwan": get_taiwan_stock,
         "twelve_data": get_twelve_data_stock,
         "polygon": get_polygon_stock,
         "futu": get_futu_stock,
@@ -326,6 +339,7 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_indicator,
         "yfinance": get_stock_stats_indicators_window,
         "b3": get_b3_indicator,
+        "taiwan": get_taiwan_indicator,
         "twelve_data": get_twelve_data_indicator,
     },
     # fundamental_data
@@ -335,6 +349,7 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_fundamentals,
         "yfinance": get_yfinance_fundamentals,
         "b3": get_b3_fundamentals,
+        "taiwan": get_taiwan_fundamentals,
         "twelve_data": get_twelve_data_fundamentals,
         "akshare": get_akshare_fundamentals,
     },
@@ -343,6 +358,7 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_balance_sheet,
         "yfinance": get_yfinance_balance_sheet,
         "b3": get_b3_balance_sheet,
+        "taiwan": get_taiwan_balance_sheet,
         "twelve_data": get_twelve_data_balance_sheet,
         "akshare": get_akshare_balance_sheet,
     },
@@ -351,6 +367,7 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_cashflow,
         "yfinance": get_yfinance_cashflow,
         "b3": get_b3_cashflow,
+        "taiwan": get_taiwan_cashflow,
         "twelve_data": get_twelve_data_cashflow,
         "akshare": get_akshare_cashflow,
     },
@@ -359,6 +376,7 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_income_statement,
         "yfinance": get_yfinance_income_statement,
         "b3": get_b3_income_statement,
+        "taiwan": get_taiwan_income_statement,
         "twelve_data": get_twelve_data_income_statement,
         "akshare": get_akshare_income_statement,
     },
@@ -371,6 +389,7 @@ VENDOR_METHODS = {
         "google_news": get_news_google,
         "searxng": get_news_searxng,
         "b3": get_b3_news,
+        "taiwan": get_taiwan_news,
         "twelve_data": get_twelve_data_news,
         "polygon": get_polygon_news,
         "eastmoney": get_news_eastmoney,
@@ -383,13 +402,16 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_global_news,
         "searxng": get_global_news_searxng,
         "b3": get_b3_global_news,
+        "taiwan": get_taiwan_global_news,
         "twelve_data": get_twelve_data_global_news,
     },
     "get_insider_transactions": {
         "alpha_vantage": get_alpha_vantage_insider_transactions,
         "yfinance": get_yfinance_insider_transactions,
         "b3": get_b3_insider_transactions,
+        "taiwan": get_taiwan_insider_transactions,
         "twelve_data": get_twelve_data_insider_transactions,
+        "finnhub": get_finnhub_insider_transactions,
     },
     # macro_data
     "get_macro_data": {
@@ -459,7 +481,11 @@ def _resolve_vendor_chain(method: str, category: str, *args) -> list[str]:
         raise ValueError(f"Method '{method}' not supported")
 
     vendor_config = get_vendor(category, method)
+    normalized_vendor_config = vendor_config.strip()
     primary_vendors = [v.strip() for v in vendor_config.split(",")]
+    is_default_chain = normalized_vendor_config == "default"
+
+    all_available_vendors = list(VENDOR_METHODS[method].keys())
 
     # Market-aware routing: the English-centric vendors return little or no
     # news for Chinese A-shares (and yfinance returns an empty-but-successful
@@ -467,17 +493,32 @@ def _resolve_vendor_chain(method: str, category: str, *args) -> list[str]:
     # news on Shanghai/Shenzhen tickers, matching the framework's "resolve
     # automatically per market" behaviour. Honoured only when not already
     # overridden by an explicit vendor config.
+    #
+    # For the "default" sentinel this must reorder all_available_vendors,
+    # not primary_vendors -- prepending a real vendor name to a list whose
+    # only entry is the literal string "default" would make the "explicit"
+    # filter below treat it as an explicit (single-vendor, no-fallback)
+    # config, silently dropping every other default vendor as a fallback
+    # (contradicting "the 'default' sentinel uses all available vendors").
     if args and isinstance(args[0], str) and is_ashare(args[0]):
-        if method == "get_news" and vendor_config in ("default", "yfinance"):
-            primary_vendors = ["eastmoney"] + [
-                v for v in primary_vendors if v != "eastmoney"
-            ]
+        if method == "get_news" and normalized_vendor_config in ("default", "yfinance"):
+            if is_default_chain:
+                all_available_vendors = ["eastmoney"] + [
+                    v for v in all_available_vendors if v != "eastmoney"
+                ]
+            else:
+                primary_vendors = ["eastmoney"] + [
+                    v for v in primary_vendors if v != "eastmoney"
+                ]
         elif "akshare" in VENDOR_METHODS.get(method, {}):
-            primary_vendors = ["akshare"] + [
-                v for v in primary_vendors if v != "akshare"
-            ]
-
-    all_available_vendors = list(VENDOR_METHODS[method].keys())
+            if is_default_chain:
+                all_available_vendors = ["akshare"] + [
+                    v for v in all_available_vendors if v != "akshare"
+                ]
+            else:
+                primary_vendors = ["akshare"] + [
+                    v for v in primary_vendors if v != "akshare"
+                ]
 
     explicit = [v for v in primary_vendors if v and v != "default"]
     if explicit:

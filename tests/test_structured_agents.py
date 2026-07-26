@@ -574,6 +574,53 @@ class TestTraderV4Content:
         assert DEFAULT_CONFIG["prompt_versions"]["trader/trader_system"] == "v3"
         assert DEFAULT_CONFIG["prompt_versions"]["trader/trader_user"] == "v1"
 
+
+@pytest.mark.unit
+class TestTraderV5HorizonInstruction:
+    """v5 wires the previously-unused get_horizon_instruction() into the
+    trader's system prompt (upstream #1147's underlying idea, rebuilt
+    against this fork's existing per-bucket horizon-guidance system rather
+    than the PR's flat trade_horizon_days/entry_price/stop_loss injection).
+    Shipped available, not default."""
+
+    def test_v5_prompt_carries_horizon_guidance(self):
+        from tradingagents.dataflows.config import set_config
+
+        set_config({"investment_horizon": "1_day"})
+        captured = {}
+        llm = _structured_trader_llm(captured)
+        trader = create_trader(llm)
+        state = _make_trader_state()
+        state["prompt_versions"] = {"trader/trader_system": "v5"}
+        trader(state)
+        system_content = next(m["content"] for m in captured["prompt"] if m["role"] == "system")
+        assert "Investment Horizon: 1_day" in system_content
+        assert "intraday volatility" in system_content
+        assert "${" not in system_content
+
+    def test_v5_still_carries_v4_content(self):
+        captured = {}
+        llm = _structured_trader_llm(captured)
+        trader = create_trader(llm)
+        state = _make_trader_state()
+        state["prompt_versions"] = {"trader/trader_system": "v5"}
+        trader(state)
+        system_content = next(m["content"] for m in captured["prompt"] if m["role"] == "system")
+        assert "expected value" in system_content.lower()
+        assert "calibrat" in system_content.lower()
+
+    def test_default_v3_does_not_carry_horizon_instruction(self):
+        captured = {}
+        llm = _structured_trader_llm(captured)
+        trader = create_trader(llm)
+        trader(_make_trader_state())  # no override -> default (v3)
+        system_content = next(m["content"] for m in captured["prompt"] if m["role"] == "system")
+        assert "Investment Horizon" not in system_content
+
+    def test_default_config_still_selects_v3(self):
+        from tradingagents.default_config import DEFAULT_CONFIG
+        assert DEFAULT_CONFIG["prompt_versions"]["trader/trader_system"] == "v3"
+
 # ---------------------------------------------------------------------------
 # Sentiment Analyst: schema, render, structured happy path + fallback
 # ---------------------------------------------------------------------------

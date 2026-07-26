@@ -12,7 +12,7 @@ dependencies = [
     "alembic>=1.16.0",
     "langchain-core>=0.3.81",
     "backtrader>=1.9.78.123",
-    "langchain-anthropic>=0.3.15",
+    "langchain-anthropic>=1.4.0",
     "langchain-experimental>=0.3.4",
     "langchain-google-genai>=4.0.0",
     "langchain-openai>=0.3.23",
@@ -81,6 +81,10 @@ chat = [
 ]
 akshare = [
     "akshare>=1.15.0",
+    # curl_cffi is used by akshare_utils.py::_fetch_em_news (东方财富 search
+    # API) directly, independent of the akshare package itself; grouped
+    # here since both are exercised only by the A-share vendor path.
+    "curl_cffi>=0.15.0",
 ]
 # Optional vendors enabled via IIC-FORGE-02. Install with:
 #   pip install -e .[polygon,futu,osint]

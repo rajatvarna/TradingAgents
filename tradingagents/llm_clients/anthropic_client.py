@@ -39,6 +39,17 @@ def _supports_effort(model: str) -> bool:
     return (major, minor) >= _EFFORT_MIN_VERSION[family]
 
 
+# Extended thinking's budget competes with the final answer for the same
+# max_tokens ceiling, so an effort-capable model that's actually using effort
+# needs meaningfully more headroom than langchain-anthropic's generic 4096
+# fallback (used when a model isn't yet in its bundled profile table, which
+# newly-released Claude 5 family models may not be for a pinned dependency
+# version) -- otherwise a long thinking trace can leave little or no budget
+# for the response itself. Only applied when the caller hasn't set an
+# explicit max_tokens.
+_MIN_MAX_TOKENS_WITH_EFFORT = 8192
+
+
 def _supports_temperature(model: str) -> bool:
     """Whether Anthropic accepts the ``temperature`` parameter for this model.
 
@@ -92,6 +103,22 @@ class AnthropicClient(BaseLLMClient):
             if key == "temperature" and not _supports_temperature(self.model):
                 continue
             llm_kwargs[key] = self.kwargs[key]
+
+        # Effort-aware max_tokens floor: only raises the ceiling (never lowers
+        # it), and only when the caller hasn't already supplied an explicit
+        # max_tokens of their own.
+        if "max_tokens" not in llm_kwargs and "effort" in llm_kwargs:
+            llm_kwargs["max_tokens"] = _MIN_MAX_TOKENS_WITH_EFFORT
+
+        # Opt-in prompt caching (anthropic_prompt_caching config key). The
+        # direct Anthropic API accepts a top-level `cache_control` request
+        # field; langchain-anthropic merges `model_kwargs` into every request
+        # payload, so this is the supported way to apply it on every call
+        # without touching per-agent message construction. Marking the
+        # request cacheable does not change model output, only cost/latency
+        # on a cache hit -- see upstream #1136.
+        if self.kwargs.get("anthropic_prompt_caching"):
+            llm_kwargs["model_kwargs"] = {"cache_control": {"type": "ephemeral"}}
 
         # T0.1 — pin deterministic generation params (skipped automatically
         # when effort=high enables extended thinking, which rejects temperature).

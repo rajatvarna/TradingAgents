@@ -18,15 +18,28 @@ provided), and add ``"ibkr"`` to the relevant vendor list in config
 Config keys (all optional — defaults shown):
   ibkr_host       = "127.0.0.1"
   ibkr_port       = 7497
-  ibkr_client_id  = 10
+  ibkr_client_id  = unset (a random id is chosen per connection to avoid
+                    colliding with another still-active session; set this
+                    explicitly to always use the same client id instead)
 """
 
 import contextlib
+import random
 from collections.abc import Generator
 from datetime import date, datetime
 
 from .config import get_config
 from .errors import DataVendorError
+
+# Bounds blocking ib_insync RPCs (accountSummary(), positions(),
+# reqHistoricalData(), ...) that otherwise wait indefinitely — ib_insync's
+# default IB.RequestTimeout is 0, meaning "no timeout", and connect(...,
+# timeout=...) only covers the initial socket handshake, not later calls.
+_REQUEST_TIMEOUT_SECONDS = 15
+# TWS/Gateway rejects a second connection reusing a clientId it still
+# considers active, which a fixed default would risk under concurrent
+# tool/graph calls. Only used when the user hasn't set ibkr_client_id.
+_RANDOM_CLIENT_ID_RANGE = (1000, 65000)
 
 
 @contextlib.contextmanager
@@ -47,7 +60,12 @@ def _ctx() -> Generator:
     cfg = get_config()
     host = cfg.get("ibkr_host", "127.0.0.1")
     port = int(cfg.get("ibkr_port", 7497))
-    client_id = int(cfg.get("ibkr_client_id", 10))
+    configured_client_id = cfg.get("ibkr_client_id")
+    client_id = (
+        int(configured_client_id)
+        if configured_client_id is not None
+        else random.randint(*_RANDOM_CLIENT_ID_RANGE)
+    )
 
     ib = IB()
     try:
@@ -56,6 +74,7 @@ def _ctx() -> Generator:
         raise DataVendorError(
             f"Cannot connect to IBKR TWS/Gateway at {host}:{port} — {exc}"
         ) from exc
+    ib.RequestTimeout = _REQUEST_TIMEOUT_SECONDS
 
     try:
         yield ib
@@ -100,6 +119,58 @@ def _md_table(headers: list, rows: list) -> str:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+def get_portfolio_context() -> str:
+    """Return a read-only snapshot of the connected IBKR account as Markdown.
+
+    Cash, net liquidation (equity), buying power, and open positions —
+    for the agent graph to see current exposure before proposing a new
+    trade. This function has no order-placement path reachable from it;
+    live-trading execution against IBKR lives entirely in
+    ``ops/broker/ibkr.py``, a separate module. It also never reads the
+    account ID/number out of ``accountSummary()``'s rows, so there is
+    nothing account-identifying in the returned text.
+    """
+    try:
+        with _ctx() as ib:
+            try:
+                summary_rows = ib.accountSummary()
+            except Exception as exc:
+                raise DataVendorError(f"IBKR accountSummary failed: {exc}") from exc
+            by_tag = {
+                r.tag: r.value for r in summary_rows if r.currency in ("BASE", "USD")
+            }
+            try:
+                position_rows = ib.positions()
+            except Exception as exc:
+                raise DataVendorError(f"IBKR positions failed: {exc}") from exc
+    except DataVendorError:
+        raise
+    except Exception as exc:
+        raise DataVendorError(f"IBKR get_portfolio_context RPC failed: {exc}") from exc
+
+    cash = by_tag.get("TotalCashValue", "N/A")
+    equity = by_tag.get("NetLiquidation", "N/A")
+    buying_power = by_tag.get("BuyingPower", "N/A")
+
+    if position_rows:
+        headers = ["Symbol", "Quantity", "Avg Cost"]
+        rows = [
+            (p.contract.symbol, f"{p.position:,.4f}", f"{p.avgCost:.4f}")
+            for p in position_rows
+        ]
+        positions_block = _md_table(headers, rows)
+    else:
+        positions_block = "_No open positions._"
+
+    return (
+        "# IBKR account snapshot (read-only)\n\n"
+        f"- Cash: {cash}\n"
+        f"- Net liquidation (equity): {equity}\n"
+        f"- Buying power: {buying_power}\n\n"
+        f"## Open positions\n{positions_block}\n"
+    )
+
 
 def get_stock_data(symbol: str, start_date: str, end_date: str) -> str:
     """Return daily OHLCV history for *symbol* as a Markdown table.

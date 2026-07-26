@@ -9,6 +9,7 @@ _ANY_MODEL_PROVIDERS = (
     "ollama",
     "ollama_cloud",
     "openrouter",
+    "requesty",
     "deepinfra",
     "mimo",
     "custom_openai",

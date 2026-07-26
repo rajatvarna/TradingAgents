@@ -238,10 +238,12 @@ def get_news_akshare(ticker: str, start_date: str, end_date: str) -> str:
             if start_dt <= datetime.strptime(ds, "%Y-%m-%d") <= end_dt:
                 filtered.append(a)
         except ValueError:
-            filtered.append(a)
+            # Unparseable date: reject rather than include -- we can't prove
+            # it belongs in the requested window, and including it risked
+            # leaking undated/malformed articles into historical requests.
+            continue
 
-    # Fall back to all recent articles if none fall in window
-    display = filtered if filtered else articles[:25]
+    display = filtered
 
     if not display:
         return f"<No 东方财富 news found for A-share {ticker}>"
@@ -265,18 +267,35 @@ def get_global_news_akshare(
     lookback_days: int | None = None,
     limit: int | None = None,
 ) -> str:
-    """Broad Chinese market news from 东方财富."""
+    """Broad Chinese market news from 东方财富, bounded to
+    ``[curr_date - lookback_days, curr_date]`` so a historical/backtest
+    request doesn't leak current or future headlines."""
     n = limit or 20
-    articles = _fetch_em_news("A股 市场 宏观", n=n)
-    if not articles:
-        return f"<Chinese market news temporarily unavailable ({curr_date})>"
+    days = lookback_days or 7
+    articles = _fetch_em_news("A股 市场 宏观", n=max(n * 3, n))
 
+    curr_dt = datetime.strptime(curr_date, "%Y-%m-%d")
+    start_dt = curr_dt - timedelta(days=days)
+
+    filtered = []
+    for a in articles:
+        ds = a.get("date", "")[:10]
+        try:
+            if start_dt <= datetime.strptime(ds, "%Y-%m-%d") <= curr_dt:
+                filtered.append(a)
+        except ValueError:
+            continue
+
+    if not filtered:
+        return f"<No Chinese market news found for the window ending {curr_date}>"
+
+    display = filtered[:n]
     lines = [
         f"# 东方财富 Chinese market news ({curr_date})",
-        f"# Articles: {len(articles)}",
+        f"# Articles: {len(display)}",
         "",
     ]
-    for a in articles[:n]:
+    for a in display:
         title = _strip_html(a.get("title", ""))
         date = a.get("date", "")[:16]
         source = a.get("mediaName", "")

@@ -54,6 +54,14 @@ class MarketDataVendorConfigTests(unittest.TestCase):
         self.assertIn("finnhub", interface.VENDOR_METHODS["get_fundamentals"])
         self.assertIn("fmp", interface.VENDOR_METHODS["get_news"])
 
+    def test_finnhub_insider_transactions_is_registered(self):
+        # finnhub_fundamentals.get_insider_transactions existed and was
+        # imported into interface.py but never registered in the
+        # get_insider_transactions vendor map, so it was silently
+        # unreachable even though "finnhub" is first in the default
+        # news_data vendor chain (which covers get_insider_transactions).
+        self.assertIn("finnhub", interface.VENDOR_METHODS["get_insider_transactions"])
+
 
 @pytest.mark.unit
 class FinancialModelingPrepAdapterTests(unittest.TestCase):

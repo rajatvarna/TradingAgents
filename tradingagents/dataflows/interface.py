@@ -28,6 +28,7 @@ from .b3 import (
 from .eastmoney_news import get_news_eastmoney, is_ashare
 from .finnhub_fundamentals import (
     get_fundamentals as get_finnhub_fundamentals,
+    get_insider_transactions as get_finnhub_insider_transactions,
 )
 from .finnhub_news import get_global_news as get_finnhub_global_news, get_news as get_finnhub_news
 from .fmp_fundamentals import (
@@ -410,6 +411,7 @@ VENDOR_METHODS = {
         "b3": get_b3_insider_transactions,
         "taiwan": get_taiwan_insider_transactions,
         "twelve_data": get_twelve_data_insider_transactions,
+        "finnhub": get_finnhub_insider_transactions,
     },
     # macro_data
     "get_macro_data": {
@@ -480,6 +482,9 @@ def _resolve_vendor_chain(method: str, category: str, *args) -> list[str]:
 
     vendor_config = get_vendor(category, method)
     primary_vendors = [v.strip() for v in vendor_config.split(",")]
+    is_default_chain = vendor_config.strip() == "default"
+
+    all_available_vendors = list(VENDOR_METHODS[method].keys())
 
     # Market-aware routing: the English-centric vendors return little or no
     # news for Chinese A-shares (and yfinance returns an empty-but-successful
@@ -487,17 +492,32 @@ def _resolve_vendor_chain(method: str, category: str, *args) -> list[str]:
     # news on Shanghai/Shenzhen tickers, matching the framework's "resolve
     # automatically per market" behaviour. Honoured only when not already
     # overridden by an explicit vendor config.
+    #
+    # For the "default" sentinel this must reorder all_available_vendors,
+    # not primary_vendors -- prepending a real vendor name to a list whose
+    # only entry is the literal string "default" would make the "explicit"
+    # filter below treat it as an explicit (single-vendor, no-fallback)
+    # config, silently dropping every other default vendor as a fallback
+    # (contradicting "the 'default' sentinel uses all available vendors").
     if args and isinstance(args[0], str) and is_ashare(args[0]):
         if method == "get_news" and vendor_config in ("default", "yfinance"):
-            primary_vendors = ["eastmoney"] + [
-                v for v in primary_vendors if v != "eastmoney"
-            ]
+            if is_default_chain:
+                all_available_vendors = ["eastmoney"] + [
+                    v for v in all_available_vendors if v != "eastmoney"
+                ]
+            else:
+                primary_vendors = ["eastmoney"] + [
+                    v for v in primary_vendors if v != "eastmoney"
+                ]
         elif "akshare" in VENDOR_METHODS.get(method, {}):
-            primary_vendors = ["akshare"] + [
-                v for v in primary_vendors if v != "akshare"
-            ]
-
-    all_available_vendors = list(VENDOR_METHODS[method].keys())
+            if is_default_chain:
+                all_available_vendors = ["akshare"] + [
+                    v for v in all_available_vendors if v != "akshare"
+                ]
+            else:
+                primary_vendors = ["akshare"] + [
+                    v for v in primary_vendors if v != "akshare"
+                ]
 
     explicit = [v for v in primary_vendors if v and v != "default"]
     if explicit:

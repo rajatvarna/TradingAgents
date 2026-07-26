@@ -122,3 +122,27 @@ class TestRouting:
              patch.object(interface, "get_vendor", return_value="yfinance"):
             result = interface.route_to_vendor("get_news", "AAPL", "2026-05-01", "2026-06-02")
         assert result == "YFINANCE"
+
+    def test_ashare_default_chain_keeps_fallback_vendors(self):
+        """The "default" sentinel must still resolve to every available
+        vendor (eastmoney preferred first) -- not collapse into a single
+        explicit eastmoney-only chain with no fallback if eastmoney fails."""
+        from tradingagents.dataflows import interface
+
+        with patch.object(interface, "get_vendor", return_value="default"):
+            chain = interface._resolve_vendor_chain(
+                "get_news", "news_data", "600519.SS", "2026-05-01", "2026-06-02",
+            )
+        assert chain[0] == "eastmoney"
+        assert len(chain) == len(interface.VENDOR_METHODS["get_news"])
+        assert set(chain) == set(interface.VENDOR_METHODS["get_news"])
+
+    def test_ashare_default_chain_prefers_akshare_for_non_news_methods(self):
+        from tradingagents.dataflows import interface
+
+        with patch.object(interface, "get_vendor", return_value="default"):
+            chain = interface._resolve_vendor_chain(
+                "get_fundamentals", "fundamental_data", "600519.SS",
+            )
+        assert chain[0] == "akshare"
+        assert len(chain) == len(interface.VENDOR_METHODS["get_fundamentals"])

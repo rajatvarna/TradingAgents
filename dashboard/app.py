@@ -6,16 +6,48 @@ Run:
 
 Environment:
     HERMES_DB_PATH — path to SQLite database (default /opt/data/hermes.db)
+    TRADINGAGENTS_DASHBOARD_HOST — bind host for the ``__main__`` dev server
+        (default 127.0.0.1; loopback-only unless TRADINGAGENTS_DASHBOARD_TOKEN
+        is also set). Only applies to ``python dashboard/app.py`` — a WSGI
+        deployment (gunicorn/fly.io importing ``server = app.server``) never
+        runs this module's ``__main__`` block, so the per-request policy
+        below is what actually protects a WSGI-served instance.
+    TRADINGAGENTS_DASHBOARD_TOKEN — shared-secret token required via the
+        ``X-Dashboard-Token`` header on every request (not a query param —
+        a token in the URL would end up in browser history, proxy/access
+        logs, and Referer headers). When unset, every request must arrive
+        over loopback (``request.remote_addr``) or it's rejected — this is
+        enforced per-request in ``_require_dashboard_token`` below, not
+        just at dev-server startup, so it also covers WSGI deployments.
 """
 
+import hmac
 import os
 
 import dash
 from dash import Input, Output, State, dcc, html
+from flask import abort, request
 
 from .queries import get_db_connection, get_stats_summary
 from .simple import build_layout as simple_layout
 from .advanced import build_layout as advanced_layout
+
+# ---------------------------------------------------------------------------
+# Bind host / auth
+# ---------------------------------------------------------------------------
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+_LOOPBACK_ADDRS = {"127.0.0.1", "::1"}  # request.remote_addr is a raw IP, never "localhost"
+_DASHBOARD_HOST = os.environ.get("TRADINGAGENTS_DASHBOARD_HOST", "127.0.0.1")
+_DASHBOARD_TOKEN = os.environ.get("TRADINGAGENTS_DASHBOARD_TOKEN")
+
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'"
+)
 
 # ---------------------------------------------------------------------------
 # Colour palette
@@ -39,6 +71,44 @@ app = dash.Dash(
     meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
 )
 server = app.server  # Expose WSGI server for gunicorn/fly.io
+
+
+@server.before_request
+def _require_dashboard_token():
+    """Gate every request: matching token, or loopback-only when none is set.
+
+    The dashboard renders portfolio/PnL data with no login system of its
+    own. The ``__main__`` block's startup guard (below) only covers
+    ``python dashboard/app.py`` directly — it never runs for a WSGI
+    deployment that imports ``server = app.server`` (gunicorn, fly.io), so
+    forgetting to set a token there would otherwise leave the dashboard
+    open to the network with no check at all. Enforcing the policy here,
+    per request, covers both cases the same way.
+
+    ``request.remote_addr`` reflects the direct TCP peer, not any
+    ``X-Forwarded-For`` header — a reverse proxy in front of this process
+    must do its own access control; this check alone does not make a
+    proxied non-loopback deployment safe.
+    """
+    if _DASHBOARD_TOKEN:
+        # Header only, deliberately — a token accepted via ?token=... would
+        # end up in browser history, reverse-proxy/access logs, and Referer
+        # headers on any outbound link from the page.
+        supplied = request.headers.get("X-Dashboard-Token") or ""
+        if not hmac.compare_digest(supplied, _DASHBOARD_TOKEN):
+            abort(401)
+        return None
+    if request.remote_addr not in _LOOPBACK_ADDRS:
+        abort(403)
+    return None
+
+
+@server.after_request
+def _set_security_headers(response):
+    response.headers["Content-Security-Policy"] = _CSP
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -239,4 +309,11 @@ def render_content(mode: str, _n_intervals: int) -> html.Div:
 # Dev entry point
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    app.run_server(host="0.0.0.0", port=8050, debug=False)
+    if _DASHBOARD_HOST not in _LOOPBACK_HOSTS and not _DASHBOARD_TOKEN:
+        raise SystemExit(
+            f"Refusing to bind {_DASHBOARD_HOST} (non-loopback) without "
+            "TRADINGAGENTS_DASHBOARD_TOKEN set — the dashboard has no "
+            "login system, so a token is required whenever it's reachable "
+            "from outside the local machine."
+        )
+    app.run_server(host=_DASHBOARD_HOST, port=8050, debug=False)

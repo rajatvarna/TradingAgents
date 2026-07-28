@@ -64,6 +64,34 @@ def test_no_token_configured_allows_requests():
     assert client.get("/").status_code == 200
 
 
+def test_no_token_configured_allows_loopback_ipv6():
+    dashboard_app = _reload_dashboard_app()
+    client = dashboard_app.server.test_client()
+    resp = client.get("/", environ_overrides={"REMOTE_ADDR": "::1"})
+    assert resp.status_code == 200
+
+
+def test_no_token_configured_rejects_non_loopback_remote_addr():
+    """WSGI gap: without a token, __main__'s startup guard never runs for a
+    process started via `server = app.server` (gunicorn/fly.io) — so the
+    per-request check must reject a non-loopback peer on its own.
+    """
+    dashboard_app = _reload_dashboard_app()
+    client = dashboard_app.server.test_client()
+    resp = client.get("/", environ_overrides={"REMOTE_ADDR": "203.0.113.5"})
+    assert resp.status_code == 403
+
+
+def test_token_configured_accepts_non_loopback_request_with_valid_token(monkeypatch):
+    monkeypatch.setenv("TRADINGAGENTS_DASHBOARD_TOKEN", "secret123")
+    dashboard_app = _reload_dashboard_app()
+    client = dashboard_app.server.test_client()
+    resp = client.get(
+        "/?token=secret123", environ_overrides={"REMOTE_ADDR": "203.0.113.5"}
+    )
+    assert resp.status_code == 200
+
+
 def test_token_configured_rejects_missing_or_wrong_token(monkeypatch):
     monkeypatch.setenv("TRADINGAGENTS_DASHBOARD_TOKEN", "secret123")
     dashboard_app = _reload_dashboard_app()

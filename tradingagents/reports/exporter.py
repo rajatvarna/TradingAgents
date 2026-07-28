@@ -130,8 +130,8 @@ def save_report_to_disk(
 
     # Run configuration report (Issue #752)
     if selections is not None and config is not None:
-        from tradingagents import __version__ as _ta_version
         from cli.run_config_report import build_run_config_markdown
+        from tradingagents import __version__ as _ta_version
 
         run_config_md = build_run_config_markdown(
             selections=selections,
@@ -145,13 +145,21 @@ def save_report_to_disk(
         # Same gating as run_config.md above: both need selections+config to
         # build, so a caller that saves without them (e.g. scripts/run_daily.py
         # today) simply doesn't get either, unchanged from prior behaviour.
+        # Best-effort: complete_report.md and run_config.md are the primary
+        # artefacts and are already written by this point, so a failure
+        # building or serializing the manifest (an additive audit extra)
+        # must not make save_report_to_disk look like it failed entirely.
         if config.get("run_manifest_enabled", True):
-            from tradingagents.reports.manifest import build_run_manifest
+            try:
+                from tradingagents.reports.manifest import build_run_manifest
 
-            manifest = build_run_manifest(final_state, ticker, config, selections)
-            (save_path / "run_manifest.json").write_text(
-                json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-            )
+                manifest = build_run_manifest(final_state, ticker, config, selections)
+                (save_path / "run_manifest.json").write_text(
+                    json.dumps(manifest, indent=2, sort_keys=True, default=str) + "\n",
+                    encoding="utf-8",
+                )
+            except Exception:
+                logger.warning("run_manifest.json generation failed for %s", ticker, exc_info=True)
 
     return complete
 

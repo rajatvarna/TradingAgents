@@ -6,13 +6,21 @@ Run:
 
 Environment:
     HERMES_DB_PATH — path to SQLite database (default /opt/data/hermes.db)
-    TRADINGAGENTS_DASHBOARD_HOST — bind host (default 127.0.0.1; loopback-only
-        unless TRADINGAGENTS_DASHBOARD_TOKEN is also set)
+    TRADINGAGENTS_DASHBOARD_HOST — bind host for the ``__main__`` dev server
+        (default 127.0.0.1; loopback-only unless TRADINGAGENTS_DASHBOARD_TOKEN
+        is also set). Only applies to ``python dashboard/app.py`` — a WSGI
+        deployment (gunicorn/fly.io importing ``server = app.server``) never
+        runs this module's ``__main__`` block, so the per-request policy
+        below is what actually protects a WSGI-served instance.
     TRADINGAGENTS_DASHBOARD_TOKEN — shared-secret token required via the
-        ``?token=`` query param or ``X-Dashboard-Token`` header when the
-        dashboard is reachable from outside loopback
+        ``?token=`` query param or ``X-Dashboard-Token`` header on every
+        request. When unset, every request must arrive over loopback
+        (``request.remote_addr``) or it's rejected — this is enforced
+        per-request in ``_require_dashboard_token`` below, not just at
+        dev-server startup, so it also covers WSGI deployments.
 """
 
+import hmac
 import os
 
 import dash
@@ -27,6 +35,7 @@ from .advanced import build_layout as advanced_layout
 # Bind host / auth
 # ---------------------------------------------------------------------------
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+_LOOPBACK_ADDRS = {"127.0.0.1", "::1"}  # request.remote_addr is a raw IP, never "localhost"
 _DASHBOARD_HOST = os.environ.get("TRADINGAGENTS_DASHBOARD_HOST", "127.0.0.1")
 _DASHBOARD_TOKEN = os.environ.get("TRADINGAGENTS_DASHBOARD_TOKEN")
 
@@ -65,17 +74,28 @@ server = app.server  # Expose WSGI server for gunicorn/fly.io
 
 @server.before_request
 def _require_dashboard_token():
-    """Reject unauthenticated requests when a token is configured.
+    """Gate every request: matching token, or loopback-only when none is set.
 
     The dashboard renders portfolio/PnL data with no login system of its
-    own, so a configured token is the only gate available once it's
-    reachable from outside loopback.
+    own. The ``__main__`` block's startup guard (below) only covers
+    ``python dashboard/app.py`` directly — it never runs for a WSGI
+    deployment that imports ``server = app.server`` (gunicorn, fly.io), so
+    forgetting to set a token there would otherwise leave the dashboard
+    open to the network with no check at all. Enforcing the policy here,
+    per request, covers both cases the same way.
+
+    ``request.remote_addr`` reflects the direct TCP peer, not any
+    ``X-Forwarded-For`` header — a reverse proxy in front of this process
+    must do its own access control; this check alone does not make a
+    proxied non-loopback deployment safe.
     """
-    if not _DASHBOARD_TOKEN:
+    if _DASHBOARD_TOKEN:
+        supplied = request.args.get("token") or request.headers.get("X-Dashboard-Token") or ""
+        if not hmac.compare_digest(supplied, _DASHBOARD_TOKEN):
+            abort(401)
         return None
-    supplied = request.args.get("token") or request.headers.get("X-Dashboard-Token")
-    if supplied != _DASHBOARD_TOKEN:
-        abort(401)
+    if request.remote_addr not in _LOOPBACK_ADDRS:
+        abort(403)
     return None
 
 

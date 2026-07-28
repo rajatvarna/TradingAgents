@@ -232,3 +232,25 @@ def test_save_report_to_disk_without_selections_or_config_skips_manifest(tmp_pat
     assert not (tmp_path / "run_manifest.json").exists()
     assert not (tmp_path / "run_config.md").exists()
     assert (tmp_path / "complete_report.md").exists()
+
+
+def test_save_report_to_disk_survives_manifest_build_failure(tmp_path, monkeypatch):
+    """The manifest is an additive audit extra; a failure building it must not
+    make save_report_to_disk look like the whole save failed — complete_report.md
+    and run_config.md are already on disk by the time the manifest is built.
+    """
+    import tradingagents.reports.manifest as manifest_module
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("synthetic manifest failure")
+
+    monkeypatch.setattr(manifest_module, "build_run_manifest", _boom)
+
+    report_file = save_report_to_disk(
+        _final_state(), "AAPL", tmp_path, selections=_selections(), config=_config()
+    )
+
+    assert report_file == tmp_path / "complete_report.md"
+    assert report_file.exists()
+    assert (tmp_path / "run_config.md").exists()
+    assert not (tmp_path / "run_manifest.json").exists()

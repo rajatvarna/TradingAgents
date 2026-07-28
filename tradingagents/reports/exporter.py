@@ -12,6 +12,7 @@ render the same ``decision.md`` to a PDF for Telegram delivery.
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import logging
 import re
 from dataclasses import dataclass
@@ -138,6 +139,19 @@ def save_report_to_disk(
             version=_ta_version,
         )
         (save_path / "run_config.md").write_text(run_config_md, encoding="utf-8")
+
+        # Machine-readable run manifest (upstream #1179, adapted onto this
+        # fork's audit hashing — see docs/UPSTREAM_PR_INTEGRATION_PLAN.md §3.1).
+        # Same gating as run_config.md above: both need selections+config to
+        # build, so a caller that saves without them (e.g. scripts/run_daily.py
+        # today) simply doesn't get either, unchanged from prior behaviour.
+        if config.get("run_manifest_enabled", True):
+            from tradingagents.reports.manifest import build_run_manifest
+
+            manifest = build_run_manifest(final_state, ticker, config, selections)
+            (save_path / "run_manifest.json").write_text(
+                json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
 
     return complete
 

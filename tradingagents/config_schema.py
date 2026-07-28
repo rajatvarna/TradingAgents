@@ -184,6 +184,7 @@ class TradingAgentsConfig(BaseModel):
     state_compression_enabled: bool = False
     trader_tools_enabled: bool = True
     ibkr_portfolio_context_enabled: bool = False
+    run_manifest_enabled: bool = True
     intraday_cache_ttl_minutes: float = Field(default=15, ge=0)
     trade_filter_enabled: bool = False
     trade_filter_threshold: float = Field(default=0.65, ge=0, le=1)

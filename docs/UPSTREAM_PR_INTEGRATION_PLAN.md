@@ -1,7 +1,7 @@
 # Upstream PR Integration Plan (Last 3 Weeks)
 
-**Status:** Active — W2 (dashboard hardening) landed; W1 (run manifest) and
-W3 (close fork PR #22) remain
+**Status:** Active — W2 (dashboard hardening) and W1 (run manifest) landed;
+only W3 (close fork PR #22) remains
 **Last updated:** 2026-07-28
 **Window:** pull requests opened against `TauricResearch/TradingAgents`
 (upstream) between **2026-07-07 and 2026-07-28** — 39 PRs.
@@ -32,8 +32,9 @@ mostly because the plan was executed rather than because upstream moved.
    remains #579 (2026-04-25) — now three months stale. Every judgement here
    remains "should *we* build this", not "did maintainers accept this".
 
-Net remaining work: **one feature port, one security fix, one housekeeping
-close.** Everything else in the window is done, superseded, or rejected.
+Net remaining work: **one housekeeping close.** The feature port (W1) and
+security fix (W2) have since landed on this branch (§3.1, §3.2). Everything
+else in the window is done, superseded, or rejected.
 
 ---
 
@@ -102,10 +103,19 @@ one-branch-one-PR convention.
 
 ### 3.1 W1 — Port #1179: reproducible run manifests *(the only feature item)*
 
+**Status: done**, branch `claude/pr-integration-plan-hzrm4u`.
+
 **Upstream PR:** [#1179](https://github.com/TauricResearch/TradingAgents/pull/1179)
 (faceWang753, open, 2026-07-27). Adds `tradingagents/run_manifest.py` (+152),
 touches `cli/main.py`, `tradingagents/reporting.py`,
 `tradingagents/graph/trading_graph.py`, `tests/test_reporting.py`, `README.md`.
+
+**Correction to this section's earlier claim:** the line below said upstream's
+`tradingagents/reporting.py` target "does not exist here." That was wrong —
+this fork has had its own `tradingagents/reporting.py::write_report_tree`
+since the evidence-auditing work (`3750517`), same filename, same rough
+purpose, just a *different* writer than the one this section actually ports
+into. See the implementation notes below for what that means in practice.
 
 **Why it's worth porting.** `grep -rn "run_manifest" --include=*.py .`
 returns nothing here — we emit no per-run manifest today. The gap is real,
@@ -169,8 +179,71 @@ first boundary. Our answer should be yes-for-now, and the README/CHANGELOG
 wording must not overclaim "reproducible" — say *auditable and comparable*.
 Per-tool served-vendor receipts are a separate, later work item.
 
-**Branch:** `feat/run-manifest` · **Risk:** low (additive, gated, no graph
-changes) · **Effort:** ~1 day.
+**Implementation notes:**
+
+- Landed as planned: new `tradingagents/reports/manifest.py::build_run_manifest()`,
+  reusing `audit/schemas.py::canonical_json` for the config-fingerprint hash
+  and `audit/prompt_registry.py::default_registry().load()` for per-template
+  SHA-256 digests of every entry in `config["prompt_versions"]`.
+- **This fork's two-writer duality, encountered mid-implementation and
+  deliberately not fixed here:** there are two independent report-tree
+  writers — `tradingagents/reports/exporter.py::save_report_to_disk`
+  (consumed by `cli/main.py`, `scripts/run_daily.py`, `scripts/run_one.py`)
+  and `tradingagents/reporting.py::write_report_tree` (consumed only by
+  `TradingAgentsGraph.save_reports()`, the programmatic/API entry point —
+  it also writes a `6_evidence/` section `save_report_to_disk` doesn't).
+  Upstream's PR targets a `reporting.py`/`cli/main.py` pair, which by
+  filename coincidence maps onto *both* of ours. This port wires the
+  manifest into `save_report_to_disk` only, matching upstream's `cli/main.py`
+  target and this section's original "no graph changes" risk estimate.
+  `TradingAgentsGraph.save_reports()` → `write_report_tree` does **not**
+  get a manifest from this change — a caller going through the programmatic
+  API path gets a report tree with no `run_manifest.json`. That's a real
+  gap, not a rounding error, and it's a natural follow-up once someone needs
+  it (or once the two writers get unified, which is a separate, larger
+  cleanup this plan doesn't scope).
+- Deviated from step 2's original wording (add an optional `manifest: dict |
+  None` parameter to `save_report_to_disk`) in favor of building the
+  manifest **inline**, gated by the same `if selections is not None and
+  config is not None:` condition `run_config.md` already uses just above
+  it in the function. Simpler, no signature change, and consistent with how
+  this fork already handles the analogous `run_config.md` artefact — so
+  `scripts/run_daily.py`/`scripts/run_one.py` (which call
+  `save_report_to_disk` without `selections`/`config` today) get neither
+  artefact, unchanged from prior behaviour, with no new parameter to thread
+  through later if that's fixed.
+- Sanitization: wrote a small local `_sanitize_url()` in `manifest.py`
+  (`urlsplit`/`urlunsplit`, strips userinfo/query/fragment, returns `None`
+  for anything that isn't a real `scheme://host` URL) rather than reusing
+  `llm_clients/url_validation.py::validate_custom_provider_base_url` — that
+  function *rejects* (raises `ValueError`) a credentialed URL rather than
+  *redacting* one, which is the wrong shape for a manifest that must still
+  write something. No absolute-path scrubbing logic was needed: the
+  manifest only ever populates fields from a hand-curated whitelist
+  (`provider`, `debate_limits`, `vendor_chains`, `prompt_versions`), so
+  `results_dir`/`data_cache_dir`/`project_dir`/`memory_log_path` are excluded
+  by construction rather than filtered after the fact.
+  `*_API_KEY` values were never a risk in the first place — this fork's
+  config dict doesn't carry API keys, those live in env vars read directly
+  by each LLM client — but the whitelist-only approach means even a future
+  config key that did carry one couldn't leak through this path silently.
+- Config key: `run_manifest_enabled: bool = True` added to `default_config.py`
+  (`_ENV_OVERRIDES` → `TRADINGAGENTS_RUN_MANIFEST_ENABLED`) and mirrored into
+  `config_schema.py::TradingAgentsConfig`; `docs/CONFIG_REFERENCE.md`
+  regenerated via `python -m tradingagents.config_schema generate-docs`.
+- Tests: `tests/test_run_manifest.py`, 14 cases, all `@pytest.mark.unit`,
+  covering every item in the list above plus URL sanitization,
+  determinism of the hash fields (not the whole dict — `generated_at` is
+  wall-clock and legitimately differs across calls), missing-section
+  omission (not `null`-padding), and an unresolvable `prompt_versions` entry
+  being skipped rather than raising. Full `pytest -m unit` run: 1941 passed,
+  0 failed (3 skipped, all pre-existing/environmental — no relation to this
+  change), confirmed via the same test venv used for W2.
+
+**Branch:** `claude/pr-integration-plan-hzrm4u` (folded into this session's
+branch, same rationale as W2 — small, low-risk, already reviewed) ·
+**Risk:** low (additive, gated, no graph changes) · **Effort:** ~1 day, as
+estimated.
 
 ### 3.2 W2 — Dashboard security hardening *(audit item from #1160 — done)*
 
@@ -344,12 +417,16 @@ flagging to the upstream maintainers separately; out of scope here.
 1. **W2 — dashboard bind + CSP** (§3.2). ✅ **Done.** Half a day, as
    estimated. First because it was the only item with a security
    consequence, and it was independent of everything else.
-2. **W1 — run manifest** (§3.1). Not started. ~1 day. The only feature port
-   left. Re-read upstream #1179's diff directly before starting (§1's scope
-   caveat), and reuse `audit/schemas.py`'s canonical-JSON hashing rather than
-   writing a second scheme.
+2. **W1 — run manifest** (§3.1). ✅ **Done.** ~1 day, as estimated. Landed
+   with one known, documented gap: the programmatic `TradingAgentsGraph.
+   save_reports()` path (`tradingagents/reporting.py::write_report_tree`)
+   doesn't get a manifest — only the CLI/scheduled-runner path
+   (`reports/exporter.py::save_report_to_disk`) does. See §3.1's
+   implementation notes.
 3. **W3 — close fork PR #22** (§3.3). Not started. Minutes. Do it whenever;
-   blocked on nothing.
+   blocked on nothing. Requires GitHub write access this session doesn't
+   currently have in scope for `rajatvarna/TradingAgents` PR actions —
+   flag to a human to close, or grant PR-write scope to close it directly.
 
 The Tier-3 audit backlog from the previous revision is now empty: the
 evaluation div-by-zero check cleared (§3.4) and the dashboard item was

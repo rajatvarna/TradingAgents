@@ -54,6 +54,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_STATE_COMPRESSION_ENABLED":  "state_compression_enabled",
     "TRADINGAGENTS_TRADER_TOOLS_ENABLED":       "trader_tools_enabled",
     "TRADINGAGENTS_IBKR_PORTFOLIO_CONTEXT_ENABLED": "ibkr_portfolio_context_enabled",
+    "TRADINGAGENTS_RUN_MANIFEST_ENABLED":       "run_manifest_enabled",
     # Provider-specific reasoning/thinking knobs (None = each provider's own
     # default). Settable here for non-interactive runs; the CLI also offers an
     # interactive choice, which is skipped when the matching var is set.
@@ -435,6 +436,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "state_compression_enabled": False,
     "trader_tools_enabled": True,
     "ibkr_portfolio_context_enabled": False,  # opt-in: requires a running TWS/IB Gateway
+    "run_manifest_enabled": True,  # write run_manifest.json alongside saved reports; local-only, no external dependency
     "intraday_cache_ttl_minutes": 15,  # B2 — TTL for interface.get_intraday_stock_data's disk cache;
                                         # short relative to the daily-data caches since intraday bars stale fast.
     "trade_filter_enabled": False,

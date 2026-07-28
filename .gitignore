@@ -270,6 +270,12 @@ MEREAD.md
 !/global-screener/lib/
 !/global-screener/lib/**
 
+# Same unanchored reports/ collision also matches tradingagents/reports/,
+# the source package holding the report-tree writer and run-manifest
+# builder (exporter.py, manifest.py) — not a generated-output directory.
+!/tradingagents/reports/
+!/tradingagents/reports/**
+
 fix_*.py
 inspect_trace.py
 

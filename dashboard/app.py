@@ -13,11 +13,12 @@ Environment:
         runs this module's ``__main__`` block, so the per-request policy
         below is what actually protects a WSGI-served instance.
     TRADINGAGENTS_DASHBOARD_TOKEN — shared-secret token required via the
-        ``?token=`` query param or ``X-Dashboard-Token`` header on every
-        request. When unset, every request must arrive over loopback
-        (``request.remote_addr``) or it's rejected — this is enforced
-        per-request in ``_require_dashboard_token`` below, not just at
-        dev-server startup, so it also covers WSGI deployments.
+        ``X-Dashboard-Token`` header on every request (not a query param —
+        a token in the URL would end up in browser history, proxy/access
+        logs, and Referer headers). When unset, every request must arrive
+        over loopback (``request.remote_addr``) or it's rejected — this is
+        enforced per-request in ``_require_dashboard_token`` below, not
+        just at dev-server startup, so it also covers WSGI deployments.
 """
 
 import hmac
@@ -90,7 +91,10 @@ def _require_dashboard_token():
     proxied non-loopback deployment safe.
     """
     if _DASHBOARD_TOKEN:
-        supplied = request.args.get("token") or request.headers.get("X-Dashboard-Token") or ""
+        # Header only, deliberately — a token accepted via ?token=... would
+        # end up in browser history, reverse-proxy/access logs, and Referer
+        # headers on any outbound link from the page.
+        supplied = request.headers.get("X-Dashboard-Token") or ""
         if not hmac.compare_digest(supplied, _DASHBOARD_TOKEN):
             abort(401)
         return None

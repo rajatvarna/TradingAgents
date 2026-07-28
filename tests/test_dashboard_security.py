@@ -87,7 +87,9 @@ def test_token_configured_accepts_non_loopback_request_with_valid_token(monkeypa
     dashboard_app = _reload_dashboard_app()
     client = dashboard_app.server.test_client()
     resp = client.get(
-        "/?token=secret123", environ_overrides={"REMOTE_ADDR": "203.0.113.5"}
+        "/",
+        headers={"X-Dashboard-Token": "secret123"},
+        environ_overrides={"REMOTE_ADDR": "203.0.113.5"},
     )
     assert resp.status_code == 200
 
@@ -98,16 +100,18 @@ def test_token_configured_rejects_missing_or_wrong_token(monkeypatch):
     client = dashboard_app.server.test_client()
 
     assert client.get("/").status_code == 401
-    assert client.get("/?token=wrong").status_code == 401
     assert client.get("/", headers={"X-Dashboard-Token": "wrong"}).status_code == 401
 
 
-def test_token_configured_accepts_query_param_or_header(monkeypatch):
+def test_token_in_query_param_is_not_accepted(monkeypatch):
+    """A token accepted via ?token=... would end up in browser history,
+    reverse-proxy/access logs, and Referer headers — header-only by design.
+    """
     monkeypatch.setenv("TRADINGAGENTS_DASHBOARD_TOKEN", "secret123")
     dashboard_app = _reload_dashboard_app()
     client = dashboard_app.server.test_client()
 
-    assert client.get("/?token=secret123").status_code == 200
+    assert client.get("/?token=secret123").status_code == 401
     assert (
         client.get("/", headers={"X-Dashboard-Token": "secret123"}).status_code == 200
     )

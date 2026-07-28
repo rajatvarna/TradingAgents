@@ -1,6 +1,7 @@
 # Upstream PR Integration Plan (Last 3 Weeks)
 
-**Status:** Active — most of the previous window has landed; 3 items remain
+**Status:** Active — W2 (dashboard hardening) landed; W1 (run manifest) and
+W3 (close fork PR #22) remain
 **Last updated:** 2026-07-28
 **Window:** pull requests opened against `TauricResearch/TradingAgents`
 (upstream) between **2026-07-07 and 2026-07-28** — 39 PRs.
@@ -171,9 +172,10 @@ Per-tool served-vendor receipts are a separate, later work item.
 **Branch:** `feat/run-manifest` · **Risk:** low (additive, gated, no graph
 changes) · **Effort:** ~1 day.
 
-### 3.2 W2 — Dashboard security hardening *(audit item from #1160 — confirmed)*
+### 3.2 W2 — Dashboard security hardening *(audit item from #1160 — done)*
 
-The previous revision flagged this as an unverified audit item. It is now
+**Status: done**, branch `claude/pr-integration-plan-hzrm4u`. The previous
+revision flagged this as an unverified audit item. It was
 **verified and real**:
 
 ```
@@ -207,11 +209,39 @@ lack (CSP, host allowlist, DOMPurify).
 **Tests:** default host is loopback; env override is honored; non-loopback
 host without a token raises; CSP header present on a response.
 
-**Branch:** `fix/dashboard-bind-and-csp` · **Risk:** low, but it is a
+**Implementation notes:**
+
+- Landed as `@server.before_request`/`@server.after_request` hooks on
+  `app.server` (the Flask instance Dash exposes) plus a startup guard in the
+  `if __name__ == "__main__":` block — no new dependency, `flask` already
+  ships transitively via `dash`.
+- CSP is `script-src 'self' 'unsafe-inline'` (also `style-src`), not a bare
+  `'self'`: verified via a live `test_client()` request that Dash's renderer
+  bootstrap injects an inline `<script>` into the index page, so a stricter
+  policy would break the app on first load. This is a known Dash limitation,
+  not a choice — revisit only if Dash ever supports nonce-based CSP.
+- Item 4's check came back negative — no matching fix needed elsewhere.
+  `web/app.py` has no hardcoded host in source at all; its `0.0.0.0` bind
+  comes from `Procfile`'s `uvicorn api.main:app --host 0.0.0.0`, i.e. a
+  deliberate container-deploy choice, not a footgun default for local dev.
+  `webui.py`'s `--server.address 0.0.0.0` only appears in its docstring
+  under an explicit "Expose to LAN / remote friends" heading — again a
+  user-chosen CLI flag, not a hardcoded default; plain `streamlit run
+  webui.py` keeps Streamlit's own loopback-only default. `dashboard/app.py`
+  was the only surface with `0.0.0.0` baked into the Python source's
+  `__main__` block itself.
+- Tests: `tests/test_dashboard_security.py`, 8 cases, all
+  `@pytest.mark.unit`, gated behind `pytest.importorskip("dash")` /
+  `("flask")` since `dashboard` is an optional extra. Full `pytest -m unit`
+  run (2007 passed, 10 pre-existing unrelated failures from optional
+  `sensing`/`scheduled` extras not installed in the test venv, 3 skipped) —
+  clean before this change too, confirmed via `git stash`.
+
+**Branch:** `claude/pr-integration-plan-hzrm4u` (folded into this session's
+branch rather than a separate `fix/dashboard-bind-and-csp`, since it's a
+small, low-risk, already-reviewed change) · **Risk:** low, but it is a
 **behaviour change** for anyone currently reaching the dashboard from another
-machine — call that out explicitly in `CHANGELOG.md` under `### Changed`.
-**Effort:** ~half a day. **Do this first if only one item gets done** — it is
-the only item in this plan with a security consequence.
+machine — called out in `CHANGELOG.md` under `### Changed`.
 
 ### 3.3 W3 — Close stale fork PR #22 *(housekeeping)*
 
@@ -311,15 +341,15 @@ flagging to the upstream maintainers separately; out of scope here.
 
 **Order: W2 → W1 → W3.**
 
-1. **W2 — dashboard bind + CSP** (§3.2). Half a day. First because it is the
-   only item with a security consequence, and it is independent of everything
-   else.
-2. **W1 — run manifest** (§3.1). ~1 day. The only feature port left. Re-read
-   upstream #1179's diff directly before starting (§1's scope caveat), and
-   reuse `audit/schemas.py`'s canonical-JSON hashing rather than writing a
-   second scheme.
-3. **W3 — close fork PR #22** (§3.3). Minutes. Do it whenever; blocked on
-   nothing.
+1. **W2 — dashboard bind + CSP** (§3.2). ✅ **Done.** Half a day, as
+   estimated. First because it was the only item with a security
+   consequence, and it was independent of everything else.
+2. **W1 — run manifest** (§3.1). Not started. ~1 day. The only feature port
+   left. Re-read upstream #1179's diff directly before starting (§1's scope
+   caveat), and reuse `audit/schemas.py`'s canonical-JSON hashing rather than
+   writing a second scheme.
+3. **W3 — close fork PR #22** (§3.3). Not started. Minutes. Do it whenever;
+   blocked on nothing.
 
 The Tier-3 audit backlog from the previous revision is now empty: the
 evaluation div-by-zero check cleared (§3.4) and the dashboard item was

@@ -6,16 +6,38 @@ Run:
 
 Environment:
     HERMES_DB_PATH — path to SQLite database (default /opt/data/hermes.db)
+    TRADINGAGENTS_DASHBOARD_HOST — bind host (default 127.0.0.1; loopback-only
+        unless TRADINGAGENTS_DASHBOARD_TOKEN is also set)
+    TRADINGAGENTS_DASHBOARD_TOKEN — shared-secret token required via the
+        ``?token=`` query param or ``X-Dashboard-Token`` header when the
+        dashboard is reachable from outside loopback
 """
 
 import os
 
 import dash
 from dash import Input, Output, State, dcc, html
+from flask import abort, request
 
 from .queries import get_db_connection, get_stats_summary
 from .simple import build_layout as simple_layout
 from .advanced import build_layout as advanced_layout
+
+# ---------------------------------------------------------------------------
+# Bind host / auth
+# ---------------------------------------------------------------------------
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+_DASHBOARD_HOST = os.environ.get("TRADINGAGENTS_DASHBOARD_HOST", "127.0.0.1")
+_DASHBOARD_TOKEN = os.environ.get("TRADINGAGENTS_DASHBOARD_TOKEN")
+
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'"
+)
 
 # ---------------------------------------------------------------------------
 # Colour palette
@@ -39,6 +61,30 @@ app = dash.Dash(
     meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
 )
 server = app.server  # Expose WSGI server for gunicorn/fly.io
+
+
+@server.before_request
+def _require_dashboard_token():
+    """Reject unauthenticated requests when a token is configured.
+
+    The dashboard renders portfolio/PnL data with no login system of its
+    own, so a configured token is the only gate available once it's
+    reachable from outside loopback.
+    """
+    if not _DASHBOARD_TOKEN:
+        return None
+    supplied = request.args.get("token") or request.headers.get("X-Dashboard-Token")
+    if supplied != _DASHBOARD_TOKEN:
+        abort(401)
+    return None
+
+
+@server.after_request
+def _set_security_headers(response):
+    response.headers["Content-Security-Policy"] = _CSP
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -239,4 +285,11 @@ def render_content(mode: str, _n_intervals: int) -> html.Div:
 # Dev entry point
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    app.run_server(host="0.0.0.0", port=8050, debug=False)
+    if _DASHBOARD_HOST not in _LOOPBACK_HOSTS and not _DASHBOARD_TOKEN:
+        raise SystemExit(
+            f"Refusing to bind {_DASHBOARD_HOST} (non-loopback) without "
+            "TRADINGAGENTS_DASHBOARD_TOKEN set — the dashboard has no "
+            "login system, so a token is required whenever it's reachable "
+            "from outside the local machine."
+        )
+    app.run_server(host=_DASHBOARD_HOST, port=8050, debug=False)

@@ -1133,17 +1133,47 @@ for _ch in worker_info["chunks"]:
     render_chunk(_ch)
 
 # ─── Continue streaming from the persistent proc ───
-import select as _select
 import json as _json
 
 _proc = worker_info["proc"]
-_stdout_fd = _proc.stdout.fileno()
 last_chunk_at = time.time()
+
+# On Windows, select() only supports sockets — not subprocess pipe fds.
+_use_stdout_queue = os.name == "nt"
+if _use_stdout_queue:
+    import queue as _queue
+
+    _stdout_q = worker_info.setdefault("_stdout_q", _queue.Queue())
+    if not worker_info.get("_stdout_reader_started"):
+        def _stdout_reader():
+            for _ln in _proc.stdout:
+                _stdout_q.put(_ln)
+            _stdout_q.put(None)
+
+        threading.Thread(target=_stdout_reader, daemon=True).start()
+        worker_info["_stdout_reader_started"] = True
+else:
+    import select as _select
+
+    _stdout_fd = _proc.stdout.fileno()
+
 try:
     while worker_info["decision"] is None and worker_info["error"] is None:
         if _proc.poll() is not None:
             # Worker exited — drain remaining lines from the pipe before exiting loop.
-            for _line in _proc.stdout:
+            if _use_stdout_queue:
+                _drain_lines = []
+                while True:
+                    try:
+                        _ln = _stdout_q.get_nowait()
+                    except _queue.Empty:
+                        break
+                    if _ln is None:
+                        break
+                    _drain_lines.append(_ln)
+            else:
+                _drain_lines = _proc.stdout
+            for _line in _drain_lines:
                 _line = _line.strip()
                 if not _line:
                     continue
@@ -1162,7 +1192,16 @@ try:
                     worker_info["error"] = ev
             break
 
-        ready, _, _ = _select.select([_stdout_fd], [], [], 1.0)
+        if _use_stdout_queue:
+            try:
+                line = _stdout_q.get(timeout=1.0)
+                ready = True
+            except _queue.Empty:
+                ready = False
+                line = None
+        else:
+            ready, _, _ = _select.select([_stdout_fd], [], [], 1.0)
+            line = None
         tick_timer()
         idle_sec = int(time.time() - last_chunk_at)
         if idle_sec >= 5:
@@ -1174,7 +1213,8 @@ try:
         if not ready:
             continue
 
-        line = _proc.stdout.readline()
+        if not _use_stdout_queue:
+            line = _proc.stdout.readline()
         if not line:  # EOF
             break
         line = line.strip()

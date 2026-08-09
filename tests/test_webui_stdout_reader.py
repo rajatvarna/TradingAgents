@@ -14,7 +14,6 @@ def test_queue_based_stdout_reader_drains_lines() -> None:
     """Mirrors the Windows webui path: thread reads lines into a queue."""
     proc_out = io.StringIO("line one\nline two\n")
     q: queue.Queue[str | None] = queue.Queue()
-    sentinel = object()
 
     def reader() -> None:
         for line in proc_out:

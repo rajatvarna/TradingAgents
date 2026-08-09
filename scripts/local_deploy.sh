@@ -15,9 +15,10 @@ set -a
 source .env
 set +a
 
-# Ensure Ollama is reachable (start separately: ollama serve)
-if ! curl -sf http://localhost:11434/api/tags >/dev/null; then
-  echo "WARNING: Ollama not running at localhost:11434 — start with: ollama serve"
+if [[ "${TRADINGAGENTS_LLM_PROVIDER:-deepseek}" == "ollama" ]]; then
+  if ! curl -sf http://localhost:11434/api/tags >/dev/null; then
+    echo "WARNING: Ollama not running at localhost:11434 — start with: ollama serve"
+  fi
 fi
 
 echo "Starting API on http://127.0.0.1:9000 ..."

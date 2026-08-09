@@ -158,7 +158,7 @@ async def list_batch_schedules(db_path: str = DB_PATH) -> list[dict]:
                 SELECT r2.id
                 FROM requests r2
                 WHERE r2.ticker = b.ticker
-                  AND lower(COALESCE(r2.llm_provider, 'ollama')) = lower(b.llm_provider)
+                  AND lower(COALESCE(r2.llm_provider, 'deepseek')) = lower(b.llm_provider)
                 ORDER BY r2.submitted_at DESC
                 LIMIT 1
             )
@@ -310,7 +310,7 @@ async def mark_stale_running_requests(
 async def create_request(
     ticker: str,
     analysis_date: str,
-    llm_provider: str = "ollama",
+    llm_provider: str = "deepseek",
     available_after: Optional[str] = None,
     db_path: str = DB_PATH,
 ) -> str:

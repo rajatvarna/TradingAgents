@@ -75,10 +75,20 @@ class _TrackingStatsHandler(StatsCallbackHandler):
         _live_register_call(self._provider)
 
 
-ANALYSIS_DIR = "/data/analysis"
-CACHE_DIR = "/data/cache"
-RESULTS_DIR = "/data/logs"
-MEMORY_LOG_PATH = "/data/memory/trading_memory.md"
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_LOCAL_OUTPUT = _REPO_ROOT / "output"
+_TRADINGAGENTS_HOME = Path(os.path.expanduser("~")) / ".tradingagents"
+
+ANALYSIS_DIR = os.getenv("TRADINGAGENTS_ANALYSIS_DIR", str(_LOCAL_OUTPUT / "analysis"))
+CACHE_DIR = os.getenv(
+    "TRADINGAGENTS_DATA_CACHE_DIR",
+    os.getenv("TRADINGAGENTS_CACHE_DIR", str(_LOCAL_OUTPUT / "cache")),
+)
+RESULTS_DIR = os.getenv("TRADINGAGENTS_RESULTS_DIR", str(_LOCAL_OUTPUT / "logs"))
+MEMORY_LOG_PATH = os.getenv(
+    "TRADINGAGENTS_MEMORY_LOG_PATH",
+    str(_TRADINGAGENTS_HOME / "memory" / "trading_memory.md"),
+)
 API_DEBUG_MODE = os.getenv("API_DEBUG_MODE", "true").strip().lower() in ("1", "true", "yes", "on")
 _executor = ThreadPoolExecutor(max_workers=1)
 GOOGLE_429_RETRY_DELAY_SECONDS = 300
@@ -91,10 +101,25 @@ OPENROUTER_429_MAX_RETRIES = 2
 task_queue: asyncio.Queue[tuple[str, str, str]] = asyncio.Queue()
 
 SUPPORTED_PROVIDERS = {
+    "deepseek",
+    "minimax",
+    "minimax-cn",
     "ollama",
     "google",
     "openrouter",
 }
+
+
+def _default_llm_provider() -> str:
+    return (os.getenv("TRADINGAGENTS_LLM_PROVIDER") or "deepseek").strip().lower()
+
+
+def _env_model(*names: str, default: str) -> str:
+    for name in names:
+        raw = os.getenv(name)
+        if raw and raw.strip():
+            return raw.strip()
+    return default
 
 
 def _append_request_log(req_id: str, message: str) -> None:
@@ -147,9 +172,13 @@ def _in_one_day_window_iso(now: Optional[datetime.datetime] = None) -> tuple[str
 
 
 def _pick_provider_config(request_provider: Optional[str]) -> tuple[str, Optional[str], str, str]:
-    provider = (request_provider or "ollama").strip().lower()
+    from tradingagents.llm_clients.openai_client import resolve_provider_base_url
+
+    provider = (request_provider or _default_llm_provider()).strip().lower()
     if provider not in SUPPORTED_PROVIDERS:
-        provider = "ollama"
+        provider = _default_llm_provider()
+        if provider not in SUPPORTED_PROVIDERS:
+            provider = "deepseek"
 
     if provider == "google":
         backend_url = os.getenv("GOOGLE_BASE_URL") or None
@@ -159,17 +188,31 @@ def _pick_provider_config(request_provider: Optional[str]) -> tuple[str, Optiona
 
     if provider == "openrouter":
         backend_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-        # Default to free-tier models on OpenRouter; callers can override via env vars.
         deep_model = os.getenv("OPENROUTER_DEEP_THINK_MODEL", "deepseek/deepseek-r1-0528:free")
         quick_model = os.getenv("OPENROUTER_QUICK_THINK_MODEL", "qwen/qwen3-coder:free")
         return provider, backend_url, deep_model, quick_model
 
-    ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    if provider == "deepseek":
+        backend_url = resolve_provider_base_url("deepseek")
+        deep_model = _env_model("TRADINGAGENTS_DEEP_THINK_LLM", "DEEP_THINK_MODEL", default="deepseek-v4-pro")
+        quick_model = _env_model("TRADINGAGENTS_QUICK_THINK_LLM", "QUICK_THINK_MODEL", default="deepseek-v4-flash")
+        return provider, backend_url, deep_model, quick_model
+
+    if provider in {"minimax", "minimax-cn"}:
+        backend_url = resolve_provider_base_url(provider)
+        deep_model = _env_model("TRADINGAGENTS_DEEP_THINK_LLM", "DEEP_THINK_MODEL", default="MiniMax-M2.7")
+        quick_model = _env_model(
+            "TRADINGAGENTS_QUICK_THINK_LLM",
+            "QUICK_THINK_MODEL",
+            default="MiniMax-M2.7-highspeed",
+        )
+        return provider, backend_url, deep_model, quick_model
+
+    ollama_host = os.getenv("OLLAMA_HOST", os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").replace("/v1", ""))
     backend_url = ollama_host.rstrip("/") + "/v1"
-    # Keep Ollama defaults on Qwen models unless explicitly overridden.
-    deep_model = os.getenv("DEEP_THINK_MODEL", "qwen3:latest")
-    quick_model = os.getenv("QUICK_THINK_MODEL", "qwen3:latest")
-    return provider, backend_url, deep_model, quick_model
+    deep_model = _env_model("DEEP_THINK_MODEL", "TRADINGAGENTS_DEEP_THINK_LLM", default="qwen3:8b-q4_K_M")
+    quick_model = _env_model("QUICK_THINK_MODEL", "TRADINGAGENTS_QUICK_THINK_LLM", default=deep_model)
+    return "ollama", backend_url, deep_model, quick_model
 
 
 def _estimate_cost_usd(provider: str, deep_model: str, quick_model: str, tokens_in: int, tokens_out: int) -> float:
@@ -271,12 +314,6 @@ def _run_analysis(req_id: str, ticker: str, analysis_date: str, llm_provider: Op
     config["data_cache_dir"] = CACHE_DIR
     config["results_dir"] = RESULTS_DIR
     config["memory_log_path"] = MEMORY_LOG_PATH
-    config["data_vendors"] = {
-        "core_stock_apis": "yfinance",
-        "technical_indicators": "yfinance",
-        "fundamental_data": "yfinance",
-        "news_data": "yfinance",
-    }
     config["max_recur_limit"] = int(os.getenv("MAX_RECUR_LIMIT", "500"))
 
     class _TeeOutput:

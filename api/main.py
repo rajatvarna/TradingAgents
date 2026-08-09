@@ -82,7 +82,11 @@ from api.worker import ANALYSIS_DIR, get_live_provider_calls, task_queue, worker
 _API_VERSION = "1.0.0"
 _NUM_WORKERS = 1
 _NUM_SCHEDULERS = 1
-_SUPPORTED_PROVIDERS = {"ollama", "google", "openrouter"}
+_SUPPORTED_PROVIDERS = {"deepseek", "minimax", "minimax-cn", "ollama", "google", "openrouter"}
+
+
+def _default_llm_provider() -> str:
+    return (os.getenv("TRADINGAGENTS_LLM_PROVIDER") or "deepseek").strip().lower()
 _SUPPORTED_BATCH_FREQUENCIES = {"daily", "weekly", "monthly"}
 _ROOT_DIR = Path(__file__).resolve().parent.parent
 _ENV_FILE = _ROOT_DIR / ".env"
@@ -561,7 +565,7 @@ async def submit_analysis(body: AnalyzeRequest, request: Request):
     if parsed > datetime.date.today():
         raise HTTPException(status_code=400, detail="date cannot be in the future")
 
-    llm_provider = (body.llm_provider or "ollama").strip().lower()
+    llm_provider = (body.llm_provider or _default_llm_provider()).strip().lower()
     if llm_provider not in _SUPPORTED_PROVIDERS:
         raise HTTPException(
             status_code=400,
@@ -1185,9 +1189,11 @@ async def ui():
                     <input id="new-ticker" type="text" placeholder="Ticker (e.g. NVDA)" style="padding:8px;border:1px solid #d1d5db;border-radius:8px;min-width:150px" />
                     <input id="new-date" type="date" style="padding:8px;border:1px solid #d1d5db;border-radius:8px" />
                     <select id="new-provider" style="padding:8px;border:1px solid #d1d5db;border-radius:8px">
-                        <option value="ollama" selected>Ollama (default)</option>
+                        <option value="deepseek" selected>DeepSeek (default)</option>
+                        <option value="minimax">MiniMax</option>
+                        <option value="ollama">Ollama (local)</option>
                         <option value="google">Google Gemini</option>
-                        <option value="openrouter">OpenRouter (free models)</option>
+                        <option value="openrouter">OpenRouter</option>
                     </select>
                     <button id="create-request" class="primary">Create</button>
                 </div>
@@ -1255,7 +1261,7 @@ async def ui():
         async function createRequest() {
             const ticker = (document.getElementById('new-ticker').value || '').trim().toUpperCase();
             const date = (document.getElementById('new-date').value || '').trim();
-            const llm_provider = (document.getElementById('new-provider').value || 'ollama').trim();
+            const llm_provider = (document.getElementById('new-provider').value || 'deepseek').trim();
             const msg = document.getElementById('create-msg');
 
             if (!ticker) {
@@ -1383,6 +1389,8 @@ async def batching_page():
                 <div>
                     <label for=\"provider\">Provider</label>
                     <select id=\"provider\">
+                        <option value=\"deepseek\">DeepSeek</option>
+                        <option value=\"minimax\">MiniMax</option>
                         <option value=\"ollama\">Ollama</option>
                         <option value=\"google\">Google</option>
                         <option value="openrouter">OpenRouter</option>
@@ -1474,6 +1482,8 @@ async def batching_page():
                 const analysis = item.latest_analysis_url ? `<a class="link" href="${safe(item.latest_analysis_url)}" target="_blank">Analysis</a>` : '—';
                 const providerSelect = `
                     <select class="row-provider" data-provider-id="${safe(item.id)}">
+                        <option value="deepseek" ${item.llm_provider === 'deepseek' ? 'selected' : ''}>DeepSeek</option>
+                        <option value="minimax" ${item.llm_provider === 'minimax' ? 'selected' : ''}>MiniMax</option>
                         <option value="ollama" ${item.llm_provider === 'ollama' ? 'selected' : ''}>Ollama</option>
                         <option value="google" ${item.llm_provider === 'google' ? 'selected' : ''}>Google</option>
                         <option value="openrouter" ${item.llm_provider === 'openrouter' ? 'selected' : ''}>OpenRouter</option>
@@ -1564,7 +1574,7 @@ async def batching_page():
                 return;
             }
 
-            const llm_provider = providerEl.value || 'ollama';
+            const llm_provider = providerEl.value || 'deepseek';
             const frequency = frequencyEl.value || 'daily';
             const res = await fetch(`/batching/schedules/${encodeURIComponent(scheduleId)}`, {
                 method: 'PUT',
@@ -1604,7 +1614,7 @@ async def batching_page():
             const message = document.getElementById('message');
             if (!scheduleId) return;
             const providerEl = document.querySelector(`[data-provider-id="${CSS.escape(scheduleId)}"]`);
-            const llm_provider = (providerEl && providerEl.value) ? providerEl.value : 'ollama';
+            const llm_provider = (providerEl && providerEl.value) ? providerEl.value : 'deepseek';
 
             const res = await fetch(`/batching/schedules/${encodeURIComponent(scheduleId)}/rerun`, {
                 method: 'POST',
@@ -1659,7 +1669,7 @@ async def batching_page():
 
         async function addSchedule() {
             const ticker = (document.getElementById('ticker').value || '').trim().toUpperCase();
-            const llm_provider = (document.getElementById('provider').value || 'ollama').trim();
+            const llm_provider = (document.getElementById('provider').value || 'deepseek').trim();
             const frequency = (document.getElementById('frequency').value || 'daily').trim();
             const message = document.getElementById('message');
 

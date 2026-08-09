@@ -75,10 +75,13 @@ class _TrackingStatsHandler(StatsCallbackHandler):
         _live_register_call(self._provider)
 
 
-ANALYSIS_DIR = "/data/analysis"
-CACHE_DIR = "/data/cache"
-RESULTS_DIR = "/data/logs"
-MEMORY_LOG_PATH = "/data/memory/trading_memory.md"
+ANALYSIS_DIR = os.getenv("TRADINGAGENTS_ANALYSIS_DIR", "/data/analysis")
+CACHE_DIR = os.getenv("TRADINGAGENTS_DATA_CACHE_DIR", os.getenv("TRADINGAGENTS_CACHE_DIR", "/data/cache"))
+RESULTS_DIR = os.getenv("TRADINGAGENTS_RESULTS_DIR", "/data/logs")
+MEMORY_LOG_PATH = os.getenv(
+    "TRADINGAGENTS_MEMORY_LOG_PATH",
+    os.path.join(os.path.expanduser("~"), ".tradingagents", "trading_memory.md"),
+)
 API_DEBUG_MODE = os.getenv("API_DEBUG_MODE", "true").strip().lower() in ("1", "true", "yes", "on")
 _executor = ThreadPoolExecutor(max_workers=1)
 GOOGLE_429_RETRY_DELAY_SECONDS = 300
@@ -164,11 +167,19 @@ def _pick_provider_config(request_provider: Optional[str]) -> tuple[str, Optiona
         quick_model = os.getenv("OPENROUTER_QUICK_THINK_MODEL", "qwen/qwen3-coder:free")
         return provider, backend_url, deep_model, quick_model
 
-    ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    ollama_host = os.getenv("OLLAMA_HOST", os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").replace("/v1", ""))
     backend_url = ollama_host.rstrip("/") + "/v1"
     # Keep Ollama defaults on Qwen models unless explicitly overridden.
-    deep_model = os.getenv("DEEP_THINK_MODEL", "qwen3:latest")
-    quick_model = os.getenv("QUICK_THINK_MODEL", "qwen3:latest")
+    deep_model = (
+        os.getenv("DEEP_THINK_MODEL")
+        or os.getenv("TRADINGAGENTS_DEEP_THINK_LLM")
+        or "qwen3:8b-q4_K_M"
+    )
+    quick_model = (
+        os.getenv("QUICK_THINK_MODEL")
+        or os.getenv("TRADINGAGENTS_QUICK_THINK_LLM")
+        or deep_model
+    )
     return provider, backend_url, deep_model, quick_model
 
 

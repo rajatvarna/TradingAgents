@@ -117,11 +117,10 @@ those rather than duplicating them.
 
 Non-obvious caveats discovered during setup:
 
-- `mcp` is pinned to `<2` on top of `pyproject.toml` (`mcp>=1.9.0`). `mcp` 2.0.0
-  renamed `streamablehttp_client` -> `streamable_http_client`, which breaks the
-  module-level imports in `ops/broker/mcp_client.py` and causes `tests/ops/broker`
-  collection errors on a fresh install. The update script reinstalls `mcp<2` after
-  the editable install. If you re-resolve dependencies manually, re-apply this pin.
+- `mcp` is pinned in `pyproject.toml` as `mcp>=1.28.1,<2`. `mcp` 2.0.0 renamed
+  `streamablehttp_client` -> `streamable_http_client`; `ops/broker/mcp_client.py`
+  includes a compat import for both names. Do not bump to `mcp>=2` without updating
+  that import and the broker test monkeypatches.
 - Running the CI-parity test suite needs the `portfolio` and `scheduled` extras
   (they provide `ib_insync`, `robin_stocks`, `apscheduler`, `pandas-market-calendars`,
   `fpdf2`), otherwise `tests/ops` fails to import. The update script installs
@@ -132,16 +131,17 @@ Non-obvious caveats discovered during setup:
 Live shadow runs (`scripts/flint/run_shadow_analysis.py`) require BOTH a reachable
 LLM and internet (yfinance is the default, keyless market-data vendor):
 
-- Keyless path: install and run Ollama, pull a tool-capable model, and point
+- Preferred cloud path: set `DEEPSEEK_API_KEY` or `MINIMAX_API_KEY` and
+  `TRADINGAGENTS_LLM_PROVIDER=deepseek` (or `minimax`) in `.env.flint-shadow`.
+  Ollama on CPU-only Cloud VMs is too slow for multi-agent runs.
+- Keyless fallback: install and run Ollama, pull a tool-capable model, and point
   `.env.flint-shadow` at it. Ollama is NOT installed by the update script and does
   not persist across fresh VMs, so install it per session if needed:
   `sudo apt-get install -y zstd` then `curl -fsSL https://ollama.com/install.sh | sudo sh`,
   start `ollama serve` (no systemd in the VM — run it in the background/tmux),
   `ollama pull llama3.2:3b`, and set `TRADINGAGENTS_DEEP_MODEL`/`TRADINGAGENTS_QUICK_MODEL`
-  to `llama3.2:3b` in `.env.flint-shadow`. CPU/GPU inference at ~7-9 tok/s means a
+  to `llama3.2:3b` in `.env.flint-shadow`. CPU inference at ~7-9 tok/s means a
   single-analyst run takes several minutes; run it in a background tmux session.
-- Alternatively set one cloud provider key (e.g. `OPENAI_API_KEY`) and
-  `TRADINGAGENTS_LLM_PROVIDER` in `.env.flint-shadow` to skip Ollama.
 - With a small local model the Flint quality gate frequently returns
   `decision: invalid_due_to_quality_gate` (missing citations / divergent chain).
   This is expected governance behavior, not an environment failure: the pipeline

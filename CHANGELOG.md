@@ -10,6 +10,10 @@ Breaking changes within the 0.x line are called out explicitly.
 
 ### Fixed
 
+- **MCP SDK 2.x import compatibility**: `ops/broker/mcp_client.py` now imports `streamablehttp_client` with a fallback to the mcp 2.0 rename (`streamable_http_client`). Pin `mcp>=1.28.1,<2` to keep CI ops tests collecting reliably. (`ops/broker/mcp_client.py`, `pyproject.toml`)
+
+- **API DeepSeek/MiniMax provider support**: REST API worker and console now support `deepseek`, `minimax`, and `minimax-cn` (not just ollama/google/openrouter). Default provider follows `TRADINGAGENTS_LLM_PROVIDER` (defaults to `deepseek`). Local path defaults use `./output/` instead of `/data/*`. Worker respects `DEFAULT_CONFIG` data vendors (Finnhub/yfinance via env) instead of forcing yfinance-only. (`api/worker.py`, `api/main.py`, `api/schemas.py`, `api/db.py`, `tests/test_api_worker_local_deploy.py`, `tests/test_provider_model_routing.py`)
+
 - **Local API deploy paths and Ollama model selection**: `api/worker.py` now reads `TRADINGAGENTS_ANALYSIS_DIR`, `TRADINGAGENTS_DATA_CACHE_DIR`, `TRADINGAGENTS_RESULTS_DIR`, and `TRADINGAGENTS_MEMORY_LOG_PATH` for non-Docker runs instead of hardcoding `/data/*` (which caused `PermissionError` on bare-metal/local installs). The Ollama worker path also honours `TRADINGAGENTS_DEEP_THINK_LLM` / `TRADINGAGENTS_QUICK_THINK_LLM` (and `DEEP_THINK_MODEL` / `QUICK_THINK_MODEL`) instead of defaulting to the non-existent `qwen3:latest` tag. (`api/worker.py`, `tests/test_api_worker_local_deploy.py`)
 
 ### Added

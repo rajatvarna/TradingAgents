@@ -7,8 +7,8 @@ import pytest
 
 
 @pytest.mark.unit
-def test_worker_paths_default_to_data_dirs(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Docker defaults remain when no override env vars are set."""
+def test_worker_paths_default_to_local_output(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Local defaults use ./output/ when no override env vars are set."""
     for var in (
         "TRADINGAGENTS_ANALYSIS_DIR",
         "TRADINGAGENTS_DATA_CACHE_DIR",
@@ -21,9 +21,9 @@ def test_worker_paths_default_to_data_dirs(monkeypatch: pytest.MonkeyPatch) -> N
     import api.worker as worker_mod
 
     importlib.reload(worker_mod)
-    assert worker_mod.ANALYSIS_DIR == "/data/analysis"
-    assert worker_mod.CACHE_DIR == "/data/cache"
-    assert worker_mod.RESULTS_DIR == "/data/logs"
+    assert worker_mod.ANALYSIS_DIR.endswith("/output/analysis")
+    assert worker_mod.CACHE_DIR.endswith("/output/cache")
+    assert worker_mod.RESULTS_DIR.endswith("/output/logs")
 
 
 @pytest.mark.unit
@@ -82,12 +82,45 @@ def test_pick_provider_config_ollama_default_model_not_latest(
 
 
 @pytest.mark.unit
-def test_pick_provider_config_unknown_provider_falls_back_to_ollama(
+def test_pick_provider_config_deepseek_uses_env_models(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import api.worker as worker_mod
 
-    monkeypatch.setenv("TRADINGAGENTS_DEEP_THINK_LLM", "custom:model")
+    monkeypatch.setenv("TRADINGAGENTS_DEEP_THINK_LLM", "deepseek-v4-pro")
+    monkeypatch.setenv("TRADINGAGENTS_QUICK_THINK_LLM", "deepseek-v4-flash")
+
+    provider, backend_url, deep, quick = worker_mod._pick_provider_config("deepseek")
+    assert provider == "deepseek"
+    assert backend_url == "https://api.deepseek.com"
+    assert deep == "deepseek-v4-pro"
+    assert quick == "deepseek-v4-flash"
+
+
+@pytest.mark.unit
+def test_pick_provider_config_minimax_uses_env_models(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import api.worker as worker_mod
+
+    monkeypatch.setenv("TRADINGAGENTS_DEEP_THINK_LLM", "MiniMax-M2.7")
+    monkeypatch.setenv("TRADINGAGENTS_QUICK_THINK_LLM", "MiniMax-M2.7-highspeed")
+
+    provider, backend_url, deep, quick = worker_mod._pick_provider_config("minimax")
+    assert provider == "minimax"
+    assert backend_url == "https://api.minimax.io/v1"
+    assert deep == "MiniMax-M2.7"
+    assert quick == "MiniMax-M2.7-highspeed"
+
+
+@pytest.mark.unit
+def test_pick_provider_config_unknown_provider_falls_back_to_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import api.worker as worker_mod
+
+    monkeypatch.setenv("TRADINGAGENTS_LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("TRADINGAGENTS_DEEP_THINK_LLM", "deepseek-v4-pro")
     provider, _, deep, _ = worker_mod._pick_provider_config("not-a-real-provider")
-    assert provider == "ollama"
-    assert deep == "custom:model"
+    assert provider == "deepseek"
+    assert deep == "deepseek-v4-pro"

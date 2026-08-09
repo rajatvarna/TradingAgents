@@ -24,7 +24,10 @@ from urllib.parse import parse_qs, urlparse
 
 from mcp import ClientSession
 from mcp.client.auth import OAuthClientProvider, TokenStorage
-from mcp.client.streamable_http import streamablehttp_client
+try:
+    from mcp.client.streamable_http import streamablehttp_client
+except ImportError:  # mcp>=2.0 renamed the symbol
+    from mcp.client.streamable_http import streamable_http_client as streamablehttp_client
 from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata, OAuthToken
 
 from ops.broker.types import OrderType, Side

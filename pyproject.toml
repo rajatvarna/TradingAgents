@@ -43,7 +43,7 @@ dependencies = [
     "typing-extensions>=4.14.0",
     "uvicorn>=0.35.0",
     "yfinance>=1.4.1",
-    "mcp>=1.9.0",
+    "mcp>=1.28.1,<2",
     # tabulate is required by pandas.DataFrame.to_markdown — used by the
     # yfinance options vendor in tradingagents/dataflows/yfinance_options.py.
     "tabulate>=0.9",

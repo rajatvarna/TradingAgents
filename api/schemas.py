@@ -16,7 +16,10 @@ class AnalyzeRequest(BaseModel):
     )
     llm_provider: Optional[str] = Field(
         None,
-        description="LLM provider to use for this request. Defaults to ollama. Supported: ollama, google, openrouter.",
+        description=(
+            "LLM provider to use for this request. Defaults to TRADINGAGENTS_LLM_PROVIDER "
+            "or deepseek. Supported: deepseek, minimax, minimax-cn, ollama, google, openrouter."
+        ),
     )
 
 
@@ -71,12 +74,12 @@ class CancelAllResponse(BaseModel):
 
 class BatchScheduleCreateRequest(BaseModel):
     ticker: str = Field(..., description="Stock ticker symbol, e.g. NVDA")
-    llm_provider: str = Field(..., description="Provider for scheduled runs: ollama, google, or openrouter")
+    llm_provider: str = Field(..., description="Provider for scheduled runs: deepseek, minimax, ollama, google, or openrouter")
     frequency: str = Field(..., description="Run frequency: daily, weekly, or monthly")
 
 
 class BatchScheduleRerunRequest(BaseModel):
-    llm_provider: str = Field(..., description="Provider to use for this rerun: ollama, google, or openrouter")
+    llm_provider: str = Field(..., description="Provider to use for this rerun: deepseek, minimax, ollama, google, or openrouter")
 
 
 class BatchScheduleUpdateRequest(BaseModel):

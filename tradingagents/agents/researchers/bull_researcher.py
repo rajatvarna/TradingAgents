@@ -45,6 +45,16 @@ def _format_monster_block_for_researcher(mss: dict) -> str:
     return "\n".join(lines)
 
 
+def format_opponent_argument(side: str, current_response: str) -> str:
+    """Render the opponent's last turn, or an explicit opening-turn placeholder (#1176)."""
+    if current_response.strip():
+        return f"Last {side} argument: {current_response}"
+    return (
+        f"There are no responses from the {side} analyst yet; "
+        "present your own argument based on the available data."
+    )
+
+
 def create_bull_researcher(llm, prompt_registry=None):
     """Create the Bull researcher node.
 
@@ -60,7 +70,7 @@ def create_bull_researcher(llm, prompt_registry=None):
         bull_history = investment_debate_state.get("bull_history", "")
 
         current_response = investment_debate_state.get("current_response", "")
-
+        opponent_argument = format_opponent_argument("bear", current_response)
         # A7 token hygiene: round 1 (this speaker's own first turn) always
         # gets full reports; every round after that gets a short extractive
         # digest instead, when debate_context_mode="digest" is configured.
@@ -119,9 +129,8 @@ def create_bull_researcher(llm, prompt_registry=None):
             market_phase_report=market_phase_report,
             monster_stock_block=monster_stock_block,
             history=history,
-            current_response=current_response,
-            language_instruction=get_language_instruction(),
-        )
+            opponent_argument=opponent_argument,
+            language_instruction=get_language_instruction(),        )
 
         # Tag the LLM call with prompt provenance so TraceCallback's
         # metadata-extraction path picks it up automatically (no

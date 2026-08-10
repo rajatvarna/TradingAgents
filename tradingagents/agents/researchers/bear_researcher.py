@@ -1,6 +1,7 @@
 from tradingagents.agents.researchers.bull_researcher import (
     _SHARED_BLOCKS,
     _format_monster_block_for_researcher,
+    format_opponent_argument,
 )
 from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
@@ -26,6 +27,7 @@ def create_bear_researcher(llm, prompt_registry=None):
         bear_history = investment_debate_state.get("bear_history", "")
 
         current_response = investment_debate_state.get("current_response", "")
+        opponent_argument = format_opponent_argument("bull", current_response)
 
         # A7 token hygiene — see create_bull_researcher's identical comment.
         is_first_turn = not bear_history.strip()
@@ -82,7 +84,7 @@ def create_bear_researcher(llm, prompt_registry=None):
             market_phase_report=market_phase_report,
             monster_stock_block=monster_stock_block,
             history=history,
-            current_response=current_response,
+            opponent_argument=opponent_argument,
             language_instruction=get_language_instruction(),
         )
 

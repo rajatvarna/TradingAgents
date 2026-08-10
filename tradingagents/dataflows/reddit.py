@@ -40,6 +40,9 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from defusedxml import ElementTree as SafeET
+from defusedxml.common import EntitiesForbidden
+
 from .symbol_utils import crypto_base
 
 logger = logging.getLogger(__name__)
@@ -183,30 +186,40 @@ def _fetch_subreddit_rss(
     sub: str,
     limit: int,
     timeout: float,
-    _retry: bool = True,
+    _retries_left: int = 2,
 ) -> list[dict]:
     """Default path: parse the public Atom search feed for a subreddit.
 
     Carries no score / comment counts, so those fields are left None and the
     post is tagged ``source="rss"`` for honest display. On a 429 (Reddit's
-    per-IP rate limit) we back off once — honouring ``Retry-After`` when
-    present — before giving up, so a transient burst doesn't blank the feed.
+    per-IP rate limit) we back off exponentially — honouring ``Retry-After``
+    when present, capped at 30s — up to ``_retries_left`` times before giving
+    up, so a transient burst across several subreddits doesn't blank the
+    whole feed (upstream #1193 / #1219).
     """
     url = _RSS.format(sub=sub, qs=_search_qs(ticker, limit))
     req = Request(url, headers={"User-Agent": _UA})
     try:
         with urlopen(req, timeout=timeout) as resp:
-            root = ET.fromstring(resp.read())
+            root = SafeET.fromstring(resp.read())
     except HTTPError as exc:
-        if exc.code == 429 and _retry:
-            wait = _retry_after_seconds(exc) or 5.0
+        if exc.code == 429 and _retries_left > 0:
+            wait = _retry_after_seconds(exc) or min(5.0 * (3 - _retries_left), 30.0)
             logger.warning(
-                "Reddit RSS 429 for r/%s · %s — backing off %.1fs then retrying once",
-                sub, ticker, wait,
+                "Reddit RSS 429 for r/%s · %s — backing off %.1fs then retrying "
+                "(%d left)",
+                sub, ticker, wait, _retries_left,
             )
             time.sleep(wait)
-            return _fetch_subreddit_rss(ticker, sub, limit, timeout, _retry=False)
+            return _fetch_subreddit_rss(
+                ticker, sub, limit, timeout, _retries_left=_retries_left - 1
+            )
         logger.warning("Reddit RSS fetch failed for r/%s · %s: %s", sub, ticker, exc)
+        return []
+    except EntitiesForbidden as exc:
+        logger.warning(
+            "Reddit RSS XML entity blocked for r/%s · %s: %s", sub, ticker, exc
+        )
         return []
     except (OSError, http.client.HTTPException, ET.ParseError) as exc:
         # OSError covers URLError/TimeoutError/connection resets; HTTPException

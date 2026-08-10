@@ -32,7 +32,7 @@ ESG report: ${esg_report}
 Derivatives / options report: ${derivatives_report}
 ${user_research_block}
 Conversation history of the debate: ${history}
-Last bull argument: ${current_response}
+${opponent_argument}
 
 Keep your response tight — win on evidence density, not length: 300 words or fewer for this round. Do not repeat points you or the bull have already made unless you are directly rebutting them.
 ${language_instruction}

@@ -7,35 +7,60 @@ The same five-tier scale (Buy, Overweight, Hold, Underweight, Sell) is used by:
 - The memory log (rating tag stored alongside each decision entry)
 
 Centralising it here avoids drift between those call sites.
+
+:func:`extract_rating` returns ``None`` when no rating can be recognised, so a
+caller can tell a genuine ``Hold`` apart from a parse failure. :func:`parse_rating`
+keeps the older "return a default" contract for callers that deliberately want
+one. The 5-tier *rating* is intentionally kept separate from the 3-tier *trade
+action* (Buy / Sell / Hold): a rating word is never mapped onto a trade action here.
 """
 
 from __future__ import annotations
 
 import re
+import unicodedata
 
 # Canonical, ordered 5-tier scale (most bullish to most bearish).
 RATINGS_5_TIER: tuple[str, ...] = (
     "Buy", "Overweight", "Hold", "Underweight", "Sell",
 )
 
+# Explicit sentinel when prose carries no parseable 5-tier rating (#1170).
+RATING_REVIEW = "REVIEW"
+
 _RATING_SET = {r.lower() for r in RATINGS_5_TIER}
 
 # Matches "Rating: X" / "rating - X" / "Rating: **X**" — tolerates markdown
 # bold wrappers and either a colon or hyphen separator.
-_RATING_LABEL_RE = re.compile(r"rating.*?[:\-][\s*]*(\w+)", re.IGNORECASE)
+_RATING_LABEL_RE = re.compile(r"rating.*?[:\-：][\s*]*(\w+)", re.IGNORECASE)
+
+
+def _normalise_punctuation(text: str) -> str:
+    """Map fullwidth punctuation to ASCII so localized labels still parse."""
+    return unicodedata.normalize("NFKC", text)
 
 
 def extract_rating(text: str) -> str | None:
-    for line in text.splitlines():
+    """Return a recognised 5-tier rating, or ``None`` when none is parseable."""
+    if not text or not text.strip():
+        return None
+
+    normalised = _normalise_punctuation(text)
+    for line in normalised.splitlines():
         m = _RATING_LABEL_RE.search(line)
         if m and m.group(1).lower() in _RATING_SET:
-            return m.group(1).capitalize()
+            word = m.group(1).capitalize()
+            for tier in RATINGS_5_TIER:
+                if tier.lower() == word.lower():
+                    return tier
 
-    for line in text.splitlines():
+    for line in normalised.splitlines():
         for word in line.lower().split():
             clean = word.strip("*:.,")
             if clean in _RATING_SET:
-                return clean.capitalize()
+                for tier in RATINGS_5_TIER:
+                    if tier.lower() == clean:
+                        return tier
 
     return None
 
@@ -43,11 +68,8 @@ def extract_rating(text: str) -> str | None:
 def parse_rating(text: str, default: str = "Hold") -> str:
     """Heuristically extract a 5-tier rating from prose text.
 
-    Two-pass strategy:
-    1. Look for an explicit "Rating: X" label (tolerant of markdown bold).
-    2. Fall back to the first 5-tier rating word found anywhere in the text.
-
     Returns a Title-cased rating string, or ``default`` if no rating word appears.
+    Prefer :func:`extract_rating` when a parse failure must not become ``Hold``.
     """
     rating = extract_rating(text)
     return rating or default

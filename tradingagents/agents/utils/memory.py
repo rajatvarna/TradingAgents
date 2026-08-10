@@ -13,7 +13,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from tradingagents.agents.utils.rating import parse_rating
+from tradingagents.agents.utils.rating import RATING_REVIEW, extract_rating
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ class TradingMemoryLog:
         """
         if not self._db_path:
             return
-        rating = parse_rating(final_trade_decision, default="Unknown")
+        rating = extract_rating(final_trade_decision) or RATING_REVIEW
 
         merged_meta = dict(meta or {})
         if analyst_signals:
@@ -272,7 +272,7 @@ class TradingMemoryLog:
             is_bullish_outcome = final_rating in {"buy", "overweight"}
             is_bearish_outcome = final_rating in {"sell", "underweight"}
             if not (is_bullish_outcome or is_bearish_outcome):
-                continue  # skip Hold / Unknown outcomes — no clear ground truth
+                continue  # skip Hold / REVIEW outcomes — no clear ground truth
 
             try:
                 meta = json.loads(row["meta"] or "{}")

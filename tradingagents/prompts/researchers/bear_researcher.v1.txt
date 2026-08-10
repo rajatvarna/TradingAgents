@@ -18,6 +18,6 @@ ESG report: ${esg_report}
 Derivatives / options report: ${derivatives_report}
 ${user_research_block}
 Conversation history of the debate: ${history}
-Last bull argument: ${current_response}
+${opponent_argument}
 Use this information to deliver a compelling bear argument, refute the bull's claims, and engage in a dynamic debate that demonstrates the risks and weaknesses of investing in the ${target_label}.
 ${language_instruction}

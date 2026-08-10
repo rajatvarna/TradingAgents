@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from tradingagents.agents.utils.rating import extract_rating, parse_rating
+from tradingagents.agents.utils.rating import RATING_REVIEW, extract_rating
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +47,11 @@ class SignalProcessor:
         self.quick_thinking_llm = quick_thinking_llm
 
     def process_signal(self, full_signal: str) -> str:
-        """Return one of Buy / Overweight / Hold / Underweight / Sell."""
+        """Return one of Buy / Overweight / Hold / Underweight / Sell / REVIEW."""
         rating = extract_rating(full_signal)
         if rating is None:
-            logger.warning("SignalProcessor: could not extract rating; falling back to Hold")
-        return parse_rating(full_signal)
+            logger.warning(
+                "SignalProcessor: could not extract rating; surfacing %s", RATING_REVIEW
+            )
+            return RATING_REVIEW
+        return rating

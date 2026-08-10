@@ -10,7 +10,14 @@ Breaking changes within the 0.x line are called out explicitly.
 
 ### Fixed
 
-- **MCP SDK 2.x import compatibility**: `ops/broker/mcp_client.py` now imports `streamablehttp_client` with a fallback to the mcp 2.0 rename (`streamable_http_client`). Pin `mcp>=1.28.1,<2` to keep CI ops tests collecting reliably. (`ops/broker/mcp_client.py`, `pyproject.toml`)
+- **Upstream sync (2026-08-10)**: merged six upstream `main` commits into this fork, resolving conflicts while preserving prompt-registry agents, report export, and CLI extensions. Ports UTC-normalized Yahoo news filtering (`_as_utc`, #1126), combined OHLCV cache coverage + same-day TTL refresh (#1150), schema-only `NO_EXTERNAL_TOOLS` constant (#1130), and Windows no-console CLI handling (#1138/#1139). (`tradingagents/dataflows/yfinance_news.py`, `tradingagents/dataflows/stockstats_utils.py`, `cli/main.py`, `tests/test_news_lookahead.py`, `tests/test_ohlcv_cache_freshness.py`, `tests/test_cli_no_console.py`)
+
+- **Debate opening-turn fabrication guard (#1210 / #1176)**: bull/bear researchers no longer render a bare `Last {opponent} argument:` label when `current_response` is empty; an explicit placeholder is injected via `${opponent_argument}` in all researcher prompt templates. (`tradingagents/agents/researchers/bull_researcher.py`, `bear_researcher.py`, `tradingagents/prompts/researchers/*.txt`, `tests/test_researcher_empty_response.py`)
+
+- **Unparseable ratings surface as REVIEW (#1189 / #1170)**: `SignalProcessor` and the SQLite memory log now tag decisions with `RATING_REVIEW` when no 5-tier rating can be extracted, instead of silently defaulting to Hold/Unknown. (`tradingagents/agents/utils/rating.py`, `tradingagents/graph/signal_processing.py`, `tradingagents/agents/utils/memory.py`, `tests/test_signal_processing.py`)
+
+- **Reddit RSS hardening (#1218 / #1219)**: RSS Atom parsing uses `defusedxml` to block XXE, and 429 responses retry up to three times with exponential backoff (honouring `Retry-After`). (`tradingagents/dataflows/reddit.py`, `pyproject.toml`)
+ `ops/broker/mcp_client.py` now imports `streamablehttp_client` with a fallback to the mcp 2.0 rename (`streamable_http_client`). Pin `mcp>=1.28.1,<2` to keep CI ops tests collecting reliably. (`ops/broker/mcp_client.py`, `pyproject.toml`)
 
 - **API DeepSeek/MiniMax provider support**: REST API worker and console now support `deepseek`, `minimax`, and `minimax-cn` (not just ollama/google/openrouter). Default provider follows `TRADINGAGENTS_LLM_PROVIDER` (defaults to `deepseek`). Local path defaults use `./output/` instead of `/data/*`. Worker respects `DEFAULT_CONFIG` data vendors (Finnhub/yfinance via env) instead of forcing yfinance-only. (`api/worker.py`, `api/main.py`, `api/schemas.py`, `api/db.py`, `tests/test_api_worker_local_deploy.py`, `tests/test_provider_model_routing.py`)
 

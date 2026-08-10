@@ -1,452 +1,130 @@
-# Upstream PR Integration Plan (Last 3 Weeks)
+# Upstream PR Integration Plan (Last 1 Month)
 
-**Status:** Active — W2 (dashboard hardening) and W1 (run manifest) landed;
-only W3 (close fork PR #22) remains
-**Last updated:** 2026-07-28
+**Status:** Active — August 2026 integration pass complete on branch
+`feat/upstream-pr-integration-aug2026`
+**Last updated:** 2026-08-10
 **Window:** pull requests opened against `TauricResearch/TradingAgents`
-(upstream) between **2026-07-07 and 2026-07-28** — 39 PRs.
-**Supersedes:** the 2026-07-25 revision of this document (window
-2026-07-04 → 2026-07-25, 40 PRs), whose triage is carried forward below.
+(upstream) between **2026-07-10 and 2026-08-10** — ~70 PRs reviewed.
+**Prior work:** July window triage and W1–W2 execution remain in git history;
+see commits on `claude/pr-integration-plan-hzrm4u`.
 
 ---
 
-## 0. What changed since the last revision
+## Executive summary
 
-Three days of drift, and the picture is very different from the first pass —
-mostly because the plan was executed rather than because upstream moved.
-
-1. **17 of the previous window's items have already landed in this fork**
-   (§2). The last revision's "Status: Proposed" header is retired.
-2. **Only 3 PRs are genuinely new** in the refreshed window (#1175, #1177,
-   #1179). Exactly one of them is real work: **#1179, reproducible run
-   manifests** — the only substantive integration item left.
-3. **Two verdicts changed on re-check** (§4): #1120/#1137 (Codex/ChatGPT
-   sign-in) moves Tier 2 → **Skip**, because `openai_oauth_client.py` is
-   already fully wired; #1146 moves Tier 2 → **Already satisfied**, because
-   `.env.example` has documented `ALPHA_VANTAGE_API_KEY` since the pr-1039
-   merge, predating the PR.
-4. **One audit item cleared, one confirmed** (§3.2, §3.4): the
-   evaluation-harness divide-by-zero check came back clean; the dashboard
-   CSP/auth exposure came back **confirmed and unfixed**.
-5. **Upstream still has merged nothing.** The last actual upstream merge
-   remains #579 (2026-04-25) — now three months stale. Every judgement here
-   remains "should *we* build this", not "did maintainers accept this".
-
-Net remaining work: **one housekeeping close.** The feature port (W1) and
-security fix (W2) have since landed on this branch (§3.1, §3.2). Everything
-else in the window is done, superseded, or rejected.
-
----
-
-## 1. Methodology
-
-- Cohort pulled via `search_pull_requests` (`repo:TauricResearch/TradingAgents
-  is:pr created:2026-07-07..2026-07-28`) → 39 PRs, cross-checked against
-  `is:merged` in-window (0 results).
-- **34 of the 39 overlap the previous window.** Their triage is carried
-  forward from the 2026-07-25 revision rather than re-derived from scratch;
-  what *was* re-verified for each is (a) whether it has since landed here,
-  and (b) whether our own code moved enough to change the verdict. The 5
-  non-overlapping PRs (#1172, #1174, #1175, #1177, #1179) were triaged fresh.
-- Upstream PR *diffs* are not readable through this session's GitHub scope
-  (`pull_request_read` is restricted to `rajatvarna/TradingAgents`), so
-  file-level review of #1179 was done from its rendered diff page. This is a
-  real limitation: treat §3.1's file-level claims as good-faith reading of
-  the PR page, and re-read the diff directly before implementing.
-- **No PR in this batch should be cherry-picked as a raw patch.** This fork
-  has diverged far past upstream's shape — `tradingagents/` now carries
-  `audit/`, `evaluation/`, `evidence/`, `experiments/`, `guardrails/`,
-  `notifications/`, `orchestrator/`, `persistence/`, `personas/`, `prompts/`,
-  `reports/`, `scoring/`, `secretary/`, `sensing/`, `valuation/` alongside
-  the original `agents/`/`dataflows/`/`graph/`/`llm_clients/`, plus top-level
-  `ops/`, `web/`, `dashboard/`, `webui.py`. Everything below is a port of an
-  *idea* into our structure, against our conventions (`encoding="utf-8"`,
-  `~/.tradingagents/` paths, no `# type: ignore`, lazy LLM imports,
-  `@pytest.mark.unit` coverage).
-
----
-
-## 2. Landed ledger — previous window, now complete
-
-Verified against `git log origin/main` and the current tree. No further
-action on any of these.
-
-| # | Title | Landed as | Verified by |
-|---|---|---|---|
-| #1124 | tolerate malformed StockTwits messages | `fee21fc` | `CHANGELOG.md` |
-| #1126 | Yahoo news window UTC + end-exclusive | `23b7622` | `CHANGELOG.md` |
-| #1152 | xAI Grok 4.5 in model catalog | `3846dbd` | `CHANGELOG.md` |
-| #1128 | CLI env-var overrides (date / analysts) | `9a21d79` | `tests/test_cli_env_skip.py` |
-| #1139 | handle missing Windows console | `9a21d79` | `tests/test_cli_console_errors.py` |
-| #1173 | uv setup workflow docs | `2470135` | `README.md` |
-| #1149 | Ollama Modelfile guide + profiles | `6dbaffa` | `examples/ollama/` |
-| #1163 | strip snapshot-only fields from historical fundamentals | `680595c`, `37cfba0` | `CHANGELOG.md` |
-| #1159 | Taiwan (TWSE/TPEx) vendor | `e89ad25` | `dataflows/taiwan.py`, `tests/test_taiwan.py` |
-| #1140 | Requesty as OpenAI-compatible provider | `4f182f9` | `llm_clients/openai_client.py` |
-| #1136 | Anthropic prompt caching + token floor | `098e6b5` | `tests/test_anthropic_prompt_caching.py` |
-| #1135 | env-var overrides to skip save/display prompts | `53b387a` | `tests/test_cli_env_skip.py` |
-| #1134 | Reddit OAuth2 (100 QPM) | `7f6745d` | `CHANGELOG.md` |
-| #1131 | prompt-hardening half only (no DDG fallback) | `0233ac0` | `CHANGELOG.md` |
-| #1155 | futures asset type | `297445e` | `CHANGELOG.md` |
-| #1147 | trade-horizon prompt context (available, not default) | `8b105c5` | `CHANGELOG.md` |
-| #1125 | read-only IBKR portfolio context | `16c831d`, `7c796f3` | `dataflows/ibkr.py::get_portfolio_context` |
-
-Follow-up review fixes on the above landed in `0cba463`, `e96896f`,
-`bd3d90f`, `8a37802`.
-
----
-
-## 3. Remaining work — execution plan
-
-Three items. Each is its own branch → PR against `origin`, per the
-one-branch-one-PR convention.
-
-### 3.1 W1 — Port #1179: reproducible run manifests *(the only feature item)*
-
-**Status: done**, branch `claude/pr-integration-plan-hzrm4u`.
-
-**Upstream PR:** [#1179](https://github.com/TauricResearch/TradingAgents/pull/1179)
-(faceWang753, open, 2026-07-27). Adds `tradingagents/run_manifest.py` (+152),
-touches `cli/main.py`, `tradingagents/reporting.py`,
-`tradingagents/graph/trading_graph.py`, `tests/test_reporting.py`, `README.md`.
-
-**Correction to this section's earlier claim:** the line below said upstream's
-`tradingagents/reporting.py` target "does not exist here." That was wrong —
-this fork has had its own `tradingagents/reporting.py::write_report_tree`
-since the evidence-auditing work (`3750517`), same filename, same rough
-purpose, just a *different* writer than the one this section actually ports
-into. See the implementation notes below for what that means in practice.
-
-**Why it's worth porting.** `grep -rn "run_manifest" --include=*.py .`
-returns nothing here — we emit no per-run manifest today. The gap is real,
-and it is the kind of point-in-time integrity work this fork already invests
-in heavily.
-
-**Why it must be adapted, not merged.** Upstream's PR writes a *standalone*
-module that re-derives hashes from scratch. We already have most of the
-inputs, built more rigorously:
-
-- `tradingagents/audit/prompt_registry.py` — per-template SHA-256
-  (`_digest`, line 159), the exact prompt-identity component a manifest needs.
-- `tradingagents/audit/ledger.py` — hash-chained append-only trace ledger
-  with `GENESIS_HASH`/`prev_hash` tamper detection.
-- `tradingagents/audit/schemas.py::canonical_json` + SHA-256 helper (line 63)
-  — the canonical-serialization primitive; **reuse this, do not write a
-  second one**, or the two hash schemes will silently disagree.
-- `tradingagents/evidence/ledger.py` — 12-char normalized data hashes.
-
-Upstream also targets `tradingagents/reporting.py`, which does not exist
-here. Our equivalent is `tradingagents/reports/exporter.py::save_report_to_disk`
-(`final_state, ticker, save_path, selections, config`), consumed by both
-`cli.main` and `scripts/run_daily.py`.
-
-**Concrete changes:**
-
-1. New `tradingagents/reports/manifest.py` with
-   `build_run_manifest(final_state, ticker, config, selections) -> dict`.
-   - Hash via `audit.schemas.canonical_json` + the existing SHA-256 helper.
-   - Include prompt-template digests from `audit.prompt_registry` — a
-     capability upstream's version does not have and our versioned
-     `tradingagents/prompts/` makes cheap. This is the main place our
-     manifest should be *better* than upstream's.
-   - Capture: requested as-of date, asset type (`cli/models.py::AssetType`,
-     now incl. futures), selected analysts, provider/model IDs, temperature,
-     configured vendor chains, debate/risk limits, config hash, context
-     hashes, final rating + output hash.
-2. Emit `run_manifest.json` from `save_report_to_disk` into the run's
-   `save_path/` root, next to `complete_report.md`. Add an optional
-   `manifest: dict | None = None` parameter — **keep it optional** so
-   `scripts/run_daily.py` and any other caller keep working unchanged.
-3. Gate behind a `run_manifest_enabled` config key
-   (`TRADINGAGENTS_RUN_MANIFEST_ENABLED`), following the
-   `ibkr_portfolio_context_enabled` precedent. Default **on** — it is
-   local-only, cheap, and has no external dependency.
-4. Sanitize before writing: strip credentials, query strings, and fragments
-   from any backend/base URL; exclude absolute local paths and every
-   `*_API_KEY`. Reuse `llm_clients/url_validation.py` if it already
-   normalizes URLs rather than adding a parallel sanitizer.
-
-**Tests** (`tests/test_run_manifest.py`, all `@pytest.mark.unit`):
-determinism (same inputs → identical hash), no absolute paths in output, no
-secret-shaped values in output, credentialed backend URL is sanitized,
-schema keys present, and `save_report_to_disk` unchanged when the flag is off.
-
-**Honest scope boundary — carry it into the docs.** This records *configured*
-vendor-chain identity, not which fallback actually served each call, and it
-does not make LLM output deterministic. Upstream's author raises exactly this
-in the PR and asks maintainers whether configured-chain identity is the right
-first boundary. Our answer should be yes-for-now, and the README/CHANGELOG
-wording must not overclaim "reproducible" — say *auditable and comparable*.
-Per-tool served-vendor receipts are a separate, later work item.
-
-**Implementation notes:**
-
-- Landed as planned: new `tradingagents/reports/manifest.py::build_run_manifest()`,
-  reusing `audit/schemas.py::canonical_json` for the config-fingerprint hash
-  and `audit/prompt_registry.py::default_registry().load()` for per-template
-  SHA-256 digests of every entry in `config["prompt_versions"]`.
-- **This fork's two-writer duality, encountered mid-implementation and
-  deliberately not fixed here:** there are two independent report-tree
-  writers — `tradingagents/reports/exporter.py::save_report_to_disk`
-  (consumed by `cli/main.py`, `scripts/run_daily.py`, `scripts/run_one.py`)
-  and `tradingagents/reporting.py::write_report_tree` (consumed only by
-  `TradingAgentsGraph.save_reports()`, the programmatic/API entry point —
-  it also writes a `6_evidence/` section `save_report_to_disk` doesn't).
-  Upstream's PR targets a `reporting.py`/`cli/main.py` pair, which by
-  filename coincidence maps onto *both* of ours. This port wires the
-  manifest into `save_report_to_disk` only, matching upstream's `cli/main.py`
-  target and this section's original "no graph changes" risk estimate.
-  `TradingAgentsGraph.save_reports()` → `write_report_tree` does **not**
-  get a manifest from this change — a caller going through the programmatic
-  API path gets a report tree with no `run_manifest.json`. That's a real
-  gap, not a rounding error, and it's a natural follow-up once someone needs
-  it (or once the two writers get unified, which is a separate, larger
-  cleanup this plan doesn't scope).
-- Deviated from step 2's original wording (add an optional `manifest: dict |
-  None` parameter to `save_report_to_disk`) in favor of building the
-  manifest **inline**, gated by the same `if selections is not None and
-  config is not None:` condition `run_config.md` already uses just above
-  it in the function. Simpler, no signature change, and consistent with how
-  this fork already handles the analogous `run_config.md` artefact — so
-  `scripts/run_daily.py`/`scripts/run_one.py` (which call
-  `save_report_to_disk` without `selections`/`config` today) get neither
-  artefact, unchanged from prior behaviour, with no new parameter to thread
-  through later if that's fixed.
-- Sanitization: wrote a small local `_sanitize_url()` in `manifest.py`
-  (`urlsplit`/`urlunsplit`, strips userinfo/query/fragment, returns `None`
-  for anything that isn't a real `scheme://host` URL) rather than reusing
-  `llm_clients/url_validation.py::validate_custom_provider_base_url` — that
-  function *rejects* (raises `ValueError`) a credentialed URL rather than
-  *redacting* one, which is the wrong shape for a manifest that must still
-  write something. No absolute-path scrubbing logic was needed: the
-  manifest only ever populates fields from a hand-curated whitelist
-  (`provider`, `debate_limits`, `vendor_chains`, `prompt_versions`), so
-  `results_dir`/`data_cache_dir`/`project_dir`/`memory_log_path` are excluded
-  by construction rather than filtered after the fact.
-  `*_API_KEY` values were never a risk in the first place — this fork's
-  config dict doesn't carry API keys, those live in env vars read directly
-  by each LLM client — but the whitelist-only approach means even a future
-  config key that did carry one couldn't leak through this path silently.
-- Config key: `run_manifest_enabled: bool = True` added to `default_config.py`
-  (`_ENV_OVERRIDES` → `TRADINGAGENTS_RUN_MANIFEST_ENABLED`) and mirrored into
-  `config_schema.py::TradingAgentsConfig`; `docs/CONFIG_REFERENCE.md`
-  regenerated via `python -m tradingagents.config_schema generate-docs`.
-- Tests: `tests/test_run_manifest.py`, 14 cases, all `@pytest.mark.unit`,
-  covering every item in the list above plus URL sanitization,
-  determinism of the hash fields (not the whole dict — `generated_at` is
-  wall-clock and legitimately differs across calls), missing-section
-  omission (not `null`-padding), and an unresolvable `prompt_versions` entry
-  being skipped rather than raising. Full `pytest -m unit` run: 1941 passed,
-  0 failed (3 skipped, all pre-existing/environmental — no relation to this
-  change), confirmed via the same test venv used for W2.
-
-**Branch:** `claude/pr-integration-plan-hzrm4u` (folded into this session's
-branch, same rationale as W2 — small, low-risk, already reviewed) ·
-**Risk:** low (additive, gated, no graph changes) · **Effort:** ~1 day, as
-estimated.
-
-### 3.2 W2 — Dashboard security hardening *(audit item from #1160 — done)*
-
-**Status: done**, branch `claude/pr-integration-plan-hzrm4u`. The previous
-revision flagged this as an unverified audit item. It was
-**verified and real**:
-
-```
-dashboard/app.py:242
-    app.run_server(host="0.0.0.0", port=8050, debug=False)
-```
-
-`grep -cniE "flask_login|basic_auth|before_request|dash_auth" dashboard/app.py`
-→ **0**. So a 242-line Dash app binds to every interface with no
-authentication, no Content-Security-Policy, and no host allowlist, and it
-renders portfolio/PnL data. Upstream #1160 — which we correctly skip on
-functionality grounds, since `web/app.py`, `dashboard/`, and `webui.py`
-together already exceed it — nevertheless ships exactly the hardening we
-lack (CSP, host allowlist, DOMPurify).
-
-**Concrete changes:**
-
-1. Default the bind host to `127.0.0.1`, overridable via
-   `TRADINGAGENTS_DASHBOARD_HOST`. Anyone genuinely wanting `0.0.0.0` must
-   opt in — this alone closes the exposure for the common case.
-2. Add a CSP response header via a Flask `after_request` hook on
-   `app.server`; no inline-script or external-CDN allowances unless the Dash
-   assets genuinely require them (check before writing the policy).
-3. Add optional shared-secret auth gated on
-   `TRADINGAGENTS_DASHBOARD_TOKEN`; when the host is non-loopback **and** no
-   token is set, refuse to start with a clear error rather than silently
-   serving to the network.
-4. Same pass over `webui.py` and `web/app.py` — confirm neither has the same
-   default-open bind before declaring this done.
-
-**Tests:** default host is loopback; env override is honored; non-loopback
-host without a token raises; CSP header present on a response.
-
-**Implementation notes:**
-
-- Landed as `@server.before_request`/`@server.after_request` hooks on
-  `app.server` (the Flask instance Dash exposes) plus a startup guard in the
-  `if __name__ == "__main__":` block — no new dependency, `flask` already
-  ships transitively via `dash`.
-- CSP is `script-src 'self' 'unsafe-inline'` (also `style-src`), not a bare
-  `'self'`: verified via a live `test_client()` request that Dash's renderer
-  bootstrap injects an inline `<script>` into the index page, so a stricter
-  policy would break the app on first load. This is a known Dash limitation,
-  not a choice — revisit only if Dash ever supports nonce-based CSP.
-- Item 4's check came back negative — no matching fix needed elsewhere.
-  `web/app.py` has no hardcoded host in source at all; its `0.0.0.0` bind
-  comes from `Procfile`'s `uvicorn api.main:app --host 0.0.0.0`, i.e. a
-  deliberate container-deploy choice, not a footgun default for local dev.
-  `webui.py`'s `--server.address 0.0.0.0` only appears in its docstring
-  under an explicit "Expose to LAN / remote friends" heading — again a
-  user-chosen CLI flag, not a hardcoded default; plain `streamlit run
-  webui.py` keeps Streamlit's own loopback-only default. `dashboard/app.py`
-  was the only surface with `0.0.0.0` baked into the Python source's
-  `__main__` block itself.
-- Tests: `tests/test_dashboard_security.py`, 8 cases, all
-  `@pytest.mark.unit`, gated behind `pytest.importorskip("dash")` /
-  `("flask")` since `dashboard` is an optional extra. Full `pytest -m unit`
-  run (2007 passed, 10 pre-existing unrelated failures from optional
-  `sensing`/`scheduled` extras not installed in the test venv, 3 skipped) —
-  clean before this change too, confirmed via `git stash`.
-
-**Branch:** `claude/pr-integration-plan-hzrm4u` (folded into this session's
-branch rather than a separate `fix/dashboard-bind-and-csp`, since it's a
-small, low-risk, already-reviewed change) · **Risk:** low, but it is a
-**behaviour change** for anyone currently reaching the dashboard from another
-machine — called out in `CHANGELOG.md` under `### Changed`.
-
-### 3.3 W3 — Close stale fork PR #22 *(housekeeping)*
-
-[`rajatvarna/TradingAgents#22`](https://github.com/rajatvarna/TradingAgents/pull/22)
-is the only open PR on the fork and it is **already obsolete**. It proposes
-`should_continue_debate` / `should_continue_risk_analysis`, both of which are
-on `main` today (`tradingagents/graph/conditional_logic.py:122` and `:136`),
-landed via the merged #26 and #28. Its stale-mock fixes to
-`tests/test_data_tool_wrappers.py` landed alongside.
-
-**Action:** close #22 with a comment pointing at #26/#28. No code change.
-Confirm first with `python -m pytest -m unit -q` that both routers are green
-on `main`.
-
-### 3.4 Cleared — no action
-
-- **Evaluation-harness divide-by-zero (prompted by #1123).** Checked
-  `tradingagents/evaluation/benchmark.py`: every ratio is guarded —
-  `hits_20d / total_20d if total_20d > 0 else None` (line 207),
-  `hits_60d / total_60d` (208), `hits / total` (264),
-  `consistent_keys / total_keys` (408), plus `if not trade_returns` (314).
-  Our implementation does not share the PR's bug. Item closed.
-
----
-
-## 4. Re-triaged — verdicts that changed
-
-| # | Old verdict | New verdict | Why |
-|---|---|---|---|
-| [#1120](https://github.com/TauricResearch/TradingAgents/pull/1120) / [#1137](https://github.com/TauricResearch/TradingAgents/pull/1137) | Tier 2b — port #1120 | **Skip** | The previous revision called for building a ChatGPT-sign-in provider. It already exists and is fully wired: `llm_clients/openai_oauth_client.py` (Device Code flow, tokens cached under `~/.tradingagents/auth/openai-oauth/`, auto-refresh), registered in `factory.py:92`, `model_catalog.py:153`, and `cli/utils.py:665` as "OpenAI (ChatGPT OAuth)". `codex_client.py` separately covers the local `codex` CLI. Between them the PRs' intent is met; porting either diff would duplicate a working provider. |
-| [#1146](https://github.com/TauricResearch/TradingAgents/pull/1146) | Tier 2a — adopt docs line | **Already satisfied** | `.env.example:48` already documents `ALPHA_VANTAGE_API_KEY`, added in the pr-1039 merge — it predates the PR, so there was never anything to port. The PR's risky half (defaulting the vendor chain to `"yfinance,alpha_vantage"`) was correctly not taken: `default_config.py` still mentions that chain only as a comment example (line 409), not as a default. |
-
-One correction to carry forward: `cli/utils.py:1055` has an Italian-language
-docstring (`"""Garantisce un token OAuth valido..."""`) in the OAuth helper.
-Not part of this plan's scope, but worth an English rewrite next time that
-file is touched — it would not survive upstream review.
-
----
-
-## 5. New in window — fresh triage
-
-| # | Title | Verdict |
+| Category | Count | Action |
 |---|---|---|
-| [#1179](https://github.com/TauricResearch/TradingAgents/pull/1179) | feat: write reproducible run manifests | **Adapt** — see §3.1. The best-quality PR in the whole window: scoped, tested (360 unit tests + ruff clean per author), and unusually candid about its own limits. |
-| [#1177](https://github.com/TauricResearch/TradingAgents/pull/1177) | 已完成更新到上游最新版本 (v0.3.1) | **Reject** — a fork-sync ("updated to upstream v0.3.1") bundled with a Traditional Chinese README, not a scoped contribution. The zh-TW README is separable and harmless, but this fork ships only `README.md` and has no translation-maintenance story; adding one we can't keep current is worse than not having it. |
-| [#1175](https://github.com/TauricResearch/TradingAgents/pull/1175) | Closed: opened against the wrong base repository | **Reject** — self-closed by author within a minute. |
-| [#1174](https://github.com/TauricResearch/TradingAgents/pull/1174) | Gap-decision bridge… (Refs `luxeandliving/trading-workspace#37`) | **Reject** — mistargeted at another repo. Carried over. |
-| [#1172](https://github.com/TauricResearch/TradingAgents/pull/1172) | Opened in error — disregard | **Reject** — self-admitted. Carried over. |
+| Already landed (July window) | 17+ | No action — see prior ledger in git log / CHANGELOG |
+| Merged this pass (Aug fixes) | 6 upstream commits + 4 ported PRs | Done on integration branch |
+| Tier 1 — port next (scoped) | 5 | See §3 |
+| Tier 2 — evaluate / partial | 8 | See §4 |
+| Reject / skip | 40+ | Spam, mega-dumps, duplicate, or fork already exceeds |
 
-Dropped from the cohort by the window shift (created 2026-07-04 → 07-06, all
-previously resolved): #1113, #1114, #1115, #1116, #1117.
+**Upstream still merges almost nothing to its own `main`.** Last upstream merge
+remains #579 (2026-04-25). All decisions here are "should *we* adopt the idea",
+adapted to this fork's prompt-registry / evidence / ops structure.
 
 ---
 
-## 6. Full window triage — all 39 PRs
+## 1. Completed — August 2026 integration pass
 
-**Done / landed (17):** #1124, #1125, #1126, #1128, #1131, #1134, #1135,
-#1136, #1139, #1140, #1147, #1149, #1152, #1155, #1159, #1163, #1173 — §2.
+### 1.1 Upstream `main` sync (6 commits)
 
-**To do (1):** #1179 — §3.1.
+Merged with conflict resolution, keeping fork agent prompts and CLI extensions:
 
-**Skip, we already have equal or better (7):**
-
-| # | Title | Why skip |
-|---|---|---|
-| #1120 / #1137 | Codex / ChatGPT sign-in provider | Already implemented — §4. |
-| #1146 | document `ALPHA_VANTAGE_API_KEY` | Already present — §4. |
-| #1123 | systematic evaluation harness | `evaluation/benchmark.py` (516 lines) is a superset; its div-by-zero bug is not shared — §3.4. |
-| #1160 | local web UI with live run streaming | Three UI surfaces already (`web/app.py` SSE + Alpaca execution, `dashboard/`, `webui.py`). Its *hardening* is the useful part → §3.2. |
-| #1122 | candidate screener + trade-horizon analysis | `scoring/monster_stock_scorer.py` screener is stronger; horizon context landed via #1147 (`8b105c5`). |
-| #1164 | Newsflash news vendor | Author owns the commercial API and is soliciting adoption; unproven personal service, business/availability risk. Confirmed absent here — deliberately. |
-| #1154 | trading-agent Copilot skill | Real, but we don't use Copilot skills. |
-
-**Reject — spam, off-topic, mis-filed, or broken (14):**
-
-| # | Why |
+| Upstream commit | Ported behavior |
 |---|---|
-| #1121 | Redundant MiMo provider; own reviewer confirmed the diff never registers it. Our `model_catalog.py` has 5 MiMo variants. |
-| #1129 | "Create mk" — junk title, no content. |
-| #1142 | 126 files / +19,540 lines parallel subsystem dump. Legitimate domain work, not reviewable as one PR. |
-| #1145 | Empty draft placeholder. |
-| #1151 | 26-file diff unrelated to its title; author self-closed as wrong-remote. (The `.NS`/`.BO` sentiment-suffix idea is genuinely missing here and deserves a fresh narrow proposal — not this diff.) |
-| #1153 | 397-commit personal ops-dashboard dump with hardcoded personal hostnames. |
-| #1158 | Self-admitted wrong PR. |
-| #1161 | 429 files, +108,080/−37. Private-fork dump; PnL already covered by `dashboard/queries.py` + `advanced.py`. Likely embeds personal infra — never cherry-pick. |
-| #1165 | 229-commit "premium trading terminal" SaaS dump (Firebase config, live-execution routers). No description. |
-| #1172, #1174, #1175, #1177 | §5. |
+| `40774ca` | Yahoo news UTC + end-exclusive window (`_as_utc`) |
+| `d78c698` | Same-day OHLCV cache TTL refresh (`_needs_same_day_refresh`) |
+| `3f6c082` / `030b434` | CLI no-console handling; `NO_EXTERNAL_TOOLS` constant |
+| `7bbe33a` / `a33fd4c` | README trending badge (fork README kept DeepWiki + community links) |
 
-The reject bucket stays large (14 of 39). Several are wholesale dumps of
-unrelated private projects rather than contributions — upstream continues to
-absorb low-effort and agent-generated PR spam while merging nothing. Worth
-flagging to the upstream maintainers separately; out of scope here.
+### 1.2 Ported open PRs (July–Aug window)
 
----
-
-## 7. Sequencing
-
-**Order: W2 → W1 → W3.**
-
-1. **W2 — dashboard bind + CSP** (§3.2). ✅ **Done.** Half a day, as
-   estimated. First because it was the only item with a security
-   consequence, and it was independent of everything else.
-2. **W1 — run manifest** (§3.1). ✅ **Done.** ~1 day, as estimated. Landed
-   with one known, documented gap: the programmatic `TradingAgentsGraph.
-   save_reports()` path (`tradingagents/reporting.py::write_report_tree`)
-   doesn't get a manifest — only the CLI/scheduled-runner path
-   (`reports/exporter.py::save_report_to_disk`) does. See §3.1's
-   implementation notes.
-3. **W3 — close fork PR #22** (§3.3). Not started. Minutes. Do it whenever;
-   blocked on nothing. Requires GitHub write access this session doesn't
-   currently have in scope for `rajatvarna/TradingAgents` PR actions —
-   flag to a human to close, or grant PR-write scope to close it directly.
-
-The Tier-3 audit backlog from the previous revision is now empty: the
-evaluation div-by-zero check cleared (§3.4) and the dashboard item was
-promoted to W2.
+| PR | Title | Status |
+|---|---|---|
+| [#1179](https://github.com/TauricResearch/TradingAgents/pull/1179) | Reproducible run manifests | **Done** (prior pass, `tradingagents/reports/manifest.py`) |
+| [#1160](https://github.com/TauricResearch/TradingAgents/pull/1160) hardening | Dashboard bind/CSP | **Done** (prior pass) |
+| [#1210](https://github.com/TauricResearch/TradingAgents/pull/1210) | Empty debate opponent guard | **Done** — `${opponent_argument}` in researcher templates |
+| [#1189](https://github.com/TauricResearch/TradingAgents/pull/1189) | Unparseable → REVIEW | **Done** — `RATING_REVIEW` sentinel |
+| [#1218](https://github.com/TauricResearch/TradingAgents/pull/1218) | Reddit XXE (`defusedxml`) | **Done** |
+| [#1219](https://github.com/TauricResearch/TradingAgents/pull/1219) | Reddit 429 multi-retry | **Done** (3 attempts, exponential backoff) |
 
 ---
 
-## 8. Per-item checklist
+## 2. Local `pr-*` branch ledger
 
-Every item in §3 goes through the standard contribution checklist before
-landing:
+Many upstream PRs were previously fetched as local `pr-*` branches. Status vs
+`main` (2026-08-10):
 
-- [ ] Branch up to date with `upstream/main`
-- [ ] `python -m pytest -m unit -v` passes
-- [ ] New behaviour covered by a `@pytest.mark.unit` test
-- [ ] Python 3.11+ compatibility (this fork's actual `requires-python`)
-- [ ] `encoding="utf-8"` on every `open()`; cache/state under `~/.tradingagents/`
-- [ ] No `# type: ignore`; LLM imports stay lazy
-- [ ] No secrets or `.env` values committed — and for W1, verify the manifest
-      itself cannot serialize one
-- [ ] `CHANGELOG.md` updated under `[Unreleased]` (W2 goes under `### Changed`,
-      not `### Added` — it changes existing default behaviour)
-- [ ] Conventional Commits message format
+**Merged into main:** pr-1009, pr-1020, pr-1024, pr-1030, pr-1033, pr-1038,
+pr-1039, pr-1042, pr-1062, pr-1070, pr-1071, pr-1083, pr-1104, pr-1119
+
+**Not merged — intentional skip (fork already exceeds or too large):**
+
+| Branch | PR | Reason to skip |
+|---|---|---|
+| pr-1093 | #1093 | Mega-orchestration dump; fork has own orchestrator/evidence stack |
+| pr-1105 | #1105 | Evidence ledger already in `tradingagents/evidence/` |
+| pr-1106, pr-1108, pr-1092 | graph routing | Prior fixes landed via fork's `conditional_logic.py` |
+| pr-1076, pr-1077 | TradingDesk | macOS-native GUI; out of scope unless explicitly requested |
+| pr-1123 | #1123 | `evaluation/benchmark.py` is a superset |
+| pr-1050, pr-1055, pr-1031 | webui/scheduled/holdings | Fork-specific features; review individually before merge |
+
+**Not merged — candidate next ports:** pr-1003 (Windows launcher), pr-1074
+(JSON retry), pr-1082 (trader probability review), pr-1086/1087 (smoke/reflection)
+
+---
+
+## 3. Tier 1 — recommended next ports
+
+Small, upstream-quality PRs worth adapting next:
+
+| PR | Title | Effort | Notes |
+|---|---|---|---|
+| [#1205](https://github.com/TauricResearch/TradingAgents/pull/1205) | DeepSeek V4 `max_tokens` + streaming | ~0.5d | Prevents gateway idle hangs (#1204) |
+| [#1200](https://github.com/TauricResearch/TradingAgents/pull/1200) | Opening debate context | ~0.5d | Overlaps #1210; verify risk debators too |
+| [#1199](https://github.com/TauricResearch/TradingAgents/pull/1199) | OpenRouter DeepSeek capability map | ~0.5d | Low risk |
+| [#1187](https://github.com/TauricResearch/TradingAgents/pull/1187) | NSE/BSE news/social | ~1d | India market gap |
+| [#1217](https://github.com/TauricResearch/TradingAgents/pull/1217) | Smoke test fail-fast | ~0.5d | Adapt to fork's smoke script |
+
+---
+
+## 4. Tier 2 — evaluate before porting
+
+| PR | Title | Verdict |
+|---|---|---|
+| [#1207](https://github.com/TauricResearch/TradingAgents/pull/1207) | Schwab + AnySearch vendors | Evaluate — large, needs vendor tests |
+| [#1209](https://github.com/TauricResearch/TradingAgents/pull/1209) | Crypto on-chain signals | Evaluate — overlaps crypto mode |
+| [#1183](https://github.com/TauricResearch/TradingAgents/pull/1183) | A-share Eastmoney | Evaluate — AKShare/Taiwan already exist |
+| [#1181](https://github.com/TauricResearch/TradingAgents/pull/1181) | Atlas Cloud provider | Evaluate — follow Requesty/OpenRouter pattern |
+| [#1195](https://github.com/TauricResearch/TradingAgents/pull/1195) | openai_codex provider | **Skip** — fork has OAuth codex client |
+| [#1202](https://github.com/TauricResearch/TradingAgents/pull/1202) | pydantic-ai/mem0/graphiti | **Defer** — large integration layer |
+| [#1185](https://github.com/TauricResearch/TradingAgents/pull/1185) | Type annotations refactor | **Defer** — wide blast radius |
+
+---
+
+## 5. Reject bucket (representative)
+
+Spam, wrong-repo, mega-dumps, or fork-already-satisfied:
+
+#1129, #1142, #1145, #1151, #1153, #1161, #1165, #1172, #1174, #1175, #1177,
+#1182, #1211, #1212, #1213, #1216, and others with junk titles / no description.
+
+---
+
+## 6. Housekeeping
+
+- [ ] Close stale fork PR #22 on `rajatvarna/TradingAgents` (obsolete vs #26/#28)
+- [ ] Delete local `upstream-pr-*` fetch branches after integration lands on `main`
+- [ ] Re-run full unit suite: `python -m pytest -m unit -q`
+
+---
+
+## 7. Methodology
+
+1. Cohort: GitHub search `repo:TauricResearch/TradingAgents is:pr created:2026-07-10..2026-08-10`
+2. Cross-check against local `pr-*` branch merge ancestry
+3. **Never raw-cherry-pick upstream patches** — port ideas into fork structure
+   (`encoding="utf-8"`, `~/.tradingagents/`, lazy LLM imports, `@pytest.mark.unit`)
+4. One integration branch → review → merge to `main` → push to `origin`

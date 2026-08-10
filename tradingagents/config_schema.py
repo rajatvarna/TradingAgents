@@ -125,6 +125,7 @@ class TradingAgentsConfig(BaseModel):
     deepseek_reasoning_effort: str | None = "max"
     temperature: float | None = Field(default=None, ge=0, le=2)
     llm_max_retries: int | None = Field(default=None, ge=0)
+    max_tokens: int | None = Field(default=8192, ge=1)
     llm_cache_enabled: bool = True
     llm_cache_ttl_hours: int = Field(default=24, ge=0)
     llm_cache_providers: list[str] = Field(default_factory=list)

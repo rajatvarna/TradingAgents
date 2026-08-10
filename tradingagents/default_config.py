@@ -26,6 +26,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_LLM_BACKEND_URL":      "backend_url",
     "TRADINGAGENTS_OUTPUT_LANGUAGE":      "output_language",
     "TRADINGAGENTS_LLM_MAX_RETRIES":      "llm_max_retries",
+    "TRADINGAGENTS_MAX_TOKENS":           "max_tokens",
     "TRADINGAGENTS_MAX_DEBATE_ROUNDS":    "max_debate_rounds",
     "TRADINGAGENTS_MAX_RISK_ROUNDS":      "max_risk_discuss_rounds",
     "TRADINGAGENTS_CHECKPOINT_ENABLED":   "checkpoint_enabled",
@@ -247,6 +248,12 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # provider/SDK at its own default (usually 2). Raise it to ride out bursty
     # 429 throttling on rate-limited deployments instead of aborting a run (#1091).
     "llm_max_retries": None,
+    # Max output tokens per LLM call. DeepSeek V4 thinking models emit long
+    # reasoning chains; without an explicit cap the backend can stream the
+    # chain indefinitely (gateway idle timeout) or truncate content to empty
+    # (#1204). Default 8192 leaves room for reasoning + content; override via
+    # TRADINGAGENTS_MAX_TOKENS.
+    "max_tokens": 8192,
     # LLM response cache — local file-based cache of LLM API responses.
     # Enabled by default; set TRADINGAGENTS_LLM_CACHE_ENABLED=false to disable.
     "llm_cache_enabled": True,

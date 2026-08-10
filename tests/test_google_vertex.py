@@ -302,8 +302,14 @@ def test_cli_does_not_prompt_gemini_thinking_for_google_vertex(monkeypatch):
         }
     )
 
-    with mock.patch.dict(os.environ, {}, clear=False), \
-         mock.patch.object(main, "DEFAULT_CONFIG", fake_cfg), \
+    for var in (
+        "TRADINGAGENTS_LLM_PROVIDER",
+        "TRADINGAGENTS_QUICK_THINK_LLM",
+        "TRADINGAGENTS_DEEP_THINK_LLM",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+    with mock.patch.object(main, "DEFAULT_CONFIG", fake_cfg), \
          mock.patch.object(main, "fetch_announcements", return_value=None), \
          mock.patch.object(main, "display_announcements"), \
          mock.patch.object(main, "get_ticker", return_value="AAPL"), \

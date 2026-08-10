@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 
 import pytest
 
@@ -21,9 +22,9 @@ def test_worker_paths_default_to_local_output(monkeypatch: pytest.MonkeyPatch) -
     import api.worker as worker_mod
 
     importlib.reload(worker_mod)
-    assert worker_mod.ANALYSIS_DIR.endswith("/output/analysis")
-    assert worker_mod.CACHE_DIR.endswith("/output/cache")
-    assert worker_mod.RESULTS_DIR.endswith("/output/logs")
+    assert Path(worker_mod.ANALYSIS_DIR).as_posix().endswith("/output/analysis")
+    assert Path(worker_mod.CACHE_DIR).as_posix().endswith("/output/cache")
+    assert Path(worker_mod.RESULTS_DIR).as_posix().endswith("/output/logs")
 
 
 @pytest.mark.unit

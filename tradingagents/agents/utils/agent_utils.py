@@ -190,11 +190,13 @@ def resolve_instrument_identity(ticker: str) -> dict:
         return {}
 
     identity: dict[str, str] = {}
-    company_name = _clean_identity_value(info.get("longName")) or _clean_identity_value(
-        info.get("shortName")
-    )
+    long_name = _clean_identity_value(info.get("longName"))
+    short_name = _clean_identity_value(info.get("shortName"))
+    company_name = long_name or short_name
     if company_name:
         identity["company_name"] = company_name
+    if short_name and (not company_name or short_name.casefold() != company_name.casefold()):
+        identity["short_name"] = short_name
     for source_key, target_key in (
         ("sector", "sector"),
         ("industry", "industry"),

@@ -144,6 +144,7 @@ _BY_ID: dict[str, ModelCapabilities] = {
 _BY_PATTERN: list[tuple[re.Pattern[str], ModelCapabilities]] = [
     (re.compile(r"^gpt-5"), _OPENAI_REASONING),
     (re.compile(r"(^|/)deepseek-chat($|[:/_-])", re.IGNORECASE), _DEEPSEEK_CHAT),
+    (re.compile(r"^deepseek/", re.IGNORECASE), _DEEPSEEK_THINKING),
     (re.compile(r"(^|/)deepseek-v\d", re.IGNORECASE), _DEEPSEEK_THINKING),
     (re.compile(r"(^|/)deepseek-r\d", re.IGNORECASE), _DEEPSEEK_THINKING),
     (re.compile(r"(^|/)deepseek-reasoner", re.IGNORECASE), _DEEPSEEK_THINKING),

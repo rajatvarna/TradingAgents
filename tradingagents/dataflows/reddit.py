@@ -43,7 +43,7 @@ from urllib.request import Request, urlopen
 from defusedxml import ElementTree as SafeET
 from defusedxml.common import EntitiesForbidden
 
-from .symbol_utils import crypto_base
+from .symbol_utils import crypto_base, india_equity_parts
 
 logger = logging.getLogger(__name__)
 
@@ -72,11 +72,40 @@ _oauth_expires_at: float = 0.0
 # discussion. wallstreetbets has the most volume but most noise; stocks /
 # investing trend more measured. Caller can override.
 DEFAULT_SUBREDDITS = ("wallstreetbets", "stocks", "investing")
+# NSE/BSE discussion is concentrated in India-specific communities.
+INDIA_SUBREDDITS = ("IndianStockMarket", "IndiaStocks", "StockMarketIndia")
 
 
-def _search_qs(ticker: str, limit: int) -> str:
+def _subreddits_for_ticker(ticker: str) -> tuple[str, ...]:
+    """Select market-aware default communities for ``ticker``."""
+    return INDIA_SUBREDDITS if india_equity_parts(ticker) else DEFAULT_SUBREDDITS
+
+
+def _clean_search_terms(
+    ticker: str,
+    search_terms: Iterable[str] | None,
+) -> tuple[str, ...]:
+    """Return safe, ordered search terms, preserving legacy ticker behavior."""
+    candidates = search_terms or (crypto_base(ticker) or ticker,)
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for term in candidates:
+        value = " ".join(str(term).replace('"', "").split())
+        key = value.casefold()
+        if value and key not in seen:
+            seen.add(key)
+            cleaned.append(value)
+    return tuple(cleaned)
+
+
+def _build_search_query(terms: Iterable[str]) -> str:
+    """Combine aliases into one Reddit query without multiplying requests."""
+    return " OR ".join(f'"{term}"' if " " in term else term for term in terms)
+
+
+def _search_qs(search_query: str, limit: int) -> str:
     return urlencode({
-        "q": ticker,
+        "q": search_query,
         "restrict_sr": "on",
         "sort": "new",
         "t": "week",  # last 7 days
@@ -182,7 +211,7 @@ def _get_oauth_token(timeout: float) -> str | None:
 
 
 def _fetch_subreddit_rss(
-    ticker: str,
+    search_query: str,
     sub: str,
     limit: int,
     timeout: float,
@@ -197,7 +226,7 @@ def _fetch_subreddit_rss(
     up, so a transient burst across several subreddits doesn't blank the
     whole feed (upstream #1193 / #1219).
     """
-    url = _RSS.format(sub=sub, qs=_search_qs(ticker, limit))
+    url = _RSS.format(sub=sub, qs=_search_qs(search_query, limit))
     req = Request(url, headers={"User-Agent": _UA})
     try:
         with urlopen(req, timeout=timeout) as resp:
@@ -208,23 +237,23 @@ def _fetch_subreddit_rss(
             logger.warning(
                 "Reddit RSS 429 for r/%s · %s — backing off %.1fs then retrying "
                 "(%d left)",
-                sub, ticker, wait, _retries_left,
+                sub, search_query, wait, _retries_left,
             )
             time.sleep(wait)
             return _fetch_subreddit_rss(
-                ticker, sub, limit, timeout, _retries_left=_retries_left - 1
+                search_query, sub, limit, timeout, _retries_left=_retries_left - 1
             )
-        logger.warning("Reddit RSS fetch failed for r/%s · %s: %s", sub, ticker, exc)
+        logger.warning("Reddit RSS fetch failed for r/%s · %s: %s", sub, search_query, exc)
         return []
     except EntitiesForbidden as exc:
         logger.warning(
-            "Reddit RSS XML entity blocked for r/%s · %s: %s", sub, ticker, exc
+            "Reddit RSS XML entity blocked for r/%s · %s: %s", sub, search_query, exc
         )
         return []
     except (OSError, http.client.HTTPException, ET.ParseError) as exc:
         # OSError covers URLError/TimeoutError/connection resets; HTTPException
         # covers chunked-transfer errors (IncompleteRead/BadStatusLine, #1024).
-        logger.warning("Reddit RSS fetch failed for r/%s · %s: %s", sub, ticker, exc)
+        logger.warning("Reddit RSS fetch failed for r/%s · %s: %s", sub, search_query, exc)
         return []
 
     posts = []
@@ -246,7 +275,7 @@ def _fetch_subreddit_rss(
 
 
 def _fetch_subreddit_json(
-    ticker: str,
+    search_query: str,
     sub: str,
     limit: int,
     timeout: float,
@@ -260,7 +289,7 @@ def _fetch_subreddit_json(
     case; ``_fetch_subreddit_oauth`` below is the authenticated equivalent used
     when REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET are configured (upstream #1134).
     """
-    url = _API.format(sub=sub, qs=_search_qs(ticker, limit))
+    url = _API.format(sub=sub, qs=_search_qs(search_query, limit))
     req = Request(url, headers={"User-Agent": _UA, "Accept": "application/json"})
     try:
         with urlopen(req, timeout=timeout) as resp:
@@ -270,13 +299,13 @@ def _fetch_subreddit_json(
     except (OSError, http.client.HTTPException, json.JSONDecodeError) as exc:
         logger.warning(
             "Reddit JSON fetch failed for r/%s · %s: %s — falling back to RSS feed.",
-            sub, ticker, exc,
+            sub, search_query, exc,
         )
-        return _fetch_subreddit_rss(ticker, sub, limit, timeout)
+        return _fetch_subreddit_rss(search_query, sub, limit, timeout)
 
 
 def _fetch_subreddit_oauth(
-    ticker: str,
+    search_query: str,
     sub: str,
     limit: int,
     timeout: float,
@@ -293,9 +322,9 @@ def _fetch_subreddit_oauth(
     """
     token = _get_oauth_token(timeout)
     if not token:
-        return _fetch_subreddit_rss(ticker, sub, limit, timeout)
+        return _fetch_subreddit_rss(search_query, sub, limit, timeout)
 
-    url = _OAUTH_API.format(sub=sub, qs=_search_qs(ticker, limit))
+    url = _OAUTH_API.format(sub=sub, qs=_search_qs(search_query, limit))
     req = Request(url, headers={"User-Agent": _UA, "Authorization": f"Bearer {token}"})
     try:
         with urlopen(req, timeout=timeout) as resp:
@@ -304,26 +333,26 @@ def _fetch_subreddit_oauth(
         return [c.get("data", {}) for c in children if isinstance(c, dict)]
     except HTTPError as exc:
         if exc.code == 401:
-            logger.warning("Reddit OAuth token rejected (401) for r/%s · %s — re-authenticating next call.", sub, ticker)
+            logger.warning("Reddit OAuth token rejected (401) for r/%s · %s — re-authenticating next call.", sub, search_query)
             _invalidate_oauth_token()
         elif exc.code == 429 and _retry:
             wait = _retry_after_seconds(exc) or 5.0
             logger.warning(
                 "Reddit OAuth 429 for r/%s · %s — backing off %.1fs then retrying once",
-                sub, ticker, wait,
+                sub, search_query, wait,
             )
             time.sleep(wait)
-            return _fetch_subreddit_oauth(ticker, sub, limit, timeout, _retry=False)
+            return _fetch_subreddit_oauth(search_query, sub, limit, timeout, _retry=False)
         else:
-            logger.warning("Reddit OAuth fetch failed for r/%s · %s: %s — falling back to RSS.", sub, ticker, exc)
-        return _fetch_subreddit_rss(ticker, sub, limit, timeout)
+            logger.warning("Reddit OAuth fetch failed for r/%s · %s: %s — falling back to RSS.", sub, search_query, exc)
+        return _fetch_subreddit_rss(search_query, sub, limit, timeout)
     except (OSError, http.client.HTTPException, json.JSONDecodeError) as exc:
-        logger.warning("Reddit OAuth fetch failed for r/%s · %s: %s — falling back to RSS.", sub, ticker, exc)
-        return _fetch_subreddit_rss(ticker, sub, limit, timeout)
+        logger.warning("Reddit OAuth fetch failed for r/%s · %s: %s — falling back to RSS.", sub, search_query, exc)
+        return _fetch_subreddit_rss(search_query, sub, limit, timeout)
 
 
 def _fetch_subreddit(
-    ticker: str,
+    search_query: str,
     sub: str,
     limit: int,
     timeout: float,
@@ -337,43 +366,45 @@ def _fetch_subreddit(
     request volume against Reddit's public per-IP rate limit.
     """
     if _reddit_oauth_credentials():
-        return _fetch_subreddit_oauth(ticker, sub, limit, timeout)
-    return _fetch_subreddit_rss(ticker, sub, limit, timeout)
+        return _fetch_subreddit_oauth(search_query, sub, limit, timeout)
+    return _fetch_subreddit_rss(search_query, sub, limit, timeout)
 
 
 def fetch_reddit_posts(
     ticker: str,
-    subreddits: Iterable[str] = DEFAULT_SUBREDDITS,
+    subreddits: Iterable[str] | None = None,
     limit_per_sub: int = 5,
     timeout: float = 10.0,
     inter_request_delay: float = 1.0,
+    search_terms: Iterable[str] | None = None,
 ) -> str:
-    """Fetch recent Reddit posts mentioning ``ticker`` across finance
-    subreddits and return them as a formatted plaintext block.
+    """Fetch recent Reddit posts for ``ticker`` across finance subreddits.
 
-    ``inter_request_delay`` paces the (now RSS-only) per-subreddit requests to
-    stay under Reddit's public per-IP rate limit; combined with the RSS-first
-    path it makes 429s rare even when several analyses run back-to-back.
+    For NSE/BSE tickers, callers may provide market-aware aliases while the
+    default subreddit set automatically switches to India-focused communities.
+    Aliases are joined into a single ``OR`` query, so request volume is unchanged.
     """
-    # Crypto reaches us as a Yahoo pair (BTC-USD); search Reddit for the base
-    # ("BTC") so the query actually matches discussion instead of near-nothing.
-    ticker = crypto_base(ticker) or ticker
+    terms = _clean_search_terms(ticker, search_terms)
+    search_query = _build_search_query(terms)
+    search_label = ", ".join(terms)
+    selected_subreddits = tuple(subreddits) if subreddits is not None else _subreddits_for_ticker(ticker)
+
     blocks = []
     total_posts = 0
-    for i, sub in enumerate(subreddits):
+    for i, sub in enumerate(selected_subreddits):
         if i > 0:
             time.sleep(inter_request_delay)
-        posts = _fetch_subreddit(ticker, sub, limit_per_sub, timeout)
+        posts = _fetch_subreddit(search_query, sub, limit_per_sub, timeout)
         total_posts += len(posts)
         if not posts:
             blocks.append(
-                f"r/{sub}: no Reddit posts returned for {ticker.upper()} "
+                f"r/{sub}: no Reddit posts returned matching {search_label} "
                 "(the public RSS feed may be rate-limited or temporarily unavailable)."
             )
             continue
 
         via_rss = any(p.get("source") == "rss" for p in posts)
-        header = f"r/{sub} — {len(posts)} recent posts mentioning {ticker.upper()}"
+        header = f"r/{sub} — {len(posts)} recent posts matching {search_label}"
         header += " (via RSS feed; scores/comments unavailable):" if via_rss else ":"
         lines = [header]
         for p in posts:
@@ -400,7 +431,7 @@ def fetch_reddit_posts(
 
     if total_posts == 0:
         return (
-            f"No Reddit discussion posts were available for {ticker.upper()}. "
+            f"No Reddit discussion posts were available matching {search_label}. "
             "Reddit JSON/RSS endpoints may be blocked, rate-limited, or temporarily unavailable."
         )
     return "\n\n".join(blocks)

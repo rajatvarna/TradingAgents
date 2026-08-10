@@ -1,12 +1,38 @@
 import copy
+import importlib
+import os
 import unittest
 from unittest.mock import patch
 
 import pytest
 
+import tradingagents.dataflows.config as config_module
 import tradingagents.default_config as default_config
 from tradingagents.dataflows import interface
 from tradingagents.dataflows.config import get_config, set_config
+
+_VENDOR_ENV_VARS = (
+    "TRADINGAGENTS_DATA_VENDOR",
+    "TRADINGAGENTS_CORE_STOCK_VENDOR",
+    "TRADINGAGENTS_TECHNICAL_INDICATORS_VENDOR",
+    "TRADINGAGENTS_FUNDAMENTAL_DATA_VENDOR",
+    "TRADINGAGENTS_NEWS_DATA_VENDOR",
+)
+
+
+def _reload_default_config_without_vendor_env(saved: dict[str, str | None]) -> dict:
+    """Reload DEFAULT_CONFIG after temporarily clearing vendor env overrides."""
+    for var in _VENDOR_ENV_VARS:
+        saved[var] = os.environ.pop(var, None)
+    importlib.reload(default_config)
+    cfg = copy.deepcopy(default_config.DEFAULT_CONFIG)
+    for var, value in saved.items():
+        if value is None:
+            os.environ.pop(var, None)
+        else:
+            os.environ[var] = value
+    importlib.reload(default_config)
+    return cfg
 
 
 class _FakeResponse:
@@ -24,7 +50,14 @@ class _FakeResponse:
 @pytest.mark.unit
 class MarketDataVendorConfigTests(unittest.TestCase):
     def setUp(self):
-        set_config(copy.deepcopy(default_config.DEFAULT_CONFIG))
+        self._saved_vendor_env: dict[str, str | None] = {}
+        clean_cfg = _reload_default_config_without_vendor_env(self._saved_vendor_env)
+        # Hard reset: set_config() merges nested dicts, so a prior test's partial
+        # data_vendors update can leak through when the suite runs in CI order.
+        config_module._config = copy.deepcopy(clean_cfg)
+
+    def tearDown(self):
+        config_module._config = copy.deepcopy(default_config.DEFAULT_CONFIG)
 
     def test_default_vendor_order_uses_official_apis_before_scraping_fallbacks(self):
         cfg = get_config()

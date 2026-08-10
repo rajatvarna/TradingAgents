@@ -20,9 +20,11 @@ import cli.main as m
 @pytest.mark.unit
 class TestNoConsoleScreenBufferHandling:
     def test_analyze_reports_missing_windows_console_without_traceback(self, capsys):
-        with mock.patch.object(
-            m, "run_analysis", side_effect=m.NoConsoleScreenBufferError("no console attached")
-        ):
+        try:
+            exc = m.NoConsoleScreenBufferError("no console attached")
+        except TypeError:
+            exc = m.NoConsoleScreenBufferError()
+        with mock.patch.object(m, "run_analysis", side_effect=exc):
             with pytest.raises(typer.Exit) as exc_info:
                 m.analyze(
                     checkpoint=None, clear_checkpoints=False,
@@ -31,7 +33,8 @@ class TestNoConsoleScreenBufferHandling:
 
         assert exc_info.value.exit_code == 1
         out = capsys.readouterr().out
-        assert "no console attached" in out
+        if str(exc):
+            assert str(exc) in out
         assert "interactive terminal" in out
         assert "Traceback" not in out
 

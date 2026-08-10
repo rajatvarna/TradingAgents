@@ -177,7 +177,10 @@ _BULL_INPUTS = {
     "news_report": "NEWS",
     "fundamentals_report": "FUND",
     "history": "HIST",
+<<<<<<< HEAD
+=======
     "current_response": "BEAR_LAST",
+>>>>>>> main
     "opponent_argument": "Last bear argument: BEAR_LAST",
     "scope_guard": "SCOPE",
     "esg_report": "ESG",

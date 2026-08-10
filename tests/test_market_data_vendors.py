@@ -9,7 +9,7 @@ import pytest
 import tradingagents.dataflows.config as config_module
 import tradingagents.default_config as default_config
 from tradingagents.dataflows import interface
-from tradingagents.dataflows.config import get_config, set_config
+from tradingagents.dataflows.config import get_config
 
 _VENDOR_ENV_VARS = (
     "TRADINGAGENTS_DATA_VENDOR",

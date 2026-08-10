@@ -281,6 +281,41 @@ def validate_config(config: dict, *, strict: bool | None = None) -> list[ConfigI
     return issues
 
 
+def _canonical_default_config() -> dict:
+    """Return ``DEFAULT_CONFIG`` without ``TRADINGAGENTS_*`` env overrides.
+
+    Doc generation must reflect shipped defaults, not the caller's local
+    ``.env`` — ``tradingagents/__init__.py`` loads dotenv before import.
+    """
+    import copy
+    import importlib
+    import os
+
+    from tradingagents import default_config as dc
+
+    env_keys = list(dc._ENV_OVERRIDES.keys())
+    env_keys.extend(dc._DATA_VENDOR_ENV_OVERRIDES.keys())
+    env_keys.append("TRADINGAGENTS_DATA_VENDOR")
+    saved: dict[str, str | None] = {}
+    for key in env_keys:
+        saved[key] = os.environ.pop(key, None)
+    tool_prefix = dc._TOOL_VENDOR_ENV_PREFIX
+    tool_saved = [(k, os.environ.pop(k)) for k in list(os.environ) if k.startswith(tool_prefix)]
+
+    importlib.reload(dc)
+    try:
+        return copy.deepcopy(dc.DEFAULT_CONFIG)
+    finally:
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        for key, value in tool_saved:
+            os.environ[key] = value
+        importlib.reload(dc)
+
+
 def generate_config_reference_markdown() -> str:
     """Autogenerate the ``docs/CONFIG_REFERENCE.md`` table.
 
@@ -319,14 +354,20 @@ def generate_config_reference_markdown() -> str:
         "| Key | Type | Default | Env override |",
         "|---|---|---|---|",
     ]
+    from pydantic_core import PydanticUndefined
+
+    canonical_config = _canonical_default_config()
+
     _sentinel = object()
     for name, field in TradingAgentsConfig.model_fields.items():
         if name in _portable_path_fields:
             default_display = _portable_path_fields[name]
         else:
-            default = _dc.DEFAULT_CONFIG.get(name, _sentinel)
+            default = canonical_config.get(name, _sentinel)
             if default is _sentinel:
                 default = field.get_default(call_default_factory=True)
+            if default is PydanticUndefined:
+                default = None
             if isinstance(default, dict) and default:
                 default_display = "`{...}`"
             elif isinstance(default, list) and default:

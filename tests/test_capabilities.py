@@ -130,3 +130,11 @@ class TestOpenAIReasoningCapabilities:
 
     def test_gpt41_keeps_temperature(self):
         assert get_capabilities("gpt-4.1").supports_temperature is True
+
+
+@pytest.mark.unit
+class TestOpenRouterPrefixes:
+    def test_deepseek_slash_prefix_uses_thinking_profile(self):
+        caps = get_capabilities("deepseek/deepseek-r1")
+        assert caps.requires_reasoning_content_roundtrip is True
+        assert caps.supports_tool_choice is False

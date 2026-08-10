@@ -158,8 +158,9 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
     stays here. When DeepSeek's thinking models return a response with
     ``reasoning_content``, that field must be echoed back as part of the
     assistant message on the next turn or the API fails with HTTP 400.
-    ``_create_chat_result`` captures it on receive and
-    ``_get_request_payload`` re-attaches it on send.
+    ``_create_chat_result`` captures it on the non-streaming path and
+    ``_convert_chunk_to_generation_chunk`` captures it on the streaming
+    path; ``_get_request_payload`` re-attaches it on send.
 
     Tool-choice handling for V4 and reasoner — those models reject the
     ``tool_choice`` parameter — is handled by the capability dispatch in
@@ -176,6 +177,22 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
             if reasoning is not None:
                 message_dict["reasoning_content"] = reasoning
         return payload
+
+    def _convert_chunk_to_generation_chunk(self, chunk, default_chunk_class, base_generation_info):
+        # langchain-openai's stream path drops ``reasoning_content`` from
+        # deltas. Rescue it into ``additional_kwargs`` so the round-trip on
+        # the next turn — see ``_get_request_payload`` — has it.
+        gen_chunk = super()._convert_chunk_to_generation_chunk(
+            chunk, default_chunk_class, base_generation_info
+        )
+        if gen_chunk is None:
+            return None
+        choices = chunk.get("choices") or chunk.get("chunk", {}).get("choices") or []
+        if choices:
+            reasoning = (choices[0].get("delta") or {}).get("reasoning_content")
+            if reasoning:
+                gen_chunk.message.additional_kwargs["reasoning_content"] = reasoning
+        return gen_chunk
 
     def _create_chat_result(self, response, generation_info=None):
         chat_result = super()._create_chat_result(response, generation_info)
@@ -357,7 +374,7 @@ class NinerouterChatOpenAI(NormalizedChatOpenAI):
 _PASSTHROUGH_KWARGS = (
     "timeout", "max_retries", "reasoning_effort", "temperature",
     "api_key", "callbacks", "http_client", "http_async_client",
-    "default_headers",
+    "default_headers", "max_tokens",
 )
 
 # OpenAI's ``reasoning_effort`` is only accepted by reasoning models — the GPT-5
@@ -633,6 +650,14 @@ class OpenAIClient(BaseLLMClient):
 
         if hasattr(chat_cls, "__name__") and chat_cls.__name__ in globals():
             chat_cls = globals()[chat_cls.__name__]
+
+        base_url_for_check = llm_kwargs.get("base_url", "") or ""
+        is_opencode = "opencode.ai" in base_url_for_check
+        if is_opencode:
+            llm_kwargs.setdefault("streaming", True)
+        is_deepseek_model = "deepseek" in self.model.lower()
+        if self.provider == "deepseek" or (is_opencode and is_deepseek_model):
+            chat_cls = DeepSeekChatOpenAI
 
         llm = chat_cls(**llm_kwargs)
         # Tag the LLM with the provider name so the cache layer can filter

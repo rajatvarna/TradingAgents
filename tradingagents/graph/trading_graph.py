@@ -371,6 +371,10 @@ class TradingAgentsGraph:
         if max_retries is not None and max_retries != "":
             kwargs["max_retries"] = _coerce_max_retries(max_retries)
 
+        max_tokens = self.config.get("max_tokens")
+        if max_tokens is not None and max_tokens != "":
+            kwargs["max_tokens"] = int(max_tokens)
+
         # Determinism keys (T0.1)
         llm_temp = self.config.get("llm_temperature")
         if llm_temp is not None and llm_temp != "":

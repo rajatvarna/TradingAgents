@@ -68,8 +68,6 @@ def test_load_ohlcv_refetches_stale_same_day_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(su.pd.Timestamp, "today", staticmethod(lambda: TODAY))
 
     # Pre-seed the cache file load_ohlcv will look for, aged past the TTL.
-    start = (TODAY - pd.DateOffset(years=5)).strftime("%Y-%m-%d")
-    end = (TODAY + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
     cache_file = tmp_path / f"AAPL-YFin-data-{su.OHLCV_CACHE_FILE_SUFFIX}.csv"
     pd.DataFrame({"Date": ["2026-07-17"], "Close": [100.0]}).to_csv(cache_file, index=False)
     old = time.time() - STALE
@@ -97,8 +95,6 @@ def test_load_ohlcv_reuses_fresh_same_day_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(su, "get_config", lambda: {"data_cache_dir": str(tmp_path)})
     monkeypatch.setattr(su.pd.Timestamp, "today", staticmethod(lambda: TODAY))
 
-    start = (TODAY - pd.DateOffset(years=5)).strftime("%Y-%m-%d")
-    end = (TODAY + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
     cache_file = tmp_path / f"AAPL-YFin-data-{su.OHLCV_CACHE_FILE_SUFFIX}.csv"
     pd.DataFrame({"Date": ["2026-07-18"], "Close": [100.0]}).to_csv(cache_file, index=False)
 

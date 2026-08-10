@@ -1,9 +1,8 @@
 """The debate opener must not be handed an empty opponent argument (#1176)."""
 from __future__ import annotations
 
-from langchain_core.messages import AIMessage
-
 import pytest
+from langchain_core.messages import AIMessage
 
 from tradingagents.agents.researchers.bear_researcher import create_bear_researcher
 from tradingagents.agents.researchers.bull_researcher import create_bull_researcher

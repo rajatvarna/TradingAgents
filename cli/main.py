@@ -71,6 +71,18 @@ from tradingagents.reports.exporter import save_report_to_disk
 
 console = Console()
 
+# prompt_toolkit's win32 output module is importable only on Windows (it asserts
+# the platform at import time), so gate on the platform rather than catching the
+# failure — that way a genuinely broken prompt_toolkit on Windows still surfaces
+# instead of silently disabling the handler below. Off Windows this stays an
+# empty tuple, which `except` accepts and never matches (#1138).
+if sys.platform == "win32":  # pragma: no cover - platform dependent
+    from prompt_toolkit.output.win32 import NoConsoleScreenBufferError
+
+    _NO_CONSOLE_ERRORS: tuple[type[BaseException], ...] = (NoConsoleScreenBufferError,)
+else:
+    _NO_CONSOLE_ERRORS = ()
+
 app = typer.Typer(
     name="TradingAgents",
     help="TradingAgents CLI: Multi-Agents LLM Financial Trading Framework",

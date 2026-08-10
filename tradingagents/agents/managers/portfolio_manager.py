@@ -33,6 +33,7 @@ from tradingagents.agents.utils.recommendation_audit import (
     render_sources_for_prompt,
 )
 from tradingagents.agents.utils.structured import (
+    NO_EXTERNAL_TOOLS,
     bind_structured,
     invoke_structured_or_freetext_with_meta,
 )

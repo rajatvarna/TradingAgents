@@ -1,7 +1,7 @@
 """yfinance-based news data fetching functions."""
 
 import contextlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import yfinance as yf
 from dateutil.relativedelta import relativedelta
@@ -10,6 +10,11 @@ from .config import get_config
 from .snapshots import GLOBAL_SCOPE, replay_formatted, write_snapshot
 from .stockstats_utils import yf_retry
 from .symbol_utils import normalize_symbol
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Normalize a datetime to UTC-aware; a naive value is assumed to be UTC."""
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
 
 
 def _extract_article_data(article: dict, max_summary_chars: int = 500) -> dict:
@@ -93,12 +98,9 @@ def _in_news_window(pub_date, start_dt, end_dt) -> bool:
     can't prove it isn't future news (look-ahead safety, #992/#1007).
     """
     if pub_date is not None:
-        if pub_date.tzinfo is not None:
-            naive = pub_date.astimezone(timezone.utc).replace(tzinfo=None)
-        else:
-            naive = pub_date
-        return start_dt <= naive < end_dt + relativedelta(days=1)
-    return end_dt >= datetime.now(timezone.utc).replace(tzinfo=None) - relativedelta(days=1)
+        end = _as_utc(end_dt)
+        return _as_utc(start_dt) <= _as_utc(pub_date) < end + timedelta(days=1)
+    return _as_utc(end_dt) >= datetime.now(timezone.utc) - timedelta(days=1)
 
 
 def get_news_yfinance(

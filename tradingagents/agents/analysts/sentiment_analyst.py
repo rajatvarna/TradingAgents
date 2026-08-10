@@ -46,6 +46,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_instrument_context_from_state,
     get_language_instruction,
     get_news,
+    resolve_instrument_identity,
 )
 from tradingagents.agents.utils.structured import (
     NO_EXTERNAL_TOOLS,
@@ -60,6 +61,7 @@ from tradingagents.dataflows.fear_greed import get_fear_greed_index
 from tradingagents.dataflows.mastodon import fetch_mastodon_posts
 from tradingagents.dataflows.reddit import fetch_reddit_posts
 from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
+from tradingagents.dataflows.symbol_utils import build_india_search_terms, india_equity_parts
 from tradingagents.dataflows.y_finance import get_instrument_profile
 
 # A1 shared partials (docs/PROMPT_STYLE_GUIDE.md), composed unconditionally —
@@ -92,12 +94,19 @@ def create_sentiment_analyst(llm, prompt_registry=None):
         start_date = _seven_days_back(end_date)
         instrument_context = get_instrument_context_from_state(state)
 
+        india_search_terms: tuple[str, ...] = ()
+        if india_equity_parts(ticker):
+            india_search_terms = build_india_search_terms(
+                ticker,
+                resolve_instrument_identity(ticker),
+            )
+
         # Pre-fetch all three sources. Each fetcher degrades gracefully and
         # returns a string (no exceptions surface from here), so the LLM
         # always sees something — either real data or a clear placeholder.
         news_block = get_news.func(ticker, start_date, end_date)
         stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
-        reddit_block = fetch_reddit_posts(ticker)
+        reddit_block = fetch_reddit_posts(ticker, search_terms=india_search_terms or None)
         # Bluesky (X/Twitter alternative) + Mastodon: free, no-auth public
         # endpoints. Fear & Greed: aggregate market-mood proxy.
         bluesky_block = fetch_bluesky_posts(f"${ticker}")

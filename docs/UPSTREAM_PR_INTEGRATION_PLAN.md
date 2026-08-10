@@ -1,7 +1,6 @@
 # Upstream PR Integration Plan (Last 1 Month)
 
-**Status:** Active — August 2026 integration pass complete on branch
-`feat/upstream-pr-integration-aug2026`
+**Status:** Complete — Tier 1 ports landed on `main` (2026-08-10)
 **Last updated:** 2026-08-10
 **Window:** pull requests opened against `TauricResearch/TradingAgents`
 (upstream) between **2026-07-10 and 2026-08-10** — ~70 PRs reviewed.
@@ -16,7 +15,7 @@ see commits on `claude/pr-integration-plan-hzrm4u`.
 |---|---|---|
 | Already landed (July window) | 17+ | No action — see prior ledger in git log / CHANGELOG |
 | Merged this pass (Aug fixes) | 6 upstream commits + 4 ported PRs | Done on integration branch |
-| Tier 1 — port next (scoped) | 5 | See §3 |
+| Tier 1 — port next (scoped) | 5 | **Done** — see §3 |
 | Tier 2 — evaluate / partial | 8 | See §4 |
 | Reject / skip | 40+ | Spam, mega-dumps, duplicate, or fork already exceeds |
 
@@ -76,17 +75,15 @@ pr-1039, pr-1042, pr-1062, pr-1070, pr-1071, pr-1083, pr-1104, pr-1119
 
 ---
 
-## 3. Tier 1 — recommended next ports
+## 3. Tier 1 — completed ports (2026-08-10)
 
-Small, upstream-quality PRs worth adapting next:
-
-| PR | Title | Effort | Notes |
+| PR | Title | Status | Notes |
 |---|---|---|---|
-| [#1205](https://github.com/TauricResearch/TradingAgents/pull/1205) | DeepSeek V4 `max_tokens` + streaming | ~0.5d | Prevents gateway idle hangs (#1204) |
-| [#1200](https://github.com/TauricResearch/TradingAgents/pull/1200) | Opening debate context | ~0.5d | Overlaps #1210; verify risk debators too |
-| [#1199](https://github.com/TauricResearch/TradingAgents/pull/1199) | OpenRouter DeepSeek capability map | ~0.5d | Low risk |
-| [#1187](https://github.com/TauricResearch/TradingAgents/pull/1187) | NSE/BSE news/social | ~1d | India market gap |
-| [#1217](https://github.com/TauricResearch/TradingAgents/pull/1217) | Smoke test fail-fast | ~0.5d | Adapt to fork's smoke script |
+| [#1205](https://github.com/TauricResearch/TradingAgents/pull/1205) | DeepSeek V4 `max_tokens` + streaming | **Done** | `TRADINGAGENTS_MAX_TOKENS`, `DeepSeekChatOpenAI` chunk round-trip |
+| [#1200](https://github.com/TauricResearch/TradingAgents/pull/1200) | Opening debate context | **Skip** | Already satisfied by #1210 `${opponent_argument}` guard |
+| [#1199](https://github.com/TauricResearch/TradingAgents/pull/1199) | OpenRouter DeepSeek capability map | **Done** | `^deepseek/` prefix → `_DEEPSEEK_THINKING` |
+| [#1187](https://github.com/TauricResearch/TradingAgents/pull/1187) | NSE/BSE news/social | **Done** | India subreddits, search-term aliases, StockTwits suffix map |
+| [#1217](https://github.com/TauricResearch/TradingAgents/pull/1217) | Smoke test fail-fast | **Done** | API-key guard + `run_agent_call()` in smoke script |
 
 ---
 
@@ -115,9 +112,9 @@ Spam, wrong-repo, mega-dumps, or fork-already-satisfied:
 
 ## 6. Housekeeping
 
-- [ ] Close stale fork PR #22 on `rajatvarna/TradingAgents` (obsolete vs #26/#28)
-- [ ] Delete local `upstream-pr-*` fetch branches after integration lands on `main`
-- [ ] Re-run full unit suite: `python -m pytest -m unit -q`
+- [x] Close stale fork PR #22 on `rajatvarna/TradingAgents` (obsolete vs #26/#28)
+- [x] Delete local `upstream-pr-*` fetch branches after integration lands on `main`
+- [x] Re-run full unit suite: `python -m pytest -m unit -q`
 
 ---
 

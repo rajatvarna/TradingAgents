@@ -27,14 +27,14 @@ def test_no_console_error_tuple_matches_platform():
 
 
 def test_missing_console_prints_actionable_message(monkeypatch):
-    class _NoConsole(Exception):
+    class _NoConsoleError(Exception):
         pass
 
     # Simulate the Windows failure on any platform by registering a stand-in.
-    monkeypatch.setattr(m, "_NO_CONSOLE_ERRORS", (_NoConsole,))
+    monkeypatch.setattr(m, "_NO_CONSOLE_ERRORS", (_NoConsoleError,))
 
     def _boom(*a, **k):
-        raise _NoConsole("No Windows console found. Are you running cmd.exe?")
+        raise _NoConsoleError("No Windows console found. Are you running cmd.exe?")
 
     monkeypatch.setattr(m, "run_analysis", _boom)
 

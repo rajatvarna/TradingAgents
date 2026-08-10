@@ -135,13 +135,26 @@ class TestPathDefaultsUseTradingAgentsHome:
         "iic_data_dir",
     )
 
-    def test_defaults_live_under_tradingagents_home(self):
+    def test_defaults_live_under_tradingagents_home(self, monkeypatch):
+        import importlib
         import os
 
+        for var in (
+            "TRADINGAGENTS_RESULTS_DIR",
+            "TRADINGAGENTS_CACHE_DIR",
+            "TRADINGAGENTS_MEMORY_LOG_PATH",
+            "TRADINGAGENTS_IIC_DB_PATH",
+            "TRADINGAGENTS_IIC_DATA_DIR",
+        ):
+            monkeypatch.delenv(var, raising=False)
+
+        from tradingagents import default_config as dc
+
+        importlib.reload(dc)
         home = os.path.join(os.path.expanduser("~"), ".tradingagents")
         for key in self._HOME_ROOTED_PATH_KEYS:
-            assert DEFAULT_CONFIG[key].startswith(home), (
-                f"{key} default {DEFAULT_CONFIG[key]!r} is not under ~/.tradingagents/"
+            assert dc.DEFAULT_CONFIG[key].startswith(home), (
+                f"{key} default {dc.DEFAULT_CONFIG[key]!r} is not under ~/.tradingagents/"
             )
 
     def test_memory_log_path_env_override_still_honored(self, monkeypatch):

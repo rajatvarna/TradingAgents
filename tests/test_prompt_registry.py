@@ -178,6 +178,7 @@ _BULL_INPUTS = {
     "fundamentals_report": "FUND",
     "history": "HIST",
     "current_response": "BEAR_LAST",
+    "opponent_argument": "Last bear argument: BEAR_LAST",
     "scope_guard": "SCOPE",
     "esg_report": "ESG",
     "derivatives_report": "DERIV",
@@ -212,7 +213,7 @@ ESG report: {i['esg_report']}
 Derivatives / options report: {i['derivatives_report']}
 {i['user_research_block']}
 Conversation history of the debate: {i['history']}
-Last bear argument: {i['current_response']}
+{i['opponent_argument']}
 Use this information to deliver a compelling bull argument, refute the bear's concerns, and engage in a dynamic debate that demonstrates the strengths of the bull position.
 {language_instruction}"""
 

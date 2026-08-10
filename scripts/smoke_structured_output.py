@@ -21,6 +21,7 @@ added, plus the heuristic SignalProcessor.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from tradingagents.agents.managers.portfolio_manager import create_portfolio_manager
@@ -30,15 +31,38 @@ from tradingagents.graph.signal_processing import SignalProcessor
 from tradingagents.llm_clients import create_llm_client
 
 PROVIDER_DEFAULTS = {
-    "openai": ("gpt-5.4-mini", None),
-    "google": ("gemini-3.5-flash", None),
-    "anthropic": ("claude-sonnet-4-6", None),
-    "deepseek": ("deepseek-v4-flash", None),
-    "qwen": ("qwen3.7-plus", None),
-    "glm": ("glm-5", None),
-    "xai": ("grok-4.5", None),
-    "mistral": ("mistral-small-2603", None),
+    "openai": ("gpt-5.4-mini", "OPENAI_API_KEY"),
+    "google": ("gemini-3.5-flash", "GOOGLE_API_KEY"),
+    "anthropic": ("claude-sonnet-4-6", "ANTHROPIC_API_KEY"),
+    "deepseek": ("deepseek-v4-flash", "DEEPSEEK_API_KEY"),
+    "qwen": ("qwen3.7-plus", "DASHSCOPE_API_KEY"),
+    "glm": ("glm-5", "ZHIPUAI_API_KEY"),
+    "xai": ("grok-4.5", "XAI_API_KEY"),
+    "mistral": ("mistral-small-2603", "MISTRAL_API_KEY"),
 }
+
+
+def require_api_key(key_env: str | None, provider: str) -> None:
+    if key_env and not os.environ.get(key_env):
+        print(f"Error: {key_env} is not set for provider {provider!r}.")
+        sys.exit(1)
+
+
+def run_agent_call(label: str, fn):
+    try:
+        return fn()
+    except Exception as exc:
+        print(f"Error during {label}: {exc}")
+        sys.exit(1)
+
+
+def check_structure(name: str, text: str, required: list[str]) -> int:
+    failures = 0
+    for marker in required:
+        ok = marker in text
+        print(f"  {'PASS' if ok else 'FAIL'}  {name}: contains {marker!r}")
+        failures += int(not ok)
+    return failures
 
 
 # Minimal but realistic state for the three agents.
@@ -110,9 +134,11 @@ def main() -> int:
     parser.add_argument("--quick-model", default=None, help="Override quick_think_llm")
     args = parser.parse_args()
 
-    default_model, _ = PROVIDER_DEFAULTS[args.provider]
+    default_model, key_env = PROVIDER_DEFAULTS[args.provider]
     deep_model = args.deep_model or default_model
     quick_model = args.quick_model or default_model
+
+    require_api_key(key_env, args.provider)
 
     print(f"Provider: {args.provider}")
     print(f"Deep model:  {deep_model}")
@@ -126,19 +152,22 @@ def main() -> int:
 
     # 1) Research Manager
     rm = create_research_manager(deep_llm)
-    rm_result = rm(_make_rm_state())
+    rm_result = run_agent_call("Research Manager", lambda: rm(_make_rm_state()))
     investment_plan = rm_result["investment_plan"]
     _print_section("[1] Research Manager — investment_plan", investment_plan)
 
     # 2) Trader (consumes RM's plan)
     trader = create_trader(quick_llm)
-    trader_result = trader(_make_trader_state(investment_plan))
+    trader_result = run_agent_call("Trader", lambda: trader(_make_trader_state(investment_plan)))
     trader_plan = trader_result["trader_investment_plan"]
     _print_section("[2] Trader — trader_investment_plan", trader_plan)
 
     # 3) Portfolio Manager (consumes both)
     pm = create_portfolio_manager(deep_llm)
-    pm_result = pm(_make_pm_state(investment_plan, trader_plan))
+    pm_result = run_agent_call(
+        "Portfolio Manager",
+        lambda: pm(_make_pm_state(investment_plan, trader_plan)),
+    )
     final_decision = pm_result["final_trade_decision"]
     _print_section("[3] Portfolio Manager — final_trade_decision", final_decision)
 
@@ -158,10 +187,7 @@ def main() -> int:
     print("\n" + "=" * 70 + "\nStructure checks\n" + "=" * 70)
     failures = 0
     for name, text, required in checks:
-        for marker in required:
-            ok = marker in text
-            print(f"  {'PASS' if ok else 'FAIL'}  {name}: contains {marker!r}")
-            failures += int(not ok)
+        failures += check_structure(name, text, required)
 
     print()
     if failures:

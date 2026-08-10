@@ -21,6 +21,8 @@ Breaking changes within the 0.x line are called out explicitly.
 - **Unparseable ratings surface as REVIEW (#1189 / #1170)**: `SignalProcessor` and the SQLite memory log now tag decisions with `RATING_REVIEW` when no 5-tier rating can be extracted, instead of silently defaulting to Hold/Unknown. (`tradingagents/agents/utils/rating.py`, `tradingagents/graph/signal_processing.py`, `tradingagents/agents/utils/memory.py`, `tests/test_signal_processing.py`)
 
 - **Reddit RSS hardening (#1218 / #1219)**: RSS Atom parsing uses `defusedxml` to block XXE, and 429 responses retry up to three times with exponential backoff (honouring `Retry-After`). (`tradingagents/dataflows/reddit.py`, `pyproject.toml`)
+
+- **Smoke structured output fail-fast (#1217)**: require API keys and exit on agent call errors instead of partial output. (`scripts/smoke_structured_output.py`)
  `ops/broker/mcp_client.py` now imports `streamablehttp_client` with a fallback to the mcp 2.0 rename (`streamable_http_client`). Pin `mcp>=1.28.1,<2` to keep CI ops tests collecting reliably. (`ops/broker/mcp_client.py`, `pyproject.toml`)
 
 - **API DeepSeek/MiniMax provider support**: REST API worker and console now support `deepseek`, `minimax`, and `minimax-cn` (not just ollama/google/openrouter). Default provider follows `TRADINGAGENTS_LLM_PROVIDER` (defaults to `deepseek`). Local path defaults use `./output/` instead of `/data/*`. Worker respects `DEFAULT_CONFIG` data vendors (Finnhub/yfinance via env) instead of forcing yfinance-only. (`api/worker.py`, `api/main.py`, `api/schemas.py`, `api/db.py`, `tests/test_api_worker_local_deploy.py`, `tests/test_provider_model_routing.py`)

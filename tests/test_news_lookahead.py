@@ -6,7 +6,6 @@ news injected future articles), #993 (empty-after-filter returned a blank body),
 and upstream #1126 (naive/host-timezone article timestamps plus an inclusive
 upper bound could leak a next-day article across the window boundary).
 """
-import time
 from datetime import datetime, timedelta, timezone
 
 import pytest

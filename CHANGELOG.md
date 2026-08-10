@@ -8,6 +8,10 @@ Breaking changes within the 0.x line are called out explicitly.
 
 ## [Unreleased]
 
+### Added
+
+- **Windows local deploy helpers**: `scripts/clean_redeploy.ps1` wipes `output/` runtime state and restarts API + Streamlit; `scripts/start_local.ps1` loads `.env` and starts both services via `python -m` (avoids Application Control blocks on `.exe` shims). WebUI sidebar now defaults LLM provider/models from `TRADINGAGENTS_LLM_PROVIDER` and model env vars. (`scripts/clean_redeploy.ps1`, `scripts/start_local.ps1`, `webui.py`)
+
 ### Fixed
 
 - **Upstream sync (2026-08-10)**: merged six upstream `main` commits into this fork, resolving conflicts while preserving prompt-registry agents, report export, and CLI extensions. Ports UTC-normalized Yahoo news filtering (`_as_utc`, #1126), combined OHLCV cache coverage + same-day TTL refresh (#1150), schema-only `NO_EXTERNAL_TOOLS` constant (#1130), and Windows no-console CLI handling (#1138/#1139). (`tradingagents/dataflows/yfinance_news.py`, `tradingagents/dataflows/stockstats_utils.py`, `cli/main.py`, `tests/test_news_lookahead.py`, `tests/test_ohlcv_cache_freshness.py`, `tests/test_cli_no_console.py`)

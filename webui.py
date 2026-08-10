@@ -391,6 +391,20 @@ PROVIDER_KEY_ENV = {
 }
 
 
+def _default_provider_index() -> int:
+    env_provider = (os.getenv("TRADINGAGENTS_LLM_PROVIDER") or "deepseek").strip().lower()
+    providers = list(PROVIDER_MODELS.keys())
+    return providers.index(env_provider) if env_provider in providers else 0
+
+
+def _default_model_index(provider: str, env_var: str, fallback: int = 0) -> int:
+    models = PROVIDER_MODELS[provider]
+    wanted = (os.getenv(env_var) or "").strip()
+    if wanted in models:
+        return models.index(wanted)
+    return min(fallback, len(models) - 1)
+
+
 def _decision_label(text: str) -> str:
     if not text:
         return "—"
@@ -459,10 +473,20 @@ trade_date = st.sidebar.date_input(
 )
 
 st.sidebar.divider()
-provider = st.sidebar.selectbox(T("provider"), list(PROVIDER_MODELS.keys()), index=0)
+provider = st.sidebar.selectbox(
+    T("provider"), list(PROVIDER_MODELS.keys()), index=_default_provider_index()
+)
 models = PROVIDER_MODELS[provider]
-deep_model = st.sidebar.selectbox(T("deep_model"), models, index=min(2, len(models) - 1))
-quick_model = st.sidebar.selectbox(T("quick_model"), models, index=0)
+deep_model = st.sidebar.selectbox(
+    T("deep_model"),
+    models,
+    index=_default_model_index(provider, "TRADINGAGENTS_DEEP_THINK_LLM", min(2, len(models) - 1)),
+)
+quick_model = st.sidebar.selectbox(
+    T("quick_model"),
+    models,
+    index=_default_model_index(provider, "TRADINGAGENTS_QUICK_THINK_LLM", 0),
+)
 
 key_env = PROVIDER_KEY_ENV.get(provider)
 key_present = bool(os.getenv(key_env)) if key_env else True

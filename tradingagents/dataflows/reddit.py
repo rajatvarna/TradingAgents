@@ -35,7 +35,7 @@ import threading
 import time
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -74,10 +74,14 @@ _oauth_expires_at: float = 0.0
 DEFAULT_SUBREDDITS = ("wallstreetbets", "stocks", "investing")
 # NSE/BSE discussion is concentrated in India-specific communities.
 INDIA_SUBREDDITS = ("IndianStockMarket", "IndiaStocks", "StockMarketIndia")
+# Crypto discussion is concentrated in crypto-native communities.
+CRYPTO_SUBREDDITS = ("CryptoCurrency", "Bitcoin", "ethereum", "AltStreetBets")
 
 
 def _subreddits_for_ticker(ticker: str) -> tuple[str, ...]:
     """Select market-aware default communities for ``ticker``."""
+    if crypto_base(ticker):
+        return CRYPTO_SUBREDDITS
     return INDIA_SUBREDDITS if india_equity_parts(ticker) else DEFAULT_SUBREDDITS
 
 
@@ -101,6 +105,26 @@ def _clean_search_terms(
 def _build_search_query(terms: Iterable[str]) -> str:
     """Combine aliases into one Reddit query without multiplying requests."""
     return " OR ".join(f'"{term}"' if " " in term else term for term in terms)
+
+
+def _window_epochs(start_date: str | None, end_date: str | None) -> tuple[float | None, float | None]:
+    """UTC window [start midnight, end+1 day midnight) for inclusive date bounds."""
+    start_ts = None
+    if start_date:
+        start_ts = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp()
+    end_ts = None
+    if end_date:
+        end_ts = (datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)).timestamp()
+    return start_ts, end_ts
+
+
+def _in_window(epoch: float | None, start_ts: float | None, end_ts: float | None) -> bool:
+    """True when ``epoch`` is in [start_ts, end_ts)."""
+    if epoch is None:
+        return start_ts is None and end_ts is None
+    if start_ts is not None and epoch < start_ts:
+        return False
+    return not (end_ts is not None and epoch >= end_ts)
 
 
 def _search_qs(search_query: str, limit: int) -> str:
@@ -377,6 +401,8 @@ def fetch_reddit_posts(
     timeout: float = 10.0,
     inter_request_delay: float = 1.0,
     search_terms: Iterable[str] | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> str:
     """Fetch recent Reddit posts for ``ticker`` across finance subreddits.
 
@@ -388,6 +414,12 @@ def fetch_reddit_posts(
     search_query = _build_search_query(terms)
     search_label = ", ".join(terms)
     selected_subreddits = tuple(subreddits) if subreddits is not None else _subreddits_for_ticker(ticker)
+    start_ts, end_ts = _window_epochs(start_date, end_date)
+    window_label = "past 7 days"
+    if start_date and end_date:
+        window_label = f"{start_date} to {end_date}"
+    elif end_date:
+        window_label = f"through {end_date}"
 
     blocks = []
     total_posts = 0
@@ -395,16 +427,14 @@ def fetch_reddit_posts(
         if i > 0:
             time.sleep(inter_request_delay)
         posts = _fetch_subreddit(search_query, sub, limit_per_sub, timeout)
+        posts = [p for p in posts if _in_window(p.get("created_utc"), start_ts, end_ts)]
         total_posts += len(posts)
         if not posts:
-            blocks.append(
-                f"r/{sub}: no Reddit posts returned matching {search_label} "
-                "(the public RSS feed may be rate-limited or temporarily unavailable)."
-            )
+            blocks.append(f"r/{sub}: <no posts found mentioning {search_label} in the {window_label}>")
             continue
 
         via_rss = any(p.get("source") == "rss" for p in posts)
-        header = f"r/{sub} — {len(posts)} recent posts matching {search_label}"
+        header = f"r/{sub} — {len(posts)} posts in the {window_label} mentioning {search_label}"
         header += " (via RSS feed; scores/comments unavailable):" if via_rss else ":"
         lines = [header]
         for p in posts:
@@ -430,6 +460,12 @@ def fetch_reddit_posts(
         blocks.append("\n".join(lines))
 
     if total_posts == 0:
+        # Window-specific placeholder for historical runs (#1220)
+        if start_date and end_date:
+            return (
+                f"<no Reddit posts found mentioning {search_label} across "
+                f"{', '.join(f'r/{s}' for s in selected_subreddits)} in the {window_label}>"
+            )
         return (
             f"No Reddit discussion posts were available matching {search_label}. "
             "Reddit JSON/RSS endpoints may be blocked, rate-limited, or temporarily unavailable."

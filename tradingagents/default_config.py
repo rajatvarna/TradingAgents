@@ -416,7 +416,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # routed to vendors you didn't choose. For ordered fallback, list several,
     # e.g. "yfinance,alpha_vantage". "default" uses all available vendors.
     "data_vendors": {
-        "core_stock_apis": "fmp,alpha_vantage,marketstack,yfinance",       # Options: alpha_vantage, yfinance, b3, taiwan
+        "core_stock_apis": "fmp,alpha_vantage,marketstack,yfinance",       # Options: alpha_vantage, yfinance, binance, b3, taiwan
         "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance, b3, taiwan
         "fundamental_data": "fmp,alpha_vantage,finnhub,yfinance",      # Options: alpha_vantage, yfinance, b3, taiwan
         "news_data": "finnhub,fmp,alpha_vantage,yfinance",          # Options: yfinance, google_news, alpha_vantage, searxng, b3, taiwan
@@ -440,6 +440,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
                                      # summary of each analyst report (not the full text) on every debate round
                                      # after a speaker's own first turn. Default "full" until an A6 scorecard
                                      # shows "digest" is non-inferior on hit-rate/calibration.
+    "news_window": {"mode": "lookback"},  # or {"mode":"market_session","exchange":"NYSE",...} (PR #1235)
     "state_compression_enabled": False,
     "trader_tools_enabled": True,
     "ibkr_portfolio_context_enabled": False,  # opt-in: requires a running TWS/IB Gateway

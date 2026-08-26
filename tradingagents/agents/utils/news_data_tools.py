@@ -3,8 +3,18 @@ from typing import Annotated
 from langchain_core.tools import tool
 
 from tradingagents.agents.utils.tool_errors import tool_error_text
+from tradingagents.dataflows.config import get_config
 from tradingagents.dataflows.interface import route_to_vendor
 from tradingagents.dataflows.run_cache import cached
+
+
+def _market_session_window(target_date: str):
+    try:
+        from tradingagents.dataflows.news_window import resolve_news_window
+
+        return resolve_news_window(target_date, get_config().get("news_window"))
+    except Exception:
+        return None
 
 
 @tool
@@ -28,6 +38,9 @@ def get_news(
         str: A formatted string containing news data
     """
     try:
+        window = _market_session_window(end_date)
+        if window is not None:
+            return route_to_vendor("get_news", ticker, window.start, window.end, max_summary_chars=max_summary_chars)
         return route_to_vendor("get_news", ticker, start_date, end_date, max_summary_chars=max_summary_chars)
     except Exception as exc:
         return tool_error_text(tool="get_news", error=exc)
@@ -57,6 +70,17 @@ def get_global_news(
         str: A formatted string containing global news data
     """
     try:
+        window = _market_session_window(curr_date)
+        if window is not None:
+            return route_to_vendor(
+                "get_global_news",
+                curr_date,
+                look_back_days,
+                limit,
+                max_summary_chars=max_summary_chars,
+                start_time=window.start,
+                end_time=window.end,
+            )
         return route_to_vendor("get_global_news", curr_date, look_back_days, limit, max_summary_chars=max_summary_chars)
     except Exception as exc:
         return tool_error_text(tool="get_global_news", error=exc)

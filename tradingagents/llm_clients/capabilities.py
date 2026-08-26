@@ -24,6 +24,7 @@ StructuredMethod = Literal[
     "json_schema",       # uses response_format={"type":"json_schema",...}
     "none",              # no structured output available; caller falls back to free-text
 ]
+ThinkingMode = Literal["always_on", "adaptive", "disabled"]
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,7 @@ class ModelCapabilities:
     # (Coding Plan, MiniMax-Text-01, etc.), so we only set it where the
     # model actually consumes it. (#826)
     requires_reasoning_split: bool = False
+    thinking_modes: tuple[ThinkingMode, ...] = ()
 
 
 # DeepSeek's thinking models accept the ``tools`` array but reject the
@@ -68,6 +70,9 @@ _DEEPSEEK_CHAT = ModelCapabilities(
     preferred_structured_method="function_calling",
 )
 
+# Backward-compat alias: old tests import _MINIMAX_THINKING
+_MINIMAX_THINKING = None  # placeholder, set below
+
 # MiniMax M2.x reasoning models accept the tools array, but their
 # tool_choice parameter is restricted to the enum {"none", "auto"}
 # (platform.minimax.io/docs/api-reference/text-post). Langchain's
@@ -75,14 +80,26 @@ _DEEPSEEK_CHAT = ModelCapabilities(
 # MiniMax 400s — same shape as the DeepSeek bug. supports_tool_choice=False
 # makes the dispatch in NormalizedChatOpenAI suppress the kwarg; the schema
 # still ships as a tool. json_mode response_format is only for
-# MiniMax-Text-01, not M2.x.
-_MINIMAX_THINKING = ModelCapabilities(
+# MiniMax-Text-01, not M-series.
+_MINIMAX_M2 = ModelCapabilities(
     supports_tool_choice=False,
     supports_json_mode=False,
     supports_json_schema=False,
     preferred_structured_method="function_calling",
     requires_reasoning_split=True,
+    thinking_modes=("always_on",),
 )
+
+_MINIMAX_M3 = ModelCapabilities(
+    supports_tool_choice=False,
+    supports_json_mode=False,
+    supports_json_schema=False,
+    preferred_structured_method="function_calling",
+    requires_reasoning_split=True,
+    thinking_modes=("adaptive", "disabled"),
+)
+
+_MINIMAX_THINKING = _MINIMAX_M2
 
 # OpenAI GPT-5 reasoning-family models reject user sampling temperatures
 # (anything other than provider default). Keep GPT-4.1 on _DEFAULT: it is a
@@ -125,14 +142,14 @@ _BY_ID: dict[str, ModelCapabilities] = {
     "gpt-5.2": _OPENAI_REASONING,
     # MiniMax — full official model lineup per
     # platform.minimax.io/docs/api-reference/text-openai-api
-    "MiniMax-M3": _MINIMAX_THINKING,
-    "MiniMax-M2.7": _MINIMAX_THINKING,
-    "MiniMax-M2.7-highspeed": _MINIMAX_THINKING,
-    "MiniMax-M2.5": _MINIMAX_THINKING,
-    "MiniMax-M2.5-highspeed": _MINIMAX_THINKING,
-    "MiniMax-M2.1": _MINIMAX_THINKING,
-    "MiniMax-M2.1-highspeed": _MINIMAX_THINKING,
-    "MiniMax-M2": _MINIMAX_THINKING,
+    "MiniMax-M3": _MINIMAX_M3,
+    "MiniMax-M2.7": _MINIMAX_M2,
+    "MiniMax-M2.7-highspeed": _MINIMAX_M2,
+    "MiniMax-M2.5": _MINIMAX_M2,
+    "MiniMax-M2.5-highspeed": _MINIMAX_M2,
+    "MiniMax-M2.1": _MINIMAX_M2,
+    "MiniMax-M2.1-highspeed": _MINIMAX_M2,
+    "MiniMax-M2": _MINIMAX_M2,
     "kimi-k2.6": _KIMI_THINKING,
     "kimi-k2.5": _KIMI_THINKING,
 }
@@ -148,8 +165,10 @@ _BY_PATTERN: list[tuple[re.Pattern[str], ModelCapabilities]] = [
     (re.compile(r"(^|/)deepseek-v\d", re.IGNORECASE), _DEEPSEEK_THINKING),
     (re.compile(r"(^|/)deepseek-r\d", re.IGNORECASE), _DEEPSEEK_THINKING),
     (re.compile(r"(^|/)deepseek-reasoner", re.IGNORECASE), _DEEPSEEK_THINKING),
-    (re.compile(r"(^|/)minimax-m\d", re.IGNORECASE), _MINIMAX_THINKING),
-    (re.compile(r"^MiniMax-M\d"), _MINIMAX_THINKING),
+    (re.compile(r"^MiniMax-M3(?:\D|$)"), _MINIMAX_M3),
+    (re.compile(r"^MiniMax-M2(?:\D|$)"), _MINIMAX_M2),
+    (re.compile(r"^MiniMax-M\d"), _MINIMAX_M2),
+    (re.compile(r"(^|/)minimax-m\d", re.IGNORECASE), _MINIMAX_M2),
     (re.compile(r"^kimi-k2"), _KIMI_THINKING),
     (re.compile(r"^kimi-thinking"), _KIMI_THINKING),
 ]

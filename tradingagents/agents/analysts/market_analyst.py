@@ -13,6 +13,7 @@ from tradingagents.agents.utils.agent_utils import (
 )
 from tradingagents.agents.utils.tool_fallback import bind_tools_or_none, safe_tool_text
 from tradingagents.audit.prompt_registry import default_registry
+from tradingagents.dataflows.symbol_utils import crypto_base
 
 
 def _format_technical_monster_context(mss: dict) -> str:
@@ -80,12 +81,14 @@ _DEFAULT_INDICATORS = [
 _PRICE_LOOKBACK_DAYS = 90
 
 
-def _prefetch_market_data(ticker: str, current_date: str) -> str:
+def _prefetch_market_data(ticker: str, current_date: str, asset_type: str | None = None) -> str:
     """Gather the market data the tools would return, for tool-less providers.
 
     Mirrors the tool path's data: the verified snapshot (source of truth),
     raw OHLCV over a default window, and a fixed complementary indicator set.
     Each source degrades to a placeholder rather than aborting the analyst.
+    When ``asset_type == "crypto"`` (or the ticker is a recognized crypto
+    pair), keyless crypto sentiment / on-chain signals are appended.
     """
     start_date = (
         datetime.strptime(current_date, "%Y-%m-%d") - timedelta(days=_PRICE_LOOKBACK_DAYS)
@@ -104,7 +107,7 @@ def _prefetch_market_data(ticker: str, current_date: str) -> str:
         lambda: get_indicators.func(ticker, ",".join(_DEFAULT_INDICATORS), current_date),
     )
 
-    return (
+    base = (
         "### Verified market snapshot (source of truth)\n"
         f"{snapshot}\n\n"
         f"### OHLCV price history ({start_date} → {current_date})\n"
@@ -113,6 +116,22 @@ def _prefetch_market_data(ticker: str, current_date: str) -> str:
         f"{indicators}"
     )
 
+    # Keyless crypto overlay — only for crypto assets, degrades gracefully.
+    is_crypto = (asset_type == "crypto") or bool(crypto_base(ticker))
+    if is_crypto:
+        try:
+            from tradingagents.dataflows.crypto_signals import get_crypto_sentiment
+
+            crypto_block = safe_tool_text(
+                "crypto sentiment / on-chain signals",
+                lambda: get_crypto_sentiment(ticker, start_date, current_date),
+            )
+            base += f"\n\n### Crypto sentiment / on-chain signals\n{crypto_block}"
+        except Exception:
+            pass
+
+    return base
+
 
 def create_market_analyst(llm, prompt_registry=None):
     registry = prompt_registry or default_registry()
@@ -120,6 +139,7 @@ def create_market_analyst(llm, prompt_registry=None):
     def market_analyst_node(state):
         current_date = state["trade_date"]
         ticker = str(state["company_of_interest"])
+        asset_type = state.get("asset_type", "stock")
         instrument_context = get_instrument_context_from_state(state)
         monster_context = _format_technical_monster_context(state.get("monster_stock_score") or {})
 
@@ -176,6 +196,24 @@ def create_market_analyst(llm, prompt_registry=None):
 
             report = result.content if isinstance(result.content, str) else ""
 
+            # Keyless crypto overlay for the tool-calling path — append after
+            # the LLM report so the evidence is present even if the model did
+            # not call a crypto-native tool. Gated on asset_type == "crypto".
+            if (asset_type == "crypto") or bool(crypto_base(ticker)):
+                try:
+                    from tradingagents.dataflows.crypto_signals import get_crypto_sentiment
+
+                    _crypto_start = (
+                        datetime.strptime(current_date, "%Y-%m-%d") - timedelta(days=_PRICE_LOOKBACK_DAYS)
+                    ).strftime("%Y-%m-%d")
+                    _crypto_block = safe_tool_text(
+                        "crypto sentiment / on-chain signals",
+                        lambda: get_crypto_sentiment(ticker, _crypto_start, current_date),
+                    )
+                    report = f"{report}\n\n### Crypto sentiment / on-chain signals\n{_crypto_block}"
+                except Exception:
+                    pass
+
             return {
                 "messages": [result],
                 "market_report": report,
@@ -184,7 +222,7 @@ def create_market_analyst(llm, prompt_registry=None):
         # Tool-free fallback: the provider (e.g. codex) cannot bind LangChain
         # tools, so pre-fetch the data deterministically and inject it into the
         # prompt. The model produces the full report in one shot.
-        market_data = _prefetch_market_data(ticker, current_date)
+        market_data = _prefetch_market_data(ticker, current_date, asset_type=asset_type)
 
         prompt = ChatPromptTemplate.from_messages(
             [

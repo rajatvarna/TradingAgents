@@ -14,6 +14,7 @@ from .alpha_vantage import (
     get_stock as get_alpha_vantage_stock,
     get_stock_intraday as get_alpha_vantage_stock_intraday,
 )
+from .anysearch import get_global_news_anysearch, get_news_anysearch
 from .b3 import (
     get_balance_sheet as get_b3_balance_sheet,
     get_cashflow as get_b3_cashflow,
@@ -25,12 +26,21 @@ from .b3 import (
     get_news as get_b3_news,
     get_stock_data as get_b3_stock,
 )
+from .binance import get_binance_stock
+from .eastmoney_data import (
+    get_balance_sheet as get_eastmoney_balance_sheet,
+    get_cashflow as get_eastmoney_cashflow,
+    get_fundamentals as get_eastmoney_fundamentals,
+    get_income_statement as get_eastmoney_income_statement,
+    get_stock_data as get_eastmoney_stock,
+)
 from .eastmoney_news import get_news_eastmoney, is_ashare
 from .finnhub_fundamentals import (
     get_fundamentals as get_finnhub_fundamentals,
     get_insider_transactions as get_finnhub_insider_transactions,
 )
 from .finnhub_news import get_global_news as get_finnhub_global_news, get_news as get_finnhub_news
+from .firecrawl_news import get_global_news_firecrawl, get_news_firecrawl
 from .fmp_fundamentals import (
     get_balance_sheet as get_fmp_balance_sheet,
     get_cashflow as get_fmp_cashflow,
@@ -51,6 +61,7 @@ from .ibkr import (
     get_stock_data as get_ibkr_stock,
 )
 from .marketstack_stock import get_stock as get_marketstack_stock
+from .newsflash import get_global_news_newsflash, get_news_newsflash
 from .polygon import (
     get_news as get_polygon_news,
     get_options_chain as get_polygon_options_chain,
@@ -59,6 +70,7 @@ from .polygon import (
     get_stock_data_intraday as get_polygon_stock_intraday,
 )
 from .polymarket import get_prediction_markets as get_polymarket_prediction_markets
+from .schwab import get_stock_data as get_schwab_stock
 from .searxng import (
     get_global_news_searxng,
     get_news_searxng,
@@ -153,6 +165,14 @@ from .errors import (
 )
 
 logger = logging.getLogger(__name__)
+
+import re as _re
+
+_API_KEY_RE = _re.compile(r"(apikey|api_key|token|key)\s*=\s*[^&\s]+", _re.I)
+
+
+def _scrub_api_key(text: str) -> str:
+    return _API_KEY_RE.sub(r"\1=***", text)
 
 
 class CircuitBreaker:
@@ -299,6 +319,11 @@ VENDOR_LIST = [
     "ibkr",
     "eastmoney",
     "akshare",
+    "binance",
+    "firecrawl",
+    "newsflash",
+    "schwab",
+    "anysearch",
 ]
 
 # Optional enrichment categories. These add macro/event context to the news
@@ -325,6 +350,9 @@ VENDOR_METHODS = {
         "futu": get_futu_stock,
         "ibkr": get_ibkr_stock,
         "akshare": get_akshare_stock_data,
+        "binance": get_binance_stock,
+        "eastmoney": get_eastmoney_stock,
+        "schwab": get_schwab_stock,
     },
     # intraday_stock_apis (B2) — deliberately separate from get_stock_data:
     # only vendors with a real sub-daily endpoint are registered here, so
@@ -352,6 +380,7 @@ VENDOR_METHODS = {
         "taiwan": get_taiwan_fundamentals,
         "twelve_data": get_twelve_data_fundamentals,
         "akshare": get_akshare_fundamentals,
+        "eastmoney": get_eastmoney_fundamentals,
     },
     "get_balance_sheet": {
         "fmp": get_fmp_balance_sheet,
@@ -361,6 +390,7 @@ VENDOR_METHODS = {
         "taiwan": get_taiwan_balance_sheet,
         "twelve_data": get_twelve_data_balance_sheet,
         "akshare": get_akshare_balance_sheet,
+        "eastmoney": get_eastmoney_balance_sheet,
     },
     "get_cashflow": {
         "fmp": get_fmp_cashflow,
@@ -370,6 +400,7 @@ VENDOR_METHODS = {
         "taiwan": get_taiwan_cashflow,
         "twelve_data": get_twelve_data_cashflow,
         "akshare": get_akshare_cashflow,
+        "eastmoney": get_eastmoney_cashflow,
     },
     "get_income_statement": {
         "fmp": get_fmp_income_statement,
@@ -379,6 +410,7 @@ VENDOR_METHODS = {
         "taiwan": get_taiwan_income_statement,
         "twelve_data": get_twelve_data_income_statement,
         "akshare": get_akshare_income_statement,
+        "eastmoney": get_eastmoney_income_statement,
     },
     # news_data
     "get_news": {
@@ -393,6 +425,9 @@ VENDOR_METHODS = {
         "twelve_data": get_twelve_data_news,
         "polygon": get_polygon_news,
         "eastmoney": get_news_eastmoney,
+        "firecrawl": get_news_firecrawl,
+        "newsflash": get_news_newsflash,
+        "anysearch": get_news_anysearch,
     },
     "get_global_news": {
         "finnhub": get_finnhub_global_news,
@@ -404,6 +439,9 @@ VENDOR_METHODS = {
         "b3": get_b3_global_news,
         "taiwan": get_taiwan_global_news,
         "twelve_data": get_twelve_data_global_news,
+        "firecrawl": get_global_news_firecrawl,
+        "newsflash": get_global_news_newsflash,
+        "anysearch": get_global_news_anysearch,
     },
     "get_insider_transactions": {
         "alpha_vantage": get_alpha_vantage_insider_transactions,
@@ -629,7 +667,7 @@ def route_to_vendor(method: str, *args, **kwargs):
                 vendor,
                 method,
                 " (configured primary)" if vendor in primary_vendors else "",
-                e,
+                _scrub_api_key(str(e)),
                 exc_info=True,
             )
             _circuit_breaker.record_failure(vendor)

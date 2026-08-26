@@ -104,8 +104,8 @@ def create_sentiment_analyst(llm, prompt_registry=None):
         # returns a string (no exceptions surface from here), so the LLM
         # always sees something — either real data or a clear placeholder.
         news_block = get_news.func(ticker, start_date, end_date)
-        stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
-        reddit_block = fetch_reddit_posts(ticker, search_terms=india_search_terms or None)
+        stocktwits_block = fetch_stocktwits_messages(ticker, limit=30, start_date=start_date, end_date=end_date)
+        reddit_block = fetch_reddit_posts(ticker, search_terms=india_search_terms or None, start_date=start_date, end_date=end_date)
         # Bluesky (X/Twitter alternative) + Mastodon: free, no-auth public
         # endpoints. Fear & Greed: aggregate market-mood proxy.
         bluesky_block = fetch_bluesky_posts(f"${ticker}")
@@ -148,11 +148,11 @@ def create_sentiment_analyst(llm, prompt_registry=None):
                     "- Current date: {current_date}\n"
                     "- Instrument context: {instrument_context}\n\n"
                     "Pre-fetched data:\n\n"
-                    "News headlines — Yahoo Finance, past 7 days\n"
+                    "News headlines — Yahoo Finance, {start_date} to {end_date}\n"
                     "<start_of_news>\n{news_block}\n<end_of_news>\n\n"
-                    "StockTwits messages — retail-trader social platform indexed by cashtag\n"
+                    "StockTwits messages — retail-trader social platform indexed by cashtag ({start_date} to {end_date})\n"
                     "<start_of_stocktwits>\n{stocktwits_block}\n<end_of_stocktwits>\n\n"
-                    "Reddit posts — r/wallstreetbets, r/stocks, r/investing (past 7 days)\n"
+                    "Reddit posts — r/wallstreetbets, r/stocks, r/investing ({start_date} to {end_date})\n"
                     "<start_of_reddit>\n{reddit_block}\n<end_of_reddit>\n\n"
                     "Bluesky posts — decentralized X/Twitter alternative (keyword search)\n"
                     "<start_of_bluesky>\n{bluesky_block}\n<end_of_bluesky>\n\n"
@@ -168,6 +168,8 @@ def create_sentiment_analyst(llm, prompt_registry=None):
         )
 
         prompt = prompt.partial(current_date=end_date)
+        prompt = prompt.partial(start_date=start_date)
+        prompt = prompt.partial(end_date=end_date)
         prompt = prompt.partial(instrument_context=instrument_context)
         prompt = prompt.partial(news_block=news_block)
         prompt = prompt.partial(stocktwits_block=stocktwits_block)

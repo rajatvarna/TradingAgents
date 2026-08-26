@@ -1,5 +1,5 @@
-"""Systematic evaluation harness for TradingAgents.
+"""Evaluation tooling: reproducible backtesting for the TradingAgents graph."""
 
-Evaluates the 10-agent bull/bear debate pipeline across tickers and dates,
-measuring signal consistency, directional accuracy, and false positive rate.
-"""
+from .backtest import generate_dates, run_backtest, summarize
+
+__all__ = ["generate_dates", "run_backtest", "summarize"]

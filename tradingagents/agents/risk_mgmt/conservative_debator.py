@@ -9,6 +9,15 @@ from tradingagents.audit.prompt_registry import default_registry
 from tradingagents.dataflows.config import get_config
 
 
+def _format_risk_opponent(role: str, current_response: str) -> str:
+    if current_response.strip():
+        return current_response
+    return (
+        f"There are no responses from the {role} analyst yet; "
+        "present your own argument based on the available data."
+    )
+
+
 def create_conservative_debator(llm, prompt_registry=None):
     registry = prompt_registry or default_registry()
 
@@ -17,8 +26,12 @@ def create_conservative_debator(llm, prompt_registry=None):
         history = risk_debate_state.get("history", "")
         conservative_history = risk_debate_state.get("conservative_history", "")
 
-        current_aggressive_response = risk_debate_state.get("current_aggressive_response", "")
-        current_neutral_response = risk_debate_state.get("current_neutral_response", "")
+        current_aggressive_response = _format_risk_opponent(
+            "aggressive", risk_debate_state.get("current_aggressive_response", "")
+        )
+        current_neutral_response = _format_risk_opponent(
+            "neutral", risk_debate_state.get("current_neutral_response", "")
+        )
 
         # A7 token hygiene — see researchers/bull_researcher.py's identical comment.
         is_first_turn = not conservative_history.strip()

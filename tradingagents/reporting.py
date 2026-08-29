@@ -119,6 +119,18 @@ def write_report_tree(final_state: dict, ticker: str, save_path) -> Path:
             (portfolio_dir / "decision.md").write_text(risk["judge_decision"], encoding="utf-8")
             sections.append(f"## V. Portfolio Manager Decision\n\n### Portfolio Manager\n{risk['judge_decision']}")
 
+    # 5b. Data Sources / Provenance (PR #1270, #1197)
+    data_sources = final_state.get("data_sources") or final_state.get("data_provenance")
+    if data_sources:
+        if isinstance(data_sources, list):
+            sources_text = "\n".join(f"- {s}" if not str(s).startswith("- ") else str(s) for s in data_sources)
+        elif isinstance(data_sources, dict):
+            sources_text = "\n".join(f"- **{k}**: {v}" for k, v in data_sources.items())
+        else:
+            sources_text = str(data_sources)
+        (save_path / "data_sources.md").write_text(sources_text, encoding="utf-8")
+        sections.append(f"## Data Sources\n\n{sources_text}")
+
     # 6. Evidence Audit (PR #1105)
     evidence_audit = build_evidence_audit(final_state)
     if evidence_audit["has_content"]:
@@ -133,7 +145,12 @@ def write_report_tree(final_state: dict, ticker: str, save_path) -> Path:
         sections.append(f"## VI. Evidence Audit\n\n{evidence_audit['markdown']}")
 
     # Write consolidated report
-    header = f"# Trading Analysis Report: {ticker}\n\nGenerated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+    header = f"# Trading Analysis Report: {ticker}\n\n"
+    # Include trade_date for auditing/backtesting reproducibility (#1270, #1197)
+    td = final_state.get("trade_date") or final_state.get("tradeDate")
+    if td:
+        header += f"Trade Date: {td}\n"
+    header += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
     report_text = header + "\n\n".join(sections)
     try:
         from cli.report_headings import transform as _prune_report_headings

@@ -31,6 +31,12 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_MAX_RISK_ROUNDS":      "max_risk_discuss_rounds",
     "TRADINGAGENTS_CHECKPOINT_ENABLED":   "checkpoint_enabled",
     "TRADINGAGENTS_BENCHMARK_TICKER":     "benchmark_ticker",
+    "TRADINGAGENTS_MEMORY_LOG_MAX_ENTRIES": "memory_log_max_entries",
+    "TRADINGAGENTS_MAX_RECUR_LIMIT":      "max_recur_limit",
+    "TRADINGAGENTS_NEWS_ARTICLE_LIMIT":   "news_article_limit",
+    "TRADINGAGENTS_GLOBAL_NEWS_ARTICLE_LIMIT": "global_news_article_limit",
+    "TRADINGAGENTS_GLOBAL_NEWS_LOOKBACK_DAYS": "global_news_lookback_days",
+    "TRADINGAGENTS_ANALYST_CONCURRENCY_LIMIT": "analyst_concurrency_limit",
     "TRADINGAGENTS_DEEPSEEK_REASONING_EFFORT": "deepseek_reasoning_effort",
     "TRADINGAGENTS_IIC_DB_PATH":          "iic_db_path",
     "TRADINGAGENTS_IIC_DATA_DIR":         "iic_data_dir",
@@ -343,6 +349,9 @@ DEFAULT_CONFIG = _apply_env_overrides({
         ".TO": "^GSPTSE",   # TSX Composite (Toronto)
         ".TW": "^TWII",     # Taiwan Weighted Index (TWSE)
         ".TWO": "^TWOII",   # Taiwan OTC Index (TPEx)
+        ".SS":  "000001.SS",   # Shanghai (SSE Composite)
+        ".SH":  "000001.SS",   # Shanghai (SSE Composite, alternate suffix) — #1260
+        ".SZ":  "399001.SZ",   # Shenzhen (SZSE Component)
         "":    "SPY",       # default for US-listed tickers
     },
     # Portfolio propagation settings
@@ -441,6 +450,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
                                      # after a speaker's own first turn. Default "full" until an A6 scorecard
                                      # shows "digest" is non-inferior on hit-rate/calibration.
     "news_window": {"mode": "lookback"},  # or {"mode":"market_session","exchange":"NYSE",...} (PR #1235)
+    "analyst_concurrency_limit": 1,  # 1=sequential, >1=parallel analyst fan-out (PR #1253, local impl)
     "state_compression_enabled": False,
     "trader_tools_enabled": True,
     "ibkr_portfolio_context_enabled": False,  # opt-in: requires a running TWS/IB Gateway

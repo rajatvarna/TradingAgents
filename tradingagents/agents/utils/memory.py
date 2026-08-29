@@ -42,7 +42,11 @@ class TradingMemoryLog:
                 self._migrate_from_markdown(base_path)
 
         # Optional cap on resolved entries. None disables rotation.
-        self._max_entries = cfg.get("memory_log_max_entries")
+        max_ent = cfg.get("memory_log_max_entries")
+        try:
+            self._max_entries = int(max_ent) if max_ent is not None and str(max_ent).strip() != "" else None
+        except (TypeError, ValueError):
+            self._max_entries = max_ent
 
     def _get_conn(self) -> sqlite3.Connection:
         """Return a per-thread cached SQLite connection.
@@ -195,37 +199,111 @@ class TradingMemoryLog:
             cursor = conn.execute("SELECT * FROM memory_log WHERE pending = 1 ORDER BY id ASC")
             return [self._row_to_dict(row) for row in cursor.fetchall()]
 
-    def get_past_context(self, ticker: str, n_same: int = 5, n_cross: int = 3) -> str:
-        """Return formatted past context string for agent prompt injection."""
+    @staticmethod
+    def _date_key(date_str: str) -> tuple:
+        """Parse YYYY-MM-DD into a comparable tuple.
+
+        Unparseable dates sort last so a malformed entry is never silently
+        trusted as point-in-time-safe context (see #1254).
+        """
+        try:
+            parts = str(date_str).split("-")
+            if len(parts) != 3:
+                raise ValueError("not YYYY-MM-DD")
+            return (int(parts[0]), int(parts[1]), int(parts[2]))
+        except (ValueError, AttributeError, TypeError):
+            return (9999, 12, 31)
+
+    def _is_past_entry(self, entry_date: str, as_of_date: str | None) -> bool:
+        """Return True if entry_date is safe to include for as_of_date.
+
+        Same-day entries are included (<=), future entries and malformed
+        dates are excluded.
+        """
+        if not as_of_date:
+            return True
+        try:
+            return self._date_key(entry_date) <= self._date_key(as_of_date)
+        except Exception:
+            return False
+
+    def get_past_context(
+        self,
+        ticker: str,
+        n_same: int = 5,
+        n_cross: int = 3,
+        as_of_date: str | None = None,
+        trade_date: str | None = None,
+    ) -> str:
+        """Return formatted past context string for agent prompt injection.
+
+        When ``as_of_date`` (or legacy alias ``trade_date``) is given, only
+        entries whose ``trade_date`` is on or before that date are included.
+        This prevents future-resolved lessons from leaking into past backtest
+        prompts (#1251, #1254, #1264). Same-day entries are included; malformed
+        dates are excluded rather than trusted.
+        """
         if not self._db_path or not self._db_path.exists():
             return ""
+
+        # Normalize alias: trade_date -> as_of_date
+        effective_date = as_of_date if as_of_date is not None else trade_date
 
         parts = []
         with self._get_conn() as conn:
             # Fetch same-ticker resolved entries
-            cursor = conn.execute(
-                "SELECT * FROM memory_log WHERE ticker = ? AND pending = 0 ORDER BY id DESC LIMIT ?",
-                (ticker, n_same)
-            )
-            same_rows = cursor.fetchall()
+            if effective_date:
+                # Use SQL filter + Python guard for malformed dates
+                cursor = conn.execute(
+                    "SELECT * FROM memory_log WHERE ticker = ? AND pending = 0 AND trade_date <= ? ORDER BY trade_date DESC, id DESC LIMIT ?",
+                    (ticker, str(effective_date), n_same * 4),
+                )
+                same_rows_raw = cursor.fetchall()
+                # Extra Python filter for strict date parsing + re-limit
+                same_rows = []
+                for row in same_rows_raw:
+                    d = row["trade_date"]
+                    if self._is_past_entry(d, str(effective_date)):
+                        same_rows.append(row)
+                    if len(same_rows) >= n_same:
+                        break
+                # Fallback if few rows due to malformed filtering — keep SQL order
+            else:
+                cursor = conn.execute(
+                    "SELECT * FROM memory_log WHERE ticker = ? AND pending = 0 ORDER BY id DESC LIMIT ?",
+                    (ticker, n_same)
+                )
+                same_rows = cursor.fetchall()
 
             if same_rows:
                 parts.append(f"Past analyses of {ticker} (most recent first):")
-                # Format full
                 for row in same_rows:
                     e = self._row_to_dict(row)
                     parts.append(self._format_full(e))
 
             # Fetch cross-ticker resolved entries
-            cursor = conn.execute(
-                "SELECT * FROM memory_log WHERE ticker != ? AND pending = 0 ORDER BY id DESC LIMIT ?",
-                (ticker, n_cross)
-            )
-            cross_rows = cursor.fetchall()
+            if effective_date:
+                cursor = conn.execute(
+                    "SELECT * FROM memory_log WHERE ticker != ? AND pending = 0 AND trade_date <= ? ORDER BY trade_date DESC, id DESC LIMIT ?",
+                    (ticker, str(effective_date), n_cross * 4),
+                )
+                cross_rows_raw = cursor.fetchall()
+                cross_rows = []
+                for row in cross_rows_raw:
+                    d = row["trade_date"]
+                    if self._is_past_entry(d, str(effective_date)):
+                        cross_rows.append(row)
+                    if len(cross_rows) >= n_cross:
+                        break
+            else:
+                cursor = conn.execute(
+                    "SELECT * FROM memory_log WHERE ticker != ? AND pending = 0 ORDER BY id DESC LIMIT ?",
+                    (ticker, n_cross)
+                )
+                cross_rows = cursor.fetchall()
 
             if cross_rows:
                 parts.append("Recent cross-ticker lessons:")
-                # Format reflection only
                 for row in cross_rows:
                     e = self._row_to_dict(row)
                     parts.append(self._format_reflection_only(e))

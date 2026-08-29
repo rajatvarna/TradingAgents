@@ -79,6 +79,8 @@ def format_datetime_for_api(date_input) -> str:
 
 
 def _get_with_retry(params: dict) -> requests.Response:
+    from .http_utils import redact_text as _redact
+
     last_exc: Exception | None = None
     for attempt in range(AV_MAX_RETRIES):
         try:
@@ -90,7 +92,13 @@ def _get_with_retry(params: dict) -> requests.Response:
             response.raise_for_status()
             return response
         except (requests.Timeout, requests.ConnectionError, requests.HTTPError) as exc:
-            last_exc = exc
+            # Redact credentials before any retry logging / re-raise (#1238)
+            redacted = _redact(str(exc))
+            try:
+                last_exc = type(exc)(redacted)
+            except Exception:
+                last_exc = exc.__class__(redacted)
+            last_exc.__cause__ = None
             if attempt < AV_MAX_RETRIES - 1:
                 time.sleep(AV_BACKOFF_BASE * (2**attempt))
     if last_exc is not None:

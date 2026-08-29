@@ -41,10 +41,16 @@ def is_valid_ticker_input(value: str) -> bool:
 
     Allows the characters Yahoo symbols use, including ``=`` for futures/forex
     like ``GC=F`` and ``EURUSD=X`` (#980), and ``^`` for indices. Empty input is
-    allowed (it defaults to SPY downstream).
+    allowed (it defaults to SPY downstream). Rejects path traversal patterns
+    (``..``, leading dot, slash) per #1262.
     """
     v = value.strip()
-    return not v or (all(ch.isalnum() or ch in "._-^=" for ch in v) and len(v) <= 32)
+    if not v:
+        return True
+    # Path traversal / directory-ish inputs
+    if ".." in v or "/" in v or "\\" in v or v.startswith("."):
+        return False
+    return all(ch.isalnum() or ch in "._-^=" for ch in v) and len(v) <= 32
 
 
 def get_ticker(default_ticker: str = "SPY") -> str:

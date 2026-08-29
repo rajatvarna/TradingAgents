@@ -128,10 +128,22 @@ def _resolve_series_id(indicator: str) -> str:
 
 def _request(path: str, params: dict) -> dict:
     """GET a FRED endpoint, surfacing FRED's JSON error body on a bad request."""
+    from .http_utils import redact_text as _redact
+
     api_params = {**params, "api_key": get_api_key(), "file_type": "json"}
-    response = requests.get(
-        f"{FRED_API_BASE}/{path}", params=api_params, timeout=REQUEST_TIMEOUT
-    )
+    try:
+        response = requests.get(
+            f"{FRED_API_BASE}/{path}", params=api_params, timeout=REQUEST_TIMEOUT
+        )
+    except requests.RequestException as exc:
+        # Redact URL-embedded api_key before surfacing (#1238)
+        redacted = _redact(str(exc))
+        try:
+            new_exc = type(exc)(redacted)
+        except Exception:
+            new_exc = exc.__class__(redacted)
+        new_exc.__cause__ = None
+        raise new_exc from None
     # FRED returns 400 with a JSON {"error_message": ...} for unknown series IDs
     # or malformed params; turn that into a clear, actionable error.
     if response.status_code == 400:
@@ -140,7 +152,16 @@ def _request(path: str, params: dict) -> dict:
         except ValueError:
             message = response.text
         raise ValueError(f"FRED request failed: {message}")
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        redacted = _redact(str(exc))
+        try:
+            new_exc = type(exc)(redacted)
+        except Exception:
+            new_exc = exc.__class__(redacted)
+        new_exc.__cause__ = None
+        raise new_exc from None
     return response.json()
 
 

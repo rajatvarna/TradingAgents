@@ -1,3 +1,5 @@
+import os
+
 import requests
 from rich.console import Console
 from rich.panel import Panel
@@ -7,6 +9,12 @@ from cli.config import CLI_CONFIG
 
 def fetch_announcements(url: str = None, timeout: float = None) -> dict:
     """Fetch announcements from endpoint. Returns dict with announcements and settings."""
+    # Allow disabling remote announcements via env var (see #1262)
+    if os.getenv("TRADINGAGENTS_DISABLE_ANNOUNCEMENTS", "").strip().lower() in ("1", "true", "yes", "on"):
+        return {
+            "announcements": [],
+            "require_attention": False,
+        }
     endpoint = url or CLI_CONFIG["announcements_url"]
     timeout = timeout or CLI_CONFIG["announcements_timeout"]
     fallback = CLI_CONFIG["announcements_fallback"]
@@ -15,9 +23,21 @@ def fetch_announcements(url: str = None, timeout: float = None) -> dict:
         response = requests.get(endpoint, timeout=timeout)
         response.raise_for_status()
         data = response.json()
+        # Handle untrusted content safely (clip length, strip control chars)
+        announcements = data.get("announcements", [fallback])
+        if not isinstance(announcements, list):
+            announcements = [str(announcements)]
+        # Clip each announcement to reasonable length to prevent display overflow
+        safe = []
+        for a in announcements:
+            s = str(a)[:2000].replace("\r", "").strip()
+            if s:
+                safe.append(s)
+        if not safe:
+            safe = [fallback]
         return {
-            "announcements": data.get("announcements", [fallback]),
-            "require_attention": data.get("require_attention", False),
+            "announcements": safe,
+            "require_attention": bool(data.get("require_attention", False)),
         }
     except Exception:
         return {

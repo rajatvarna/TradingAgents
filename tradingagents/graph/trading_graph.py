@@ -659,7 +659,7 @@ class TradingAgentsGraph:
         # Realize prior pending outcomes first (parity with propagate()).
         self._resolve_pending_entries(company_name)
 
-        past_context = self.memory_log.get_past_context(company_name)
+        past_context = self.memory_log.get_past_context(company_name, as_of_date=str(trade_date))
         instrument_context = self.resolve_instrument_context(company_name, asset_type)
         risk_constraints = self._risk_constraints_from_config()
 
@@ -725,6 +725,16 @@ class TradingAgentsGraph:
         # Merge evidence defaults & run post-run audits (parity with _run_graph).
         self._merge_evidence_defaults(final_state, evidence_pack)
         self._audit_final_state(final_state)
+
+        # Data provenance for report tree (#1270)
+        if not final_state.get("data_sources") and not final_state.get("data_provenance"):
+            try:
+                dv = self.config.get("data_vendors", {}) or {}
+                if dv:
+                    final_state["data_sources"] = [f"{cat}: {vendors}" for cat, vendors in dv.items() if vendors]
+                    final_state.setdefault("trade_date", str(trade_date))
+            except Exception:
+                pass
 
         # Side effects the raw stream path would otherwise skip (see _run_graph).
         self._log_state(trade_date, final_state)
@@ -1034,7 +1044,8 @@ class TradingAgentsGraph:
 
         # Initialize state — inject memory log context for PM and the
         # deterministically resolved instrument identity for all agents.
-        past_context = self.memory_log.get_past_context(company_name)
+        # as_of_date keeps future-resolved lessons out of past prompts (#1251).
+        past_context = self.memory_log.get_past_context(company_name, as_of_date=str(trade_date))
         instrument_context = self.resolve_instrument_context(company_name, asset_type)
         risk_constraints = self._risk_constraints_from_config()
 
@@ -1155,6 +1166,17 @@ class TradingAgentsGraph:
         # Back-fill evidence keys and run post-run audits.
         self._merge_evidence_defaults(final_state, evidence_pack)
         self._audit_final_state(final_state)
+
+        # Data provenance for report tree (#1270, #1197) — fail-open
+        if not final_state.get("data_sources") and not final_state.get("data_provenance"):
+            try:
+                dv = self.config.get("data_vendors", {}) or {}
+                if dv:
+                    final_state["data_sources"] = [f"{cat}: {vendors}" for cat, vendors in dv.items() if vendors]
+                    # Also record the trade_date explicitly for reporting header
+                    final_state.setdefault("trade_date", str(trade_date))
+            except Exception:
+                pass
 
         # Log state to disk.
         self._log_state(trade_date, final_state)

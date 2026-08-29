@@ -33,5 +33,11 @@ def get_indicators(
         try:
             results.append(route_to_vendor("get_indicators", symbol, ind, curr_date, look_back_days))
         except ValueError as e:
-            results.append(str(e))
+            # Redact any credential that may have leaked into the error (#1238)
+            try:
+                from tradingagents.dataflows.http_utils import redact_text
+
+                results.append(redact_text(str(e)))
+            except Exception:
+                results.append(str(e))
     return "\n\n".join(results)

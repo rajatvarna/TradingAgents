@@ -50,7 +50,11 @@ _FOREX_CURRENCIES = frozenset(
 # DOT (previously supported) has fallen out of the CMC20 top 20 and is removed.
 # https://coinmarketcap.com/charts/cmc20/
 _CRYPTO_BASES = frozenset(
-    {"BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "LTC", "BCH", "AVAX", "LINK", "XLM", "HBAR", "SUI", "TON", "SHIB", "PEPE", "UNI", "ETC"}
+    {
+        "BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "LTC", "BCH", "AVAX", "LINK",
+        "XLM", "HBAR", "SUI", "TON", "SHIB", "PEPE", "UNI", "ETC",
+        "BNB", "TRX", "NEAR", "APT",  # from TauricResearch/TradingAgents#1292
+    }
 )
 
 # Explicit aliases for instruments whose broker symbol does not map to a
@@ -71,9 +75,14 @@ _ALIASES = {
     "SPX500": "^GSPC", "US500": "^GSPC", "SPX": "^GSPC",
     "NAS100": "^NDX", "US100": "^NDX", "USTEC": "^NDX",
     "US30": "^DJI", "DJI30": "^DJI", "WS30": "^DJI",
-    "GER40": "^GDAXI", "GER30": "^GDAXI", "DE40": "^GDAXI",
-    "UK100": "^FTSE", "JP225": "^N225", "JPN225": "^N225",
-    "FRA40": "^FCHI", "EU50": "^STOXX50E", "HK50": "^HSI",
+    "GER40": "^GDAXI", "GER30": "^GDAXI", "DE40": "^GDAXI", "DAX": "^GDAXI", "DAX40": "^GDAXI",
+    "UK100": "^FTSE", "FTSE": "^FTSE", "FTSE100": "^FTSE",
+    "JP225": "^N225", "JPN225": "^N225", "N225": "^N225", "NIKKEI": "^N225", "NIKKEI225": "^N225",
+    "FRA40": "^FCHI", "CAC": "^FCHI", "CAC40": "^FCHI",
+    "EU50": "^STOXX50E", "STOXX50": "^STOXX50E",
+    "HK50": "^HSI", "HSI": "^HSI", "HANGSENG": "^HSI",
+    "VIX": "^VIX", "VOLATILITY": "^VIX",
+    "DXY": "DX-Y.NYB", "USDX": "DX-Y.NYB",
 }
 
 # Yahoo symbols may contain letters, digits, and these structural characters.

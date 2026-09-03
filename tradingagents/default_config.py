@@ -339,19 +339,37 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # falling back to the "" entry for tickers without a known suffix.
     "benchmark_ticker": None,
     "benchmark_map": {
+        # India
         ".NS": "^NSEI",     # Nifty 50 (NSE India)
+        ".NSE": "^NSEI",    # NSE India alt suffix — #1294
         ".BO": "^BSESN",    # Sensex (BSE India)
+        ".BSE": "^BSESN",   # BSE India alt suffix — #1294
+        # US / default
+        "":    "SPY",       # default for US-listed tickers (no suffix)
+        ".US": "SPY",       # US suffix — #1294
+        # Developed markets
         ".T":  "^N225",     # Nikkei 225 (Japan)
         ".HK": "^HSI",      # Hang Seng (Hong Kong)
         ".KL": "^KLSE",     # Malaysia (FTSE Bursa Malaysia KLCI)
         ".L":  "^FTSE",     # FTSE 100 (London)
+        ".PA": "^FCHI",     # CAC 40 (Paris) — #1294
+        ".DE": "^GDAXI",    # DAX (Germany) — #1294
+        ".MI": "^FTSEMIB",  # FTSE MIB (Milan) — #1294
+        ".AS": "^AEX",      # AEX (Amsterdam) — #1294
+        ".SW": "^SSMI",     # SMI (Switzerland) — #1294
+        ".ST": "^OMX",      # OMX (Sweden) — #1294
         ".TO": "^GSPTSE",   # TSX Composite (Toronto)
+        ".AX": "^AXJO",     # Australia (ASX 200) — #1294
+        ".KS": "^KS11",     # KOSPI (South Korea) — #1294 (upstream uses ^KS11)
         ".TW": "^TWII",     # Taiwan Weighted Index (TWSE)
         ".TWO": "^TWOII",   # Taiwan OTC Index (TPEx)
+        ".SA": "^BVSP",     # Bovespa (Brazil) — #1294
+        ".J":  "^J203.JO",  # JSE Top 40 (South Africa) — #1294
+        ".MX": "^MXX",      # IPC (Mexico) — #1294
+        # China A-shares
         ".SS":  "000001.SS",   # Shanghai (SSE Composite)
         ".SH":  "000001.SS",   # Shanghai (SSE Composite, alternate suffix) — #1260
         ".SZ":  "399001.SZ",   # Shenzhen (SZSE Component)
-        "":    "SPY",       # default for US-listed tickers
     },
     # Portfolio propagation settings
     # Max parallel threads in propagate_portfolio(). Keep below your LLM

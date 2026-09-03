@@ -44,6 +44,13 @@ def create_aggressive_debator(llm, prompt_registry=None):
 
         trader_decision = state["trader_investment_plan"]
 
+        # Prompt layout is cache-aware (#750): the debate-wide shared context
+        # (reports, trader decision where applicable, then the append-only
+        # debate history) leads, and the per-role instructions trail. Every
+        # debate turn therefore extends a byte-identical prefix that provider
+        # prompt caches can serve at the cached-token rate; with the role text
+        # first, no two turns ever share a prefix and every turn bills full
+        # price. Wording is unchanged — sections are only reordered.
         version = state.get("prompt_versions", {}).get("risk/aggressive", "v1")
         prompt, prompt_hash, shared_hashes = registry.render_with_shared(
             "risk/aggressive",

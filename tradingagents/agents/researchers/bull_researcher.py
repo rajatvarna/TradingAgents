@@ -106,6 +106,13 @@ def create_bull_researcher(llm, prompt_registry=None):
             else "Asset fundamentals report (may be unavailable for crypto)"
         )
 
+        # Prompt layout is cache-aware (#750): the debate-wide shared context
+        # (reports, trader decision where applicable, then the append-only
+        # debate history) leads, and the per-role instructions trail. Every
+        # debate turn therefore extends a byte-identical prefix that provider
+        # prompt caches can serve at the cached-token rate; with the role text
+        # first, no two turns ever share a prefix and every turn bills full
+        # price. Wording is unchanged — sections are only reordered.
         version = state.get("prompt_versions", {}).get("researchers/bull_researcher", "v2")
         prompt, prompt_hash, shared_hashes = registry.render_with_shared(
             "researchers/bull_researcher",

@@ -1093,6 +1093,24 @@ class TradingAgentsGraph:
                 self._run_signature(asset_type),
             )
 
+    def save_reports(self, final_state, ticker, save_path=None) -> Path:
+        """Write the markdown report tree for a completed run, like the CLI does.
+
+        Programmatic callers get the same on-disk reports the CLI produces. Pass
+        an explicit ``save_path`` or let it default under ``results_dir``.
+        """
+        from tradingagents.dataflows.utils import safe_ticker_component
+        from tradingagents.reporting import write_report_tree
+
+        if save_path is None:
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            save_path = (
+                Path(self.config["results_dir"])
+                / "reports"
+                / f"{safe_ticker_component(ticker)}_{stamp}"
+            )
+        return write_report_tree(final_state, ticker, save_path)
+
     def _run_graph(
         self,
         company_name,

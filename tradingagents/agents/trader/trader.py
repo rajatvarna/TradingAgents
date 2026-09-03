@@ -91,11 +91,12 @@ def create_trader(llm, cache=None, prompt_registry=None, tools=None):
             investment_plan=investment_plan,
         )
 
+        if grounding:
+            system_content = grounding + system_content
         messages = [
             {"role": "system", "content": system_content},
             {"role": "user", "content": (report_section + user_content) if report_section else user_content},
         ]
-        # If grounding is needed but registry path doesn't include it, it is already in report_section; for non-registry fallback, grounding would be injected via system prompt.
 
         # If tools are bound, run a tool-augmented pass first so the Trader can
         # verify current price, options, or news before the structured proposal.

@@ -66,17 +66,20 @@ def test_fetch_returns_normalizes_benchmark(monkeypatch):
             queried.append(symbol)
 
         def history(self, *args, **kwargs):
-            return pd.DataFrame({"Close": [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0]})
+            prices = [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0]
+            idx = pd.date_range(start="2025-01-02", periods=len(prices), freq="D")
+            return pd.DataFrame({"Close": prices}, index=idx)
 
     monkeypatch.setattr(tg.yf, "Ticker", FakeTicker)
 
-    raw, alpha, days = TradingAgentsGraph._fetch_returns(
+    raw, alpha, days, resolved = TradingAgentsGraph._fetch_returns(
         None, "AAPL", "2025-01-02", holding_days=5, benchmark="SPX500"
     )
 
     assert queried[0] == "AAPL"
     assert queried[1] == "^GSPC"  # user-configured benchmark normalized too
     assert raw is not None and alpha is not None and days is not None
+    assert resolved == "2025-01-07"
 
 
 def test_news_lookup_normalizes_symbol(monkeypatch):

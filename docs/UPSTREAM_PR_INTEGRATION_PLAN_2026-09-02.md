@@ -372,9 +372,29 @@ Both add `tradingagents/{execution,brokers,strategies}/` with live broker client
 
 ## 10. Housekeeping
 
-- [ ] After merging Phase 1–2, update `docs/UPSTREAM_PR_INTEGRATION_PLAN.md` to point at this file (or promote this file to that path).
+- [x] After merging Phase 1–2, update `docs/UPSTREAM_PR_INTEGRATION_PLAN.md` to point at this file (or promote this file to that path). — done 2026-09-03: `4419c46`
 - [ ] Delete stale local `pr-*` fetch branches after integration lands on `main`.
 - [ ] Record reject decisions (#1287, #1284, #1273, #1271, #1266) in `CHANGELOG.md` with rationale (hard-rule violation + fork superset).
 - [ ] If `mcp` pin or `output/` path convention changes, sync `AGENTS.md` and `docs/flint/SHADOW_RUN_SETUP.md` per `AGENTS.md:67`.
 - [ ] Sync `pyproject.toml` version after upstream merge (fork is `0.3.1` today vs upstream `0.4.1` — decide whether to bump fork version or keep divergent versioning intentionally).
+
+---
+
+## 11. Tier 2 final verdicts (2026-09-03 evaluation, after PR #48)
+
+All Tier 1 items from §3 are now landed on `feat/upstream-sep02-integration` (commits `74a1be8`..`2fa4188`). The following Tier 2 cohort was evaluated after the 1281 port:
+
+| PR | Title | Verdict (2026-09-03) | Rationale |
+|----|-------|----------------------|-----------|
+| `1263` | `test: add unit tests for Azure OpenAI provider client` | **DEFER — test-only, no prod code** | Land as-is if Azure dep not required for `unit` marker. No behavior change; can be added after PR #48 merges to avoid blocking. |
+| `1262` | `feat(cli): enhance announcement handling and env config` | **DEFER — overlaps Flint headless path** | CLI announcement fetch hardening + `TRADINGAGENTS_DISABLE_ANNOUNCEMENTS` is interactive-only; shadow runner (`scripts/flint/run_shadow_analysis.py`) is non-interactive and already has announcement bypass. Audit `cli/announcements.py:4` against fork's divergence in next window. |
+| `1256` | `Add multi-region stock discovery to CLI` | **DEFER — interactive TUI** | `tradingagents/discovery/stock_discovery.py` + `cli/tui.py:296` ranked universe requires `Space`/`Enter` TUI; shadow is non-interactive (`--analysts market,news`). Fork already has `dashboard/` + `screener/` superset. Gate behind `TRADINGAGENTS_DISCOVERY_ENABLED` if Flint requests pre-screening. |
+| `1290` | `ci: add smoke x86_64 workflow` | **DEFER** | `.github/workflows` differs from fork (`.venv`, `portfolio`/`scheduled` extras per `AGENTS.md:62`). Evaluate after Tier 0/1 merge, do not block. |
+| `1253` | `perf(graph): run the four analysts in parallel` | **GATED — feature branch** | Requires `analyst_subgraph.py` + `setup.py` fan-out, gated `TRADINGAGENTS_ANALYST_PARALLEL_ENABLED=false`, `cost_callback`/`TraceCallback` propagation, and A/B parity proof. Already gated design in this plan §3.6. |
+| `1244` | `feat(dataflows): add native Binance vendor` | **AUDIT then PORT if delta** | Fork already has `tradingagents/dataflows/binance.py` (CMC20→18, 1000-candle pagination, `BINANCE_BASE_URL` for 451). Audit whitelist + pagination vs upstream in next window; sync if delta via `tests/test_binance_vendor.py`. |
+| `1281` | `Make debate and analyst prompts cache-friendly` | **LANDED 2026-09-03** | Reorder-only, 9 python + 12 prompt files, `2fa4188`. 67 `test_analyst_prompt_registry` pass. |
+
+Mega-dumps `1273`/`1271`/`1266`/`1287`/`1284` remain **REJECT** per `AGENTS.md:13` (broker execution / framework reorg). No further action this pass.
+
+**Next window:** open a fresh `feat/upstream-sep10-*` branch for any Tier 2 promotions after PR #48 lands on `main`.
 

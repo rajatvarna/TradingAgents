@@ -7,6 +7,7 @@ import yfinance as yf
 from dateutil.relativedelta import relativedelta
 
 from .config import get_config
+from .date_window import in_window
 from .snapshots import GLOBAL_SCOPE, replay_formatted, write_snapshot
 from .stockstats_utils import yf_retry
 from .symbol_utils import normalize_symbol

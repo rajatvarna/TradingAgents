@@ -73,3 +73,8 @@ def parse_rating(text: str, default: str = "Hold") -> str:
     """
     rating = extract_rating(text)
     return rating or default
+
+
+def is_review(signal: str) -> bool:
+    """Whether a signal is the non-tradeable REVIEW sentinel (#1170)."""
+    return signal == RATING_REVIEW

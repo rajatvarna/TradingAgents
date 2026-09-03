@@ -43,7 +43,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_COST_GUARD_ENABLED":   "cost_guard_enabled",
     "TRADINGAGENTS_ORCHESTRATOR_ENABLED": "orchestrator_enabled",
     "TRADINGAGENTS_TEMPERATURE":          "temperature",
-    # Monster Stock / TraderLion framework
+     # Monster Stock / TraderLion framework
     "TRADINGAGENTS_MONSTER_STOCK_MODE":          "monster_stock_mode",
     "TRADINGAGENTS_FORENSIC_ACCOUNTING_MODE":    "forensic_accounting_mode",
     "TRADINGAGENTS_MIN_COMPOSITE_SCORE_FOR_BUY": "min_composite_score_for_buy",
@@ -205,12 +205,12 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # Pending entries are never pruned. None disables rotation entirely.
     "memory_log_max_entries": None,
     # LLM settings
-    # Supported llm_provider values (see also CLI and factory):
+     # Supported llm_provider values (see also CLI and factory):
     # openai, google, anthropic, xai, deepseek, kimi, qwen, qwen-cn, glm, glm-cn,
     # minimax, minimax-cn, openrouter, deepinfra, github_copilot, ollama, bedrock, azure
-    "llm_provider": "google",
-    "deep_think_llm": "gemini-2.5-pro",
-    "quick_think_llm": "gemini-2.5-flash-lite",
+    "llm_provider": "openai",
+    "deep_think_llm": "gpt-5.6",
+    "quick_think_llm": "gpt-5.6-luna",
     # T0.1 — deterministic generation defaults.  Reproducibility floor for
     # the audit trail: with these pinned, two runs against the same
     # (ticker, date, prompt, snapshot) should produce ε-close outputs, and
@@ -254,11 +254,12 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # provider/SDK at its own default (usually 2). Raise it to ride out bursty
     # 429 throttling on rate-limited deployments instead of aborting a run (#1091).
     "llm_max_retries": None,
-    # Max output tokens per LLM call. DeepSeek V4 thinking models emit long
+     # Max output tokens per LLM call. DeepSeek V4 thinking models emit long
     # reasoning chains; without an explicit cap the backend can stream the
     # chain indefinitely (gateway idle timeout) or truncate content to empty
     # (#1204). Default 8192 leaves room for reasoning + content; override via
-    # TRADINGAGENTS_MAX_TOKENS.
+    # TRADINGAGENTS_MAX_TOKENS. Forwarded to every provider (Gemini as
+    # max_output_tokens) per upstream #1204.
     "max_tokens": 8192,
     # LLM response cache — local file-based cache of LLM API responses.
     # Enabled by default; set TRADINGAGENTS_LLM_CACHE_ENABLED=false to disable.

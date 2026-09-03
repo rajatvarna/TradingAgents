@@ -30,6 +30,7 @@ import http.client
 import json
 import logging
 import os
+import random
 import re
 import threading
 import time
@@ -42,7 +43,9 @@ from urllib.request import Request, urlopen
 
 from defusedxml import ElementTree as SafeET
 from defusedxml.common import EntitiesForbidden
+from defusedxml.common import EntitiesForbidden
 
+from .date_window import in_window
 from .symbol_utils import crypto_base, india_equity_parts
 
 logger = logging.getLogger(__name__)
@@ -160,12 +163,43 @@ def _strip_html(content: str) -> str:
 
 
 def _retry_after_seconds(exc: HTTPError) -> float | None:
-    """Seconds to wait from a 429's ``Retry-After`` header, capped at 30s."""
+    """Seconds to wait from a 429's ``Retry-After`` header, capped at 30s.
+
+    Returns ``None`` only when the header is absent or unparseable; a valid
+    ``Retry-After: 0`` returns ``0.0`` (retry at once), not ``None``.
+    """
     try:
         val = exc.headers.get("Retry-After") if getattr(exc, "headers", None) else None
-        return min(float(val), 30.0) if val else None
+        return min(float(val), 30.0) if val is not None else None
     except (ValueError, TypeError, AttributeError):
         return None
+# Headerless-429 backoff when Reddit gives no Retry-After. Jittered so several
+# analyses sharing an IP don't retry in lockstep and re-collide on the limit.
+_RETRY_FALLBACK_SECONDS = 5.0
+
+
+def _jitter(seconds: float, frac: float = 0.2) -> float:
+    """Return ``seconds`` with +/-``frac`` random jitter, to desynchronize
+    concurrent runs pacing against the same per-IP limit."""
+    return seconds * (1.0 + random.uniform(-frac, frac))
+
+
+# Reddit search feeds are small (a page of results); cap the read so a
+# compromised or misbehaving endpoint can't stream an unbounded body into
+# memory before we parse it. Overflow raises http.client.HTTPException, which
+# both fetch paths already treat as a failed fetch (degrade to empty / RSS).
+_MAX_FEED_BYTES = 5 * 1024 * 1024
+
+
+def _read_capped(resp) -> bytes:
+    """Read a response body bounded to ``_MAX_FEED_BYTES``, raising on overflow."""
+    data = resp.read(_MAX_FEED_BYTES + 1)
+    if len(data) > _MAX_FEED_BYTES:
+        raise http.client.HTTPException(
+            f"Reddit feed exceeded {_MAX_FEED_BYTES} bytes; refusing to parse"
+        )
+    return data
+
 
 
 def _reddit_oauth_credentials() -> tuple[str, str] | None:
@@ -254,10 +288,13 @@ def _fetch_subreddit_rss(
     req = Request(url, headers={"User-Agent": _UA})
     try:
         with urlopen(req, timeout=timeout) as resp:
-            root = SafeET.fromstring(resp.read())
+            root = SafeET.fromstring(_read_capped(resp))
     except HTTPError as exc:
         if exc.code == 429 and _retries_left > 0:
-            wait = _retry_after_seconds(exc) or min(5.0 * (3 - _retries_left), 30.0)
+            # Honour a server-supplied Retry-After exactly (including 0); jitter
+            # only our own fallback so concurrent runs don't retry in lockstep.
+            retry_after = _retry_after_seconds(exc)
+            wait = retry_after if retry_after is not None else _jitter(_RETRY_FALLBACK_SECONDS)
             logger.warning(
                 "Reddit RSS 429 for r/%s · %s — backing off %.1fs then retrying "
                 "(%d left)",
@@ -317,7 +354,7 @@ def _fetch_subreddit_json(
     req = Request(url, headers={"User-Agent": _UA, "Accept": "application/json"})
     try:
         with urlopen(req, timeout=timeout) as resp:
-            payload = json.loads(resp.read())
+            payload = json.loads(_read_capped(resp))
         children = (payload.get("data") or {}).get("children") or []
         return [c.get("data", {}) for c in children if isinstance(c, dict)]
     except (OSError, http.client.HTTPException, json.JSONDecodeError) as exc:
@@ -424,8 +461,8 @@ def fetch_reddit_posts(
     blocks = []
     total_posts = 0
     for i, sub in enumerate(selected_subreddits):
-        if i > 0:
-            time.sleep(inter_request_delay)
+        if i > 0 and inter_request_delay:
+            time.sleep(_jitter(inter_request_delay))
         posts = _fetch_subreddit(search_query, sub, limit_per_sub, timeout)
         posts = [p for p in posts if _in_window(p.get("created_utc"), start_ts, end_ts)]
         total_posts += len(posts)

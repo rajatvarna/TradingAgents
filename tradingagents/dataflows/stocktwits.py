@@ -14,12 +14,14 @@ network call succeeded.
 
 from __future__ import annotations
 
+import contextlib
 import http.client
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from urllib.request import Request, urlopen
 
+from .date_window import in_window
 from .symbol_utils import crypto_base
 
 logger = logging.getLogger(__name__)
@@ -28,49 +30,38 @@ _API = "https://api.stocktwits.com/api/2/streams/symbol/{ticker}.json"
 _UA = "tradingagents/0.2 (+https://github.com/TauricResearch/TradingAgents)"
 
 
-def _iso_to_epoch(iso_str: str | None) -> float | None:
-    """Parse StockTwits' ISO-8601 ``created_at`` to a UTC epoch, or None."""
-    if not iso_str:
-        return None
-    try:
-        normalized = iso_str[:-1] + "+00:00" if iso_str.endswith("Z") else iso_str
-        return datetime.fromisoformat(normalized).timestamp()
-    except (ValueError, TypeError):
-        return None
+def _within_window(messages, start_date, end_date):
+    """Keep only messages published in [start_date, end_date] (look-ahead safe).
 
-
-def _window_epochs(start_date: str | None, end_date: str | None) -> tuple[float | None, float | None]:
-    """UTC window [start midnight, end+1 day midnight) for inclusive date bounds."""
-    start_ts = None
-    if start_date:
-        start_ts = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp()
-    end_ts = None
-    if end_date:
-        end_ts = (datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)).timestamp()
-    return start_ts, end_ts
-
-
-def _in_window(epoch: float | None, start_ts: float | None, end_ts: float | None) -> bool:
-    """True when ``epoch`` is in [start_ts, end_ts). Undated excluded in dated window."""
-    if epoch is None:
-        return start_ts is None and end_ts is None
-    if start_ts is not None and epoch < start_ts:
-        return False
-    return not (end_ts is not None and epoch >= end_ts)
+    No window (both None) leaves the list untouched for live callers. A message
+    whose ``created_at`` (ISO 8601) is unparseable is dropped in a historical
+    window, since we can't prove it isn't from after the as-of date (#1220).
+    """
+    if not (start_date and end_date):
+        return messages
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+    kept = []
+    for m in messages:
+        created = None
+        raw = m.get("created_at")
+        if raw:
+            with contextlib.suppress(ValueError, TypeError):
+                created = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if in_window(created, start_dt, end_dt):
+            kept.append(m)
+    return kept
 
 
 def _stocktwits_symbol(ticker: str) -> str:
-    """Map Yahoo symbols to StockTwits' symbol conventions."""
-    base = crypto_base(ticker)
-    if base:
-        return f"{base}.X"
+    """Map a crypto pair to StockTwits' ``<BASE>.X`` convention.
 
-    symbol = ticker.strip().upper()
-    if symbol.endswith(".NS"):
-        return symbol[:-3] + ".NSE"
-    if symbol.endswith(".BO"):
-        return symbol[:-3] + ".BSE"
-    return symbol
+    StockTwits lists crypto as ``BTC.X`` (Yahoo's ``BTC-USD`` form 404s), so any
+    crypto symbol resolves to its base plus ``.X``; other symbols pass through
+    upper-cased.
+    """
+    base = crypto_base(ticker)
+    return f"{base}.X" if base else ticker.strip().upper()
 
 
 def fetch_stocktwits_messages(
@@ -83,8 +74,10 @@ def fetch_stocktwits_messages(
     """Fetch recent StockTwits messages for ``ticker`` and return them as a
     formatted plaintext block ready for prompt injection.
 
-    When ``start_date``/``end_date`` are provided messages outside the window
-    are dropped (#1220).
+    When ``start_date``/``end_date`` (yyyy-mm-dd) are given, messages are trimmed
+    to that window. The StockTwits public stream only serves recent messages, so
+    for a historical run they all fall after the window and a clear placeholder
+    is returned rather than leaking today's chatter into a backtest (#1220).
 
     Returns a placeholder string when the endpoint is unreachable, the
     symbol has no messages, or the response shape is unexpected — the
@@ -95,27 +88,19 @@ def fetch_stocktwits_messages(
     try:
         with urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read())
-    except (OSError, http.client.HTTPException, json.JSONDecodeError, UnicodeError) as exc:
+    except (OSError, http.client.HTTPException, json.JSONDecodeError) as exc:
         # OSError covers URLError/TimeoutError/connection resets; HTTPException
         # covers chunked-transfer errors (IncompleteRead/BadStatusLine, #1024).
-        # UnicodeError covers UnicodeEncodeError raised by http.client when a
-        # non-ASCII ticker (e.g. a Chinese company name) reaches the ASCII-only request line.
         logger.warning("StockTwits fetch failed for %s: %s", ticker, exc)
         return f"<stocktwits unavailable: {type(exc).__name__}>"
 
-    raw_messages = data.get("messages", []) if isinstance(data, dict) else []
-    messages = [m for m in raw_messages if isinstance(m, dict)] if isinstance(raw_messages, list) else []
+    messages = data.get("messages", []) if isinstance(data, dict) else []
+    messages = _within_window(messages, start_date, end_date)
     if not messages:
-        return f"<no StockTwits messages found for ${ticker.upper()}>"
-
-    start_ts, end_ts = _window_epochs(start_date, end_date)
-    messages = [m for m in messages if _in_window(_iso_to_epoch(m.get("created_at")), start_ts, end_ts)]
-    if not messages:
-        if end_date:
+        if start_date and end_date:
             return (
-                f"<no StockTwits messages found for ${ticker.upper()} in the "
-                f"requested window (through {end_date}); historical social "
-                f"data may be unavailable>"
+                f"<no StockTwits messages for ${ticker.upper()} within "
+                f"{start_date}..{end_date} (public stream serves only recent messages)>"
             )
         return f"<no StockTwits messages found for ${ticker.upper()}>"
 

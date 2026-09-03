@@ -837,85 +837,133 @@ def run_analysis(
             """Process one graph output chunk and refresh the TUI display."""
             ingest_chunk_messages(message_store, chunk, classify_message_type)
 
-            # Analyst status updates
-            agent_tracker.update_from_analyst_stream(
-                chunk, report_builder,
-                wall_time_tracker=analyst_wall_time_tracker,
-            )
+            # Analyst status updates - handled inline per chunk below
 
-            # Research Team — handle investment debate state
-            if chunk.get("investment_debate_state"):
-                debate_state = chunk["investment_debate_state"]
-                bull_hist = debate_state.get("bull_history", "").strip()
-                bear_hist = debate_state.get("bear_history", "").strip()
-                judge = debate_state.get("judge_decision", "").strip()
-
-                if bull_hist or bear_hist:
-                    agent_tracker.mark_research_team_in_progress()
-                if bull_hist:
-                    report_builder.update_section(
-                        "investment_plan", f"### Bull Researcher Analysis\n{bull_hist}")
-                if bear_hist:
-                    report_builder.update_section(
-                        "investment_plan", f"### Bear Researcher Analysis\n{bear_hist}")
-                if judge:
-                    report_builder.update_section(
-                        "investment_plan", f"### Research Manager Decision\n{judge}")
-                    agent_tracker.update_status("Bull Researcher", "completed")
-                    agent_tracker.update_status("Bear Researcher", "completed")
-                    agent_tracker.update_status("Research Manager", "completed")
-                    agent_tracker.update_status("Trader", "in_progress")
-
-            # Trading Team
-            if chunk.get("trader_investment_plan"):
-                report_builder.update_section("trader_investment_plan", chunk["trader_investment_plan"])
-                if agent_tracker.agent_status.get("Trader") != "completed":
-                    agent_tracker.update_status("Trader", "completed")
-                    agent_tracker.update_status("Aggressive Analyst", "in_progress")
-
-            # Risk Management Team
-            if chunk.get("risk_debate_state"):
-                risk_state = chunk["risk_debate_state"]
-                agg_hist = risk_state.get("aggressive_history", "").strip()
-                con_hist = risk_state.get("conservative_history", "").strip()
-                neu_hist = risk_state.get("neutral_history", "").strip()
-                judge = risk_state.get("judge_decision", "").strip()
-
-                if agg_hist:
-                    if agent_tracker.agent_status.get("Aggressive Analyst") != "completed":
-                        agent_tracker.update_status("Aggressive Analyst", "in_progress")
-                    report_builder.update_section(
-                        "final_trade_decision", f"### Aggressive Analyst Analysis\n{agg_hist}")
-                if con_hist:
-                    if agent_tracker.agent_status.get("Conservative Analyst") != "completed":
-                        agent_tracker.update_status("Conservative Analyst", "in_progress")
-                    report_builder.update_section(
-                        "final_trade_decision", f"### Conservative Analyst Analysis\n{con_hist}")
-                if neu_hist:
-                    if agent_tracker.agent_status.get("Neutral Analyst") != "completed":
-                        agent_tracker.update_status("Neutral Analyst", "in_progress")
-                    report_builder.update_section(
-                        "final_trade_decision", f"### Neutral Analyst Analysis\n{neu_hist}")
-                if judge and agent_tracker.agent_status.get("Portfolio Manager") != "completed":
-                    agent_tracker.update_status("Portfolio Manager", "in_progress")
-                    report_builder.update_section(
-                        "final_trade_decision", f"### Portfolio Manager Decision\n{judge}")
-                    agent_tracker.update_status("Aggressive Analyst", "completed")
-                    agent_tracker.update_status("Conservative Analyst", "completed")
-                    agent_tracker.update_status("Neutral Analyst", "completed")
-                    agent_tracker.update_status("Portfolio Manager", "completed")
-
-            # Refresh display
-            display_mgr.update_all(agent_tracker, message_store, report_builder,
-                                   stats_handler=stats_handler, start_time=start_time,
-                                   spend_tracker=spend_tracker)
-
-        final_state, decision = graph.propagate(
+        # Initialize state and get graph args with checkpoint lifecycle (upstream #1249)
+        # Resolve the instrument identity once here so all agents anchor to
+        # the real company (#814); the CLI builds state directly rather than
+        # going through propagate(), so this must happen on the CLI path too.
+        instrument_context = graph.resolve_instrument_context(
+            selections["ticker"], selections["asset_type"]
+        )
+        init_agent_state = graph.propagator.create_initial_state(
             selections["ticker"],
             selections["analysis_date"],
             asset_type=selections["asset_type"],
-            on_chunk=render_chunk,
+            instrument_context=instrument_context,
         )
+        # Pass callbacks to graph config for tool execution tracking
+        # (LLM tracking is handled separately via LLM constructor)
+        # Fork keeps SpendTracker in graph construction; tool tracking uses stats_handler
+        args = graph.propagator.get_graph_args(callbacks=[stats_handler])
+
+        # Recompile with a checkpointer and inject the thread_id so --checkpoint
+        # actually saves and resumes on the CLI path (#1249); a no-op when
+        # checkpointing is disabled. Torn down in the finally below.
+        checkpoint_tid = graph.begin_checkpoint(
+            selections["ticker"], selections["analysis_date"], selections["asset_type"]
+        )
+        if checkpoint_tid is not None:
+            args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = checkpoint_tid
+
+        # Stream the analysis. On resume, feed None so LangGraph continues the
+        # interrupted run instead of re-appending the initial state (#1249); the
+        # try/finally tears the checkpointer down even if the stream raises.
+        trace = []
+        try:
+            for chunk in graph.graph.stream(graph.checkpoint_input(init_agent_state), **args):
+                # Keep TUI message store in sync (fork's ingest path)
+                ingest_chunk_messages(message_store, chunk, classify_message_type)
+
+                # Analyst status updates (fork's TUI)
+                agent_tracker.update_from_analyst_stream(
+                    chunk, report_builder,
+                    wall_time_tracker=analyst_wall_time_tracker,
+                )
+
+                # Research Team — handle investment debate state
+                if chunk.get("investment_debate_state"):
+                    debate_state = chunk["investment_debate_state"]
+                    bull_hist = debate_state.get("bull_history", "").strip()
+                    bear_hist = debate_state.get("bear_history", "").strip()
+                    judge = debate_state.get("judge_decision", "").strip()
+
+                    if bull_hist or bear_hist:
+                        agent_tracker.mark_research_team_in_progress()
+                    if bull_hist:
+                        report_builder.update_section(
+                            "investment_plan", f"### Bull Researcher Analysis\n{bull_hist}")
+                    if bear_hist:
+                        report_builder.update_section(
+                            "investment_plan", f"### Bear Researcher Analysis\n{bear_hist}")
+                    if judge:
+                        report_builder.update_section(
+                            "investment_plan", f"### Research Manager Decision\n{judge}")
+                        agent_tracker.update_status("Bull Researcher", "completed")
+                        agent_tracker.update_status("Bear Researcher", "completed")
+                        agent_tracker.update_status("Research Manager", "completed")
+                        agent_tracker.update_status("Trader", "in_progress")
+
+                # Trading Team
+                if chunk.get("trader_investment_plan"):
+                    report_builder.update_section("trader_investment_plan", chunk["trader_investment_plan"])
+                    if agent_tracker.agent_status.get("Trader") != "completed":
+                        agent_tracker.update_status("Trader", "completed")
+                        agent_tracker.update_status("Aggressive Analyst", "in_progress")
+
+                # Risk Management Team
+                if chunk.get("risk_debate_state"):
+                    risk_state = chunk["risk_debate_state"]
+                    agg_hist = risk_state.get("aggressive_history", "").strip()
+                    con_hist = risk_state.get("conservative_history", "").strip()
+                    neu_hist = risk_state.get("neutral_history", "").strip()
+                    judge = risk_state.get("judge_decision", "").strip()
+
+                    if agg_hist:
+                        if agent_tracker.agent_status.get("Aggressive Analyst") != "completed":
+                            agent_tracker.update_status("Aggressive Analyst", "in_progress")
+                        report_builder.update_section(
+                            "final_trade_decision", f"### Aggressive Analyst Analysis\n{agg_hist}")
+                    if con_hist:
+                        if agent_tracker.agent_status.get("Conservative Analyst") != "completed":
+                            agent_tracker.update_status("Conservative Analyst", "in_progress")
+                        report_builder.update_section(
+                            "final_trade_decision", f"### Conservative Analyst Analysis\n{con_hist}")
+                    if neu_hist:
+                        if agent_tracker.agent_status.get("Neutral Analyst") != "completed":
+                            agent_tracker.update_status("Neutral Analyst", "in_progress")
+                        report_builder.update_section(
+                            "final_trade_decision", f"### Neutral Analyst Analysis\n{neu_hist}")
+                    if judge and agent_tracker.agent_status.get("Portfolio Manager") != "completed":
+                        agent_tracker.update_status("Portfolio Manager", "in_progress")
+                        report_builder.update_section(
+                            "final_trade_decision", f"### Portfolio Manager Decision\n{judge}")
+                        agent_tracker.update_status("Aggressive Analyst", "completed")
+                        agent_tracker.update_status("Conservative Analyst", "completed")
+                        agent_tracker.update_status("Neutral Analyst", "completed")
+                        agent_tracker.update_status("Portfolio Manager", "completed")
+
+                # Refresh display
+                display_mgr.update_all(agent_tracker, message_store, report_builder,
+                                       stats_handler=stats_handler, start_time=start_time,
+                                       spend_tracker=spend_tracker)
+
+                trace.append(chunk)
+
+            # Clean run: drop this run's checkpoint so a later run starts fresh.
+            # A mid-stream failure skips this, keeping the checkpoint for resume.
+            graph.clear_checkpoint_on_success(
+                selections["ticker"], selections["analysis_date"], selections["asset_type"]
+            )
+        finally:
+            # Always restore the plain uncheckpointed graph, even on failure.
+            graph.end_checkpoint()
+
+        # Streamed chunks are per-node deltas, not full state. Merge them
+        # so every report field populated across the run is present.
+        final_state = {}
+        for chunk in trace:
+            final_state.update(chunk)
 
         agent_tracker.set_all_completed()
 

@@ -35,23 +35,3 @@ SIGNAL_CONVICTION_WEIGHTS: dict[str, float] = {
     SIGNAL_UNDERWEIGHT: -1.0,
     SIGNAL_SELL: -2.0,
 }
-
-
-class SignalProcessor:
-    """Read the 5-tier rating out of a Portfolio Manager decision."""
-
-    def __init__(self, quick_thinking_llm: Any = None):
-        # The LLM argument is accepted for backwards compatibility but no
-        # longer used: the PM's structured output guarantees the rating is
-        # parseable from the rendered markdown without a second LLM call.
-        self.quick_thinking_llm = quick_thinking_llm
-
-    def process_signal(self, full_signal: str) -> str:
-        """Return one of Buy / Overweight / Hold / Underweight / Sell / REVIEW."""
-        rating = extract_rating(full_signal)
-        if rating is None:
-            logger.warning(
-                "SignalProcessor: could not extract rating; surfacing %s", RATING_REVIEW
-            )
-            return RATING_REVIEW
-        return rating

@@ -52,6 +52,19 @@ def create_trader(llm, cache=None, prompt_registry=None, tools=None):
         capital_context = build_capital_context(state.get("holdings_info"))
         risk_constraints_block = format_risk_constraints(state.get("risk_constraints", {}))
 
+        # Upstream price grounding (#1167): include technical market report when available
+        market_report = (state.get("market_report") or "").strip()
+        if market_report:
+            grounding = (
+                "Ground concrete price levels (entry, stop-loss, position sizing) in the technical "
+                "market report's price structure -- current price, support/resistance, ATR, and "
+                "volatility -- and use the research plan for direction and strategy. "
+            )
+            report_section = f"Technical Market Report:\n{market_report}\n\n"
+        else:
+            grounding = ""
+            report_section = ""
+
         # Trader uses two templates (system + user) rather than one
         # combined prompt. Record both hashes in metadata so the trace
         # can reconstruct either side independently.
@@ -80,8 +93,9 @@ def create_trader(llm, cache=None, prompt_registry=None, tools=None):
 
         messages = [
             {"role": "system", "content": system_content},
-            {"role": "user", "content": user_content},
+            {"role": "user", "content": (report_section + user_content) if report_section else user_content},
         ]
+        # If grounding is needed but registry path doesn't include it, it is already in report_section; for non-registry fallback, grounding would be injected via system prompt.
 
         # If tools are bound, run a tool-augmented pass first so the Trader can
         # verify current price, options, or news before the structured proposal.

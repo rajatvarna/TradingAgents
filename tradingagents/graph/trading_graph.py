@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 UTC = timezone.utc
@@ -387,7 +388,8 @@ class TradingAgentsGraph:
 
         max_tokens = self.config.get("max_tokens")
         if max_tokens is not None and max_tokens != "":
-            kwargs["max_tokens"] = int(max_tokens)
+            key = "max_output_tokens" if provider == "google" else "max_tokens"
+            kwargs[key] = _coerce_max_tokens(max_tokens)
 
         # Determinism keys (T0.1)
         llm_temp = self.config.get("llm_temperature")
@@ -1019,7 +1021,12 @@ class TradingAgentsGraph:
 
         with self.checkpoint_scope(company_name, trade_date, asset_type) as thread_id_value:
             return self._run_graph(
-                company_name, trade_date, asset_type=asset_type,
+                company_name,
+                trade_date,
+                asset_type=asset_type,
+                on_chunk=on_chunk,
+                progress_callback=progress_callback,
+                target_profile=target_profile,
                 checkpoint_thread_id=thread_id_value,
             )
 
@@ -1085,28 +1092,17 @@ class TradingAgentsGraph:
                 self.config["data_cache_dir"], company_name, str(trade_date),
                 self._run_signature(asset_type),
             )
-            if step is not None:
-                logger.info(
-                    "Resuming from step %d for %s on %s", step, company_name, trade_date
-                )
-            else:
-                logger.info("Starting fresh for %s on %s", company_name, trade_date)
 
-        try:
-            return self._run_graph(
-                company_name,
-                trade_date,
-                asset_type=asset_type,
-                on_chunk=on_chunk,
-                progress_callback=progress_callback,
-                target_profile=target_profile,
-            )
-        finally:
-            logger.info("run_cache stats: %s", run_cache_stats())
-            if self._checkpointer_ctx is not None:
-                self._checkpointer_ctx.__exit__(None, None, None)
-                self._checkpointer_ctx = None
-                self.graph = self.workflow.compile()
+    def _run_graph(
+        self,
+        company_name,
+        trade_date,
+        asset_type: str = "stock",
+        on_chunk=None,
+        progress_callback=None,
+        target_profile=None,
+        checkpoint_thread_id: str | None = None,
+    ):
         """Execute the graph and write the resulting state to disk and memory log."""
         from tradingagents.spend_tracker import BudgetExceededError, SpendTracker
         for cb in self.callbacks or []:

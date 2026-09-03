@@ -109,9 +109,9 @@ class TradingAgentsConfig(BaseModel):
     trigger_daily_rate_max_jobs: int = Field(default=200, ge=0)
 
     # --- LLM provider / generation ---------------------------------------
-    llm_provider: str = Field(default="google", min_length=1)
-    deep_think_llm: str = Field(default="gemini-2.5-pro", min_length=1)
-    quick_think_llm: str = Field(default="gemini-2.5-flash-lite", min_length=1)
+    llm_provider: str = Field(default="openai", min_length=1)
+    deep_think_llm: str = Field(default="gpt-5.6", min_length=1)
+    quick_think_llm: str = Field(default="gpt-5.6-luna", min_length=1)
     llm_temperature: float = Field(default=0.0, ge=0, le=2)
     llm_seed: int | None = None
     backend_url: str | None = None
@@ -125,7 +125,7 @@ class TradingAgentsConfig(BaseModel):
     deepseek_reasoning_effort: str | None = "max"
     temperature: float | None = Field(default=None, ge=0, le=2)
     llm_max_retries: int | None = Field(default=None, ge=0)
-    max_tokens: int | None = Field(default=8192, ge=1)
+    max_tokens: int | None = Field(default=None, ge=1)
     llm_cache_enabled: bool = True
     llm_cache_ttl_hours: int = Field(default=24, ge=0)
     llm_cache_providers: list[str] = Field(default_factory=list)
@@ -179,6 +179,8 @@ class TradingAgentsConfig(BaseModel):
     av_global_news_limit: int = Field(default=50, ge=0)
     tool_vendors: dict[str, str] = Field(default_factory=dict)
     earnings_lookahead_days: int = Field(default=7, ge=0)
+    news_window: dict[str, Any] = Field(default_factory=lambda: {"mode": "lookback"})
+    analyst_concurrency_limit: int = Field(default=1, ge=1)
 
     # --- Analyst weighting / trade filter -----------------------------------
     analyst_weights_lookback: int = Field(default=20, ge=0)

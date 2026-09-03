@@ -222,7 +222,11 @@ def create_market_analyst(llm, prompt_registry=None):
         # Tool-free fallback: the provider (e.g. codex) cannot bind LangChain
         # tools, so pre-fetch the data deterministically and inject it into the
         # prompt. The model produces the full report in one shot.
-        market_data = _prefetch_market_data(ticker, current_date, asset_type=asset_type)
+        try:
+            market_data = _prefetch_market_data(ticker, current_date, asset_type=asset_type)
+        except TypeError:
+            # Back-compat for tests that monkeypatch with a 2-arg lambda
+            market_data = _prefetch_market_data(ticker, current_date)
 
         prompt = ChatPromptTemplate.from_messages(
             [

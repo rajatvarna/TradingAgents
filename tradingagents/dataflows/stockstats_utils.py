@@ -46,10 +46,25 @@ def _cache_covers_request(
     if "Date" not in cached.columns:
         return False
 
-    cached_dates = pd.to_datetime(cached["Date"], errors="coerce")
+    # Use the same local-midnight normalization as _clean_dataframe so
+    # tz-aware/intraday strings (e.g. "2026-05-08 09:30:00-04:00") compare
+    # correctly against the naive curr_date cutoff (#1201).
+    try:
+        # _normalize_dates is defined later; use _local_midnight mapping directly
+        # to avoid forward-reference issues at import time.
+        cached_dates = pd.to_datetime(pd.Series(cached["Date"]).map(_local_midnight))
+    except Exception:
+        cached_dates = pd.to_datetime(cached["Date"], errors="coerce")
     max_cached_date = cached_dates.max()
     if pd.isna(max_cached_date):
         return False
+    # max_cached_date from _local_midnight is already naive midnight; ensure
+    # comparison is naive vs naive even if fallback path produced tz-aware.
+    if getattr(max_cached_date, "tzinfo", None) is not None:
+        try:
+            max_cached_date = max_cached_date.tz_localize(None)
+        except Exception:
+            pass
     if max_cached_date.normalize() >= curr_date_dt.normalize():
         return True
 
@@ -259,14 +274,35 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     # A cached file may be empty if a prior fetch failed (unknown symbol,
     # transient rate limit). Treat an empty/columnless cache as a miss and
     # re-fetch rather than serving the poisoned file forever.
+    # Fork must also honour legacy date-ranged cache files (e.g.
+    # AAPL-YFin-data-2021-05-08-2026-05-09.csv) that tests seed; upstream used
+    # that naming while the fork moved to a fixed 15y suffix. Scan for any
+    # matching file so the seeded cache is found (#1201 tests).
     data = None
+    candidates: list[str] = []
     if os.path.exists(data_file):
-        cached = pd.read_csv(data_file, on_bad_lines="skip", encoding="utf-8")
+        candidates.append(data_file)
+    # Legacy / seeded files: any file with the same prefix and .csv suffix
+    try:
+        prefix = f"{safe_symbol}-YFin-data-"
+        for fn in os.listdir(config["data_cache_dir"]):
+            p = os.path.join(config["data_cache_dir"], fn)
+            if fn.startswith(prefix) and fn.endswith(".csv") and os.path.abspath(p) != os.path.abspath(data_file):
+                candidates.append(p)
+    except FileNotFoundError:
+        pass
+
+    for cand in candidates:
+        try:
+            cached = pd.read_csv(cand, on_bad_lines="skip", encoding="utf-8")
+        except Exception:
+            continue
         if (
-            _cache_covers_request(data_file, cached, curr_date_dt, today_date)
-            and not _needs_same_day_refresh(data_file, curr_date_dt, today_date)
+            _cache_covers_request(cand, cached, curr_date_dt, today_date)
+            and not _needs_same_day_refresh(cand, curr_date_dt, today_date)
         ):
             data = cached
+            break
 
     if data is None:
         downloaded = yf_retry(lambda: yf.download(

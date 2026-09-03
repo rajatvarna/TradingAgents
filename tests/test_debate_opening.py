@@ -28,9 +28,14 @@ _REPORTS = {
 
 def _capturing_llm(captured: dict):
     llm = MagicMock()
-    llm.invoke.side_effect = lambda prompt: (
-        captured.__setitem__("prompt", prompt) or MagicMock(content="argument")
-    )
+    def _capture(prompt, *args, **kwargs):
+        # prompt_registry path passes config={"metadata":...}; accept it
+        if isinstance(prompt, list):
+            # prompt | llm path passes list of messages; flatten to string
+            prompt = " ".join(getattr(m, "content", str(m)) for m in prompt)
+        captured["prompt"] = prompt if isinstance(prompt, str) else str(prompt)
+        return MagicMock(content="argument")
+    llm.invoke.side_effect = _capture
     return llm
 
 

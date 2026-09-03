@@ -254,13 +254,11 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # provider/SDK at its own default (usually 2). Raise it to ride out bursty
     # 429 throttling on rate-limited deployments instead of aborting a run (#1091).
     "llm_max_retries": None,
-     # Max output tokens per LLM call. DeepSeek V4 thinking models emit long
-    # reasoning chains; without an explicit cap the backend can stream the
-    # chain indefinitely (gateway idle timeout) or truncate content to empty
-    # (#1204). Default 8192 leaves room for reasoning + content; override via
-    # TRADINGAGENTS_MAX_TOKENS. Forwarded to every provider (Gemini as
-    # max_output_tokens) per upstream #1204.
-    "max_tokens": 8192,
+    # Cap on output tokens forwarded to every provider chat client. None leaves
+    # each provider at its own default. Set it to bound a model that emits
+    # unbounded reasoning/output and hangs or trips a gateway idle timeout
+    # (e.g. some deepseek-v4-flash deployments, #1204).
+    "max_tokens": None,
     # LLM response cache — local file-based cache of LLM API responses.
     # Enabled by default; set TRADINGAGENTS_LLM_CACHE_ENABLED=false to disable.
     "llm_cache_enabled": True,

@@ -3,6 +3,7 @@ from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     format_risk_constraints,
     get_language_instruction,
+    opponent_argument_or_opening,
     summarize_for_debate,
 )
 from tradingagents.audit.prompt_registry import default_registry
@@ -10,12 +11,7 @@ from tradingagents.dataflows.config import get_config
 
 
 def _format_risk_opponent(role: str, current_response: str) -> str:
-    if current_response.strip():
-        return current_response
-    return (
-        f"There are no responses from the {role} analyst yet; "
-        "present your own argument based on the available data."
-    )
+    return opponent_argument_or_opening(current_response, f"{role} analyst")
 
 
 def create_aggressive_debator(llm, prompt_registry=None):

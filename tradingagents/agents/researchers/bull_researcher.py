@@ -1,6 +1,7 @@
 from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     get_language_instruction,
+    opponent_argument_or_opening,
     summarize_for_debate,
     trim_debate_history,
 )
@@ -47,12 +48,7 @@ def _format_monster_block_for_researcher(mss: dict) -> str:
 
 def format_opponent_argument(side: str, current_response: str) -> str:
     """Render the opponent's last turn, or an explicit opening-turn placeholder (#1176)."""
-    if current_response.strip():
-        return f"Last {side} argument: {current_response}"
-    return (
-        f"There are no responses from the {side} analyst yet; "
-        "present your own argument based on the available data."
-    )
+    return opponent_argument_or_opening(current_response, f"{side} analyst")
 
 
 def create_bull_researcher(llm, prompt_registry=None):
@@ -70,7 +66,7 @@ def create_bull_researcher(llm, prompt_registry=None):
         bull_history = investment_debate_state.get("bull_history", "")
 
         current_response = investment_debate_state.get("current_response", "")
-        opponent_argument = format_opponent_argument("bear", current_response)
+        opponent_argument = opponent_argument_or_opening(current_response, "bear analyst")
         # A7 token hygiene: round 1 (this speaker's own first turn) always
         # gets full reports; every round after that gets a short extractive
         # digest instead, when debate_context_mode="digest" is configured.

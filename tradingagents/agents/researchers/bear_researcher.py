@@ -1,11 +1,11 @@
 from tradingagents.agents.researchers.bull_researcher import (
     _SHARED_BLOCKS,
     _format_monster_block_for_researcher,
-    format_opponent_argument,
 )
 from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     get_language_instruction,
+    opponent_argument_or_opening,
     summarize_for_debate,
     trim_debate_history,
 )
@@ -27,7 +27,7 @@ def create_bear_researcher(llm, prompt_registry=None):
         bear_history = investment_debate_state.get("bear_history", "")
 
         current_response = investment_debate_state.get("current_response", "")
-        opponent_argument = format_opponent_argument("bull", current_response)
+        opponent_argument = opponent_argument_or_opening(current_response, "bull analyst")
 
         # A7 token hygiene — see create_bull_researcher's identical comment.
         is_first_turn = not bear_history.strip()

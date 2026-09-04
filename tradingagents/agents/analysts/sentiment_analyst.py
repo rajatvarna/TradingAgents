@@ -144,9 +144,6 @@ def create_sentiment_analyst(llm, prompt_registry=None):
                 SystemMessage(content=system_message),
                 (
                     "human",
-                    " Analysis context:\n"
-                    "- Current date: {current_date}\n"
-                    "- Instrument context: {instrument_context}\n\n"
                     "Pre-fetched data:\n\n"
                     "News headlines — Yahoo Finance, {start_date} to {end_date}\n"
                     "<start_of_news>\n{news_block}\n<end_of_news>\n\n"
@@ -161,7 +158,14 @@ def create_sentiment_analyst(llm, prompt_registry=None):
                     "Fear & Greed Index — aggregate market mood (0–100)\n"
                     "<start_of_fear_greed>\n{fear_greed_block}\n<end_of_fear_greed>\n\n"
                     "{agentkey_block}\n\n"
-                    "Use the pre-fetched data to produce a comprehensive sentiment report with source-by-source evidence, divergences, catalysts, risks, and a final markdown table.",
+                    "Use the pre-fetched data to produce a comprehensive sentiment report with source-by-source evidence, divergences, catalysts, risks, and a final markdown table.\n"
+                    # Volatile per-run values (trade date, instrument) go LAST
+                    # so the static prefix above stays byte-identical across
+                    # trade dates and tickers, and provider prompt caches can
+                    # reuse it between runs (#750).
+                    " Analysis context:\n"
+                    "- Current date: {current_date}\n"
+                    "- Instrument context: {instrument_context}",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]

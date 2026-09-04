@@ -1,5 +1,8 @@
 # Upstream PR Integration Plan (Last 1 Month)
 
+> **Latest:** `docs/UPSTREAM_PR_INTEGRATION_PLAN_2026-09-02.md` covers window `2026-08-19..2026-09-02`
+> (upstream v0.4.0 + v0.4.1 post-fixes, branch `feat/upstream-sep02-integration`). This file is retained for history.
+
 **Status:** Complete — Tier 1 ports landed on `main` (2026-08-10)
 **Last updated:** 2026-08-10
 **Window:** pull requests opened against `TauricResearch/TradingAgents`

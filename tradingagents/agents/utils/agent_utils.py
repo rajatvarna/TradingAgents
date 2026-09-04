@@ -152,6 +152,19 @@ def get_horizon_instruction() -> str:
     guidance = horizon_guidance.get(horizon, horizon_guidance["medium_term"])
     return f" Investment Horizon: {horizon}. Analysis Priority: {guidance} Adapt your analysis based on this investment horizon."
 
+def opponent_argument_or_opening(text: str, opponent: str) -> str:
+    """Opponent's latest argument, or an explicit opening marker when empty.
+
+    The first speaker in each debate round receives an empty opponent response;
+    interpolating it into a "refute the opponent" prompt makes the model
+    fabricate the other side's position. Returning a clear "has not spoken yet"
+    marker instead lets it open with its own case (#1176).
+    """
+    text = (text or "").strip()
+    if text:
+        return text
+    return f"(The {opponent} has not spoken yet — open the debate with your own case.)"
+
 
 def _clean_identity_value(value: Any) -> str | None:
     """Return a trimmed string, or None for empty / placeholder-ish values."""

@@ -30,15 +30,24 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 # LLMs sometimes write a placeholder string ("None", "N/A", ...) into an optional
-# numeric field instead of omitting it. Coerce those to None so the structured
-# call validates instead of erroring (#1058). Pydantic still parses real numeric
-# strings ("189.5") to float.
+# numeric field instead of omitting it, or include percentage signs / currency
+# symbols ("15%", "$189.5"). Coerce these safely (#1058, #1288).
 _NULLISH_FLOAT = {"", "none", "n/a", "na", "null", "nil", "-", "tbd", "unknown"}
 
 
 def _coerce_optional_float(value):
-    if isinstance(value, str) and value.strip().lower() in _NULLISH_FLOAT:
-        return None
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if cleaned.lower() in _NULLISH_FLOAT:
+            return None
+        s = cleaned.lstrip("$€£¥~+ ").rstrip(" %").strip()
+        # Handle leading dot like ".50" -> "0.50" for float()
+        if s.startswith("."):
+            s = "0" + s
+        try:
+            return float(s)
+        except (ValueError, TypeError):
+            pass
     return value
 
 # ---------------------------------------------------------------------------
@@ -87,9 +96,11 @@ class ResearchPlan(BaseModel):
     recommendation: PortfolioRating = Field(
         description=(
             "The investment recommendation. Exactly one of Buy / Overweight / "
-            "Hold / Underweight / Sell. Reserve Hold for situations where the "
-            "evidence on both sides is genuinely balanced; otherwise commit to "
-            "the side with the stronger arguments."
+            "Hold / Underweight / Sell. Choose Hold when the evidence is "
+            "balanced, materially conflicting, ambiguous, or insufficient to "
+            "justify changing exposure; otherwise commit to the side with the "
+            "clearly stronger arguments. Do not pick a direction merely to be "
+            "decisive."
         ),
     )
     rationale: str = Field(
@@ -333,7 +344,10 @@ class PortfolioDecision(BaseModel):
     rating: PortfolioRating = Field(
         description=(
             "The final position rating. Exactly one of Buy / Overweight / Hold / "
-            "Underweight / Sell, picked based on the analysts' debate."
+            "Underweight / Sell, picked based on the analysts' debate. Choose "
+            "Hold when the case is balanced, materially conflicting, ambiguous, "
+            "or insufficient to justify changing exposure, rather than forcing a "
+            "direction to appear decisive."
         ),
     )
     executive_summary: str = Field(

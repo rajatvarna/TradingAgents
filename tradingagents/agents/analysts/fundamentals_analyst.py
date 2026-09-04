@@ -209,6 +209,10 @@ def create_fundamentals_analyst(llm, prompt_registry=None):
                         " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
                         " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
                         " You have access to the following tools: {tool_names}.\n"
+                        # Volatile per-run values (trade date, instrument) go LAST
+                        # so the static prefix above stays byte-identical across
+                        # trade dates and tickers, and provider prompt caches can
+                        # reuse it between runs (#750).
                         "Analysis context:\n"
                         "- Current date: {current_date}\n"
                         "- Instrument context: {instrument_context}",
@@ -249,10 +253,14 @@ def create_fundamentals_analyst(llm, prompt_registry=None):
                     " base your report only on the provided data."
                     " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
                     " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
+                    "=== Pre-fetched fundamentals ===\n{fundamentals_data}\n"
+                    # Volatile per-run values (trade date, instrument) go LAST
+                    # so the static prefix above stays byte-identical across
+                    # trade dates and tickers, and provider prompt caches can
+                    # reuse it between runs (#750).
                     "\nAnalysis context:\n"
                     "- Current date: {current_date}\n"
-                    "- Instrument context: {instrument_context}\n\n"
-                    "=== Pre-fetched fundamentals ===\n{fundamentals_data}",
+                    "- Instrument context: {instrument_context}",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]

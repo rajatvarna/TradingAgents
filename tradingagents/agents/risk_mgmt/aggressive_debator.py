@@ -3,6 +3,7 @@ from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     format_risk_constraints,
     get_language_instruction,
+    opponent_argument_or_opening,
     summarize_for_debate,
 )
 from tradingagents.audit.prompt_registry import default_registry
@@ -10,12 +11,7 @@ from tradingagents.dataflows.config import get_config
 
 
 def _format_risk_opponent(role: str, current_response: str) -> str:
-    if current_response.strip():
-        return current_response
-    return (
-        f"There are no responses from the {role} analyst yet; "
-        "present your own argument based on the available data."
-    )
+    return opponent_argument_or_opening(current_response, f"{role} analyst")
 
 
 def create_aggressive_debator(llm, prompt_registry=None):
@@ -48,6 +44,13 @@ def create_aggressive_debator(llm, prompt_registry=None):
 
         trader_decision = state["trader_investment_plan"]
 
+        # Prompt layout is cache-aware (#750): the debate-wide shared context
+        # (reports, trader decision where applicable, then the append-only
+        # debate history) leads, and the per-role instructions trail. Every
+        # debate turn therefore extends a byte-identical prefix that provider
+        # prompt caches can serve at the cached-token rate; with the role text
+        # first, no two turns ever share a prefix and every turn bills full
+        # price. Wording is unchanged — sections are only reordered.
         version = state.get("prompt_versions", {}).get("risk/aggressive", "v1")
         prompt, prompt_hash, shared_hashes = registry.render_with_shared(
             "risk/aggressive",

@@ -112,12 +112,19 @@ def write_report_tree(final_state: dict, ticker: str, save_path) -> Path:
             content = "\n\n".join(f"### {name}\n{text}" for name, text in risk_parts)
             sections.append(f"## IV. Risk Management Team Decision\n\n{content}")
 
-        # 5. Portfolio Manager
-        if risk.get("judge_decision"):
-            portfolio_dir = save_path / "5_portfolio"
-            portfolio_dir.mkdir(exist_ok=True)
-            (portfolio_dir / "decision.md").write_text(risk["judge_decision"], encoding="utf-8")
-            sections.append(f"## V. Portfolio Manager Decision\n\n### Portfolio Manager\n{risk['judge_decision']}")
+    # 5. Portfolio Manager — standalone or via risk debate (PR #1293)
+    risk_state = final_state.get("risk_debate_state") or {}
+    pm_state = final_state.get("portfolio_manager_state") or {}
+    portfolio_decision = (
+        risk_state.get("judge_decision")
+        or pm_state.get("judge_decision")
+        or final_state.get("portfolio_decision")
+    )
+    if portfolio_decision:
+        portfolio_dir = save_path / "5_portfolio"
+        portfolio_dir.mkdir(exist_ok=True)
+        (portfolio_dir / "decision.md").write_text(portfolio_decision, encoding="utf-8")
+        sections.append(f"## V. Portfolio Manager Decision\n\n### Portfolio Manager\n{portfolio_decision}")
 
     # 5b. Data Sources / Provenance (PR #1270, #1197)
     data_sources = final_state.get("data_sources") or final_state.get("data_provenance")

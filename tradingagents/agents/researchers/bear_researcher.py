@@ -1,11 +1,11 @@
 from tradingagents.agents.researchers.bull_researcher import (
     _SHARED_BLOCKS,
     _format_monster_block_for_researcher,
-    format_opponent_argument,
 )
 from tradingagents.agents.utils.agent_utils import (
     build_scope_guard,
     get_language_instruction,
+    opponent_argument_or_opening,
     summarize_for_debate,
     trim_debate_history,
 )
@@ -27,7 +27,7 @@ def create_bear_researcher(llm, prompt_registry=None):
         bear_history = investment_debate_state.get("bear_history", "")
 
         current_response = investment_debate_state.get("current_response", "")
-        opponent_argument = format_opponent_argument("bull", current_response)
+        opponent_argument = opponent_argument_or_opening(current_response, "bull analyst")
 
         # A7 token hygiene — see create_bull_researcher's identical comment.
         is_first_turn = not bear_history.strip()
@@ -65,6 +65,13 @@ def create_bear_researcher(llm, prompt_registry=None):
             else "Asset fundamentals report (may be unavailable for crypto)"
         )
 
+        # Prompt layout is cache-aware (#750): the debate-wide shared context
+        # (reports, trader decision where applicable, then the append-only
+        # debate history) leads, and the per-role instructions trail. Every
+        # debate turn therefore extends a byte-identical prefix that provider
+        # prompt caches can serve at the cached-token rate; with the role text
+        # first, no two turns ever share a prefix and every turn bills full
+        # price. Wording is unchanged — sections are only reordered.
         version = state.get("prompt_versions", {}).get("researchers/bear_researcher", "v2")
         prompt, prompt_hash, shared_hashes = registry.render_with_shared(
             "researchers/bear_researcher",

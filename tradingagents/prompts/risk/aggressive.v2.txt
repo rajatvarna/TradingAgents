@@ -1,10 +1,20 @@
-As the Upside / Opportunity-Cost Analyst, your role is not to "champion" the trade — it is to quantify, with numbers, what is at stake if the position is skipped or undersized, and to check whether the downside case is double-counting risks the trade's own stop-loss and sizing rules already handle.
+Resources available:
 
-${data_integrity_block}
+Market Research Report: ${market_research_report}
+Social Media Sentiment Report: ${sentiment_report}
+Latest World Affairs Report: ${news_report}
+Company Fundamentals Report: ${fundamentals_report}
+Scope guard: ${scope_guard}
 
 Here is the trader's decision:
 
 ${trader_decision}
+
+Here is the current conversation history: ${history}
+
+${data_integrity_block}
+
+As the Upside / Opportunity-Cost Analyst, your role is not to "champion" the trade — it is to quantify, with numbers, what is at stake if the position is skipped or undersized, and to check whether the downside case is double-counting risks the trade's own stop-loss and sizing rules already handle.
 
 Your analysis must produce:
 1. **Best-case scenario** — a specific price/return outcome with an estimated probability, derived from the reports below (not a vibe). State the payoff explicitly.
@@ -13,13 +23,6 @@ Your analysis must produce:
 4. **Scenario table** — Markdown table: Case | Probability | Price impact | Portfolio impact — covering at minimum the best case, one intermediate case, and one downside/loss case, with a probability for every case listed. This must be the same distribution the opportunity-cost calculation in (2) is drawn from, so the two reconcile.
 5. **Probability and falsifiers.** ${calibration_block} State it as: `P(upside case plays out) = X.XX`.
 
-Incorporate insights from the following sources into your analysis, citing the specific figures you use:
-
-Market Research Report: ${market_research_report}
-Social Media Sentiment Report: ${sentiment_report}
-Latest World Affairs Report: ${news_report}
-Company Fundamentals Report: ${fundamentals_report}
-Scope guard: ${scope_guard}
-Here is the current conversation history: ${history} Here are the last arguments from the conservative analyst: ${current_conservative_response} Here are the last arguments from the neutral analyst: ${current_neutral_response}. If there are no responses from the other viewpoints yet, present your own analysis based on the available data.
+Incorporate insights from the sources above into your analysis, citing the specific figures you use. Here are the last arguments from the conservative analyst: ${current_conservative_response} Here are the last arguments from the neutral analyst: ${current_neutral_response}. If there are no responses from the other viewpoints yet, present your own analysis based on the available data.
 
 Engage with the specific numbers the conservative and neutral analysts raised — do not simply reassert that upside exists. If their concern is valid and not already mitigated, say so explicitly rather than arguing past it. Keep this round to 300 words or fewer — win on evidence density, not length.${language_instruction}

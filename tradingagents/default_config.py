@@ -37,6 +37,10 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_GLOBAL_NEWS_ARTICLE_LIMIT": "global_news_article_limit",
     "TRADINGAGENTS_GLOBAL_NEWS_LOOKBACK_DAYS": "global_news_lookback_days",
     "TRADINGAGENTS_ANALYST_CONCURRENCY_LIMIT": "analyst_concurrency_limit",
+    "TRADINGAGENTS_ANALYST_PARALLEL_ENABLED": "analyst_parallel_enabled",
+    "TRADINGAGENTS_DISCOVERY_ENABLED": "discovery_enabled",
+    "TRADINGAGENTS_DISCOVERY_LIMIT": "discovery_candidate_limit",
+    "TRADINGAGENTS_DISCOVERY_LOOKBACK": "discovery_lookback_days",
     "TRADINGAGENTS_DEEPSEEK_REASONING_EFFORT": "deepseek_reasoning_effort",
     "TRADINGAGENTS_IIC_DB_PATH":          "iic_db_path",
     "TRADINGAGENTS_IIC_DATA_DIR":         "iic_data_dir",
@@ -440,10 +444,12 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # Category-level configuration (default for all tools in category).
     # The configured value is the exact vendor chain — requests are NOT silently
     # routed to vendors you didn't choose. For ordered fallback, list several,
-    # e.g. "yfinance,alpha_vantage". "default" uses all available vendors.
+    # e.g. "yfinance,alpha_vantage". "default" uses all available vendors,
+    # except the opt-in Parallel ticker search which requires an explicit
+    # tool_vendors["get_news"]="parallel" (#1302).
     "data_vendors": {
         "core_stock_apis": "fmp,alpha_vantage,marketstack,yfinance",       # Options: alpha_vantage, yfinance, binance, b3, taiwan
-        "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance, b3, taiwan
+        "technical_indicators": "yfinance,alpha_vantage",  # Options: alpha_vantage, yfinance, b3, taiwan
         "fundamental_data": "fmp,alpha_vantage,finnhub,yfinance",      # Options: alpha_vantage, yfinance, b3, taiwan
         "news_data": "finnhub,fmp,alpha_vantage,yfinance",          # Options: yfinance, google_news, alpha_vantage, searxng, b3, taiwan
         "macro_data": "fred",                # Options: fred (needs FRED_API_KEY)
@@ -468,6 +474,20 @@ DEFAULT_CONFIG = _apply_env_overrides({
                                      # shows "digest" is non-inferior on hit-rate/calibration.
     "news_window": {"mode": "lookback"},  # or {"mode":"market_session","exchange":"NYSE",...} (PR #1235)
     "analyst_concurrency_limit": 1,  # 1=sequential, >1=parallel analyst fan-out (PR #1253, local impl)
+    # Gated upstream-style isolated-subgraph parallel fan-out (#1253). When
+    # True (default False), the 4 core analysts each run in their own compiled
+    # ReAct subgraph with a private messages channel; only report_key crosses
+    # back. Scoped to market/sentiment(news alias social)/news/fundamentals;
+    # any other selection falls back to the sequential path. Do NOT flip
+    # default without A/B parity + checkpoint/callback verification.
+    "analyst_parallel_enabled": False,
+    # Pre-analysis stock discovery (#1256, additive only). Disabled by default
+    # so headless shadow runs never touch the network unless explicitly
+    # enabled. NOT wired into the interactive CLI/TUI in this fork.
+    "discovery_enabled": False,
+    "discovery_candidate_limit": 8,
+    "discovery_lookback_days": 20,
+    "discovery_regions": ("us", "europe"),
     "state_compression_enabled": False,
     "trader_tools_enabled": True,
     "ibkr_portfolio_context_enabled": False,  # opt-in: requires a running TWS/IB Gateway

@@ -373,7 +373,7 @@ Both add `tradingagents/{execution,brokers,strategies}/` with live broker client
 ## 10. Housekeeping
 
 - [x] After merging Phase 1–2, update `docs/UPSTREAM_PR_INTEGRATION_PLAN.md` to point at this file (or promote this file to that path). — done 2026-09-03: `4419c46`
-- [ ] Delete stale local `pr-*` fetch branches after integration lands on `main`.
+- [x] Delete stale local `pr-*` fetch branches after integration lands on `main`. — done 2026-09-06: 45 local `pr-*` + 3 merged `feat/upstream-*` branches deleted after #49 merge; remote `feat/upstream-sep05-tier2` deleted.
 - [ ] Record reject decisions (#1287, #1284, #1273, #1271, #1266) in `CHANGELOG.md` with rationale (hard-rule violation + fork superset).
 - [ ] If `mcp` pin or `output/` path convention changes, sync `AGENTS.md` and `docs/flint/SHADOW_RUN_SETUP.md` per `AGENTS.md:67`.
 - [ ] Sync `pyproject.toml` version after upstream merge (fork is `0.3.1` today vs upstream `0.4.1` — decide whether to bump fork version or keep divergent versioning intentionally).

@@ -76,6 +76,35 @@ def _seven_days_back(trade_date: str) -> str:
     return (datetime.strptime(trade_date, "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
 
 
+def _sanitize_external_block(text: str) -> str:
+    """Neutralize fence-breakers in untrusted third-party text (#1262).
+
+    News / social content can contain ``</...>`` or our block markers and try
+    to close prompt fences early. Escaping ``</`` keeps the block intact as
+    data. The shared ``data_integrity`` prompt block already instructs the
+    model to treat interpolated reports as untrusted data, not instructions.
+    """
+    if not text:
+        return text
+    cleaned = text.replace("</", "<\\/")
+    for marker in (
+        "<start_of_news>",
+        "<end_of_news>",
+        "<start_of_stocktwits>",
+        "<end_of_stocktwits>",
+        "<start_of_reddit>",
+        "<end_of_reddit>",
+        "<start_of_bluesky>",
+        "<end_of_bluesky>",
+        "<start_of_mastodon>",
+        "<end_of_mastodon>",
+        "<start_of_fear_greed>",
+        "<end_of_fear_greed>",
+    ):
+        cleaned = cleaned.replace(marker, marker.replace("<", "&lt;").replace(">", "&gt;"))
+    return cleaned
+
+
 def create_sentiment_analyst(llm, prompt_registry=None):
     """Create a sentiment analyst node for the trading graph.
 
@@ -103,14 +132,18 @@ def create_sentiment_analyst(llm, prompt_registry=None):
         # Pre-fetch all three sources. Each fetcher degrades gracefully and
         # returns a string (no exceptions surface from here), so the LLM
         # always sees something — either real data or a clear placeholder.
-        news_block = get_news.func(ticker, start_date, end_date)
-        stocktwits_block = fetch_stocktwits_messages(ticker, limit=30, start_date=start_date, end_date=end_date)
-        reddit_block = fetch_reddit_posts(ticker, search_terms=india_search_terms or None, start_date=start_date, end_date=end_date)
+        news_block = _sanitize_external_block(get_news.func(ticker, start_date, end_date))
+        stocktwits_block = _sanitize_external_block(
+            fetch_stocktwits_messages(ticker, limit=30, start_date=start_date, end_date=end_date)
+        )
+        reddit_block = _sanitize_external_block(
+            fetch_reddit_posts(ticker, search_terms=india_search_terms or None, start_date=start_date, end_date=end_date)
+        )
         # Bluesky (X/Twitter alternative) + Mastodon: free, no-auth public
         # endpoints. Fear & Greed: aggregate market-mood proxy.
-        bluesky_block = fetch_bluesky_posts(f"${ticker}")
-        mastodon_block = fetch_mastodon_posts(ticker)
-        fear_greed_block = get_fear_greed_index()
+        bluesky_block = _sanitize_external_block(fetch_bluesky_posts(f"${ticker}"))
+        mastodon_block = _sanitize_external_block(fetch_mastodon_posts(ticker))
+        fear_greed_block = _sanitize_external_block(get_fear_greed_index())
 
         # Chinese / international social channels via AgentKey. Stock-only:
         # CN-platform chatter is noise for crypto (whose sentiment is global /
@@ -120,8 +153,10 @@ def create_sentiment_analyst(llm, prompt_registry=None):
         agentkey_block = ""
         if agentkey_configured() and state.get("asset_type", "stock") != "crypto":
             profile = get_instrument_profile(ticker)
-            agentkey_block = build_agentkey_social_section(
-                ticker, profile["name"], profile["sector"], profile["industry"]
+            agentkey_block = _sanitize_external_block(
+                build_agentkey_social_section(
+                    ticker, profile["name"], profile["sector"], profile["industry"]
+                )
             )
 
         version = state.get("prompt_versions", {}).get("analysts/sentiment", "v1")

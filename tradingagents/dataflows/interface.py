@@ -62,6 +62,7 @@ from .ibkr import (
 )
 from .marketstack_stock import get_stock as get_marketstack_stock
 from .newsflash import get_global_news_newsflash, get_news_newsflash
+from .parallel_news import get_news_parallel
 from .polygon import (
     get_news as get_polygon_news,
     get_options_chain as get_polygon_options_chain,
@@ -324,6 +325,7 @@ VENDOR_LIST = [
     "newsflash",
     "schwab",
     "anysearch",
+    "parallel",
 ]
 
 # Optional enrichment categories. These add macro/event context to the news
@@ -428,6 +430,7 @@ VENDOR_METHODS = {
         "firecrawl": get_news_firecrawl,
         "newsflash": get_news_newsflash,
         "anysearch": get_news_anysearch,
+        "parallel": get_news_parallel,
     },
     "get_global_news": {
         "finnhub": get_finnhub_global_news,
@@ -513,7 +516,9 @@ def _resolve_vendor_chain(method: str, category: str, *args) -> list[str]:
 
     The configured vendor list IS the chain: we do NOT silently fall back to
     vendors the user did not choose (#988/#289).  The "default" sentinel (no
-    explicit config) uses all available vendors.
+    explicit config) uses all available vendors, except "parallel" which
+    sends queries to a separate search service and requires an explicit
+    opt-in via tool_vendors["get_news"]="parallel" (#1302).
     """
     if method not in VENDOR_METHODS:
         raise ValueError(f"Method '{method}' not supported")
@@ -567,7 +572,9 @@ def _resolve_vendor_chain(method: str, category: str, *args) -> list[str]:
                 f"Available: {all_available_vendors}."
             )
         return vendor_chain
-    return all_available_vendors
+    # Parallel requires an explicit choice; keep the implicit default chain
+    # unchanged so existing runs never invoke it unless configured.
+    return [v for v in all_available_vendors if v != "parallel"]
 
 
 def _build_no_data_message(

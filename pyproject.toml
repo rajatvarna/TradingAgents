@@ -53,6 +53,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Parallel Search MCP ticker news (tradingagents/dataflows/parallel_news.py).
+# Opt-in via tool_vendors["get_news"]="parallel". Pinned <2 per AGENTS.md:
+# mcp 2.0 renamed streamablehttp_client -> streamable_http_client, see
+# ops/broker/mcp_client.py compat import (mirrored in parallel_news._search).
+parallel = [
+    "mcp>=1.28.1,<2",
+]
 news = [
     "aiohttp>=3.9.0",
     "beautifulsoup4>=4.12.0",

@@ -22,6 +22,22 @@ class TradingMemoryLog:
 
     _SEPARATOR = "\n\n<!-- ENTRY_END -->\n\n"
 
+    @classmethod
+    def _sanitize_block(cls, text: str) -> str:
+        """Strip entry delimiters from user/LLM text so they cannot split the log.
+
+        Adapted from upstream #1262: the fork keeps the SQLite backend and the
+        existing ``ENTRY_END`` separator (no format migration), but LLM text
+        containing the delimiter must not split the markdown sidecar on a
+        future re-migration. Both the bare marker and the full separator are
+        removed.
+        """
+        if not text:
+            return text
+        return text.replace(cls._SEPARATOR.strip(), "").replace("<!-- ENTRY_END -->", "").replace(
+            "<!-- TRADINGAGENTS_ENTRY_END -->", ""
+        )
+
     def __init__(self, config: dict = None):
         cfg = config or {}
         self._db_path = None
@@ -145,6 +161,7 @@ class TradingMemoryLog:
         if analyst_signals:
             merged_meta["analyst_signals"] = analyst_signals
         meta_json = json.dumps(merged_meta, ensure_ascii=False)
+        decision = self._sanitize_block(final_trade_decision)
         with self._get_conn() as conn:
             # INSERT OR IGNORE respects the UNIQUE(ticker, trade_date, pending) constraint,
             # replacing the previous SELECT + conditional INSERT (two round-trips → one).
@@ -153,7 +170,7 @@ class TradingMemoryLog:
                 INSERT OR IGNORE INTO memory_log (ticker, trade_date, rating, decision, reflection, pending, meta, outcome, expected_return)
                 VALUES (?, ?, ?, ?, "", 1, ?, "{}", ?)
                 """,
-                (ticker, trade_date, rating, final_trade_decision, meta_json, expected_return)
+                (ticker, trade_date, rating, decision, meta_json, expected_return)
             )
         # --- Markdown sidecar for test compatibility (tests read mem.md) ---
         if self._log_path is not None:
@@ -165,7 +182,7 @@ class TradingMemoryLog:
                         if line.startswith(f"[{trade_date} | {ticker} |") and line.endswith("| pending]"):
                             return
                 tag = f"[{trade_date} | {ticker} | {rating} | pending]"
-                entry = f"{tag}\n\nDECISION:\n{final_trade_decision}{self._SEPARATOR}"
+                entry = f"{tag}\n\nDECISION:\n{decision}{self._SEPARATOR}"
                 with open(self._log_path, "a", encoding="utf-8") as f:
                     f.write(entry)
             except Exception as exc:
@@ -462,7 +479,7 @@ class TradingMemoryLog:
                 SET raw_return = ?, alpha_return = ?, holding_days = ?, reflection = ?, pending = 0, outcome = ?, resolved_date = ?, resolved = ?
                 WHERE id = ?
                 """,
-                (raw_return, alpha_return, holding_days, reflection, outcome_json, resolution_date, resolution_date, entry_id)
+                (raw_return, alpha_return, holding_days, self._sanitize_block(reflection), outcome_json, resolution_date, resolution_date, entry_id)
             )
 
             conn.commit()
@@ -497,7 +514,7 @@ class TradingMemoryLog:
                         )
                         rest = "\n".join(lines[1:])
                         new_blocks.append(
-                            f"{new_tag}\n\n{rest.lstrip()}\n\nREFLECTION:\n{reflection}"
+                            f"{new_tag}\n\n{rest.lstrip()}\n\nREFLECTION:\n{self._sanitize_block(reflection)}"
                         )
                         updated = True
                     else:
@@ -532,7 +549,7 @@ class TradingMemoryLog:
                         SET raw_return = ?, alpha_return = ?, holding_days = ?, reflection = ?, pending = 0, outcome = ?, resolved_date = ?, resolved = ?
                         WHERE id = ?
                         """,
-                        (upd["raw_return"], upd["alpha_return"], upd["holding_days"], upd["reflection"], outcome_json, res_date, res_date, row["id"])
+                        (upd["raw_return"], upd["alpha_return"], upd["holding_days"], self._sanitize_block(upd["reflection"]), outcome_json, res_date, res_date, row["id"])
                     )
             conn.commit()
             self._apply_rotation(conn)
@@ -566,7 +583,7 @@ class TradingMemoryLog:
                             )
                             rest = "\n".join(lines[1:])
                             new_blocks.append(
-                                f"{new_tag}\n\n{rest.lstrip()}\n\nREFLECTION:\n{upd['reflection']}"
+                                f"{new_tag}\n\n{rest.lstrip()}\n\nREFLECTION:\n{self._sanitize_block(upd['reflection'])}"
                             )
                             del update_map[(trade_date, ticker)]
                             matched = True

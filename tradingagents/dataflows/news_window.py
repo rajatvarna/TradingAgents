@@ -7,7 +7,7 @@ calendar-day arithmetic. Opt-in via ``news_window.mode == "market_session"``.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 NY = ZoneInfo("America/New_York")
@@ -56,8 +56,8 @@ def resolve_news_window(target_date: str, config: dict | None) -> NewsWindow | N
     try:
         start_off = int(config.get("start_offset_minutes", 60))
         end_off = int(config.get("end_offset_minutes", -60))
-    except Exception:
-        raise ValueError("start_offset_minutes/end_offset_minutes must be integers")
+    except Exception as exc:
+        raise ValueError("start_offset_minutes/end_offset_minutes must be integers") from exc
     # Validate window not inverted via offsets sanity
     cal = _get_calendar(exchange)
     target_d = _parse_date(target_date)

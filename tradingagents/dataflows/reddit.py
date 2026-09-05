@@ -43,9 +43,7 @@ from urllib.request import Request, urlopen
 
 from defusedxml import ElementTree as SafeET
 from defusedxml.common import EntitiesForbidden
-from defusedxml.common import EntitiesForbidden
 
-from .date_window import in_window
 from .symbol_utils import crypto_base, india_equity_parts
 
 logger = logging.getLogger(__name__)

@@ -88,7 +88,6 @@ def _fetch_hashrate() -> str | None:
             for entry in hashrates[-3:]:
                 if not isinstance(entry, dict):
                     continue
-                ts = entry.get("timestamp")
                 val = entry.get("avgHashrate")
                 if val is None:
                     continue

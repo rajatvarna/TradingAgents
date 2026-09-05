@@ -55,7 +55,7 @@ from tradingagents.agents.utils.options_tools import get_options_data
 from tradingagents.agents.utils.quant_data_tools import get_quantitative_metrics
 from tradingagents.agents.utils.technical_data_tools import get_technical_indicators
 from tradingagents.dataflows.config import set_config
-from tradingagents.dataflows.run_cache import reset as reset_run_cache, stats as run_cache_stats
+from tradingagents.dataflows.run_cache import reset as reset_run_cache
 from tradingagents.dataflows.symbol_utils import normalize_symbol
 from tradingagents.dataflows.utils import safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
@@ -1100,7 +1100,6 @@ class TradingAgentsGraph:
         an explicit ``save_path`` or let it default under ``results_dir``.
         """
         from tradingagents.dataflows.utils import safe_ticker_component
-        from tradingagents.reporting import write_report_tree
 
         if save_path is None:
             stamp = datetime.now().strftime("%Y%m%d_%H%M%S")

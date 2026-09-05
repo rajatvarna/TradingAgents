@@ -45,15 +45,16 @@ _FOREX_CURRENCIES = frozenset(
 # Crypto bases recognized across vendors (yfinance, binance). Sourced from
 # CoinMarketCap's CMC20 index constituents (top 20 by market cap, excluding
 # stablecoins and wrapped/pegged tokens), cross-checked against Binance's
-# exchangeInfo endpoint for actual USDT pair availability. 2 of the 20 CMC20
-# constituents have no corresponding Binance USDT pair and are excluded;
-# DOT (previously supported) has fallen out of the CMC20 top 20 and is removed.
+# exchangeInfo endpoint for actual USDT pair availability as of 2026-08-19
+# (upstream #1244). 2 of the 20 CMC20 constituents (HYPE, CC) have no
+# corresponding Binance USDT pair and are excluded; DOT (previously supported)
+# has fallen out of the CMC20 top 20 and is removed.
 # https://coinmarketcap.com/charts/cmc20/
 _CRYPTO_BASES = frozenset(
     {
         "BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "LTC", "BCH", "AVAX", "LINK",
         "XLM", "HBAR", "SUI", "TON", "SHIB", "PEPE", "UNI", "ETC",
-        "BNB", "TRX", "NEAR", "APT",  # from TauricResearch/TradingAgents#1292
+        "BNB", "TRX", "ZEC", "NEAR", "APT",  # ZEC from upstream #1244; NEAR/APT from #1292
     }
 )
 

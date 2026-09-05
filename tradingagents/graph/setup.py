@@ -34,6 +34,7 @@ from tradingagents.agents.utils.agent_states import AgentState
 from tradingagents.agents.utils.tool_provenance import create_tool_provenance_capture_node
 
 from .analyst_execution import build_analyst_execution_plan
+from .analyst_subgraph import build_analyst_subgraph, make_analyst_wrapper
 from .conditional_logic import ConditionalLogic
 from .constants import (
     ANALYST_REPORT_KEYS,
@@ -60,6 +61,11 @@ _ANALYST_FACTORIES = {
 }
 
 _DEFAULT_ANALYSTS = ("market", "sentiment", "news", "fundamentals")
+
+# Core analysts eligible for the gated isolated-subgraph parallel path
+# (upstream #1253). "social" is an alias for "sentiment" and counts as core.
+# Any selection containing other analysts falls back to the sequential path.
+_ISOLATED_PARALLEL_CORE = frozenset({"market", "sentiment", "social", "news", "fundamentals"})
 
 # Every target a shared conditional router can return. Each edge driven by the
 # router maps all of them, so a fall-through return (e.g. under prompt/i18n/
@@ -137,11 +143,40 @@ class GraphSetup:
             )
 
         workflow = StateGraph(AgentState)
-        self._build_analyst_nodes(workflow, selected_analysts)
-        self._build_fixed_nodes(workflow)
-        self._wire_analyst_branches(workflow, selected_analysts)
+        if self._use_isolated_parallel(selected_analysts):
+            # Gated upstream-style path: analysts are self-contained ReAct
+            # subgraphs with private messages channels. Fixed nodes must exist
+            # first (fan-in target is Conflict Detector).
+            self._build_fixed_nodes(workflow)
+            self._wire_isolated_analyst_branches(workflow, selected_analysts)
+        else:
+            self._build_analyst_nodes(workflow, selected_analysts)
+            self._build_fixed_nodes(workflow)
+            self._wire_analyst_branches(workflow, selected_analysts)
         self._wire_fixed_flow(workflow, selected_analysts, run_recorder_node)
         return workflow
+
+    def _use_isolated_parallel(self, selected_analysts: list[str]) -> bool:
+        """True when the gated isolated-subgraph path should be used.
+
+        Requires ``analyst_parallel_enabled=True`` (default False) AND a
+        selection scoped to the 4 core analysts. Anything else falls back to
+        the existing sequential / concurrency-limit path.
+        """
+        if not bool(self.config.get("analyst_parallel_enabled", False)):
+            return False
+        extra = set(selected_analysts) - _ISOLATED_PARALLEL_CORE
+        if extra:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "analyst_parallel_enabled=True but selection %s includes "
+                "non-core analysts %s; falling back to sequential path.",
+                selected_analysts,
+                sorted(extra),
+            )
+            return False
+        return True
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -259,6 +294,35 @@ class GraphSetup:
             self.deep_thinking_llm,
             cache=self.structured_output_cache,
         ))
+
+    def _wire_isolated_analyst_branches(
+        self, workflow: StateGraph, selected_analysts: list[str]
+    ) -> None:
+        """Wire gated isolated-subgraph parallel fan-out (upstream #1253).
+
+        Each core analyst runs in its own compiled ReAct subgraph with a
+        private ``messages`` channel. The parent fans out from START to every
+        wrapper in one superstep (concurrent) and fans in at
+        ``Conflict Detector`` — the fork's equivalent of upstream's
+        ``Bull Researcher`` fan-in, preserving the conflict-detection stage
+        that sits before the debate. Only ``report_key`` crosses back; the
+        tool-call scratchpad stays private.
+
+        Analyst callables close over the shared LLM instances (which already
+        carry ``RunCostCallback`` + ``TraceCallback``), and the wrapper
+        forwards the parent invoke ``config`` into ``subgraph.invoke`` so
+        ``ToolNode`` executions are traced too.
+        """
+        plan = build_analyst_execution_plan(selected_analysts)
+        for spec in plan.specs:
+            factory = _ANALYST_FACTORIES[spec.key]
+            analyst_fn = factory(self.quick_thinking_llm)
+            tool_node = self.tool_nodes[TOOL_NODE_KEY[spec.key]]
+            router = self.conditional_logic.should_continue_analyst(spec.key)
+            subgraph = build_analyst_subgraph(spec, analyst_fn, tool_node, router)
+            workflow.add_node(spec.agent_node, make_analyst_wrapper(subgraph, spec))
+            workflow.add_edge(START, spec.agent_node)
+            workflow.add_edge(spec.agent_node, "Conflict Detector")
 
     def _wire_analyst_branches(self, workflow: StateGraph, selected_analysts: list[str]) -> None:
         """Wire sequential or parallel analyst fan-out, tool loops, clear nodes, and join."""

@@ -181,6 +181,12 @@ class TradingAgentsConfig(BaseModel):
     earnings_lookahead_days: int = Field(default=7, ge=0)
     news_window: dict[str, Any] = Field(default_factory=lambda: {"mode": "lookback"})
     analyst_concurrency_limit: int = Field(default=1, ge=1)
+    analyst_parallel_enabled: bool = False
+    # --- Stock discovery (#1256, additive, disabled by default) ---------------
+    discovery_enabled: bool = False
+    discovery_candidate_limit: int = Field(default=8, ge=1)
+    discovery_lookback_days: int = Field(default=20, ge=1)
+    discovery_regions: list[str] | tuple[str, ...] = Field(default_factory=lambda: ["us", "europe"])
 
     # --- Analyst weighting / trade filter -----------------------------------
     analyst_weights_lookback: int = Field(default=20, ge=0)

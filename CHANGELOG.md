@@ -10,6 +10,8 @@ Breaking changes within the 0.x line are called out explicitly.
 
 ### Added
 
+- **Upstream Sep-05 Tier-2 (2026-09-05, branch `feat/upstream-sep05-tier2`)**: Reddit `RedditUnavailable` + 60s headerless backoff (#1295); Meta Model API `meta` provider for Muse Spark (#1301); Alpha Vantage fallback for `technical_indicators` (#1298, others already had it); Azure provider unit tests (#1263); smoke x86 CI adapted to uv/.venv (#1290); Binance ZEC parity + tests (#1244); gated parallel analysts `analyst_parallel_enabled=False` (#1253, fan-in at Conflict Detector); opt-in Parallel Search MCP news vendor `tradingagents[parallel]` (#1302); additive stock-discovery module `discovery_enabled=False` (#1256); announcement redaction/validation + safe_ticker + memory/sentiment sanitize (#1262). Rejected per `AGENTS.md` broker-execution boundary: Alpaca execution (#1287/#1237 incl. Sep-04 multi-symbol update), CALL/PUT live-broker system (#1284), Investment Committee mega-dump (#1273), A-share position reorg (#1271), provenance mega-rewrite (#1266). (`tradingagents/dataflows/reddit.py`, `llm_clients/*`, `dataflows/parallel_news.py`, `discovery/`, `graph/analyst_subgraph.py`, `cli/announcements.py`, `docs/UPSTREAM_PR_INTEGRATION_PLAN_2026-09-02.md §12`)
+
 - **Windows local deploy helpers**: `scripts/clean_redeploy.ps1` wipes `output/` runtime state and restarts API + Streamlit; `scripts/start_local.ps1` loads `.env` and starts both services via `python -m` (avoids Application Control blocks on `.exe` shims). WebUI sidebar now defaults LLM provider/models from `TRADINGAGENTS_LLM_PROVIDER` and model env vars. (`scripts/clean_redeploy.ps1`, `scripts/start_local.ps1`, `webui.py`)
 
 ### Fixed

@@ -398,3 +398,26 @@ Mega-dumps `1273`/`1271`/`1266`/`1287`/`1284` remain **REJECT** per `AGENTS.md:1
 
 **Next window:** open a fresh `feat/upstream-sep10-*` branch for any Tier 2 promotions after PR #48 lands on `main`.
 
+---
+
+## 12. Sep-05 Tier-2 execution (branch `feat/upstream-sep05-tier2`, after #48 merge to `main`)
+
+All Tier-2 DEFER/GATED items from §11 plus 5 new upstream PRs (`1295,1297,1298,1301,1302`) landed 2026-09-05:
+
+| PR | Title | Verdict (2026-09-05) | Commit |
+|----|-------|----------------------|--------|
+| `1295` | `fix(reddit): report failed fetches as unavailable; 60s backoff` | **LANDED** — correctness, prevents 429-as-silence | `f60f0ed` RedditUnavailable + 60s fallback + 120s cap |
+| `1301` | `feat(llm): Meta Model API for Muse Spark` | **LANDED** — additive OpenAI-compatible provider | `c205a7c` meta ProviderSpec + catalog + capabilities |
+| `1298` | `Fall back to Alpha Vantage when Yahoo fails` | **LANDED scoped** — only `technical_indicators` needed it; other 3 cats already had AV | `cd60ac4` |
+| `1297` | `docker compose build` one-liner | **LANDED** — README only | `cd60ac4` |
+| `1263` | `Azure OpenAI provider unit tests` | **LANDED** — test-only, no new dep | `cd60ac4` tests/test_azure_provider.py 6 passed |
+| `1290` | `ci: smoke x86_64 workflow` | **LANDED adapted** — fork uv/.venv/Python 3.12, workflow_dispatch only | `cd60ac4` .github/workflows/smoke-x86.yml |
+| `1244` | `Binance vendor` | **PARITY + ZEC** — fork ahead on base-URL env; added missing ZEC + tests | `61daaaa` |
+| `1253` | `parallel analysts` | **LANDED GATED OFF** — `analyst_parallel_enabled=False`, fan-in at Conflict Detector (not Bull, fork has extra nodes) | `61daaaa` analyst_subgraph.py + setup wiring |
+| `1302` | `Parallel Search MCP ticker news` | **LANDED opt-in** — `parallel` excluded from default chain, `tool_vendors[get_news]=parallel` to enable, `mcp>=1.28.1,<2` extra | `00cc4e0` parallel_news.py + interface + pyproject |
+| `1256` | `multi-region discovery` | **LANDED additive only** — `discovery_enabled=False` (upstream True), no TUI wiring, no FS writes | `00cc4e0` discovery/ + config_schema |
+| `1262` | `announcement hardening` | **LANDED scoped** — redaction/validation + safe_ticker + memory/sentiment sanitize; skipped interactive/TUI + ENTRY_END migration | `00cc4e0` |
+| `1237` | `risk-managed multi-symbol Alpaca` (updated 2026-09-04, +17062) | **REJECT** — broker execution per `AGENTS.md:18-21` | — |
+
+Validation: 191 targeted tests pass (reddit 27, api_key 31, registry 18, capabilities 30, azure 6, parallel_news 20, binance 9, analyst_parallel 7, discovery 6, announcements 6, cli_symbol 7+). `test_config_schema` 28 passed. Housekeeping: `pyproject.toml` stays `0.4.0` (matches upstream/main) — no bump needed; `mcp` pin unchanged; `output/` paths untouched.
+

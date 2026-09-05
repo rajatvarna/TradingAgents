@@ -176,7 +176,7 @@ _BY_PATTERN: list[tuple[re.Pattern[str], ModelCapabilities]] = [
     (re.compile(r"^gpt-5"), _OPENAI_REASONING),
     (re.compile(r"(^|/)deepseek-chat($|[:/_-])", re.IGNORECASE), _DEEPSEEK_CHAT),
     (re.compile(r"^deepseek/", re.IGNORECASE), _DEEPSEEK_THINKING),
-    (re.compile(r"(^|/)deepseek-v\d", re.IGNORECASE), _DEEPSEEK_THINKING),
+    (re.compile(r"^deepseek-v\d", re.IGNORECASE), _DEEPSEEK_THINKING),
     (re.compile(r"(^|/)deepseek-r\d", re.IGNORECASE), _DEEPSEEK_THINKING),
     (re.compile(r"(^|/)deepseek-reasoner", re.IGNORECASE), _DEEPSEEK_THINKING),
     (re.compile(r"^MiniMax-M3(?:\D|$)"), _MINIMAX_M3),
@@ -197,12 +197,20 @@ def get_capabilities(model_name: str) -> ModelCapabilities:
     # ``deepseek-v4-flash`` does, not fall through to _DEFAULT (#1199). Only the
     # official namespace is stripped; third-party finetunes on other publishers
     # (e.g. ``tngtech/deepseek-...``) keep _DEFAULT, since their quirks are unknown.
-    if model_name.startswith("deepseek/"):
-        model_name = model_name.removeprefix("deepseek/")
+    # The official publishers' own hosted namespaces (``deepseek-ai/``,
+    # ``minimaxai/``) are also stripped so hosted first-party models reuse the
+    # native quirks. Matching then uses ``search`` so ``(^|/)`` patterns match
+    # the segment after any remaining (third-party) slash; the V-series pattern
+    # stays ``^``-anchored so unknown third-party V-finetunes keep _DEFAULT.
+    lowered = model_name.lower()
+    for _prefix in ("deepseek/", "deepseek-ai/", "minimaxai/"):
+        if lowered.startswith(_prefix):
+            model_name = model_name[len(_prefix):]
+            break
 
     if model_name in _BY_ID:
         return _BY_ID[model_name]
     for pattern, caps in _BY_PATTERN:
-        if pattern.match(model_name):
+        if pattern.search(model_name):
             return caps
     return _DEFAULT

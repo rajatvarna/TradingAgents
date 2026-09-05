@@ -274,23 +274,10 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     # A cached file may be empty if a prior fetch failed (unknown symbol,
     # transient rate limit). Treat an empty/columnless cache as a miss and
     # re-fetch rather than serving the poisoned file forever.
-    # Fork must also honour legacy date-ranged cache files (e.g.
-    # AAPL-YFin-data-2021-05-08-2026-05-09.csv) that tests seed; upstream used
-    # that naming while the fork moved to a fixed 15y suffix. Scan for any
-    # matching file so the seeded cache is found (#1201 tests).
     data = None
     candidates: list[str] = []
     if os.path.exists(data_file):
         candidates.append(data_file)
-    # Legacy / seeded files: any file with the same prefix and .csv suffix
-    try:
-        prefix = f"{safe_symbol}-YFin-data-"
-        for fn in os.listdir(config["data_cache_dir"]):
-            p = os.path.join(config["data_cache_dir"], fn)
-            if fn.startswith(prefix) and fn.endswith(".csv") and os.path.abspath(p) != os.path.abspath(data_file):
-                candidates.append(p)
-    except FileNotFoundError:
-        pass
 
     for cand in candidates:
         try:

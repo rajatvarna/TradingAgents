@@ -40,7 +40,8 @@ def _make_graph():
 
 def _price_df(closes):
     """Build a minimal yfinance-style DataFrame from a list of closes."""
-    return pd.DataFrame({"Close": closes})
+    idx = pd.date_range(start="2024-01-15", periods=len(closes), freq="D")
+    return pd.DataFrame({"Close": closes}, index=idx)
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +59,7 @@ class TestFetchReturns:
             mock_ticker.side_effect = lambda sym: MagicMock(
                 history=lambda **kw: stock_df if sym == "AAPL" else spy_df
             )
-            raw, alpha, days = graph._fetch_returns("AAPL", "2024-01-15", holding_days=5)
+            raw, alpha, days, _resolved = graph._fetch_returns("AAPL", "2024-01-15", holding_days=5)
 
         assert raw is not None
         assert alpha is not None
@@ -75,7 +76,7 @@ class TestFetchReturns:
             mock_ticker.side_effect = lambda sym: MagicMock(
                 history=lambda **kw: short_df if sym != "SPY" else spy_df
             )
-            raw, alpha, days = graph._fetch_returns("AAPL", "2024-01-15")
+            raw, alpha, days, _resolved = graph._fetch_returns("AAPL", "2024-01-15")
 
         assert raw is None
         assert alpha is None
@@ -90,7 +91,7 @@ class TestFetchReturns:
             mock_ticker.side_effect = lambda sym: MagicMock(
                 history=lambda **kw: stock_df if sym == "AAPL" else short_spy
             )
-            raw, alpha, days = graph._fetch_returns("AAPL", "2024-01-15")
+            raw, alpha, days, _resolved = graph._fetch_returns("AAPL", "2024-01-15")
 
         assert raw is None
         assert alpha is None
@@ -101,7 +102,7 @@ class TestFetchReturns:
 
         with patch("tradingagents.graph.trading_graph.yf.Ticker",
                    side_effect=Exception("connection refused")):
-            raw, alpha, days = graph._fetch_returns("AAPL", "2024-01-15")
+            raw, alpha, days, _resolved = graph._fetch_returns("AAPL", "2024-01-15")
 
         assert raw is None
         assert alpha is None
@@ -112,7 +113,7 @@ class TestFetchReturns:
 
         with patch("tradingagents.graph.trading_graph.yf.Ticker",
                    side_effect=Exception("date parse error")):
-            raw, alpha, days = graph._fetch_returns("AAPL", "not-a-date")
+            raw, alpha, days, _resolved = graph._fetch_returns("AAPL", "not-a-date")
 
         assert raw is None
 
@@ -126,7 +127,7 @@ class TestFetchReturns:
             mock_ticker.side_effect = lambda sym: MagicMock(
                 history=lambda **kw: stock_df if sym == "AAPL" else spy_df
             )
-            raw, alpha, days = graph._fetch_returns("AAPL", "2024-01-15", holding_days=5)
+            raw, alpha, days, _resolved = graph._fetch_returns("AAPL", "2024-01-15", holding_days=5)
 
         assert raw == pytest.approx(0.10, rel=1e-3)
         assert alpha == pytest.approx(0.05, rel=1e-3)

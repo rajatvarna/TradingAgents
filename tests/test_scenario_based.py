@@ -77,6 +77,7 @@ def test_noisy_sideways_memory_context_is_injected(tmp_path, load_scenario, scen
         alpha_return=0.0,
         holding_days=5,
         reflection="Standing aside avoided churn.",
+        resolution_date="2026-04-06",
     )
 
     config = DEFAULT_CONFIG.copy()

@@ -143,8 +143,11 @@ class TestRouting:
                 "get_news", "news_data", "600519.SS", "2026-05-01", "2026-06-02",
             )
         assert chain[0] == "eastmoney"
-        assert len(chain) == len(interface.VENDOR_METHODS["get_news"])
-        assert set(chain) == set(interface.VENDOR_METHODS["get_news"])
+        # "parallel" is opt-in only (tool_vendors["get_news"]="parallel") and
+        # never in the default chain (#1302).
+        expected = set(interface.VENDOR_METHODS["get_news"]) - {"parallel"}
+        assert set(chain) == expected
+        assert len(chain) == len(expected)
 
     def test_ashare_default_chain_prefers_akshare_for_non_news_methods(self):
         from tradingagents.dataflows import interface

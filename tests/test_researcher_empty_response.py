@@ -41,8 +41,8 @@ def test_bull_opening_turn_omits_empty_bear_argument():
     captured: dict = {}
     create_bull_researcher(_CapturingLlm(captured))(_state("", 0))
     prompt = captured["prompt"]
-    assert "Last bear argument:" not in prompt
-    assert "no responses from the bear analyst yet" in prompt
+    assert "has not spoken yet" in prompt
+    assert "Bear Analyst: valuation is stretched" not in prompt
 
 
 @pytest.mark.unit
@@ -50,8 +50,8 @@ def test_bear_opening_turn_omits_empty_bull_argument():
     captured: dict = {}
     create_bear_researcher(_CapturingLlm(captured))(_state("", 0))
     prompt = captured["prompt"]
-    assert "Last bull argument:" not in prompt
-    assert "no responses from the bull analyst yet" in prompt
+    assert "has not spoken yet" in prompt
+    assert "Bull Analyst: margins keep expanding" not in prompt
 
 
 @pytest.mark.unit
@@ -61,8 +61,8 @@ def test_bull_still_receives_a_real_bear_argument():
         _state("Bear Analyst: valuation is stretched", 1)
     )
     prompt = captured["prompt"]
-    assert "Last bear argument: Bear Analyst: valuation is stretched" in prompt
-    assert "no responses from the bear analyst yet" not in prompt
+    assert "Bear Analyst: valuation is stretched" in prompt
+    assert "has not spoken yet" not in prompt
 
 
 @pytest.mark.unit
@@ -72,5 +72,5 @@ def test_bear_still_receives_a_real_bull_argument():
         _state("Bull Analyst: margins keep expanding", 1)
     )
     prompt = captured["prompt"]
-    assert "Last bull argument: Bull Analyst: margins keep expanding" in prompt
-    assert "no responses from the bull analyst yet" not in prompt
+    assert "Bull Analyst: margins keep expanding" in prompt
+    assert "has not spoken yet" not in prompt

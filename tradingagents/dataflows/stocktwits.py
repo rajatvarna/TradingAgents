@@ -54,14 +54,22 @@ def _within_window(messages, start_date, end_date):
 
 
 def _stocktwits_symbol(ticker: str) -> str:
-    """Map a crypto pair to StockTwits' ``<BASE>.X`` convention.
+    """Map Yahoo symbols to StockTwits conventions.
 
     StockTwits lists crypto as ``BTC.X`` (Yahoo's ``BTC-USD`` form 404s), so any
-    crypto symbol resolves to its base plus ``.X``; other symbols pass through
-    upper-cased.
+    crypto symbol resolves to its base plus ``.X``. Yahoo India suffixes map to
+    StockTwits' exchange codes (``.NS`` -> ``.NSE``, ``.BO`` -> ``.BSE``); other
+    symbols pass through upper-cased.
     """
     base = crypto_base(ticker)
-    return f"{base}.X" if base else ticker.strip().upper()
+    if base:
+        return f"{base}.X"
+    sym = ticker.strip().upper()
+    if sym.endswith(".NS"):
+        return sym[: -len(".NS")] + ".NSE"
+    if sym.endswith(".BO"):
+        return sym[: -len(".BO")] + ".BSE"
+    return sym
 
 
 def fetch_stocktwits_messages(
@@ -94,7 +102,8 @@ def fetch_stocktwits_messages(
         logger.warning("StockTwits fetch failed for %s: %s", ticker, exc)
         return f"<stocktwits unavailable: {type(exc).__name__}>"
 
-    messages = data.get("messages", []) if isinstance(data, dict) else []
+    raw_messages = data.get("messages", []) if isinstance(data, dict) else []
+    messages = [m for m in raw_messages if isinstance(m, dict)] if isinstance(raw_messages, list) else []
     messages = _within_window(messages, start_date, end_date)
     if not messages:
         if start_date and end_date:
@@ -107,9 +116,13 @@ def fetch_stocktwits_messages(
     lines = []
     bullish = bearish = unlabeled = 0
     for m in messages[:limit]:
+        if not isinstance(m, dict):
+            continue
         created = m.get("created_at", "")
-        user = (m.get("user") or {}).get("username", "?")
-        entities = m.get("entities") or {}
+        _user = m.get("user")
+        user = (_user.get("username", "?") if isinstance(_user, dict) else "?")
+        entities = m.get("entities")
+        entities = entities if isinstance(entities, dict) else {}
         sentiment_obj = entities.get("sentiment") or {}
         sentiment = sentiment_obj.get("basic") if isinstance(sentiment_obj, dict) else None
         body = (m.get("body") or "").replace("\n", " ").strip()

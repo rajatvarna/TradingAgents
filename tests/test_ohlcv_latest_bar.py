@@ -85,9 +85,7 @@ def _run_load(monkeypatch, tmp_path, frame, curr_date):
     monkeypatch.setattr(su, "get_config", lambda: {"data_cache_dir": str(tmp_path)})
     today = pd.Timestamp(curr_date)
     monkeypatch.setattr(su.pd.Timestamp, "today", staticmethod(lambda: today))
-    start = (today - pd.DateOffset(years=5)).strftime("%Y-%m-%d")
-    end = (today + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-    (tmp_path / f"AAPL-YFin-data-{start}-{end}.csv").write_text(frame.to_csv(index=False))
+    (tmp_path / "AAPL-YFin-data-15y.csv").write_text(frame.to_csv(index=False))
 
     def _fail_download(*a, **k):
         raise AssertionError("should use the seeded cache, not download")

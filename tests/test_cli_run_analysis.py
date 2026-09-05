@@ -21,7 +21,12 @@ def test_run_analysis_routes_through_propagate(monkeypatch, tmp_path):
     import cli.main as m
 
     fake_graph = MagicMock()
-    fake_graph.graph.stream = MagicMock()
+    fake_graph.graph.stream.return_value = []
+    fake_graph.begin_checkpoint.return_value = None
+    fake_graph.checkpoint_input.side_effect = lambda s: s
+    fake_graph.resolve_instrument_context.return_value = ""
+    fake_graph.propagator.create_initial_state.return_value = {}
+    fake_graph.propagator.get_graph_args.return_value = {}
     fake_graph.propagate.return_value = (
         {
             "market_report": "market done",
@@ -66,11 +71,10 @@ def test_run_analysis_routes_through_propagate(monkeypatch, tmp_path):
 
     m.run_analysis(checkpoint=True)
 
-    fake_graph.propagate.assert_called_once()
-    _, kwargs = fake_graph.propagate.call_args
-    assert kwargs["asset_type"] == "stock"
-    assert callable(kwargs["on_chunk"])
-    assert fake_graph.graph.stream.called is False
+    # CLI streams graph.graph.stream directly with checkpoint lifecycle (#1249),
+    # not via propagate().
+    assert fake_graph.graph.stream.called is True
+    assert fake_graph.propagate.called is False
 
 
 def _base_run_analysis_setup(monkeypatch, tmp_path):
@@ -79,7 +83,12 @@ def _base_run_analysis_setup(monkeypatch, tmp_path):
     import cli.main as m
 
     fake_graph = MagicMock()
-    fake_graph.graph.stream = MagicMock()
+    fake_graph.graph.stream.return_value = []
+    fake_graph.begin_checkpoint.return_value = None
+    fake_graph.checkpoint_input.side_effect = lambda s: s
+    fake_graph.resolve_instrument_context.return_value = ""
+    fake_graph.propagator.create_initial_state.return_value = {}
+    fake_graph.propagator.get_graph_args.return_value = {}
     fake_graph.propagate.return_value = (
         {
             "market_report": "market done",
@@ -137,7 +146,7 @@ def test_save_and_display_report_env_vars_skip_both_prompts(monkeypatch, tmp_pat
     m.run_analysis(checkpoint=True)  # must not raise
 
     fake_graph = m.TradingAgentsGraph()
-    fake_graph.propagate.assert_called()
+    fake_graph.graph.stream.assert_called()
 
 
 @pytest.mark.unit

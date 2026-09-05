@@ -15,12 +15,13 @@ def test_fetch_returns_normalizes_symbol(monkeypatch):
             seen.append(symbol)
 
         def history(self, **kwargs):
-            return pd.DataFrame({"Close": [100, 101, 102, 103, 104, 105, 106]})
+            idx = pd.date_range(start="2024-01-02", periods=7, freq="D")
+            return pd.DataFrame({"Close": [100, 101, 102, 103, 104, 105, 106]}, index=idx)
 
     monkeypatch.setattr("tradingagents.graph.trading_graph.yf.Ticker", FakeTicker)
     graph = TradingAgentsGraph.__new__(TradingAgentsGraph)
 
-    raw, alpha, days = TradingAgentsGraph._fetch_returns(
+    raw, alpha, days, _resolved = TradingAgentsGraph._fetch_returns(
         graph,
         "XAUUSD",
         "2024-01-02",

@@ -51,7 +51,7 @@ from .symbol_utils import crypto_base, india_equity_parts
 logger = logging.getLogger(__name__)
 
 
-class RedditUnavailable(Exception):
+class RedditUnavailable(Exception):  # noqa: N818 - matches upstream #1295 contract
     """A subreddit fetch failed and returned nothing we can trust.
 
     Kept distinct from a successful fetch that matched no posts. Rendering a

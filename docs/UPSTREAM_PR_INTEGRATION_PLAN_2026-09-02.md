@@ -421,3 +421,13 @@ All Tier-2 DEFER/GATED items from §11 plus 5 new upstream PRs (`1295,1297,1298,
 
 Validation: 191 targeted tests pass (reddit 27, api_key 31, registry 18, capabilities 30, azure 6, parallel_news 20, binance 9, analyst_parallel 7, discovery 6, announcements 6, cli_symbol 7+). `test_config_schema` 28 passed. Housekeeping: `pyproject.toml` stays `0.4.0` (matches upstream/main) — no bump needed; `mcp` pin unchanged; `output/` paths untouched.
 
+**CI fix pass (`801071b3`, 2026-09-06):** PR #49's `tests (py3.11/12/13)` failed on ~25 tests; all fixed locally (225-test subset green, `ruff` clean):
+- `_fetch_returns` now 4-tuple — unpack + DatetimeIndex fixtures in `test_fetch_returns_and_batch`, `test_reflection_returns`; annotation fix in `trading_graph.py:529`.
+- Registry counts — `test_eastmoney_news` excludes opt-in `parallel`; `test_intraday_data` expects `binance`/`eastmoney`/`schwab`.
+- Prompt reorder — bull byte-identical reference follows cache-friendly order; `test_researcher_empty_response` asserts `has not spoken yet`; noisy_sideways passes `resolution_date`.
+- CLI streams `graph.stream` directly (#1249) — tests assert stream, not `propagate`.
+- StockTwits `.NS→.NSE`/`.BO→.BSE` restored; malformed-shape hardening; capabilities hosted-prefix reconciliation (43/43); OHLCV legacy scan dropped in favor of 15y seed.
+- Slow `test_scenario_based` end-to-end left for CI (21 min network waits); gating verified directly via `get_past_context`.
+
+**Post-merge (blocked on CI green):** merge #49 → `git checkout main && git pull` → delete branch + 46 stale local `pr-*` branches → next window starts fresh. No new upstream PRs since `1302` (2026-09-04); cohort complete.
+

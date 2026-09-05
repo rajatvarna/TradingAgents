@@ -114,12 +114,12 @@ which redis-server || echo "install redis-server before integration tests"
 
 - **Tests:** pytest with markers `unit` (default, fast, isolated), `integration` (real API / external service), `smoke` (quick end-to-end).
 - **Commits:** one per task. Format: `feat(<scope>): <subject>` matching repo style (see `git log --oneline -5`).
-- **Cost guards:** every guard ships with `enabled: bool = False` default. Measurement always on. (See [saved memory](../../../.claude/projects/-home-ziwei-huang-TradingAgents/memory/cost-guards-disabled-by-default.md).)
+- **Cost guards:** every guard ships with `enabled: bool = False` default. Measurement always on. (See saved memory `cost-guards-disabled-by-default.md`, local-only.)
 - **Imports:** absolute, rooted at `tradingagents.` and `cli.`.
 - **Schema:** append-only — no reshape of any existing F1/F2 table. New tables and one comment-only edit on `events.status`.
 - **Time:** All timestamps are `datetime.now(timezone.utc).isoformat()` strings; comparisons use `datetime('now')` in SQL.
 - **Async:** Triage + adapters use `asyncio`. Redis is `redis.asyncio.Redis`. Test fakes use `fakeredis.aioredis`.
-- **Integration test gating:** Anything that hits a real external service is marked `integration` and skipped automatically when the relevant env var is unset/placeholder (see [conftest dummy_api_keys memory](../../../.claude/projects/-home-ziwei-huang-TradingAgents/memory/conftest-dummy-api-keys.md) — for tests needing real keys, call `load_dotenv(override=True)` inside the test body).
+- **Integration test gating:** Anything that hits a real external service is marked `integration` and skipped automatically when the relevant env var is unset/placeholder (see saved memory `conftest-dummy-api-keys.md`, local-only — for tests needing real keys, call `load_dotenv(override=True)` inside the test body).
 
 ---
 

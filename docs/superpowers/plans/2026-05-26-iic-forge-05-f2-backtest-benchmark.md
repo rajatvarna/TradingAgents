@@ -95,7 +95,7 @@ pytest --version                                              # >= 7.0
 
 - **Tests:** pytest with markers `unit` (default, fast, isolated), `integration` (real API / external state), `smoke` (quick end-to-end).
 - **Commits:** one per task. Format: `feat(<scope>): <subject>` matching repo style (see `git log --oneline -5`).
-- **Cost guards:** every guard ships with `enabled: bool = False` default. Measurement always on. (See [saved memory](../../../.claude/projects/-home-ziwei-huang-TradingAgents/memory/cost-guards-disabled-by-default.md).)
+- **Cost guards:** every guard ships with `enabled: bool = False` default. Measurement always on. (See saved memory `cost-guards-disabled-by-default.md`, local-only.)
 - **Imports:** absolute, rooted at `tradingagents.` and `cli.`.
 - **Markdown artifacts** live on disk; SQLite stores paths + small metadata.
 - **No schema changes** — `backtests`/`backtest_runs` from F1 are used unchanged. All lifecycle state in `backtest_runs.metrics` JSON.

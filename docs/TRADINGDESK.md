@@ -7,7 +7,7 @@ research workspace: a watchlist of tracked tickers, runs as permanent
 documents, a decisions journal that closes the loop with realized alpha, and a
 live "watch the agents work" theater.
 
-![TradingDesk — the workspace after a completed NVDA run: the Watchlist with live decisions, the per-ticker Journal, and the Live Monitor's timeline + Agent Theater.](images/tradingdesk.png)
+*TradingDesk — the workspace after a completed NVDA run: the Watchlist with live decisions, the per-ticker Journal, and the Live Monitor's timeline + Agent Theater. (Screenshot `images/tradingdesk.png` not checked in.)*
 
 This document records **what** each piece is, the **logic** behind it, and
 **how** it was built, so the project can be picked up cold.

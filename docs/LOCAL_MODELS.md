@@ -214,7 +214,7 @@ Popular models:
 To pre-tune a local model's context length, quantization, and temperature
 for TradingAgents' analyst/trader prompts (instead of relying on Ollama's
 defaults), see the example Modelfiles in
-[`examples/ollama`](../examples/ollama/README.md) — a fast profile for
+`examples/ollama/README.md` — a fast profile for
 quick iteration and an accurate profile for deep-thinker passes.
 
 ---

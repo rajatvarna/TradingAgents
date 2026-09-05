@@ -87,7 +87,7 @@ If `sqlite3.sqlite_version < 3.35` the `RETURNING` clause will fail — abort an
 
 - **Tests:** pytest with markers `unit` (default, fast, isolated), `integration` (real API / external service), `smoke` (quick end-to-end).
 - **Commits:** one per task. Format: `feat(<scope>): <subject>` matching repo style.
-- **Cost guards:** every guard ships `enabled: bool = False` default. Measurement always on. (See [saved memory](../../../.claude/projects/-home-ziwei-huang-TradingAgents/memory/cost-guards-disabled-by-default.md).)
+- **Cost guards:** every guard ships `enabled: bool = False` default. Measurement always on. (See saved memory `cost-guards-disabled-by-default.md`, local-only.)
 - **Imports:** absolute, rooted at `tradingagents.` and `cli.`.
 - **Schema:** append-only. Only `ALTER TABLE … ADD COLUMN` and `CREATE INDEX IF NOT EXISTS`. Existing F1/F2/F3 columns are untouched.
 - **Time:** All timestamps are `datetime.now(timezone.utc).isoformat()` strings; SQL comparisons use `datetime('now')`.

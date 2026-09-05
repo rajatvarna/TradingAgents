@@ -199,8 +199,8 @@ The envelope on `ingest:raw`:
 
 | Source | Mode | Poll interval | Cursor | Library | Replaces stub at |
 |---|---|---|---|---|---|
-| `polygon_news` | REST poll | 60s | last-seen `published_utc` | `requests` (sync inside an asyncio task is fine for 1 call/min) | [tradingagents/dataflows/polygon.py:75](../../tradingagents/dataflows/polygon.py) |
-| `telegram` | Telethon `iter_messages` per channel | 90s | max `message_id` per channel | `telethon` | new; sibling to [tradingagents/dataflows/telegram_osint.py](../../tradingagents/dataflows/telegram_osint.py) which becomes the F0 pull-path real impl |
+| `polygon_news` | REST poll | 60s | last-seen `published_utc` | `requests` (sync inside an asyncio task is fine for 1 call/min) | `tradingagents/dataflows/polygon.py:75` |
+| `telegram` | Telethon `iter_messages` per channel | 90s | max `message_id` per channel | `telethon` | new; sibling to `tradingagents/dataflows/telegram_osint.py` which becomes the F0 pull-path real impl |
 | `x` | Polled search or filtered stream (decide at implementation) | 60s | `since_id` | `tweepy` | new |
 | `rss` | `feedparser` per feed | 5min | max `published` ts per feed | `feedparser` | new |
 | `gdelt` | GDELT 2.0 doc API | 15min | `last_seen_date` | `requests` + `pandas` | new |

@@ -128,6 +128,20 @@ _DEFAULT = ModelCapabilities(
 )
 
 
+# Meta Model API (Muse Spark) accepts the tools array but only supports
+# ``tool_choice="auto"`` — langchain's function-spec dict form 400s with
+# "only auto is supported for tool_choice". Meta's documented structured
+# path is response_format json_schema with constrained decoding
+# (dev.meta.ai/docs/structured-output), so that is the preferred method.
+# Plain bind_tools without tool_choice still works for agentic tool loops.
+_META_SPARK = ModelCapabilities(
+    supports_tool_choice=False,
+    supports_json_mode=True,
+    supports_json_schema=True,
+    preferred_structured_method="json_schema",
+)
+
+
 # Exact-ID matches take precedence over pattern matches.
 _BY_ID: dict[str, ModelCapabilities] = {
     "deepseek-chat": _DEEPSEEK_CHAT,
@@ -171,6 +185,7 @@ _BY_PATTERN: list[tuple[re.Pattern[str], ModelCapabilities]] = [
     (re.compile(r"(^|/)minimax-m\d", re.IGNORECASE), _MINIMAX_M2),
     (re.compile(r"^kimi-k2"), _KIMI_THINKING),
     (re.compile(r"^kimi-thinking"), _KIMI_THINKING),
+    (re.compile(r"^muse-spark"), _META_SPARK),
 ]
 
 

@@ -39,18 +39,23 @@ CRYPTO_SUFFIXES = ("-USD", "-USDT", "-USDC", "-BTC", "-ETH")
 def is_valid_ticker_input(value: str) -> bool:
     """Whether a ticker entry is acceptable (charset + length).
 
-    Allows the characters Yahoo symbols use, including ``=`` for futures/forex
-    like ``GC=F`` and ``EURUSD=X`` (#980), and ``^`` for indices. Empty input is
-    allowed (it defaults to SPY downstream). Rejects path traversal patterns
-    (``..``, leading dot, slash) per #1262.
+    Delegates to ``safe_ticker_component`` so CLI validation matches every
+    filesystem path join (rejects ``..``, separators, etc., #1262). Allows the
+    characters Yahoo symbols use, including ``=`` for futures/forex like
+    ``GC=F`` and ``EURUSD=X`` (#980), ``^`` for indices, and ``+`` for broker
+    CFD markers (data layer strips ``+``). Empty input is allowed (it defaults
+    to SPY downstream).
     """
     v = value.strip()
     if not v:
         return True
-    # Path traversal / directory-ish inputs
-    if ".." in v or "/" in v or "\\" in v or v.startswith("."):
+    try:
+        from tradingagents.dataflows.utils import safe_ticker_component
+
+        safe_ticker_component(v)
+        return True
+    except ValueError:
         return False
-    return all(ch.isalnum() or ch in "._-^=" for ch in v) and len(v) <= 32
 
 
 def get_ticker(default_ticker: str = "SPY") -> str:
@@ -685,6 +690,7 @@ def _llm_provider_table() -> list[tuple[str, str, str | None]]:
         ("Kimi", "kimi", os.environ.get("KIMI_BASE_URL") or "https://api.moonshot.ai/v1"),
         ("MiniMax", "minimax", "https://api.minimax.io/v1"),
         ("NVIDIA NIM", "nvidia_nim", "https://integrate.api.nvidia.com/v1"),
+        ("Meta Model API", "meta", "https://api.meta.ai/v1"),
         ("OpenRouter", "openrouter", "https://openrouter.ai/api/v1"),
         ("Requesty", "requesty", "https://router.requesty.ai/v1"),
         ("Mistral", "mistral", "https://api.mistral.ai/v1"),

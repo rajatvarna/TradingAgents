@@ -24,7 +24,7 @@ def test_every_select_llm_provider_choice_has_an_entry():
         "glm", "glm-cn",
         "minimax", "minimax-cn",
         "9router",
-        "openrouter", "opencode", "azure", "ollama", "lmstudio", "custom",
+        "openrouter", "opencode", "azure", "ollama", "lmstudio", "custom", "meta",
     }
     assert expected.issubset(PROVIDER_API_KEY_ENV.keys())
 
@@ -47,6 +47,7 @@ def test_every_select_llm_provider_choice_has_an_entry():
         ("minimax-cn", "MINIMAX_CN_API_KEY"),
         ("9router",    "NINEROUTER_KEY"),
         ("openrouter", "OPENROUTER_API_KEY"),
+        ("meta",       "META_API_KEY"),
         ("opencode",   "OPENCODE_API_KEY"),
         ("custom",     "CUSTOM_PROVIDER_API_KEY"),
     ],

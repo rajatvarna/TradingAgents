@@ -62,6 +62,7 @@ PROVIDER_API_KEY_ENV: dict[str, str | None] = {
     "codex":      None,
     "groq":       "GROQ_API_KEY",
     "nvidia":     "NVIDIA_API_KEY",
+    "meta":       "META_API_KEY",
     "atlas":      "ATLAS_API_KEY",
     # Generic OpenAI-compatible endpoint: the client reads this when set (keyed
     # relays), but it is marked key-optional in the provider registry so the CLI

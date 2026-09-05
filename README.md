@@ -152,6 +152,7 @@ Alternatively, run with Docker:
 
 ```bash
 cp .env.example .env  # add your API keys
+docker compose build tradingagents
 docker compose run --rm tradingagents
 ```
 
@@ -256,6 +257,7 @@ export ZHIPU_CN_API_KEY=...        # GLM via BigModel (China, open.bigmodel.cn)
 export MINIMAX_API_KEY=...         # MiniMax — Global (api.minimax.io, M3 default, 512K ctx)
 export MINIMAX_CN_API_KEY=...      # MiniMax — China (api.minimaxi.com, M3 default, 512K ctx)
 export OPENROUTER_API_KEY=...      # OpenRouter
+export META_API_KEY=...            # Meta Model API (Muse Spark)
 export DEEPINFRA_API_KEY=...       # DeepInfra
 export GITHUB_TOKEN=...            # GitHub Models / Copilot
 export ALPHA_VANTAGE_API_KEY=...   # Alpha Vantage
@@ -402,7 +404,7 @@ See [**OPENCLAW_INTEGRATION.md**](OPENCLAW_INTEGRATION.md) for detailed setup in
 
 ### Implementation Details
 
-We built TradingAgents with LangGraph to ensure flexibility and modularity. The framework supports multiple LLM providers: OpenAI, Google, Anthropic, Tencent Cloud LKEAP, xAI, DeepSeek, Kimi (Moonshot), Qwen (Alibaba DashScope, international and China endpoints), GLM (Zhipu), MiniMax (global + China), OpenRouter, DeepInfra, GitHub Models / Copilot, Ollama for local models, AWS Bedrock, and Azure OpenAI for enterprise.
+We built TradingAgents with LangGraph to ensure flexibility and modularity. The framework supports multiple LLM providers: OpenAI, Google, Anthropic, Tencent Cloud LKEAP, xAI, DeepSeek, Kimi (Moonshot), Qwen (Alibaba DashScope, international and China endpoints), GLM (Zhipu), MiniMax (global + China), OpenRouter, Meta Model API (Muse Spark), DeepInfra, GitHub Models / Copilot, Ollama for local models, AWS Bedrock, and Azure OpenAI for enterprise.
 
 ### Python Usage
 
@@ -426,7 +428,7 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 
 config = DEFAULT_CONFIG.copy()
-config["llm_provider"] = "openai"        # openai, google, anthropic, tencent, xai, deepseek, kimi, qwen, qwen-cn, glm, glm-cn, minimax, minimax-cn, openrouter, deepinfra, github_copilot, ollama, bedrock, azure; openai_compatible covers any OpenAI-compatible endpoint (vLLM, LM Studio, llama.cpp, ...)
+config["llm_provider"] = "openai"        # openai, google, anthropic, tencent, xai, deepseek, kimi, qwen, qwen-cn, glm, glm-cn, minimax, minimax-cn, openrouter, meta, deepinfra, github_copilot, ollama, bedrock, azure; openai_compatible covers any OpenAI-compatible endpoint (vLLM, LM Studio, llama.cpp, ...)
 config["deep_think_llm"] = "gpt-5.6"      # Model for complex reasoning
 config["quick_think_llm"] = "gpt-5.6-luna" # Model for quick tasks
 config["max_debate_rounds"] = 2
@@ -437,6 +439,37 @@ print(decision)
 ```
 
 See `tradingagents/default_config.py` for all configuration options.
+
+### Optional Parallel ticker news
+
+Install `pip install "tradingagents[parallel]"` and select Parallel for the
+`get_news` tool in the config you pass to `TradingAgentsGraph`:
+
+```python
+config = DEFAULT_CONFIG.copy()
+config["tool_vendors"] = {**config["tool_vendors"], "get_news": "parallel"}
+```
+
+This uses [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp)
+at `https://search.parallel.ai/mcp` without a Parallel account or API key. Free
+access is rate limited. Once selected, agents can send ticker symbols, date
+windows, and generated news queries to Parallel during analysis. See Parallel's
+[terms](https://parallel.ai/customer-terms) and [privacy policy](https://parallel.ai/privacy-policy).
+
+Only ticker news is supported. Global news and insider transactions keep their
+existing providers. Remove the `get_news` override to disable Parallel. An
+explicit chain such as `"parallel,yfinance"` uses the existing ordered fallback
+behavior; neither the usual defaults nor the `"default"` sentinel enable Parallel.
+Failed attempts remain visible in the vendor logs.
+
+Results retain source links and excerpts, honor `news_article_limit`, and use the
+shared UTC date-window filter. Undated articles are excluded from historical
+windows, but may appear in live windows, just as with the existing news provider.
+Publication dates are source metadata, not archived page snapshots; excerpts can
+reflect later edits. Historical coverage can be sparse. Reports are capped at
+25,000 characters, responses at 2 MiB, and each exchange at 60 seconds. The
+adapter does not share conversation identifiers across calls because this
+provider interface has no conversation context.
 
 ## Persistence and Recovery
 

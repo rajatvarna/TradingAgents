@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from .alpha_vantage_common import _make_api_request, format_datetime_for_api
+from .config import get_config
 from .snapshots import GLOBAL_SCOPE, snapshot
 
 
@@ -103,9 +104,21 @@ def get_news(ticker, start_date, end_date) -> str:
     scope_literal=GLOBAL_SCOPE, date_arg="curr_date",
     serialize="str",
 )
-def get_global_news(curr_date, look_back_days: int = 7, limit: int = 50) -> str:
-    """Return broad market news & sentiment as markdown."""
+def get_global_news(curr_date, look_back_days: int | None = None, limit: int | None = None) -> str:
+    """Return broad market news & sentiment as markdown.
+
+    ``None`` for either optional falls back to ``global_news_lookback_days`` /
+    ``global_news_article_limit`` from the active config, mirroring the
+    yfinance path — the tool schema marks both optional, so a model omitting
+    them must not crash on ``timedelta(days=None)`` (#1329).
+    """
     from datetime import datetime, timedelta
+
+    config = get_config()
+    if look_back_days is None:
+        look_back_days = config["global_news_lookback_days"]
+    if limit is None:
+        limit = config["global_news_article_limit"]
 
     curr_dt = datetime.strptime(curr_date, "%Y-%m-%d")
     start_dt = curr_dt - timedelta(days=look_back_days)

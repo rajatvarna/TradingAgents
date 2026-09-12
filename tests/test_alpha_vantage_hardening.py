@@ -11,6 +11,7 @@ import pytest
 
 import tradingagents.dataflows.alpha_vantage_common as av
 import tradingagents.dataflows.alpha_vantage_fundamentals as avf
+import tradingagents.dataflows.alpha_vantage_news as avn
 
 
 class _FakeResponse:
@@ -94,3 +95,36 @@ def test_fundamentals_no_curr_date_passes_through(monkeypatch):
 def test_fundamentals_non_json_body_unchanged(monkeypatch):
     monkeypatch.setattr(avf, "_make_api_request", lambda fn, params: "not-json")
     assert avf.get_cashflow("AAPL", curr_date="2024-01-01") == "not-json"
+
+
+def _capture_global_news_params(monkeypatch, config):
+    captured = {}
+    monkeypatch.setattr(avn, "_make_api_request", lambda fn, params: captured.update(params) or "{}")
+    monkeypatch.setattr(avn, "get_config", lambda: config)
+    # Bypass the @snapshot replay wrapper: it keys on curr_date and would
+    # serve a replay instead of calling through with our stubbed request.
+    monkeypatch.setattr(avn, "get_global_news", avn.get_global_news.__wrapped__)
+    return captured
+
+
+@pytest.mark.unit
+def test_global_news_omitted_optionals_resolve_from_config(monkeypatch):
+    # The get_global_news tool marks look_back_days/limit optional and forwards
+    # None; Alpha Vantage must resolve them from config like the yfinance path
+    # does, instead of crashing on timedelta(days=None) (#1329).
+    captured = _capture_global_news_params(
+        monkeypatch, {"global_news_lookback_days": 7, "global_news_article_limit": 10}
+    )
+    avn.get_global_news("2026-01-10", None, None)
+    assert captured["limit"] == "10"
+    assert captured["time_from"] == "20260103T0000"  # 2026-01-10 minus 7 days
+
+
+@pytest.mark.unit
+def test_global_news_explicit_optionals_win_over_config(monkeypatch):
+    captured = _capture_global_news_params(
+        monkeypatch, {"global_news_lookback_days": 7, "global_news_article_limit": 10}
+    )
+    avn.get_global_news("2026-01-10", 3, 5)
+    assert captured["limit"] == "5"
+    assert captured["time_from"] == "20260107T0000"  # 2026-01-10 minus 3 days

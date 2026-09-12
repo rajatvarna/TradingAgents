@@ -60,6 +60,7 @@ from .ibkr import (
     get_options_overview as get_ibkr_options_overview,
     get_stock_data as get_ibkr_stock,
 )
+from .keenable_news import get_global_news_keenable, get_news_keenable
 from .marketstack_stock import get_stock as get_marketstack_stock
 from .newsflash import get_global_news_newsflash, get_news_newsflash
 from .parallel_news import get_news_parallel
@@ -326,6 +327,7 @@ VENDOR_LIST = [
     "schwab",
     "anysearch",
     "parallel",
+    "keenable",
 ]
 
 # Optional enrichment categories. These add macro/event context to the news
@@ -431,6 +433,7 @@ VENDOR_METHODS = {
         "newsflash": get_news_newsflash,
         "anysearch": get_news_anysearch,
         "parallel": get_news_parallel,
+        "keenable": get_news_keenable,
     },
     "get_global_news": {
         "finnhub": get_finnhub_global_news,
@@ -445,6 +448,7 @@ VENDOR_METHODS = {
         "firecrawl": get_global_news_firecrawl,
         "newsflash": get_global_news_newsflash,
         "anysearch": get_global_news_anysearch,
+        "keenable": get_global_news_keenable,
     },
     "get_insider_transactions": {
         "alpha_vantage": get_alpha_vantage_insider_transactions,
@@ -518,7 +522,9 @@ def _resolve_vendor_chain(method: str, category: str, *args) -> list[str]:
     vendors the user did not choose (#988/#289).  The "default" sentinel (no
     explicit config) uses all available vendors, except "parallel" which
     sends queries to a separate search service and requires an explicit
-    opt-in via tool_vendors["get_news"]="parallel" (#1302).
+    opt-in via tool_vendors["get_news"]="parallel" (#1302), and "keenable"
+    which is a keyless web-search news vendor requiring an explicit opt-in
+    via tool_vendors["get_news"]="keenable" (port 1308).
     """
     if method not in VENDOR_METHODS:
         raise ValueError(f"Method '{method}' not supported")
@@ -572,9 +578,9 @@ def _resolve_vendor_chain(method: str, category: str, *args) -> list[str]:
                 f"Available: {all_available_vendors}."
             )
         return vendor_chain
-    # Parallel requires an explicit choice; keep the implicit default chain
-    # unchanged so existing runs never invoke it unless configured.
-    return [v for v in all_available_vendors if v != "parallel"]
+    # Parallel and Keenable require an explicit choice; keep the implicit
+    # default chain unchanged so existing runs never invoke them unless configured.
+    return [v for v in all_available_vendors if v not in ("parallel", "keenable")]
 
 
 def _build_no_data_message(

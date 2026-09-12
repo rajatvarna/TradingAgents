@@ -489,6 +489,22 @@ reflect later edits. Historical coverage can be sparse. Reports are capped at
 adapter does not share conversation identifiers across calls because this
 provider interface has no conversation context.
 
+### Optional Keenable web-search news
+
+News comes from yfinance by default. To pull it from a Keenable web search instead, set
+`config["tool_vendors"]["get_news"] = "keenable"` (ticker news) and/or
+`config["tool_vendors"]["get_global_news"] = "keenable"` (macro headlines, using
+`global_news_queries`). To switch the whole `news_data` category, chain it with a vendor
+that also serves insider transactions, e.g. `config["data_vendors"]["news_data"] =
+"keenable,yfinance"`. No account is needed: it works keyless out of the box. Setting
+`KEENABLE_API_KEY` is optional and only lifts the keyless per-IP rate limits (10
+requests/s, 1000/hour). Results are bounded to the analysis window on the server and
+re-checked locally, so a historical run never sees articles published after its as-of date.
+
+Neither the usual defaults nor the `"default"` sentinel enable Keenable; remove the
+override to disable it. An explicit chain such as `"keenable,yfinance"` uses the existing
+ordered fallback behavior.
+
 ## Persistence and Recovery
 
 TradingAgents persists two kinds of state across runs.

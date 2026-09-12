@@ -140,7 +140,7 @@ class TestFundamentalDataTools:
         from tradingagents.agents.utils.fundamental_data_tools import get_balance_sheet
         mock_route.return_value = "Balance sheet"
 
-        result = get_balance_sheet.invoke({"ticker": "AAPL"})
+        result = get_balance_sheet.invoke({"ticker": "AAPL", "curr_date": "2026-01-15"})
         assert result == "Balance sheet"
 
     @patch("tradingagents.agents.utils.fundamental_data_tools.route_to_vendor")
@@ -148,7 +148,7 @@ class TestFundamentalDataTools:
         from tradingagents.agents.utils.fundamental_data_tools import get_cashflow
         mock_route.return_value = "Cash flow"
 
-        result = get_cashflow.invoke({"ticker": "AAPL"})
+        result = get_cashflow.invoke({"ticker": "AAPL", "curr_date": "2026-01-15"})
         assert result == "Cash flow"
 
     @patch("tradingagents.agents.utils.fundamental_data_tools.route_to_vendor")
@@ -158,7 +158,7 @@ class TestFundamentalDataTools:
         )
         mock_route.return_value = "Income statement"
 
-        result = get_income_statement.invoke({"ticker": "AAPL"})
+        result = get_income_statement.invoke({"ticker": "AAPL", "curr_date": "2026-01-15"})
         assert result == "Income statement"
 
 

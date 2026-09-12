@@ -810,7 +810,7 @@ class TestFundamentalsAnalystPrompt:
             language_instruction="",
         )
         digest = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
-        assert digest == "b144f3d202ead2100dc227cc9e4f99b1430d194761c78cf2e38097b4745e14da"
+        assert digest == "67db4fb1e79046dc8a58022cf5664f0ad5f9b7c2462fbcba5d42f5e16df2186b"
 
     def test_node_tool_free_fallback_passes_prompt_metadata(self, monkeypatch):
         from tradingagents.agents.analysts import fundamentals_analyst as fa

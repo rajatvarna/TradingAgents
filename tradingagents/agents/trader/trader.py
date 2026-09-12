@@ -14,6 +14,7 @@ from tradingagents.agents.utils.agent_utils import (
     format_risk_constraints,
     get_horizon_instruction,
     get_language_instruction,
+    portfolio_prompt_block,
 )
 from tradingagents.agents.utils.structured import (
     bind_structured,
@@ -51,6 +52,20 @@ def create_trader(llm, cache=None, prompt_registry=None, tools=None):
 
         capital_context = build_capital_context(state.get("holdings_info"))
         risk_constraints_block = format_risk_constraints(state.get("risk_constraints", {}))
+
+        # Optional broker-neutral portfolio snapshot supplied via
+        # propagate(..., portfolio_context=...) / --portfolio-context.
+        # Rendered python-side so the versioned registry templates
+        # (trader_system/trader_user) and their hash tests stay untouched.
+        # Renders an explicit "not provided" notice when absent so the Trader
+        # never mistakes a missing portfolio for a flat one.
+        # NOTE: this is distinct from the opt-in read-only IBKR tool
+        # (trader_get_ibkr_portfolio, gated by
+        # ibkr_portfolio_context_enabled), which lets the Trader pull live
+        # brokerage exposure mid-run. The two paths are never merged: this
+        # block only reflects the caller-supplied snapshot, and the IBKR
+        # tool is never wired into PortfolioContext.
+        portfolio_block = portfolio_prompt_block(state)
 
         # Upstream price grounding (#1167): include technical market report when available
         market_report = (state.get("market_report") or "").strip()
@@ -93,9 +108,10 @@ def create_trader(llm, cache=None, prompt_registry=None, tools=None):
 
         if grounding:
             system_content = grounding + system_content
+        user_combined = (report_section + user_content) if report_section else user_content
         messages = [
             {"role": "system", "content": system_content},
-            {"role": "user", "content": (report_section + user_content) if report_section else user_content},
+            {"role": "user", "content": user_combined + "\n\n" + portfolio_block},
         ]
 
         # If tools are bound, run a tool-augmented pass first so the Trader can

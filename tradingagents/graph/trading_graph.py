@@ -20,6 +20,7 @@ from tradingagents.agents.analysts.valuation_analyst import (
     get_scenario_analysis,
     get_wacc_components,
 )
+from tradingagents.agents.schemas import PortfolioContext
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_balance_sheet,
@@ -64,7 +65,7 @@ from tradingagents.reporting import write_report_tree
 
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
 from .conditional_logic import ConditionalLogic
-from .propagation import Propagator
+from .propagation import Propagator, portfolio_context_fingerprint
 from .reflection import Reflector, extract_expected_return
 from .setup import GraphSetup
 from .signal_processing import SIGNAL_CONVICTION_WEIGHTS, SignalProcessor
@@ -745,7 +746,13 @@ class TradingAgentsGraph:
                 logger.warning("Could not resolve pending for %s; will retry next run", ticker, exc_info=True)
         return resolved
 
-    def stream_run(self, company_name, trade_date, asset_type: str = "stock"):
+    def stream_run(
+        self,
+        company_name,
+        trade_date,
+        asset_type: str = "stock",
+        portfolio_context: PortfolioContext | dict | None = None,
+    ):
         """Streaming sibling of :meth:`propagate` for live host UIs.
 
         Yields each whole-state snapshot from ``graph.stream(stream_mode="values")``
@@ -779,6 +786,7 @@ class TradingAgentsGraph:
             past_context=past_context,
             instrument_context=instrument_context,
             risk_constraints=risk_constraints,
+            portfolio_context=portfolio_context,
             **evidence_pack,
         )
         if monster_score:
@@ -873,18 +881,28 @@ class TradingAgentsGraph:
         td = str(trade_date)
         return td if td < datetime.now().strftime("%Y-%m-%d") else None
 
-    def _run_signature(self, asset_type: str) -> str:
+    def _run_signature(
+        self,
+        asset_type: str,
+        portfolio_context: PortfolioContext | dict | None = None,
+    ) -> str:
         """Graph-shape inputs that must invalidate a checkpoint if changed.
 
         Keyed into the checkpoint thread ID so a resume under a different analyst
         selection, debate/risk depth, or asset mode starts fresh instead of
         silently continuing the previous graph (#1089).
+
+        The portfolio snapshot participates through a deterministic fingerprint
+        (not the raw JSON): the same snapshot resumes, a changed snapshot
+        starts a fresh run rather than continuing with stale holdings, and a
+        missing context never shares a checkpoint with a provided one.
         """
         return "|".join([
             "analysts=" + ",".join(self.selected_analysts),
             f"debate={self.config['max_debate_rounds']}",
             f"risk={self.config['max_risk_discuss_rounds']}",
             f"asset={asset_type}",
+            f"portfolio={portfolio_context_fingerprint(portfolio_context)}",
         ])
 
     def _empty_evidence_pack(self, warnings: list[str] | None = None) -> dict[str, Any]:
@@ -1067,6 +1085,7 @@ class TradingAgentsGraph:
         on_chunk=None,
         progress_callback=None,
         target_profile=None,
+        portfolio_context: PortfolioContext | dict | None = None,
     ):
         """Run the trading agents graph for a company on a specific date.
 
@@ -1076,6 +1095,13 @@ class TradingAgentsGraph:
         ``checkpoint_enabled`` is set in config, the graph is recompiled with
         a per-ticker SqliteSaver so a crashed run can resume from the last
         successful node on a subsequent invocation with the same ticker+date.
+
+        ``portfolio_context`` is an optional broker-neutral
+        :class:`~tradingagents.agents.schemas.PortfolioContext` (or its dict
+        form) describing current holdings and capital. When provided it is
+        threaded through the Trader, risk, and Portfolio Manager prompts;
+        when omitted those nodes are told explicitly that no portfolio
+        context was given, instead of assuming a flat portfolio.
 
         Returns ``(final_state, signal)`` where ``signal`` is one of the 5-tier
         ratings (Buy / Overweight / Hold / Underweight / Sell) or ``"REVIEW"``
@@ -1101,7 +1127,9 @@ class TradingAgentsGraph:
         # before the pipeline runs; shared with the CLI path.
         past_context = self.prepare_memory_context(company_name, trade_date)
 
-        with self.checkpoint_scope(company_name, trade_date, asset_type) as thread_id_value:
+        with self.checkpoint_scope(
+            company_name, trade_date, asset_type, portfolio_context=portfolio_context
+        ) as thread_id_value:
             return self._run_graph(
                 company_name,
                 trade_date,
@@ -1111,9 +1139,16 @@ class TradingAgentsGraph:
                 target_profile=target_profile,
                 checkpoint_thread_id=thread_id_value,
                 past_context=past_context,
+                portfolio_context=portfolio_context,
             )
 
-    def begin_checkpoint(self, company_name, trade_date, asset_type: str = "stock") -> str | None:
+    def begin_checkpoint(
+        self,
+        company_name,
+        trade_date,
+        asset_type: str = "stock",
+        portfolio_context: PortfolioContext | dict | None = None,
+    ) -> str | None:
         """Recompile the graph with a per-ticker checkpointer and return the
         ``thread_id`` to inject into the stream/invoke ``config`` (or ``None``
         when checkpointing is disabled).
@@ -1127,7 +1162,7 @@ class TradingAgentsGraph:
         self._resuming = False
         if not self.config.get("checkpoint_enabled"):
             return None
-        signature = self._run_signature(asset_type)
+        signature = self._run_signature(asset_type, portfolio_context)
         self._checkpointer_ctx = get_checkpointer(self.config["data_cache_dir"], company_name)
         saver = self._checkpointer_ctx.__enter__()
         self.graph = self.workflow.compile(checkpointer=saver)
@@ -1161,19 +1196,34 @@ class TradingAgentsGraph:
         self._resuming = False
 
     @contextmanager
-    def checkpoint_scope(self, company_name, trade_date, asset_type: str = "stock"):
+    def checkpoint_scope(
+        self,
+        company_name,
+        trade_date,
+        asset_type: str = "stock",
+        portfolio_context: PortfolioContext | dict | None = None,
+    ):
         """Context-manager form of begin/end_checkpoint for the propagate path."""
         try:
-            yield self.begin_checkpoint(company_name, trade_date, asset_type)
+            yield self.begin_checkpoint(
+                company_name, trade_date, asset_type,
+                portfolio_context=portfolio_context,
+            )
         finally:
             self.end_checkpoint()
 
-    def clear_checkpoint_on_success(self, company_name, trade_date, asset_type: str = "stock"):
+    def clear_checkpoint_on_success(
+        self,
+        company_name,
+        trade_date,
+        asset_type: str = "stock",
+        portfolio_context: PortfolioContext | dict | None = None,
+    ):
         """Drop a completed run's checkpoint so a later run starts fresh (#1249)."""
         if self.config.get("checkpoint_enabled"):
             clear_checkpoint(
                 self.config["data_cache_dir"], company_name, str(trade_date),
-                self._run_signature(asset_type),
+                self._run_signature(asset_type, portfolio_context),
             )
 
     def save_reports(self, final_state, ticker, save_path=None) -> Path:
@@ -1203,6 +1253,7 @@ class TradingAgentsGraph:
         target_profile=None,
         checkpoint_thread_id: str | None = None,
         past_context: str | None = None,
+        portfolio_context: PortfolioContext | dict | None = None,
     ):
         """Execute the graph and write the resulting state to disk and memory log.
 
@@ -1237,6 +1288,7 @@ class TradingAgentsGraph:
             instrument_context=instrument_context,
             risk_constraints=risk_constraints,
             target_profile=target_profile,
+            portfolio_context=portfolio_context,
             **evidence_pack,
         )
         if monster_score:
@@ -1361,7 +1413,7 @@ class TradingAgentsGraph:
         if self.config.get("checkpoint_enabled") and not budget_aborted:
             clear_checkpoint(
                 self.config["data_cache_dir"], company_name, str(trade_date),
-                self._run_signature(asset_type),
+                self._run_signature(asset_type, portfolio_context),
             )
 
         # Log spend and audit trail to stderr.
@@ -1379,6 +1431,13 @@ class TradingAgentsGraph:
         self.log_states_dict[str(trade_date)] = {
             "company_of_interest": final_state.get("company_of_interest"),
             "trade_date": final_state.get("trade_date"),
+            # Whether a portfolio snapshot was provided, and the snapshot
+            # itself when present, so saved runs identify which context the
+            # Trader / risk / Portfolio Manager decisions were grounded in.
+            # A missing context (None) is recorded as absent rather than as
+            # an empty portfolio.
+            "portfolio_context_present": final_state.get("portfolio_context") is not None,
+            "portfolio_context": final_state.get("portfolio_context"),
             "market_report": final_state.get("market_report"),
             "sentiment_report": final_state.get("sentiment_report"),
             "news_report": final_state.get("news_report"),

@@ -72,13 +72,15 @@ class _FakePropagator:
         self.initial_state_kwargs = None
 
     def create_initial_state(
-        self, ticker, trade_date, asset_type="stock", past_context="", instrument_context=""
+        self, ticker, trade_date, asset_type="stock", past_context="", instrument_context="",
+        portfolio_context=None,
     ):
         self.initial_state_kwargs = {
             "ticker": ticker,
             "trade_date": trade_date,
             "past_context": past_context,
             "instrument_context": instrument_context,
+            "portfolio_context": portfolio_context,
         }
         return {"messages": [], "company_of_interest": ticker}
 

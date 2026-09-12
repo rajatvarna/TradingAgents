@@ -57,7 +57,7 @@ from tradingagents.agents.utils.technical_data_tools import get_technical_indica
 from tradingagents.dataflows.config import set_config
 from tradingagents.dataflows.run_cache import reset as reset_run_cache
 from tradingagents.dataflows.symbol_utils import normalize_symbol
-from tradingagents.dataflows.utils import safe_ticker_component
+from tradingagents.dataflows.utils import get_current_date, safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.llm_clients import create_llm_client
 from tradingagents.reporting import write_report_tree
@@ -158,6 +158,37 @@ def _precompute_forensic_score(ticker: str, trade_date: str, config: dict) -> di
     except Exception as exc:
         logger.warning("Forensic accounting pre-score failed for %s: %s", ticker, exc)
         return {}
+
+
+def _validate_trade_date(trade_date: str) -> str:
+    """Validate a programmatic run date before any vendor request is made.
+
+    The interactive CLI already rejects future dates, but callers of
+    ``TradingAgentsGraph.propagate`` can bypass that prompt.  Letting a future
+    date reach the data tools makes them request an impossible Yahoo range and
+    can produce a misleading downstream no-data error (#1118).
+    """
+    value = str(trade_date)
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d")
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"trade_date must be a valid date in YYYY-MM-DD format, got {trade_date!r}"
+        ) from exc
+
+    # Reject non-canonical values such as a datetime string even if a future
+    # parser would otherwise accept them.
+    if parsed.strftime("%Y-%m-%d") != value:
+        raise ValueError(
+            f"trade_date must be a valid date in YYYY-MM-DD format, got {trade_date!r}"
+        )
+
+    today = get_current_date()
+    if value > today:
+        raise ValueError(
+            f"trade_date cannot be in the future: {value} is after {today}"
+        )
+    return value
 
 
 def _coerce_max_retries(value):
@@ -1003,6 +1034,7 @@ class TradingAgentsGraph:
         ``tradingagents.agents.utils.rating.is_review`` before mapping it to the
         PortfolioRating enum.
         """
+        trade_date = _validate_trade_date(trade_date)
         self.ticker = company_name
         self.structured_output_cache.clear()
 

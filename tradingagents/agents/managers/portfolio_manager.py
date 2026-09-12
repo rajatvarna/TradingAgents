@@ -20,6 +20,7 @@ from tradingagents.agents.utils.agent_utils import (
     format_analyst_weights_block,
     format_risk_constraints,
     get_language_instruction,
+    portfolio_prompt_block,
 )
 from tradingagents.agents.utils.rating import RATINGS_5_TIER, extract_rating, parse_rating
 from tradingagents.agents.utils.recommendation_audit import (
@@ -121,6 +122,13 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
         scope_guard = build_scope_guard(state["company_of_interest"])
         constraints_block = format_risk_constraints(state.get("risk_constraints", {}))
 
+        # Optional broker-neutral snapshot of current holdings and capital,
+        # injected python-side so the versioned managers/portfolio_manager
+        # template stays untouched. An explicit "not provided" notice when
+        # absent, so sizing language is never presented as portfolio-grounded
+        # without a snapshot.
+        portfolio_block = portfolio_prompt_block(state)
+
         # B4: same trailing-accuracy signal the Research Manager already
         # receives (Item 6 / "Confidence-Weighted Analyst Voting"), extended
         # to the Portfolio Manager so the final synthesis sees it too.
@@ -198,7 +206,7 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
             language_instruction=get_language_instruction(),
         )
 
-        prompt = constraints_block + prompt
+        prompt = constraints_block + prompt + "\n\n" + portfolio_block
 
         reliability_signals = (
             f"\n\n**Reliability Signals:**\n"

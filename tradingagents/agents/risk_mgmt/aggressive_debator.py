@@ -4,6 +4,7 @@ from tradingagents.agents.utils.agent_utils import (
     format_risk_constraints,
     get_language_instruction,
     opponent_argument_or_opening,
+    portfolio_prompt_block,
     summarize_for_debate,
 )
 from tradingagents.audit.prompt_registry import default_registry
@@ -42,6 +43,11 @@ def create_aggressive_debator(llm, prompt_registry=None):
         scope_guard = build_scope_guard(state.get("company_of_interest", "the requested instrument"))
         constraints_block = format_risk_constraints(state.get("risk_constraints", {}))
 
+        # Optional broker-neutral portfolio snapshot, injected python-side so
+        # the versioned risk/aggressive template stays untouched. Renders an
+        # explicit "not provided" notice when absent.
+        portfolio_block = portfolio_prompt_block(state)
+
         trader_decision = state["trader_investment_plan"]
 
         # Prompt layout is cache-aware (#750): the debate-wide shared context
@@ -68,7 +74,7 @@ def create_aggressive_debator(llm, prompt_registry=None):
             language_instruction=get_language_instruction(),
         )
 
-        prompt = constraints_block + prompt
+        prompt = constraints_block + prompt + "\n\n" + portfolio_block
         response = llm.invoke(
             prompt,
             config={

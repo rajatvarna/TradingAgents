@@ -162,13 +162,14 @@ def _request(path: str, params: dict) -> dict:
         new_exc.__cause__ = None
         raise new_exc from None
     # FRED returns 400 with a JSON {"error_message": ...} for unknown series IDs
-    # or malformed params; turn that into a clear, actionable error.
+    # or malformed params; turn that into a clear, actionable error. The body
+    # can quote the request back, so scrub it like any other error text (#1324).
     if response.status_code == 400:
         try:
             message = response.json().get("error_message", response.text)
         except ValueError:
             message = response.text
-        raise ValueError(f"FRED request failed: {message}")
+        raise ValueError(f"FRED request failed: {_redact(message)}")
     try:
         response.raise_for_status()
     except requests.HTTPError as exc:
@@ -177,6 +178,16 @@ def _request(path: str, params: dict) -> dict:
             new_exc = type(exc)(redacted)
         except Exception:
             new_exc = exc.__class__(redacted)
+        # Keep the response attached for status-code-based retry logic (#1324).
+        # Prefer the local response (raise_for_status may raise a bare error
+        # without one attached, as in tests); fall back to the original's.
+        try:
+            new_exc.response = response
+        except Exception:
+            try:
+                new_exc.response = exc.response
+            except Exception:
+                pass
         new_exc.__cause__ = None
         raise new_exc from None
     return response.json()

@@ -187,6 +187,55 @@ class FredFormattingTests(unittest.TestCase):
 
 
 @pytest.mark.unit
+class FredKeyRedactionTests(unittest.TestCase):
+    """The API key travels as a query parameter: it must not reach error strings.
+
+    ``requests`` builds its HTTPError message from the full URL, which carries
+    ``api_key=...``. Anything catching and logging that error writes the key
+    where it does not belong (ports TauricResearch/TradingAgents#1324 onto the
+    fork's ``http_utils.redact_text`` helper, which uses ``***``).
+    """
+
+    def test_http_error_message_carries_no_key(self):
+        import requests
+
+        response = mock.Mock(status_code=500)
+        response.raise_for_status.side_effect = requests.HTTPError(
+            "500 Server Error for url: https://api.stlouisfed.org/fred/series"
+            "?series_id=DGS10&api_key=abcdef0123456789abcdef0123456789"
+        )
+        with mock.patch.dict("os.environ", {"FRED_API_KEY": "abcdef0123456789abcdef0123456789"}):
+            with mock.patch("tradingagents.dataflows.fred.requests.get", return_value=response):
+                with self.assertRaises(requests.HTTPError) as caught:
+                    fred._request("series", {"series_id": "DGS10"})
+        self.assertNotIn("abcdef0123456789abcdef0123456789", str(caught.exception))
+        self.assertIn("api_key=***", str(caught.exception))
+
+    def test_http_error_keeps_its_class_and_response(self):
+        import requests
+
+        response = mock.Mock(status_code=503)
+        response.raise_for_status.side_effect = requests.HTTPError("503 for url: ?api_key=k")
+        with mock.patch.dict("os.environ", {"FRED_API_KEY": "k" * 32}):
+            with mock.patch("tradingagents.dataflows.fred.requests.get", return_value=response):
+                with self.assertRaises(requests.HTTPError) as caught:
+                    fred._request("series", {"series_id": "DGS10"})
+        self.assertIs(caught.exception.response, response)
+        self.assertEqual(caught.exception.response.status_code, 503)
+
+    def test_bad_request_body_is_redacted_too(self):
+        response = mock.Mock(status_code=400)
+        response.json.return_value = {
+            "error_message": "Bad request: api_key=abcdef0123456789abcdef0123456789"
+        }
+        with mock.patch.dict("os.environ", {"FRED_API_KEY": "abcdef0123456789abcdef0123456789"}):
+            with mock.patch("tradingagents.dataflows.fred.requests.get", return_value=response):
+                with self.assertRaises(ValueError) as caught:
+                    fred._request("series", {"series_id": "NOPE"})
+        self.assertNotIn("abcdef0123456789abcdef0123456789", str(caught.exception))
+
+
+@pytest.mark.unit
 class FredRoutingTests(unittest.TestCase):
     def setUp(self):
         config_module._config = copy.deepcopy(default_config.DEFAULT_CONFIG)

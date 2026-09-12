@@ -127,6 +127,24 @@ conda create -n tradingagents python=3.12
 conda activate tradingagents
 ```
 
+On macOS or Linux, `conda activate` is a shell-level command. If your shell
+reports that Conda has not been initialized, initialize it as the user who will
+run TradingAgents, without `sudo`:
+
+```bash
+conda init "$(basename "$SHELL")"
+```
+
+Close and reopen the terminal (or restart the shell), then activate the
+environment:
+
+```bash
+conda activate tradingagents
+```
+
+For a one-off command when shell activation is unavailable, use `conda run`
+instead, for example `conda run -n tradingagents pip install .`.
+
 Install the package and its dependencies:
 
 ```bash
@@ -440,6 +458,40 @@ print(decision)
 
 See `tradingagents/default_config.py` for all configuration options.
 
+### Portfolio context (optional)
+
+`propagate()` accepts an optional, broker-neutral `PortfolioContext` snapshot describing current holdings and capital. When provided, the Trader, risk analysts, and Portfolio Manager ground their sizing language in it; when omitted, they are told explicitly that no portfolio context was given instead of assuming a flat portfolio. A context with empty `positions` means a known flat portfolio — this is distinct from providing no context at all.
+
+```python
+from tradingagents.agents.schemas import PortfolioContext
+from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.default_config import DEFAULT_CONFIG
+
+ta = TradingAgentsGraph(debug=True, config=DEFAULT_CONFIG.copy())
+
+context = PortfolioContext(
+    positions=[{"symbol": "NVDA", "quantity": 10.0, "average_entry_price": 150.0}],
+    cash=25000.0,
+    portfolio_value=120000.0,
+    as_of="2026-01-15",
+    source="paper-broker",
+    currency="USD",
+)
+
+_, decision = ta.propagate("NVDA", "2026-01-15", portfolio_context=context)
+print(decision)
+```
+
+Existing calls without `portfolio_context` keep working unchanged. The CLI accepts the same snapshot as a JSON file:
+
+```bash
+tradingagents analyze --portfolio-context /path/to/portfolio.json
+```
+
+Saved run state records whether a context was present (`portfolio_context_present`) together with the snapshot used. The contract carries no credentials, account identifiers, or broker dependencies. This caller-supplied snapshot is distinct from the opt-in read-only IBKR tool (`trader_get_ibkr_portfolio`); the two paths are never merged.
+
+`currency` is an optional reporting label only; TradingAgents does not perform FX conversion. A changed snapshot starts a fresh checkpointed run instead of resuming stale portfolio state.
+
 ### Optional Parallel ticker news
 
 Install `pip install "tradingagents[parallel]"` and select Parallel for the
@@ -470,6 +522,22 @@ reflect later edits. Historical coverage can be sparse. Reports are capped at
 25,000 characters, responses at 2 MiB, and each exchange at 60 seconds. The
 adapter does not share conversation identifiers across calls because this
 provider interface has no conversation context.
+
+### Optional Keenable web-search news
+
+News comes from yfinance by default. To pull it from a Keenable web search instead, set
+`config["tool_vendors"]["get_news"] = "keenable"` (ticker news) and/or
+`config["tool_vendors"]["get_global_news"] = "keenable"` (macro headlines, using
+`global_news_queries`). To switch the whole `news_data` category, chain it with a vendor
+that also serves insider transactions, e.g. `config["data_vendors"]["news_data"] =
+"keenable,yfinance"`. No account is needed: it works keyless out of the box. Setting
+`KEENABLE_API_KEY` is optional and only lifts the keyless per-IP rate limits (10
+requests/s, 1000/hour). Results are bounded to the analysis window on the server and
+re-checked locally, so a historical run never sees articles published after its as-of date.
+
+Neither the usual defaults nor the `"default"` sentinel enable Keenable; remove the
+override to disable it. An explicit chain such as `"keenable,yfinance"` uses the existing
+ordered fallback behavior.
 
 ## Persistence and Recovery
 

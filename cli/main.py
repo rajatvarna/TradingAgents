@@ -1,4 +1,5 @@
 import datetime
+import json
 import logging
 import os
 import socket
@@ -8,6 +9,7 @@ from functools import wraps
 from pathlib import Path
 
 import typer
+from pydantic import ValidationError
 from rich.align import Align
 from rich.console import Console
 from rich.live import Live
@@ -61,6 +63,7 @@ from cli.utils import (
     select_shallow_thinking_agent,
     validate_custom_provider_base_url,
 )
+from tradingagents.agents.schemas import PortfolioContext
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.graph.analyst_execution import (
     AnalystWallTimeTracker,
@@ -699,10 +702,38 @@ def _build_run_config(selections: dict, checkpoint: bool | None) -> dict:
     return config
 
 
+def load_portfolio_context_file(path_str: str) -> dict:
+    """Load and validate a ``PortfolioContext`` JSON file for ``--portfolio-context``.
+
+    Returns the snapshot as plain JSON-safe data ready for
+    ``Propagator.create_initial_state``. Raises ``typer.BadParameter`` with an
+    actionable message for a missing file, malformed JSON, or schema
+    violations — the CLI must fail at startup rather than run with a silently
+    degraded (or empty-looking) portfolio.
+    """
+    path = Path(path_str).expanduser()
+    if not path.is_file():
+        raise typer.BadParameter(f"portfolio context file not found: {path_str}")
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter(
+            f"portfolio context file is not valid JSON: {path_str} ({exc})"
+        ) from exc
+    try:
+        context = PortfolioContext.model_validate(raw)
+    except ValidationError as exc:
+        raise typer.BadParameter(
+            f"portfolio context file failed validation: {path_str}\n{exc}"
+        ) from exc
+    return context.model_dump(mode="json")
+
+
 def run_analysis(
     checkpoint: bool | None = None,
     metrics_config: MetricsConfig | None = None,
     max_cost: float | None = None,
+    portfolio_context_path: str | None = None,
 ):
     """Gather user selections, run the trading analysis graph, and display results."""
     # Send library logs to a file so they don't corrupt the Rich Live display.
@@ -849,11 +880,27 @@ def run_analysis(
         instrument_context = graph.resolve_instrument_context(
             selections["ticker"], selections["asset_type"]
         )
+        # Settle pending decisions and carry prior lessons into the PM prompt;
+        # the CLI builds state itself, so the memory log must be wired here too.
+        past_context = graph.prepare_memory_context(
+            selections["ticker"], selections["analysis_date"]
+        )
+        # An optional broker-neutral portfolio snapshot (``--portfolio-context``)
+        # is threaded through the same way; when omitted the state records
+        # None so decision nodes see "not provided" rather than a flat
+        # portfolio.
+        portfolio_context = (
+            load_portfolio_context_file(portfolio_context_path)
+            if portfolio_context_path
+            else None
+        )
         init_agent_state = graph.propagator.create_initial_state(
             selections["ticker"],
             selections["analysis_date"],
             asset_type=selections["asset_type"],
+            past_context=past_context,
             instrument_context=instrument_context,
+            portfolio_context=portfolio_context,
         )
         # Pass callbacks to graph config for tool execution tracking
         # (LLM tracking is handled separately via LLM constructor)
@@ -863,8 +910,11 @@ def run_analysis(
         # Recompile with a checkpointer and inject the thread_id so --checkpoint
         # actually saves and resumes on the CLI path (#1249); a no-op when
         # checkpointing is disabled. Torn down in the finally below.
+        # The portfolio snapshot participates in the checkpoint identity so a
+        # changed snapshot starts fresh instead of resuming stale state.
         checkpoint_tid = graph.begin_checkpoint(
-            selections["ticker"], selections["analysis_date"], selections["asset_type"]
+            selections["ticker"], selections["analysis_date"], selections["asset_type"],
+            portfolio_context=portfolio_context,
         )
         if checkpoint_tid is not None:
             args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = checkpoint_tid
@@ -873,6 +923,7 @@ def run_analysis(
         # interrupted run instead of re-appending the initial state (#1249); the
         # try/finally tears the checkpointer down even if the stream raises.
         trace = []
+        run_completed = False
         try:
             for chunk in graph.graph.stream(graph.checkpoint_input(init_agent_state), **args):
                 # Keep TUI message store in sync (fork's ingest path)
@@ -956,8 +1007,10 @@ def run_analysis(
             # Clean run: drop this run's checkpoint so a later run starts fresh.
             # A mid-stream failure skips this, keeping the checkpoint for resume.
             graph.clear_checkpoint_on_success(
-                selections["ticker"], selections["analysis_date"], selections["asset_type"]
+                selections["ticker"], selections["analysis_date"], selections["asset_type"],
+                portfolio_context=portfolio_context,
             )
+            run_completed = True
         finally:
             # Always restore the plain uncheckpointed graph, even on failure.
             graph.end_checkpoint()
@@ -967,6 +1020,13 @@ def run_analysis(
         final_state = {}
         for chunk in trace:
             final_state.update(chunk)
+
+        # Record the decision only for a run that finished; an interrupted
+        # stream keeps its checkpoint (and writes nothing) for a later resume.
+        if run_completed:
+            graph.record_decision(
+                selections["ticker"], selections["analysis_date"], final_state
+            )
 
         agent_tracker.set_all_completed()
 
@@ -1078,6 +1138,13 @@ def analyze(
         "--max-cost",
         help="Maximum estimated USD spend for this run. Aborts when exceeded.",
     ),
+    portfolio_context: str | None = typer.Option(
+        None,
+        "--portfolio-context",
+        help="Path to a JSON file with an optional broker-neutral portfolio "
+        "snapshot (positions, cash, capital). When omitted, decision nodes "
+        "are told explicitly that no portfolio context was provided.",
+    ),
 ):
     """Run an interactive stock analysis session with optional checkpoint support and metrics selection."""
     if list_metrics:
@@ -1099,7 +1166,10 @@ def analyze(
         n = clear_all_checkpoints(DEFAULT_CONFIG["data_cache_dir"])
         console.print(f"[yellow]Cleared {n} checkpoint(s).[/yellow]")
     try:
-        run_analysis(checkpoint=checkpoint, metrics_config=metrics_config, max_cost=max_cost)
+        run_analysis(
+            checkpoint=checkpoint, metrics_config=metrics_config, max_cost=max_cost,
+            portfolio_context_path=portfolio_context,
+        )
     except NoConsoleScreenBufferError as exc:
         # prompt_toolkit can't attach to a real console (e.g. launched via
         # pythonw, a non-interactive Windows shell, or a GUI wrapper) — show

@@ -143,9 +143,10 @@ class TestRouting:
                 "get_news", "news_data", "600519.SS", "2026-05-01", "2026-06-02",
             )
         assert chain[0] == "eastmoney"
-        # "parallel" is opt-in only (tool_vendors["get_news"]="parallel") and
-        # never in the default chain (#1302).
-        expected = set(interface.VENDOR_METHODS["get_news"]) - {"parallel"}
+        # "parallel" and "keenable" are opt-in only
+        # (tool_vendors["get_news"]="parallel"/"keenable") and never in the
+        # default chain (#1302, #1308).
+        expected = set(interface.VENDOR_METHODS["get_news"]) - {"parallel", "keenable"}
         assert set(chain) == expected
         assert len(chain) == len(expected)
 

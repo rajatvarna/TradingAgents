@@ -124,13 +124,13 @@ def test_oversized_body_is_rejected_before_parsing():
     """A body past the cap must degrade, not be buffered and parsed in full."""
 
     class _BigResp:
-        def __enter__(self_inner):
-            return self_inner
+        def __enter__(self):
+            return self
 
-        def __exit__(self_inner, *a):
+        def __exit__(self, *a):
             return False
 
-        def read(self_inner, *a):
+        def read(self, *a):
             return b"x" * 100
 
     with patch.object(stocktwits, "_MAX_FEED_BYTES", 10), \

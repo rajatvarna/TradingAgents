@@ -849,10 +849,16 @@ def run_analysis(
         instrument_context = graph.resolve_instrument_context(
             selections["ticker"], selections["asset_type"]
         )
+        # Settle pending decisions and carry prior lessons into the PM prompt;
+        # the CLI builds state itself, so the memory log must be wired here too.
+        past_context = graph.prepare_memory_context(
+            selections["ticker"], selections["analysis_date"]
+        )
         init_agent_state = graph.propagator.create_initial_state(
             selections["ticker"],
             selections["analysis_date"],
             asset_type=selections["asset_type"],
+            past_context=past_context,
             instrument_context=instrument_context,
         )
         # Pass callbacks to graph config for tool execution tracking
@@ -873,6 +879,7 @@ def run_analysis(
         # interrupted run instead of re-appending the initial state (#1249); the
         # try/finally tears the checkpointer down even if the stream raises.
         trace = []
+        run_completed = False
         try:
             for chunk in graph.graph.stream(graph.checkpoint_input(init_agent_state), **args):
                 # Keep TUI message store in sync (fork's ingest path)
@@ -958,6 +965,7 @@ def run_analysis(
             graph.clear_checkpoint_on_success(
                 selections["ticker"], selections["analysis_date"], selections["asset_type"]
             )
+            run_completed = True
         finally:
             # Always restore the plain uncheckpointed graph, even on failure.
             graph.end_checkpoint()
@@ -967,6 +975,13 @@ def run_analysis(
         final_state = {}
         for chunk in trace:
             final_state.update(chunk)
+
+        # Record the decision only for a run that finished; an interrupted
+        # stream keeps its checkpoint (and writes nothing) for a later resume.
+        if run_completed:
+            graph.record_decision(
+                selections["ticker"], selections["analysis_date"], final_state
+            )
 
         agent_tracker.set_all_completed()
 

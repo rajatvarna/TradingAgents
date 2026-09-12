@@ -166,7 +166,28 @@ git push origin feat/upstream-sep12-tier1  # PR to origin/main
 
 ---
 
-## 8. Risks & mitigations
+## 8. Execution record (branch `feat/upstream-sep12-tier1`)
+
+| Commit | PR | Result |
+|--------|----|--------|
+| `15efbc5a` | #1324 FRED redaction | Landed (+response preservation, 400-body scrub, 3 tests, 19 pass) |
+| `f464507e` | #1328 StockTwits cap | Landed (5MiB + oversized test, 24 pass) |
+| `52291b29` | #1329 AV optionals | Landed (config fallback + `__wrapped__` test bypass, 8 pass) |
+| `fe95197f` | #1331 statement dates | Landed (schema + v1/v2 prompt lines, 6 tests) |
+| `ff8369e5` | #1319 future dates | Landed (propagate validation, 3 tests) |
+| `1aafc009` | #1312 conda docs | Landed verbatim |
+| `96730490` | #1318 signals | Landed as-is (6 tests) |
+| `cfa284c1` | #1308 Keenable | Landed opt-in, excluded from defaults (25 tests) |
+| `a6d9cecd` | lint N805 | — |
+| `fc83ddee` | #1332 decision log | Landed (prepare/record methods, CLI wiring, 5 tests) |
+| `d2420228` | #1304 portfolio ctx | Landed scoped (python-side blocks, IBKR distinct, 55 tests) |
+| — | #1307 checkpointer | Verified SKIP — fork already uses static SQL |
+| — | #1330 OHLCV prune | Verified SKIP — fork writes fixed `15y` name, no day-stamped files |
+| — | #1303/#1309/#1294-remainder | Rejected per §5 |
+
+Validation: `ruff check .` clean; 127-test targeted subset green; 225-test Sep-05 regression subset re-verified green after rebase point. `test_memory_log.py` 6+1 failures are pre-existing on clean `main` (Windows-local; Linux CI green).
+
+## 9. Risks & mitigations
 
 | Risk | Mitigation |
 |------|------------|

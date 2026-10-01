@@ -131,6 +131,10 @@ class NormalizedChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
 REQUEST_TIMEOUT_SECONDS = 600
 
 
+# The read timeout the OpenAI and Anthropic SDKs use by default.
+REQUEST_TIMEOUT_SECONDS = 600
+
+
 class GoogleClient(BaseLLMClient):
     """Client for Google Gemini models."""
 

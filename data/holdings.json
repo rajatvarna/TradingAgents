@@ -6,7 +6,7 @@
       "company_name": "Apple Inc.",
       "quantity": 100,
       "purchase_price": 150.25,
-      "current_price": 343.4599914550781,
+      "current_price": 341.4800109863281,
       "purchase_date": "2024-01-15",
       "sector": "Technology",
       "status": "active"
@@ -17,7 +17,7 @@
       "company_name": "Microsoft Corporation",
       "quantity": 50,
       "purchase_price": 310.0,
-      "current_price": 529.0499877929688,
+      "current_price": 534.0280151367188,
       "purchase_date": "2024-02-01",
       "sector": "Technology",
       "status": "active"
@@ -28,7 +28,7 @@
       "company_name": "Alphabet Inc.",
       "quantity": 75,
       "purchase_price": 120.5,
-      "current_price": 340.5899963378906,
+      "current_price": 345.46380615234375,
       "purchase_date": "2024-03-01",
       "sector": "Technology",
       "status": "active"
@@ -38,9 +38,9 @@
     "total_holdings": 3,
     "total_quantity": 225,
     "total_invested": 39562.5,
-    "total_current_value": 86342.75,
-    "total_gain_loss": 46780.25,
-    "gain_loss_percentage": 118.24,
-    "last_updated": "2026-10-18T13:00:59Z"
+    "total_current_value": 86759.19,
+    "total_gain_loss": 47196.69,
+    "gain_loss_percentage": 119.3,
+    "last_updated": "2026-10-19T16:14:40Z"
   }
 }

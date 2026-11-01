@@ -101,9 +101,10 @@ class TestRenderTraderProposal:
             win_probability=58,
         )
         md = render_trader_proposal(p)
-        assert "Entry Price" not in md
-        assert "Stop Loss" not in md
-        assert "Position Sizing" not in md
+        # An omitted line reads as a field nobody asked for, so absent levels
+        # are named as not provided.
+        for field in ("Entry Price", "Stop Loss", "Position Sizing"):
+            assert f"**{field}**: not provided" in md
         # Without price levels the R/R is reported as not-applicable.
         assert "**Risk/Reward Ratio**: n/a" in md
         assert "FINAL TRANSACTION PROPOSAL: **SELL**" in md

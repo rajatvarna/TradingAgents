@@ -48,10 +48,13 @@ def _coerce_optional_float(value):
         # Handle leading dot like ".50" -> "0.50" for float()
         if s.startswith("."):
             s = "0" + s
+        # Anything that is not a single number (a range "150-160", a hedge
+        # "around 150") is dropped like a placeholder: letting it reach pydantic
+        # would fail the whole decision and lose every field the model got right.
         try:
             return float(s)
         except (ValueError, TypeError):
-            pass
+            return None
     return value
 
 # ---------------------------------------------------------------------------
@@ -320,14 +323,14 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
         "",
         f"**Bear Case**: {proposal.bear_case}",
     ]
-    if proposal.entry_price is not None:
-        parts.extend(["", f"**Entry Price**: {proposal.entry_price}"])
-    if proposal.stop_loss is not None:
-        parts.extend(["", f"**Stop Loss**: {proposal.stop_loss}"])
-    if proposal.target_price is not None:
-        parts.extend(["", f"**Target Price**: {proposal.target_price}"])
-    if proposal.position_sizing:
-        parts.extend(["", f"**Position Sizing**: {proposal.position_sizing}"])
+    # Named even when absent, so a reader can tell a level the trader chose not
+    # to give from one the schema never asked for.
+    for label, value in (("Entry Price", proposal.entry_price),
+                         ("Stop Loss", proposal.stop_loss),
+                         ("Target Price", proposal.target_price),
+                         ("Position Sizing", proposal.position_sizing)):
+        shown = value if value is not None and value != "" else "not provided"
+        parts.extend(["", f"**{label}**: {shown}"])
     if proposal.falsifiers:
         parts.extend(["", "**Falsifiers**: " + "; ".join(proposal.falsifiers)])
     parts.extend(["", _render_trade_review(proposal)])
@@ -436,8 +439,11 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
         "",
         f"**Investment Thesis**: {decision.investment_thesis}",
     ]
-    if decision.price_target is not None:
-        parts.extend(["", f"**Price Target**: {decision.price_target}"])
+    # Named even when absent: a missing line reads as a field nobody asked for.
+    target = decision.price_target if decision.price_target is not None else "not provided"
+    parts.extend(["", f"**Price Target**: {target}"])
+    # Time Horizon stays omitted when absent: reports.exporter captures any text
+    # after the label as the horizon, so "not provided" would be exported as one.
     if decision.time_horizon:
         parts.extend(["", f"**Time Horizon**: {decision.time_horizon}"])
     evidence_ids = ", ".join(decision.supporting_evidence_ids) or "None"

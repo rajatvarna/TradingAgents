@@ -444,6 +444,7 @@ def _fetch_subreddit(
     sub: str,
     limit: int,
     timeout: float,
+    _retry: bool = True,
 ) -> list[dict]:
     """Fetch one subreddit: OAuth-authenticated JSON when credentials are
     configured (richer data, higher rate limit), RSS otherwise.
@@ -454,8 +455,10 @@ def _fetch_subreddit(
     request volume against Reddit's public per-IP rate limit.
     """
     if _reddit_oauth_credentials():
-        return _fetch_subreddit_oauth(search_query, sub, limit, timeout)
-    return _fetch_subreddit_rss(search_query, sub, limit, timeout)
+        return _fetch_subreddit_oauth(search_query, sub, limit, timeout, _retry=_retry)
+    return _fetch_subreddit_rss(
+        search_query, sub, limit, timeout, _retries_left=2 if _retry else 0
+    )
 
 
 def fetch_reddit_posts(
@@ -496,13 +499,17 @@ def fetch_reddit_posts(
     total_posts = 0
     sub_count = 0
     unavailable: list[tuple[str, str]] = []
+    allow_retry = True
     for i, sub in enumerate(selected_subreddits):
         if i > 0 and inter_request_delay:
             time.sleep(_jitter(inter_request_delay))
         sub_count += 1
         try:
-            fetched = _fetch_subreddit(search_query, sub, limit_per_sub, timeout)
+            fetched = _fetch_subreddit(search_query, sub, limit_per_sub, timeout, _retry=allow_retry)
         except RedditUnavailable as exc:
+            # One failure means the per-IP budget is likely gone: pay the 60s
+            # back-off at most once per run rather than stalling on every sub.
+            allow_retry = False
             unavailable.append((sub, exc.reason))
             blocks.append(f"r/{sub}: <unavailable: {exc.reason}>")
             continue

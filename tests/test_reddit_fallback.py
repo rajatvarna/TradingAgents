@@ -253,7 +253,7 @@ class TestCryptoSearchTerm:
     def _captured_ticker(self, ticker):
         seen = {}
 
-        def fake_fetch(t, sub, limit, timeout):
+        def fake_fetch(t, sub, limit, timeout, **kwargs):
             seen["ticker"] = t
             return []
 
@@ -347,3 +347,19 @@ class TestEmptyIsNotAnError:
     def test_empty_feed_returns_empty_list_not_error(self):
         with patch.object(reddit, "urlopen", return_value=_empty_atom_resp()):
             assert reddit._fetch_subreddit_rss("NVDA", "stocks", 5, 5.0) == []
+
+
+@pytest.mark.unit
+class TestRetryPaidOncePerRun:
+    """The 60s back-off is paid at most once per run (port of upstream 7cc478ad)."""
+
+    def test_retry_is_not_spent_again_after_a_failure(self):
+        seen = []
+
+        def record(t, sub, limit, timeout, _retry=True):
+            seen.append(_retry)
+            raise reddit.RedditUnavailable(sub, "HTTP 429")
+
+        with patch.object(reddit, "_fetch_subreddit", side_effect=record):
+            reddit.fetch_reddit_posts("NVDA", subreddits=("a", "b", "c"), inter_request_delay=0)
+        assert seen == [True, False, False]

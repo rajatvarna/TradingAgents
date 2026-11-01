@@ -37,7 +37,7 @@ def test_fetch_reddit_posts_uses_one_query_across_india_sources(monkeypatch):
         calls.append((search_query, sub, limit, timeout))
         return []
 
-    monkeypatch.setattr(reddit, "_fetch_subreddit", fake_fetch)
+    monkeypatch.setattr(reddit, "_fetch_subreddit_rss", fake_fetch)
     monkeypatch.setattr(reddit.time, "sleep", lambda _seconds: None)
 
     terms = build_india_search_terms(
@@ -51,6 +51,7 @@ def test_fetch_reddit_posts_uses_one_query_across_india_sources(monkeypatch):
     )
 
     expected_query = 'SBIN OR SBI OR "State Bank of India" OR "SBIN NSE"'
-    assert [sub for _query, sub, _limit, _timeout in calls] == list(reddit.INDIA_SUBREDDITS)
+    # All India subreddits are searched in one combined request.
+    assert [sub for _query, sub, _limit, _timeout in calls] == ["+".join(reddit.INDIA_SUBREDDITS)]
     assert all(query == expected_query for query, _sub, _limit, _timeout in calls)
     assert "State Bank of India" in result

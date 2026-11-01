@@ -1,5 +1,6 @@
 # TradingAgents/graph/trading_graph.py
 
+import hashlib
 import json
 import logging
 import os
@@ -250,6 +251,13 @@ def _store_final_decision(
             final_state.get("trader_investment_plan", ""),
         ),
     )
+
+
+# Config keys that do not change what a run writes: where it keeps its files,
+# whether it checkpoints, and how often it retries a provider.
+_NOT_IN_SIGNATURE = frozenset({
+    "results_dir", "data_cache_dir", "memory_log_path", "checkpoint_enabled", "llm_max_retries",
+})
 
 
 class TradingAgentsGraph:
@@ -898,13 +906,20 @@ class TradingAgentsGraph:
         (not the raw JSON): the same snapshot resumes, a changed snapshot
         starts a fresh run rather than continuing with stale holdings, and a
         missing context never shares a checkpoint with a provided one.
+
+        The rest of the config counts too (provider, models, endpoint, language,
+        vendors, limits): a resume must not carry reports that other settings
+        produced. Only where the run keeps its files and how it retries are left out.
         """
+        settings = {k: v for k, v in self.config.items() if k not in _NOT_IN_SIGNATURE}
+        digest = hashlib.sha256(json.dumps(settings, sort_keys=True, default=str).encode()).hexdigest()[:12]
         return "|".join([
             "analysts=" + ",".join(self.selected_analysts),
             f"debate={self.config['max_debate_rounds']}",
             f"risk={self.config['max_risk_discuss_rounds']}",
             f"asset={asset_type}",
             f"portfolio={portfolio_context_fingerprint(portfolio_context)}",
+            f"settings={digest}",
         ])
 
     def _empty_evidence_pack(self, warnings: list[str] | None = None) -> dict[str, Any]:

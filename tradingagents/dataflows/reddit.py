@@ -17,6 +17,11 @@ WAF only blocks *unauthenticated* JSON requests, so an authenticated app gets
 score/comment counts back plus a materially higher rate limit (100 QPM) than
 the RSS feed's per-IP throttling.
 
+Without OAuth credentials all subreddits are searched in one combined request
+(``r/a+b+c``): anonymous RSS allows about one request per minute per IP, so a
+request per subreddit spent a 429 back-off on almost every run. Each entry names
+its subreddit and posts are grouped back by it.
+
 Returns formatted plaintext blocks ready for prompt injection and degrades
 gracefully — returns a placeholder string rather than raising, so callers
 never special-case missing data.
@@ -44,6 +49,7 @@ from urllib.request import Request, urlopen
 from defusedxml import ElementTree as SafeET
 from defusedxml.common import EntitiesForbidden
 
+from .date_window import coverage_gap
 from .symbol_utils import crypto_base, india_equity_parts
 
 logger = logging.getLogger(__name__)
@@ -142,6 +148,28 @@ def _in_window(epoch: float | None, start_ts: float | None, end_ts: float | None
     if start_ts is not None and epoch < start_ts:
         return False
     return not (end_ts is not None and epoch >= end_ts)
+
+
+# Matches ``t=week`` in ``_search_qs``: the search cannot see past one week.
+_SEARCH_LOOKBACK = timedelta(days=7)
+
+# Reddit's maximum page size. A week of posts for a ticker across the default
+# subreddits fits comfortably, so one full page keeps a high-volume subreddit
+# from crowding the others out of a combined search.
+_FEED_PAGE = 100
+
+
+def _coverage_dates(posts) -> list:
+    """Dates that bound the feed's coverage. The search is limited to the last
+    week, so the lookback start bounds it even when nothing came back; a full
+    page may have cut older matches off, so then only the posts themselves do."""
+    dates = [
+        datetime.fromtimestamp(p["created_utc"], tz=timezone.utc)
+        for p in posts if p.get("created_utc")
+    ]
+    if len(posts) < _FEED_PAGE:
+        dates.append(datetime.now(timezone.utc) - _SEARCH_LOOKBACK)
+    return dates
 
 
 def _search_qs(search_query: str, limit: int) -> str:
@@ -349,7 +377,12 @@ def _fetch_subreddit_rss(
         title_el = entry.find("atom:title", _ATOM_NS)
         published_el = entry.find("atom:published", _ATOM_NS)
         content_el = entry.find("atom:content", _ATOM_NS)
+        category_el = entry.find("atom:category", _ATOM_NS)
         posts.append({
+            # A combined feed names each entry's subreddit; a single-subreddit
+            # feed may omit it, and then it can only be that one.
+            "subreddit": category_el.get("term") if category_el is not None
+            else (sub if "+" not in sub else ""),
             "title": (title_el.text if title_el is not None else "") or "",
             "score": None,
             "num_comments": None,
@@ -444,6 +477,7 @@ def _fetch_subreddit(
     sub: str,
     limit: int,
     timeout: float,
+    _retry: bool = True,
 ) -> list[dict]:
     """Fetch one subreddit: OAuth-authenticated JSON when credentials are
     configured (richer data, higher rate limit), RSS otherwise.
@@ -454,8 +488,108 @@ def _fetch_subreddit(
     request volume against Reddit's public per-IP rate limit.
     """
     if _reddit_oauth_credentials():
-        return _fetch_subreddit_oauth(search_query, sub, limit, timeout)
-    return _fetch_subreddit_rss(search_query, sub, limit, timeout)
+        return _fetch_subreddit_oauth(search_query, sub, limit, timeout, _retry=_retry)
+    return _fetch_subreddit_rss(
+        search_query, sub, limit, timeout, _retries_left=2 if _retry else 0
+    )
+
+
+def _format_posts_block(sub: str, posts: list[dict], search_label: str, window_label: str) -> str:
+    """One subreddit's posts as a prompt-ready block."""
+    via_rss = any(p.get("source") == "rss" for p in posts)
+    header = f"r/{sub} — {len(posts)} posts in the {window_label} mentioning {search_label}"
+    header += " (via RSS feed; scores/comments unavailable):" if via_rss else ":"
+    lines = [header]
+    for p in posts:
+        title = (p.get("title") or "").replace("\n", " ").strip()
+        score = p.get("score")
+        comments = p.get("num_comments")
+        created = p.get("created_utc")
+        created_str = (
+            time.strftime("%Y-%m-%d", time.gmtime(created)) if created else "?"
+        )
+        # Score / comment counts are absent on the RSS fallback path —
+        # show them only when present rather than printing fake zeros.
+        meta = created_str
+        if score is not None and comments is not None:
+            meta += f" · {score:>4}↑ · {comments:>3}c"
+        selftext = (p.get("selftext") or "").replace("\n", " ").strip()
+        if len(selftext) > 240:
+            selftext = selftext[:240] + "…"
+        lines.append(
+            f"  [{meta}] {title}"
+            + (f"\n    body excerpt: {selftext}" if selftext else "")
+        )
+    return "\n".join(lines)
+
+
+def _fetch_reddit_combined(
+    search_query: str,
+    search_label: str,
+    subreddits: tuple[str, ...],
+    limit_per_sub: int,
+    timeout: float,
+    start_date: str | None,
+    end_date: str | None,
+    window_label: str,
+) -> str:
+    """Anonymous path: search every subreddit in one combined RSS request.
+
+    Anonymous RSS allows about one request per minute per IP, so a request per
+    subreddit spent a back-off on almost every run. Each entry names its
+    subreddit; posts are grouped back by it, each subreddit keeping its own
+    limit, and a full page is not taken as evidence of absence.
+    """
+    start_ts, end_ts = _window_epochs(start_date, end_date)
+    label = ", ".join(f"r/{s}" for s in subreddits)
+    try:
+        fetched = _fetch_subreddit_rss(search_query, "+".join(subreddits), _FEED_PAGE, timeout)
+    except RedditUnavailable as exc:
+        return (
+            f"<Reddit unavailable: {exc.reason} ({label}); "
+            f"this is not an absence of discussion>"
+        )
+
+    posts = [p for p in fetched if _in_window(p.get("created_utc"), start_ts, end_ts)]
+    if not posts:
+        gap = start_date and end_date and coverage_gap(
+            _coverage_dates(fetched), start_date, end_date,
+            "Reddit search", f"discussion of {search_label}",
+        )
+        if gap:
+            return gap
+        if start_date and end_date:
+            return (
+                f"<no Reddit posts found mentioning {search_label} across "
+                f"{label} in the {window_label}>"
+            )
+        return (
+            f"No Reddit discussion posts were available matching {search_label}. "
+            "Reddit JSON/RSS endpoints may be blocked, rate-limited, or temporarily unavailable."
+        )
+
+    # Group by the subreddit each entry names, in the requested order. Nothing
+    # is dropped: an unlabelled post from a one-subreddit request belongs to it,
+    # and any other name gets its own block.
+    by_sub = {s.lower(): (s, []) for s in subreddits}
+    for p in posts:
+        name = p.get("subreddit") or (subreddits[0] if len(subreddits) == 1 else "unknown")
+        by_sub.setdefault(name.lower(), (name, []))[1].append(p)
+
+    page_full = len(fetched) >= _FEED_PAGE
+    blocks = []
+    for sub, sub_posts in by_sub.values():
+        if not sub_posts:
+            blocks.append(
+                f"r/{sub}: <not among the newest {_FEED_PAGE} matches across {label}>"
+                if page_full
+                else f"r/{sub}: <no posts found mentioning {search_label} in the {window_label}>"
+            )
+            continue
+        blocks.append(
+            _format_posts_block(sub, sub_posts[:limit_per_sub], search_label, window_label)
+        )
+    return "\n\n".join(blocks)
 
 
 def fetch_reddit_posts(
@@ -492,51 +626,46 @@ def fetch_reddit_posts(
     elif end_date:
         window_label = f"through {end_date}"
 
+    if not _reddit_oauth_credentials():
+        return _fetch_reddit_combined(
+            search_query, search_label, selected_subreddits, limit_per_sub,
+            timeout, start_date, end_date, window_label,
+        )
+
     blocks = []
     total_posts = 0
     sub_count = 0
+    fetched_posts: list[dict] = []
     unavailable: list[tuple[str, str]] = []
+    allow_retry = True
     for i, sub in enumerate(selected_subreddits):
         if i > 0 and inter_request_delay:
             time.sleep(_jitter(inter_request_delay))
         sub_count += 1
         try:
-            fetched = _fetch_subreddit(search_query, sub, limit_per_sub, timeout)
+            fetched = _fetch_subreddit(search_query, sub, limit_per_sub, timeout, _retry=allow_retry)
         except RedditUnavailable as exc:
+            # One failure means the per-IP budget is likely gone: pay the 60s
+            # back-off at most once per run rather than stalling on every sub.
+            allow_retry = False
             unavailable.append((sub, exc.reason))
             blocks.append(f"r/{sub}: <unavailable: {exc.reason}>")
             continue
         posts = [p for p in fetched if _in_window(p.get("created_utc"), start_ts, end_ts)]
         total_posts += len(posts)
+        fetched_posts.extend(fetched)
         if not posts:
-            blocks.append(f"r/{sub}: <no posts found mentioning {search_label} in the {window_label}>")
+            gap = start_date and end_date and coverage_gap(
+                _coverage_dates(fetched), start_date, end_date,
+                f"r/{sub}", f"discussion of {search_label}",
+            )
+            blocks.append(
+                f"r/{sub}: "
+                + (gap or f"<no posts found mentioning {search_label} in the {window_label}>")
+            )
             continue
 
-        via_rss = any(p.get("source") == "rss" for p in posts)
-        header = f"r/{sub} — {len(posts)} posts in the {window_label} mentioning {search_label}"
-        header += " (via RSS feed; scores/comments unavailable):" if via_rss else ":"
-        lines = [header]
-        for p in posts:
-            title = (p.get("title") or "").replace("\n", " ").strip()
-            score = p.get("score")
-            comments = p.get("num_comments")
-            created = p.get("created_utc")
-            created_str = (
-                time.strftime("%Y-%m-%d", time.gmtime(created)) if created else "?"
-            )
-            # Score / comment counts are absent on the RSS fallback path —
-            # show them only when present rather than printing fake zeros.
-            meta = created_str
-            if score is not None and comments is not None:
-                meta += f" · {score:>4}↑ · {comments:>3}c"
-            selftext = (p.get("selftext") or "").replace("\n", " ").strip()
-            if len(selftext) > 240:
-                selftext = selftext[:240] + "…"
-            lines.append(
-                f"  [{meta}] {title}"
-                + (f"\n    body excerpt: {selftext}" if selftext else "")
-            )
-        blocks.append("\n".join(lines))
+        blocks.append(_format_posts_block(sub, posts, search_label, window_label))
 
     # The blanket "nobody posted anywhere" claim is only true when every
     # subreddit actually answered. When some or all failed, the per-subreddit
@@ -551,6 +680,12 @@ def fetch_reddit_posts(
     if total_posts == 0 and not unavailable:
         # Window-specific placeholder for historical runs (#1220)
         if start_date and end_date:
+            gap = coverage_gap(
+                _coverage_dates(fetched_posts), start_date, end_date,
+                "Reddit search", f"discussion of {search_label}",
+            )
+            if gap:
+                return gap
             return (
                 f"<no Reddit posts found mentioning {search_label} across "
                 f"{', '.join(f'r/{s}' for s in selected_subreddits)} in the {window_label}>"

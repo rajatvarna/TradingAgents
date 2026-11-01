@@ -629,6 +629,13 @@ class TestDeferredReflection:
         assert TradingAgentsGraph._resolve_benchmark(mock_graph, "RELIANCE.NS") == "QQQ"
         assert TradingAgentsGraph._resolve_benchmark(mock_graph, "NVDA") == "QQQ"
 
+    def test_explicit_benchmark_is_resolved_like_any_other_symbol(self):
+        """A configured benchmark takes the same alias mapping as the ticker, or
+        the return lookup finds nothing and the decision never settles."""
+        mock_graph = MagicMock(spec=TradingAgentsGraph)
+        mock_graph.config = {"benchmark_ticker": "SPX500", "benchmark_map": {"": "SPY"}}
+        assert TradingAgentsGraph._resolve_benchmark(mock_graph, "NVDA") == "^GSPC"
+
     def test_resolve_benchmark_falls_back_when_map_missing(self):
         """No benchmark_ticker, no benchmark_map → SPY."""
         mock_graph = MagicMock(spec=TradingAgentsGraph)
@@ -1209,3 +1216,36 @@ class TestLegacyRemoval:
         assert len(entries) == 1
         assert entries[0]["ticker"] == "NVDA"
         assert entries[0]["pending"] is True
+
+
+@pytest.mark.unit
+def test_a_failed_reflection_leaves_the_entry_pending_and_lets_the_run_start(tmp_path, monkeypatch):
+    """Settling past decisions happens on the way into a new run, and reflection
+    calls an LLM. A transient failure there must not stop the new analysis."""
+    from tradingagents.agents.utils.memory import TradingMemoryLog
+    from tradingagents.graph.trading_graph import TradingAgentsGraph
+
+    graph = object.__new__(TradingAgentsGraph)
+    graph.config = {"memory_log_path": str(tmp_path / "m.md")}
+    graph.memory_log = TradingMemoryLog(graph.config)
+    graph.memory_log.store_decision("NVDA", "2026-01-05", "Rating: Buy\n\nx")
+    graph.memory_log.store_decision("NVDA", "2026-01-12", "Rating: Sell\n\ny")
+    monkeypatch.setattr(graph, "_resolve_benchmark", lambda t: "SPY", raising=False)
+    monkeypatch.setattr(graph, "_fetch_returns",
+                        lambda t, d, benchmark=None: (0.01, 0.005, 5, "2026-01-19"), raising=False)
+
+    class _Reflector:
+        calls = 0
+
+        def reflect_on_final_decision(self, **kw):
+            _Reflector.calls += 1
+            if _Reflector.calls == 1:
+                raise RuntimeError("provider timed out")
+            return "second one worked"
+
+    graph.reflector = _Reflector()
+
+    graph._resolve_pending_entries("NVDA")  # must not raise
+
+    entries = graph.memory_log.load_entries()
+    assert [e["pending"] for e in entries] == [True, False]  # the failed one waits for next time

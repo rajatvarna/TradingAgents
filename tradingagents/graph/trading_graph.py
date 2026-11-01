@@ -567,7 +567,9 @@ class TradingAgentsGraph:
         """
         explicit = self.config.get("benchmark_ticker")
         if explicit:
-            return explicit
+            # Same alias mapping as the analyzed ticker; an unmapped alias finds
+            # no prices, and the decision would stay pending for good.
+            return normalize_symbol(explicit)
         benchmark_map = self.config.get("benchmark_map", {})
         ticker_upper = ticker.upper()
         for suffix, benchmark in benchmark_map.items():

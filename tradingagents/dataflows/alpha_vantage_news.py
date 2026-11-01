@@ -92,6 +92,9 @@ def get_news(ticker, start_date, end_date) -> str:
         "tickers": ticker,
         "time_from": format_datetime_for_api(start_date),
         "time_to": format_datetime_for_api(end_date, end_of_day=True),
+        # Without a limit the endpoint returns 50 articles with per-ticker
+        # sentiment arrays, and all of it reaches the prompt.
+        "limit": str(get_config()["news_article_limit"]),
     }
     return _normalize_news_response(
         _make_api_request("NEWS_SENTIMENT", params),

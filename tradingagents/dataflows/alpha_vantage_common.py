@@ -7,7 +7,7 @@ from io import StringIO
 import pandas as pd
 import requests
 
-from .errors import VendorNotConfiguredError, VendorRateLimitError
+from .errors import VendorCapabilityError, VendorNotConfiguredError, VendorRateLimitError
 
 API_BASE_URL = "https://www.alphavantage.co/query"
 AV_MAX_RETRIES = 3
@@ -41,8 +41,12 @@ class AlphaVantageAuthError(ValueError):
     pass
 
 
-class AlphaVantageUnsupportedIndicatorError(ValueError):
-    """Raised when an indicator function is called that is not supported by Alpha Vantage."""
+class AlphaVantageUnsupportedIndicatorError(VendorCapabilityError, ValueError):
+    """Raised when an indicator is not served by Alpha Vantage.
+
+    A vendor error, not a caller error: another vendor may compute it, so the
+    router moves on instead of treating this vendor's prose as an answer.
+    """
 
     pass
 

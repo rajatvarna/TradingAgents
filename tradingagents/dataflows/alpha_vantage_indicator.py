@@ -1,9 +1,13 @@
+import logging
+
 from ._indicator_descriptions import INDICATOR_DESCRIPTIONS
 from .alpha_vantage_common import (
-    AlphaVantageRateLimitError,
     AlphaVantageUnsupportedIndicatorError,
     _make_api_request,
 )
+from .errors import NoMarketDataError, VendorError
+
+logger = logging.getLogger(__name__)
 
 
 def get_indicator(
@@ -51,8 +55,10 @@ def get_indicator(
     }
 
     if indicator not in supported_indicators:
-        raise ValueError(
-            f"Indicator {indicator} is not supported. Please choose from: {list(supported_indicators.keys())}"
+        # A vendor error, not a caller error: another vendor may compute it, and
+        # the router decides.
+        raise AlphaVantageUnsupportedIndicatorError(
+            f"Alpha Vantage does not serve {indicator}; it serves {list(supported_indicators)}"
         )
 
     curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
@@ -126,12 +132,12 @@ def get_indicator(
                 "time_period": str(time_period),
                 "datatype": "csv"
             })
-        elif indicator == "vwma":
-            # Alpha Vantage doesn't have direct VWMA, so we'll return an informative message
-            # In a real implementation, this would need to be calculated from OHLCV data
-            return f"## VWMA (Volume Weighted Moving Average) for {symbol}:\n\nVWMA calculation requires OHLCV data and is not directly available from Alpha Vantage API.\nThis indicator would need to be calculated from the raw stock data using volume-weighted price averaging.\n\n{INDICATOR_DESCRIPTIONS.get('vwma', 'No description available.')}"
         else:
-            return f"Error: Indicator {indicator} not implemented yet."
+            # No endpoint for this indicator. Raising lets the router try the
+            # next vendor; returning prose counted as a successful answer.
+            raise AlphaVantageUnsupportedIndicatorError(
+                f"Alpha Vantage does not serve the {indicator} indicator"
+            )
 
         # Parse CSV data and extract values for the date range
         lines = data.strip().split('\n')
@@ -201,8 +207,10 @@ def get_indicator(
 
         return result_str
 
-    except AlphaVantageRateLimitError:
+    except VendorError:
+        # Unavailable vendor, throttle, or an indicator this vendor does not
+        # serve: let the router fall back instead of returning a failure string.
         raise
     except Exception as e:
-        print(f"Error getting Alpha Vantage indicator data for {indicator}: {e}")
-        return f"Error retrieving {indicator} data: {str(e)}"
+        logger.warning("Alpha Vantage indicator %s failed: %s", indicator, e)
+        raise NoMarketDataError(symbol, symbol, f"{indicator} unavailable: {e}") from e

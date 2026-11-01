@@ -185,38 +185,37 @@ def write_report_tree(final_state: dict, ticker: str, save_path) -> Path:
     } | {
         ("5_portfolio", "decision.md")
     }
-    written = {
-        ("1_analysts", f"{key}.md")
-        for key, state_key in (
-            ("market", "market_report"), ("sentiment", "sentiment_report"),
-            ("news", "news_report"), ("fundamentals", "fundamentals_report"),
-            ("options", "options_report"), ("esg", "esg_report"),
-            ("derivatives", "derivatives_report"), ("technical", "technical_report"),
-            ("quant", "quant_report"), ("alternative", "alternative_report"),
-        )
-        if final_state.get(state_key)
-    } | {
-        ("2_research", name)
-        for name, state_key in (
-            ("bull.md", "bull_history"), ("bear.md", "bear_history"),
-            ("manager.md", "judge_decision"),
-        )
-        if final_state.get("investment_debate_state", {}).get(state_key)
-    } | {
-        ("3_trading", "trader.md")
-        if final_state.get("trader_investment_plan")
-    } | {
-        ("4_risk", name)
-        for name, state_key in (
-            ("aggressive.md", "aggressive_history"),
-            ("conservative.md", "conservative_history"),
-            ("neutral.md", "neutral_history"),
-        )
-        if final_state.get("risk_debate_state", {}).get(state_key)
-    } | {
-        ("5_portfolio", "decision.md")
-        if portfolio_decision
-    }
+    # Track which section files this run actually wrote, so stale files from
+    # a previous run can be removed.
+    written: set[tuple[str, str]] = set()
+    for key, state_key in (
+        ("market", "market_report"), ("sentiment", "sentiment_report"),
+        ("news", "news_report"), ("fundamentals", "fundamentals_report"),
+        ("options", "options_report"), ("esg", "esg_report"),
+        ("derivatives", "derivatives_report"), ("technical", "technical_report"),
+        ("quant", "quant_report"), ("alternative", "alternative_report"),
+    ):
+        if final_state.get(state_key):
+            written.add(("1_analysts", f"{key}.md"))
+    debate = final_state.get("investment_debate_state", {}) or {}
+    for name, state_key in (
+        ("bull.md", "bull_history"), ("bear.md", "bear_history"),
+        ("manager.md", "judge_decision"),
+    ):
+        if debate.get(state_key):
+            written.add(("2_research", name))
+    if final_state.get("trader_investment_plan"):
+        written.add(("3_trading", "trader.md"))
+    risk = final_state.get("risk_debate_state", {}) or {}
+    for name, state_key in (
+        ("aggressive.md", "aggressive_history"),
+        ("conservative.md", "conservative_history"),
+        ("neutral.md", "neutral_history"),
+    ):
+        if risk.get(state_key):
+            written.add(("4_risk", name))
+    if portfolio_decision:
+        written.add(("5_portfolio", "decision.md"))
     for folder, filename in _section_files - written:
         (save_path / folder / filename).unlink(missing_ok=True)
 

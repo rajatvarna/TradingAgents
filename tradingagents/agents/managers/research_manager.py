@@ -74,6 +74,13 @@ def create_research_manager(llm, cache=None, prompt_registry=None):
             lessons_line=lessons_line,
             language_instruction=get_language_instruction(),
         )
+        prompt += (
+            "\n\n## Output\n\n"
+            "Write these sections, in this order, starting with the recommendation on its own line:\n\n"
+            "- **Recommendation**: exactly one of Buy / Overweight / Hold / Underweight / Sell\n"
+            "- **Rationale**: which arguments decided it\n"
+            "- **Strategic Actions**: concrete steps for the trader, sized against a standard allocation"
+        )
 
         investment_plan, structured_valid = invoke_structured_or_freetext_with_meta(
             structured_llm,

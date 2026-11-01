@@ -220,6 +220,14 @@ def create_portfolio_manager(llm, cache=None, prompt_registry=None):
         if strategy_rules:
             prompt += f"\n\n**Learned Strategy Rules:**\n{strategy_rules}\n"
 
+        prompt += (
+            "\n\n## Output\n\n"
+            "Write these sections, in this order, starting with the rating on its own line:\n\n"
+            "- **Rating**: exactly one of Buy / Overweight / Hold / Underweight / Sell\n"
+            "- **Executive Summary**: the call and how to act on it\n"
+            "- **Investment Thesis**: the evidence that decided it, and what would change it"
+        )
+
         final_trade_decision, pm_structured_valid = invoke_structured_or_freetext_with_meta(
             structured_llm,
             llm,

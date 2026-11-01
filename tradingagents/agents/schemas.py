@@ -40,14 +40,21 @@ def _coerce_optional_float(value):
         cleaned = value.strip()
         if cleaned.lower() in _NULLISH_FLOAT:
             return None
-        s = cleaned.lstrip("$€£¥~+ ").rstrip(" %").strip()
+        # A percentage is not a price: reading "15%" as 15 would put a stop at
+        # $15 on a $600 stock, so it nulls the field instead (#1288).
+        if cleaned.endswith("%"):
+            return None
+        s = cleaned.replace(",", "").lstrip("$€£¥~+ ").strip()
         # Handle leading dot like ".50" -> "0.50" for float()
         if s.startswith("."):
             s = "0" + s
+        # Anything that is not a single number (a range "150-160", a hedge
+        # "around 150") is dropped like a placeholder: letting it reach pydantic
+        # would fail the whole decision and lose every field the model got right.
         try:
             return float(s)
         except (ValueError, TypeError):
-            pass
+            return None
     return value
 
 # ---------------------------------------------------------------------------
@@ -96,11 +103,10 @@ class ResearchPlan(BaseModel):
     recommendation: PortfolioRating = Field(
         description=(
             "The investment recommendation. Exactly one of Buy / Overweight / "
-            "Hold / Underweight / Sell. Choose Hold when the evidence is "
-            "balanced, materially conflicting, ambiguous, or insufficient to "
-            "justify changing exposure; otherwise commit to the side with the "
-            "clearly stronger arguments. Do not pick a direction merely to be "
-            "decisive."
+            "Hold / Underweight / Sell. Conflicting arguments alone are not a "
+            "reason to Hold: commit to the stronger side, sized by how "
+            "decisively it wins. Choose Hold only when the evidence is still "
+            "balanced after weighing, or too thin to support a call."
         ),
     )
     rationale: str = Field(
@@ -216,11 +222,19 @@ class TraderProposal(BaseModel):
     )
     entry_price: float | None = Field(
         default=None,
-        description="Optional entry price target in the instrument's quote currency.",
+        description=(
+            "Optional entry price target as an absolute number in the instrument's "
+            "quote currency (e.g. 189.5), never a percentage or a range. Omit it "
+            "if you cannot state a specific level."
+        ),
     )
     stop_loss: float | None = Field(
         default=None,
-        description="Optional stop-loss price in the instrument's quote currency.",
+        description=(
+            "Optional stop-loss as an absolute price in the instrument's quote "
+            "currency (e.g. 172.0), never a percentage. Convert a percentage "
+            "distance to the price level it implies, or omit it."
+        ),
     )
     target_price: float | None = Field(
         default=None,
@@ -309,14 +323,14 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
         "",
         f"**Bear Case**: {proposal.bear_case}",
     ]
-    if proposal.entry_price is not None:
-        parts.extend(["", f"**Entry Price**: {proposal.entry_price}"])
-    if proposal.stop_loss is not None:
-        parts.extend(["", f"**Stop Loss**: {proposal.stop_loss}"])
-    if proposal.target_price is not None:
-        parts.extend(["", f"**Target Price**: {proposal.target_price}"])
-    if proposal.position_sizing:
-        parts.extend(["", f"**Position Sizing**: {proposal.position_sizing}"])
+    # Named even when absent, so a reader can tell a level the trader chose not
+    # to give from one the schema never asked for.
+    for label, value in (("Entry Price", proposal.entry_price),
+                         ("Stop Loss", proposal.stop_loss),
+                         ("Target Price", proposal.target_price),
+                         ("Position Sizing", proposal.position_sizing)):
+        shown = value if value is not None and value != "" else "not provided"
+        parts.extend(["", f"**{label}**: {shown}"])
     if proposal.falsifiers:
         parts.extend(["", "**Falsifiers**: " + "; ".join(proposal.falsifiers)])
     parts.extend(["", _render_trade_review(proposal)])
@@ -344,10 +358,11 @@ class PortfolioDecision(BaseModel):
     rating: PortfolioRating = Field(
         description=(
             "The final position rating. Exactly one of Buy / Overweight / Hold / "
-            "Underweight / Sell, picked based on the analysts' debate. Choose "
-            "Hold when the case is balanced, materially conflicting, ambiguous, "
-            "or insufficient to justify changing exposure, rather than forcing a "
-            "direction to appear decisive."
+            "Underweight / Sell, picked based on the analysts' debate. "
+            "Conflicting arguments alone are not a reason to Hold: commit to the "
+            "stronger side, sized by how decisively it wins. Choose Hold only "
+            "when the evidence is still balanced after weighing, or too thin to "
+            "support a call."
         ),
     )
     executive_summary: str = Field(
@@ -424,8 +439,11 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
         "",
         f"**Investment Thesis**: {decision.investment_thesis}",
     ]
-    if decision.price_target is not None:
-        parts.extend(["", f"**Price Target**: {decision.price_target}"])
+    # Named even when absent: a missing line reads as a field nobody asked for.
+    target = decision.price_target if decision.price_target is not None else "not provided"
+    parts.extend(["", f"**Price Target**: {target}"])
+    # Time Horizon stays omitted when absent: reports.exporter captures any text
+    # after the label as the horizon, so "not provided" would be exported as one.
     if decision.time_horizon:
         parts.extend(["", f"**Time Horizon**: {decision.time_horizon}"])
     evidence_ids = ", ".join(decision.supporting_evidence_ids) or "None"

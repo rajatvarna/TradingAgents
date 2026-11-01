@@ -384,7 +384,7 @@ _PASSTHROUGH_KWARGS = (
 # family and the o-series. Non-reasoning models (gpt-4.1, gpt-4o, ...) 400 with
 # "Unsupported parameter: 'reasoning.effort' is not supported with this model".
 # Drop the kwarg for those rather than crash the run.
-_OPENAI_REASONING_MODEL = re.compile(r"^(gpt-5|o[1-9])")
+_OPENAI_REASONING_MODEL = re.compile(r"^(?:gpt-(?:[5-9]|[1-9]\d)|o[1-9])(?:[.-]|$)")
 
 
 def _supports_reasoning_effort(model: str) -> bool:
@@ -459,7 +459,8 @@ OPENAI_COMPATIBLE_PROVIDERS: dict[str, ProviderSpec] = {
     ),
     "atlas":      ProviderSpec(base_url="https://api.atlascloud.ai/v1", base_url_env="ATLAS_BASE_URL"),
     "ollama":     ProviderSpec(base_url="http://localhost:11434/v1", base_url_env="OLLAMA_BASE_URL",
-                               key_optional=True, placeholder_key="ollama"),
+                               key_optional=True, placeholder_key="ollama",
+                               chat_class=LocalCompatibleChatOpenAI),
     # Generic endpoint: user supplies base_url; key optional (keyless local).
     "openai_compatible": ProviderSpec(
         require_base_url=True, key_optional=True, chat_class=LocalCompatibleChatOpenAI

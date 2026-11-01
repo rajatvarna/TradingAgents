@@ -8,6 +8,7 @@ from tradingagents.llm_clients.openai_client import (
     OPENAI_COMPATIBLE_PROVIDERS,
     DeepSeekChatOpenAI,
     KimiChatOpenAI,
+    LocalCompatibleChatOpenAI,
     MinimaxChatOpenAI,
     NormalizedChatOpenAI,
     is_openai_compatible,
@@ -41,7 +42,7 @@ def test_registry_membership():
     ("groq", "https://api.groq.com/openai/v1", NormalizedChatOpenAI, False),
     ("nvidia", "https://integrate.api.nvidia.com/v1", NormalizedChatOpenAI, False),
     ("meta", "https://api.meta.ai/v1", NormalizedChatOpenAI, False),
-    ("ollama", "http://localhost:11434/v1", NormalizedChatOpenAI, False),
+    ("ollama", "http://localhost:11434/v1", LocalCompatibleChatOpenAI, False),
 ])
 def test_registry_spec(provider, base_url, chat_class, responses):
     spec = OPENAI_COMPATIBLE_PROVIDERS[provider]

@@ -205,10 +205,12 @@ def get_stockstats_indicator(
     except NoMarketDataError:
         raise  # Unknown/delisted symbol — let the router emit the sentinel
     except Exception as e:
-        print(
-            f"Error getting stockstats indicator data for indicator {indicator} on {curr_date}: {e}"
-        )
-        return ""
+        # An empty string renders as "2026-05-08: " in the indicator table, which
+        # reads as no value that day rather than a read that failed. Raise so the
+        # router can try the next vendor or report the series unavailable.
+        raise NoMarketDataError(
+            symbol, symbol, f"{indicator} could not be read for {curr_date}: {e}"
+        ) from e
 
     return str(indicator_value)
 
@@ -467,6 +469,17 @@ def get_income_statement(
         return f"Error retrieving income statement for {ticker}: {str(e)}"
 
 
+# Rows are dated by the transaction, which is when the insider traded, not when
+# the market learned of it: a Form 4 is filed up to two business days later and
+# this vendor reports no filing date, so the most recent rows may not have been
+# public on the analysis date.
+_TRANSACTION_DATE_VINTAGE = (
+    "# Rows are dated by transaction date. A trade becomes public when its Form 4 "
+    "is filed, up to two business days later, so the newest rows may not have been "
+    "known on this date.\n\n"
+)
+
+
 # This vendor dates a statement by the period it covers, not by the day it was
 # filed, and carries no filing date to do better. A company files weeks after its
 # period ends, so a run dated in that gap can be served figures that were not yet
@@ -497,7 +510,8 @@ def get_insider_transactions(
 
         # Add header information
         header = f"# Insider Transactions data for {canonical}\n"
-        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        header += _TRANSACTION_DATE_VINTAGE
 
         return header + csv_string
 

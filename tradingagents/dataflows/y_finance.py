@@ -354,7 +354,8 @@ def get_balance_sheet(
 
         # Add header information
         header = f"# Balance Sheet data for {canonical} ({freq})\n"
-        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        header += _PERIOD_END_VINTAGE
 
         return header + csv_string
 
@@ -393,7 +394,8 @@ def get_cashflow(
 
         # Add header information
         header = f"# Cash Flow data for {canonical} ({freq})\n"
-        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        header += _PERIOD_END_VINTAGE
 
         return header + csv_string
 
@@ -432,7 +434,8 @@ def get_income_statement(
 
         # Add header information
         header = f"# Income Statement data for {canonical} ({freq})\n"
-        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        header += _PERIOD_END_VINTAGE
 
         return header + csv_string
 
@@ -440,6 +443,17 @@ def get_income_statement(
         raise
     except Exception as e:
         return f"Error retrieving income statement for {ticker}: {str(e)}"
+
+
+# This vendor dates a statement by the period it covers, not by the day it was
+# filed, and carries no filing date to do better. A company files weeks after its
+# period ends, so a run dated in that gap can be served figures that were not yet
+# public. Say so rather than implying the stricter guarantee (SEC EDGAR, which
+# does carry filing dates, serves US filers as filed).  (upstream b6dad747)
+_PERIOD_END_VINTAGE = (
+    "# Periods are cut at the fiscal period end; this vendor does not report "
+    "filing dates, so the most recent period may not have been published yet.\n\n"
+)
 
 
 def get_insider_transactions(

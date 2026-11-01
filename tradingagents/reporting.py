@@ -165,6 +165,61 @@ def write_report_tree(final_state: dict, ticker: str, save_path) -> Path:
     except ImportError:
         pass
     (save_path / "complete_report.md").write_text(report_text, encoding="utf-8")
+
+    # Reconcile section files owned by this writer: delete section files from a
+    # previous run that this run did not write, so re-saving to the same folder
+    # never leaves stale sections (#1566 / 21bc5d8f). Other files in the folder
+    # (notes, evidence, data_sources) are kept.
+    _section_files = {
+        ("1_analysts", name) for name in (
+            "market.md", "sentiment.md", "news.md", "fundamentals.md",
+            "options.md", "esg.md", "derivatives.md", "technical.md",
+            "quant.md", "alternative.md",
+        )
+    } | {
+        ("2_research", name) for name in ("bull.md", "bear.md", "manager.md")
+    } | {
+        ("3_trading", "trader.md")
+    } | {
+        ("4_risk", name) for name in ("aggressive.md", "conservative.md", "neutral.md")
+    } | {
+        ("5_portfolio", "decision.md")
+    }
+    written = {
+        ("1_analysts", f"{key}.md")
+        for key, state_key in (
+            ("market", "market_report"), ("sentiment", "sentiment_report"),
+            ("news", "news_report"), ("fundamentals", "fundamentals_report"),
+            ("options", "options_report"), ("esg", "esg_report"),
+            ("derivatives", "derivatives_report"), ("technical", "technical_report"),
+            ("quant", "quant_report"), ("alternative", "alternative_report"),
+        )
+        if final_state.get(state_key)
+    } | {
+        ("2_research", name)
+        for name, state_key in (
+            ("bull.md", "bull_history"), ("bear.md", "bear_history"),
+            ("manager.md", "judge_decision"),
+        )
+        if final_state.get("investment_debate_state", {}).get(state_key)
+    } | {
+        ("3_trading", "trader.md")
+        if final_state.get("trader_investment_plan")
+    } | {
+        ("4_risk", name)
+        for name, state_key in (
+            ("aggressive.md", "aggressive_history"),
+            ("conservative.md", "conservative_history"),
+            ("neutral.md", "neutral_history"),
+        )
+        if final_state.get("risk_debate_state", {}).get(state_key)
+    } | {
+        ("5_portfolio", "decision.md")
+        if portfolio_decision
+    }
+    for folder, filename in _section_files - written:
+        (save_path / folder / filename).unlink(missing_ok=True)
+
     return save_path / "complete_report.md"
 
 

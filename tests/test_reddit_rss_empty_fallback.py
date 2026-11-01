@@ -4,7 +4,7 @@ import tradingagents.dataflows.reddit as reddit
 
 
 def test_fetch_reddit_posts_returns_message_when_all_sources_empty(monkeypatch):
-    def fake_fetch_subreddit(ticker, sub, limit, timeout):
+    def fake_fetch_subreddit(ticker, sub, limit, timeout, **kwargs):
         return []
 
     monkeypatch.setattr(reddit, "_fetch_subreddit", fake_fetch_subreddit)
@@ -27,7 +27,7 @@ def test_fetch_reddit_posts_returns_message_when_all_sources_empty(monkeypatch):
 def test_fetch_reddit_posts_marks_empty_subreddit_blocks(monkeypatch):
     calls = []
 
-    def fake_fetch_subreddit(ticker, sub, limit, timeout):
+    def fake_fetch_subreddit(ticker, sub, limit, timeout, **kwargs):
         calls.append(sub)
         if sub == "stocks":
             return []

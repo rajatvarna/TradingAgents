@@ -44,6 +44,7 @@ from urllib.request import Request, urlopen
 from defusedxml import ElementTree as SafeET
 from defusedxml.common import EntitiesForbidden
 
+from .date_window import coverage_gap
 from .symbol_utils import crypto_base, india_equity_parts
 
 logger = logging.getLogger(__name__)
@@ -142,6 +143,21 @@ def _in_window(epoch: float | None, start_ts: float | None, end_ts: float | None
     if start_ts is not None and epoch < start_ts:
         return False
     return not (end_ts is not None and epoch >= end_ts)
+
+
+# Matches ``t=week`` in ``_search_qs``: the search cannot see past one week.
+_SEARCH_LOOKBACK = timedelta(days=7)
+
+
+def _coverage_dates(posts) -> list:
+    """Post dates plus the search lookback start: the query is limited to the
+    last week, so a window older than that is out of reach even when the feed
+    returns nothing."""
+    dates = [
+        datetime.fromtimestamp(p["created_utc"], tz=timezone.utc)
+        for p in posts if p.get("created_utc")
+    ]
+    return dates + [datetime.now(timezone.utc) - _SEARCH_LOOKBACK]
 
 
 def _search_qs(search_query: str, limit: int) -> str:
@@ -498,6 +514,7 @@ def fetch_reddit_posts(
     blocks = []
     total_posts = 0
     sub_count = 0
+    fetched_posts: list[dict] = []
     unavailable: list[tuple[str, str]] = []
     allow_retry = True
     for i, sub in enumerate(selected_subreddits):
@@ -515,8 +532,16 @@ def fetch_reddit_posts(
             continue
         posts = [p for p in fetched if _in_window(p.get("created_utc"), start_ts, end_ts)]
         total_posts += len(posts)
+        fetched_posts.extend(fetched)
         if not posts:
-            blocks.append(f"r/{sub}: <no posts found mentioning {search_label} in the {window_label}>")
+            gap = start_date and end_date and coverage_gap(
+                _coverage_dates(fetched), start_date, end_date,
+                f"r/{sub}", f"discussion of {search_label}",
+            )
+            blocks.append(
+                f"r/{sub}: "
+                + (gap or f"<no posts found mentioning {search_label} in the {window_label}>")
+            )
             continue
 
         via_rss = any(p.get("source") == "rss" for p in posts)
@@ -558,6 +583,12 @@ def fetch_reddit_posts(
     if total_posts == 0 and not unavailable:
         # Window-specific placeholder for historical runs (#1220)
         if start_date and end_date:
+            gap = coverage_gap(
+                _coverage_dates(fetched_posts), start_date, end_date,
+                "Reddit search", f"discussion of {search_label}",
+            )
+            if gap:
+                return gap
             return (
                 f"<no Reddit posts found mentioning {search_label} across "
                 f"{', '.join(f'r/{s}' for s in selected_subreddits)} in the {window_label}>"

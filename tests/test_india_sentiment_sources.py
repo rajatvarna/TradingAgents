@@ -33,7 +33,7 @@ def test_reddit_combines_market_terms_into_one_query():
 def test_fetch_reddit_posts_uses_one_query_across_india_sources(monkeypatch):
     calls = []
 
-    def fake_fetch(search_query, sub, limit, timeout):
+    def fake_fetch(search_query, sub, limit, timeout, **kwargs):
         calls.append((search_query, sub, limit, timeout))
         return []
 

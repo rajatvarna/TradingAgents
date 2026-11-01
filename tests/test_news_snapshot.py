@@ -373,7 +373,9 @@ class TestGetNewsYfinanceSnapshotIntegration:
 
         out1 = yfinance_news.get_news_yfinance("AAPL", "2026-01-15", "2026-01-15")
         out2 = yfinance_news.get_news_yfinance("AAPL", "2026-01-15", "2026-01-15")
-        assert out1 == out2 == "No news found for AAPL"
+        # A past window the empty feed cannot reach is unavailable, not "no news".
+        assert out1 == out2
+        assert "unavailable" in out1 and "not an absence" in out1
         assert fake_ticker.get_news.call_count == 1  # 2nd call from cache
 
 

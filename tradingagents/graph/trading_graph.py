@@ -56,7 +56,7 @@ from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.agents.utils.options_tools import get_options_data
 from tradingagents.agents.utils.quant_data_tools import get_quantitative_metrics
 from tradingagents.agents.utils.technical_data_tools import get_technical_indicators
-from tradingagents.dataflows.config import set_config
+from tradingagents.dataflows.config import run_config, set_config
 from tradingagents.dataflows.run_cache import reset as reset_run_cache
 from tradingagents.dataflows.symbol_utils import normalize_symbol
 from tradingagents.dataflows.utils import get_current_date, safe_ticker_component
@@ -737,7 +737,8 @@ class TradingAgentsGraph:
         so decisions that were too recent to score at analysis time get resolved
         later. Thin wrapper over :meth:`_resolve_pending_entries`.
         """
-        self._resolve_pending_entries(ticker)
+        with run_config(self.config):
+            self._resolve_pending_entries(ticker)
 
     def resolve_all_pending(self) -> list[str]:
         """Resolve pending entries for every ticker that has any.
@@ -750,7 +751,8 @@ class TradingAgentsGraph:
         resolved = []
         for ticker in tickers:
             try:
-                self._resolve_pending_entries(ticker)
+                with run_config(self.config):
+                    self._resolve_pending_entries(ticker)
                 resolved.append(ticker)
             except Exception:  # noqa: BLE001 - one ticker must not poison the batch
                 logger.warning("Could not resolve pending for %s; will retry next run", ticker, exc_info=True)
@@ -1142,22 +1144,23 @@ class TradingAgentsGraph:
 
         # Settle pending memory-log entries and build the past-context block
         # before the pipeline runs; shared with the CLI path.
-        past_context = self.prepare_memory_context(company_name, trade_date)
+        with run_config(self.config):
+            past_context = self.prepare_memory_context(company_name, trade_date)
 
-        with self.checkpoint_scope(
-            company_name, trade_date, asset_type, portfolio_context=portfolio_context
-        ) as thread_id_value:
-            return self._run_graph(
-                company_name,
-                trade_date,
-                asset_type=asset_type,
-                on_chunk=on_chunk,
-                progress_callback=progress_callback,
-                target_profile=target_profile,
-                checkpoint_thread_id=thread_id_value,
-                past_context=past_context,
-                portfolio_context=portfolio_context,
-            )
+            with self.checkpoint_scope(
+                company_name, trade_date, asset_type, portfolio_context=portfolio_context
+            ) as thread_id_value:
+                return self._run_graph(
+                    company_name,
+                    trade_date,
+                    asset_type=asset_type,
+                    on_chunk=on_chunk,
+                    progress_callback=progress_callback,
+                    target_profile=target_profile,
+                    checkpoint_thread_id=thread_id_value,
+                    past_context=past_context,
+                    portfolio_context=portfolio_context,
+                )
 
     def begin_checkpoint(
         self,

@@ -179,6 +179,7 @@ _BY_PATTERN: list[tuple[re.Pattern[str], ModelCapabilities]] = [
     (re.compile(r"^deepseek-v\d", re.IGNORECASE), _DEEPSEEK_THINKING),
     (re.compile(r"(^|/)deepseek-r\d", re.IGNORECASE), _DEEPSEEK_THINKING),
     (re.compile(r"(^|/)deepseek-reasoner", re.IGNORECASE), _DEEPSEEK_THINKING),
+    (re.compile(r"(^|/)deepseek-flash", re.IGNORECASE), _DEEPSEEK_THINKING),
     (re.compile(r"^MiniMax-M3(?:\D|$)"), _MINIMAX_M3),
     (re.compile(r"^MiniMax-M2(?:\D|$)"), _MINIMAX_M2),
     (re.compile(r"^MiniMax-M\d"), _MINIMAX_M2),

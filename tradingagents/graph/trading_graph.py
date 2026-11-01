@@ -579,7 +579,7 @@ class TradingAgentsGraph:
             # no prices, and the decision would stay pending for good.
             return normalize_symbol(explicit)
         benchmark_map = self.config.get("benchmark_map", {})
-        ticker_upper = ticker.upper()
+        ticker_upper = normalize_symbol(ticker)
         for suffix, benchmark in benchmark_map.items():
             if suffix and ticker_upper.endswith(suffix.upper()):
                 return benchmark

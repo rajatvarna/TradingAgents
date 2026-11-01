@@ -22,14 +22,14 @@ def _extract_article_data(article: dict, max_summary_chars: int = 500) -> dict:
     # Handle nested content structure
     if "content" in article:
         content = article["content"]
-        title = content.get("title", "No title")
-        summary = content.get("summary", "")
-        provider = content.get("provider", {})
-        publisher = provider.get("displayName", "Unknown")
+        title = content.get("title") or "No title"
+        summary = content.get("summary") or ""
+        provider = content.get("provider") or {}
+        publisher = provider.get("displayName") or "Unknown"
 
         # Get URL from canonicalUrl or clickThroughUrl
         url_obj = content.get("canonicalUrl") or content.get("clickThroughUrl") or {}
-        link = url_obj.get("url", "")
+        link = url_obj.get("url") or ""
 
         # Get publish date
         pub_date_str = content.get("pubDate", "")
@@ -66,7 +66,7 @@ def _extract_article_data(article: dict, max_summary_chars: int = 500) -> dict:
                 # news window filter by up to a day near local midnight.
                 pub_date = datetime.fromtimestamp(ts, tz=timezone.utc)
 
-        summary = article.get("summary", "")
+        summary = article.get("summary") or ""
         if max_summary_chars > 0 and summary and len(summary) > max_summary_chars:
             first_para = summary.split('\n\n')[0]
             if len(first_para) <= max_summary_chars:
@@ -75,10 +75,10 @@ def _extract_article_data(article: dict, max_summary_chars: int = 500) -> dict:
                 summary = summary[:max_summary_chars].rsplit(' ', 1)[0] + "..."
 
         return {
-            "title": article.get("title", "No title"),
+            "title": article.get("title") or "No title",
             "summary": summary,
-            "publisher": article.get("publisher", "Unknown"),
-            "link": article.get("link", ""),
+            "publisher": article.get("publisher") or "Unknown",
+            "link": article.get("link") or "",
             "pub_date": pub_date,
         }
 

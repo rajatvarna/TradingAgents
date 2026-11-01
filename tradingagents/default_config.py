@@ -364,9 +364,11 @@ DEFAULT_CONFIG = _apply_env_overrides({
         ".ST": "^OMX",      # OMX (Sweden) — #1294
         ".TO": "^GSPTSE",   # TSX Composite (Toronto)
         ".AX": "^AXJO",     # Australia (ASX 200) — #1294
-        ".KS": "^KS11",     # KOSPI (South Korea) — #1294 (upstream uses ^KS11)
-        ".TW": "^TWII",     # Taiwan Weighted Index (TWSE)
-        ".TWO": "^TWOII",   # Taiwan OTC Index (TPEx)
+        ".KS":  "^KS11",     # KOSPI (South Korea) — #1294 (upstream uses ^KS11)
+        ".KQ":  "^KQ11",     # KOSDAQ (South Korea) — upstream #1294
+        ".TW":  "^TWII",     # Taiwan Weighted Index (TWSE)
+        ".TWO": "^TWOII",    # Taiwan OTC Index (TPEx) — fork keeps ^TWOII; upstream maps to ^TWII
+        ".SI":  "^STI",      # Straits Times (Singapore) — upstream #1294
         ".SA": "^BVSP",     # Bovespa (Brazil) — #1294
         ".J":  "^J203.JO",  # JSE Top 40 (South Africa) — #1294
         ".MX": "^MXX",      # IPC (Mexico) — #1294

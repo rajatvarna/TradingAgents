@@ -267,6 +267,27 @@ def get_fundamentals(
         if not info:
             raise NoMarketDataError(ticker, canonical, "no fundamentals returned")
 
+        # Money figures come in three currencies (#1456): price levels in the
+        # quote currency (which can be a minor unit like London's GBp); market
+        # cap and per-share figures in that currency's main unit; income
+        # figures in the currency the company reports in (an ADR quotes in USD,
+        # reports in TWD), or bare when Yahoo does not say which.
+        _MAIN_UNIT = {"GBp": "GBP", "GBX": "GBP", "ZAc": "ZAR", "ILA": "ILS"}
+        _currency = info.get("currency") or ""
+        _financial_currency = info.get("financialCurrency") or ""
+        _price_levels = {"52 Week High", "52 Week Low", "50 Day Average", "200 Day Average"}
+        _per_share = {"EPS (TTM)", "Forward EPS", "Book Value"}
+        _income = {"Revenue (TTM)", "Gross Profit", "EBITDA", "Net Income", "Free Cash Flow"}
+
+        def _unit_for(label: str) -> str:
+            if label in _income:
+                return _financial_currency
+            if label in _per_share or label == "Market Cap":
+                return _MAIN_UNIT.get(_currency, _currency)
+            if label in _price_levels:
+                return _currency
+            return ""
+
         fields = [
             ("Name", info.get("longName")),
             ("Sector", info.get("sector")),
@@ -305,7 +326,8 @@ def get_fundamentals(
                 continue
             if historical and label in _SNAPSHOT_ONLY_LABELS:
                 continue
-            lines.append(f"{label}: {value}")
+            unit = _unit_for(label)
+            lines.append(f"{label}: {value}{' ' + unit if unit else ''}")
 
         # yfinance returns a stub dict (e.g. {"trailingPegRatio": None}) for
         # unknown symbols, so `info` is truthy but every field is empty. Treat

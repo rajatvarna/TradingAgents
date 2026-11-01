@@ -91,7 +91,7 @@ def get_news(ticker, start_date, end_date) -> str:
     params = {
         "tickers": ticker,
         "time_from": format_datetime_for_api(start_date),
-        "time_to": format_datetime_for_api(end_date),
+        "time_to": format_datetime_for_api(end_date, end_of_day=True),
     }
     return _normalize_news_response(
         _make_api_request("NEWS_SENTIMENT", params),
@@ -127,7 +127,7 @@ def get_global_news(curr_date, look_back_days: int | None = None, limit: int | N
     params = {
         "topics": "financial_markets,economy_macro,economy_monetary",
         "time_from": format_datetime_for_api(start_date),
-        "time_to": format_datetime_for_api(curr_date),
+        "time_to": format_datetime_for_api(curr_date, end_of_day=True),
         "limit": str(limit),
     }
     return _normalize_news_response(

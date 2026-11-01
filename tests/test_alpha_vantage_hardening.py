@@ -167,3 +167,18 @@ def test_unparseable_body_is_never_served_untrimmed(monkeypatch):
 def test_empty_body_still_passes_through(monkeypatch):
     monkeypatch.setattr(avs, "_make_api_request", lambda *a, **k: "")
     assert avs.get_stock("IBM", "2024-05-09", "2024-05-10") == ""
+
+
+@pytest.mark.unit
+def test_the_news_window_includes_the_analysis_day(monkeypatch):
+    """time_to was midnight at the start of the end date, so everything
+    published during the analysis day, the most decision-relevant day, was
+    excluded. The yfinance path includes it."""
+    seen = {}
+    monkeypatch.setattr(avn, "_make_api_request",
+                        lambda fn, params: seen.update(params) or "{}")
+
+    avn.get_news("AAPL", "2026-03-10", "2026-03-14")
+
+    assert seen["time_from"] == "20260310T0000"
+    assert seen["time_to"] == "20260314T2359"

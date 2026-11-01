@@ -295,3 +295,28 @@ def test_resolver_prefers_tradingagents_ollama_env(monkeypatch):
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://legacy-ollama:11434/v1")
     mod = _reload_client()
     assert mod.resolve_provider_base_url("ollama") == "http://preferred-ollama:11434/v1"
+
+
+@pytest.mark.unit
+def test_structured_output_suppresses_object_tool_choice(monkeypatch):
+    """Ollama rejects the object-form tool_choice like other local servers
+    (#1062), and a local model ID has no capability entry saying otherwise, so
+    it takes the same client as the generic local endpoint."""
+    from langchain_openai import ChatOpenAI
+    from pydantic import BaseModel
+
+    from tradingagents.llm_clients import create_llm_client
+
+    class Schema(BaseModel):
+        x: int
+
+    captured = {}
+    monkeypatch.setattr(
+        ChatOpenAI,
+        "with_structured_output",
+        lambda self, schema, method=None, **kw: captured.update({"method": method, **kw}) or "BOUND",
+    )
+
+    create_llm_client(provider="ollama", model="qwen3:30b").get_llm().with_structured_output(Schema)
+
+    assert captured["tool_choice"] is None

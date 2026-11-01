@@ -3,7 +3,8 @@
 Regressions for #990 (no request timeout -> can hang), #991 (invalid-key
 responses mislabeled as rate limits and silently treated as transient), and
 #1115 (fundamentals look-ahead filter never ran because the payload is a JSON
-string, not a dict).
+string, not a dict), and the date trim that keeps post-end_date bars out of a
+historical run.
 """
 import json
 
@@ -12,6 +13,7 @@ import pytest
 import tradingagents.dataflows.alpha_vantage_common as av
 import tradingagents.dataflows.alpha_vantage_fundamentals as avf
 import tradingagents.dataflows.alpha_vantage_news as avn
+import tradingagents.dataflows.alpha_vantage_stock as avs
 
 
 class _FakeResponse:
@@ -128,3 +130,40 @@ def test_global_news_explicit_optionals_win_over_config(monkeypatch):
     avn.get_global_news("2026-01-10", 3, 5)
     assert captured["limit"] == "5"
     assert captured["time_from"] == "20260107T0000"  # 2026-01-10 minus 3 days
+
+
+# ---------------------------------------------------------------------------
+# Date trim (see the rationale on the unguarded trim in alpha_vantage_common)
+# ---------------------------------------------------------------------------
+
+_DAILY_CSV = (
+    "timestamp,open,high,low,close,volume\n"
+    "2024-05-13,1,1,1,1,10\n"   # after end_date -> must never be served
+    "2024-05-10,1,1,1,1,10\n"
+    "2024-05-09,1,1,1,1,10\n"
+)
+
+
+@pytest.mark.unit
+def test_stock_data_is_trimmed_to_the_requested_window(monkeypatch):
+    monkeypatch.setattr(avs, "_make_api_request", lambda *a, **k: _DAILY_CSV)
+    out = avs.get_stock("IBM", "2024-05-09", "2024-05-10")
+    assert "2024-05-10" in out and "2024-05-09" in out
+    assert "2024-05-13" not in out, "bar after end_date leaked into the window"
+
+
+@pytest.mark.unit
+def test_unparseable_body_is_never_served_untrimmed(monkeypatch):
+    """The trim used to swallow the failure and return the whole body, putting
+    bars after end_date into a backtest. It must raise instead."""
+    monkeypatch.setattr(avs, "_make_api_request",
+                        lambda *a, **k: "timestamp,close\nnot-a-date,1\n")
+
+    with pytest.raises(ValueError):
+        avs.get_stock("IBM", "2024-05-09", "2024-05-10")
+
+
+@pytest.mark.unit
+def test_empty_body_still_passes_through(monkeypatch):
+    monkeypatch.setattr(avs, "_make_api_request", lambda *a, **k: "")
+    assert avs.get_stock("IBM", "2024-05-09", "2024-05-10") == ""

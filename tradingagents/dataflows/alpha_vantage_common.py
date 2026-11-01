@@ -198,26 +198,20 @@ def _filter_csv_by_range(csv_data: str, start_date: str, end_date: str, *, end_o
     if not csv_data or csv_data.strip() == "":
         return csv_data
 
-    try:
-        # Parse CSV data
-        df = pd.read_csv(StringIO(csv_data))
+    # Deliberately unguarded: the API returns the full series up to today, so
+    # this trim is the only thing keeping bars after end_date out of a historical
+    # run. Returning the untrimmed body on failure would leak future prices, so a
+    # parse failure propagates and the routing layer falls through or fails.
+    df = pd.read_csv(StringIO(csv_data))
 
-        # Assume the first column is the date column (timestamp)
-        date_col = df.columns[0]
-        df[date_col] = pd.to_datetime(df[date_col])
+    # Assume the first column is the date column (timestamp)
+    date_col = df.columns[0]
+    df[date_col] = pd.to_datetime(df[date_col])
 
-        # Filter by date range
-        start_dt = pd.to_datetime(start_date)
-        end_dt = pd.to_datetime(end_date)
-        if end_of_day:
-            end_dt += pd.Timedelta(hours=23, minutes=59, seconds=59)
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date)
+    if end_of_day:
+        end_dt += pd.Timedelta(hours=23, minutes=59, seconds=59)
 
-        filtered_df = df[(df[date_col] >= start_dt) & (df[date_col] <= end_dt)]
-
-        # Convert back to CSV string
-        return filtered_df.to_csv(index=False)
-
-    except Exception as e:
-        # If filtering fails, return original data with a warning
-        print(f"Warning: Failed to filter CSV data by range: {e}")
-        return csv_data
+    filtered_df = df[(df[date_col] >= start_dt) & (df[date_col] <= end_dt)]
+    return filtered_df.to_csv(index=False)

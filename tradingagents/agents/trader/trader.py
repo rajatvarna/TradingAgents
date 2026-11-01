@@ -117,6 +117,18 @@ def create_trader(llm, cache=None, prompt_registry=None, tools=None):
         )
         system_content = grounding + absolute_levels + system_content
         user_combined = (report_section + user_content) if report_section else user_content
+        # The field list lives in the schema, which a provider without structured
+        # output never sees; state the shape in the prompt too. Python-side so the
+        # versioned registry templates stay put.
+        user_combined += (
+            "\n\n## Output\n\n"
+            "Write these sections, in this order, starting with the action on its own line:\n\n"
+            "- **Action**: exactly one of Buy / Hold / Sell. A research recommendation of "
+            "Overweight is a Buy and Underweight is a Sell, sized by how strong the case is; "
+            "conflict alone is not a Hold.\n"
+            "- **Reasoning**: why, against the plan and the price structure\n"
+            "- **Entry Price**, **Stop Loss**, **Position Sizing**: when you can state them"
+        )
         messages = [
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_combined + "\n\n" + portfolio_block},

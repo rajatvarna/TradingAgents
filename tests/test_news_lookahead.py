@@ -257,3 +257,24 @@ def test_coverage_gap_future_window_is_unavailable():
     today = datetime.now(timezone.utc).date()
     out = coverage_gap([], str(today), str(today + timedelta(days=3)), "Feed", "items")
     assert out is not None and "past today" in out
+
+
+@pytest.mark.unit
+def test_global_news_limit_is_not_spent_on_out_of_window_articles(monkeypatch):
+    # #1356: out-of-window articles must not eat the article budget.
+    future = [{"title": f"FUTURE {i}", "publisher": "P", "link": "l",
+               "providerPublishTime": _epoch("2025-06-01")} for i in range(5)]
+    inside = {"title": "INSIDE", "publisher": "P", "link": "l",
+              "providerPublishTime": _epoch("2025-05-08")}
+
+    class FakeSearch:
+        def __init__(self, query=None, *a, **k):
+            self.news = future if query == "first" else [inside]
+
+    monkeypatch.setattr(ynews.yf, "Search", FakeSearch)
+    monkeypatch.setattr(ynews, "get_config", lambda: {
+        "global_news_lookback_days": 7, "global_news_article_limit": 3,
+        "global_news_queries": ["first", "second"],
+    })
+    out = ynews.get_global_news_yfinance("2025-05-09")
+    assert "INSIDE" in out and "FUTURE" not in out

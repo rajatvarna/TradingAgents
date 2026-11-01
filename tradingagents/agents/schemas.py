@@ -40,7 +40,11 @@ def _coerce_optional_float(value):
         cleaned = value.strip()
         if cleaned.lower() in _NULLISH_FLOAT:
             return None
-        s = cleaned.lstrip("$€£¥~+ ").rstrip(" %").strip()
+        # A percentage is not a price: reading "15%" as 15 would put a stop at
+        # $15 on a $600 stock, so it nulls the field instead (#1288).
+        if cleaned.endswith("%"):
+            return None
+        s = cleaned.replace(",", "").lstrip("$€£¥~+ ").strip()
         # Handle leading dot like ".50" -> "0.50" for float()
         if s.startswith("."):
             s = "0" + s
@@ -216,11 +220,19 @@ class TraderProposal(BaseModel):
     )
     entry_price: float | None = Field(
         default=None,
-        description="Optional entry price target in the instrument's quote currency.",
+        description=(
+            "Optional entry price target as an absolute number in the instrument's "
+            "quote currency (e.g. 189.5), never a percentage or a range. Omit it "
+            "if you cannot state a specific level."
+        ),
     )
     stop_loss: float | None = Field(
         default=None,
-        description="Optional stop-loss price in the instrument's quote currency.",
+        description=(
+            "Optional stop-loss as an absolute price in the instrument's quote "
+            "currency (e.g. 172.0), never a percentage. Convert a percentage "
+            "distance to the price level it implies, or omit it."
+        ),
     )
     target_price: float | None = Field(
         default=None,

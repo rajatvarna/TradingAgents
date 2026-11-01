@@ -106,8 +106,16 @@ def create_trader(llm, cache=None, prompt_registry=None, tools=None):
             investment_plan=investment_plan,
         )
 
-        if grounding:
-            system_content = grounding + system_content
+        # Entry/stop are numeric price fields. Asking for concrete levels invites
+        # a percentage ("15%"), which is not a price and fails the structured
+        # parse (#1288). Added python-side so the versioned templates stay put.
+        absolute_levels = (
+            "State entry price and stop-loss as absolute price levels in the "
+            "instrument's quote currency (for example 189.5), never a percentage "
+            "or a range; convert a percentage distance to the price level it "
+            "implies, or omit the field if you cannot state a number. "
+        )
+        system_content = grounding + absolute_levels + system_content
         user_combined = (report_section + user_content) if report_section else user_content
         messages = [
             {"role": "system", "content": system_content},

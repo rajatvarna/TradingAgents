@@ -15,6 +15,7 @@ network call succeeded.
 from __future__ import annotations
 
 import contextlib
+import html
 import http.client
 import json
 import logging
@@ -71,6 +72,13 @@ def _stocktwits_symbol(ticker: str) -> str:
     if sym.endswith(".BO"):
         return sym[: -len(".BO")] + ".BSE"
     return sym
+
+
+def _body(message) -> str:
+    """The message text; the StockTwits API serves it HTML-escaped
+    (``&amp;``, ``&#39;``), so decode entities before screening (#1376).
+    """
+    return html.unescape(message.get("body") or "")
 
 
 # A symbol stream is a page of messages; cap the read so a compromised or
@@ -152,7 +160,7 @@ def fetch_stocktwits_messages(
         entities = entities if isinstance(entities, dict) else {}
         sentiment_obj = entities.get("sentiment") or {}
         sentiment = sentiment_obj.get("basic") if isinstance(sentiment_obj, dict) else None
-        body = (m.get("body") or "").replace("\n", " ").strip()
+        body = _body(m).replace("\n", " ").strip()
         if len(body) > 280:
             body = body[:280] + "…"
 

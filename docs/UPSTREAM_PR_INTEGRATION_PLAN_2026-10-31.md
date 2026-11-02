@@ -9,6 +9,45 @@
 
 ---
 
+## Progress (2026-11-01 → 2026-11-02)
+
+**Branch:** `feat/upstream-oct-integration` (5 commits ahead of `main`)
+
+### Completed — Tier 0 (3 backported + 2 already in-fork)
+
+| # | Upstream | Fix | Fork file | Status |
+|---|----------|-----|-----------|--------|
+| 1 | `caf6792b` / #1603 | Memory: order past context by decision date; rotate by oldest-dated | `tradingagents/agents/utils/memory.py` | ✅ committed |
+| 2 | `21bc5d8f` / #1566 | Reporting: delete stale section files when re-saving to same folder | `tradingagents/reporting.py` | ✅ committed |
+| 3 | `b6dad747` | yfinance: state period-end vintage rule on BS/CF/IS headers | `tradingagents/dataflows/y_finance.py` | ✅ committed |
+| — | `60dcf647` / #645 | Failed-reflection resilience | `tradingagents/graph/trading_graph.py` | ✅ already in-fork |
+| — | #1488 `a5b0f217` | Strict YYYY-MM-DD trade_date validation | `tradingagents/graph/trading_graph.py` | ✅ already in-fork |
+
+**Not ported** (require upstream's restructured `vendors/`/`memory/` modules absent from fork):
+SEC EDGAR one row per period (#1517/#1542), settle on final closes (#1548/#1539), settlement lock `wait=False` (#11dab3b0), `settle_all_pending` API (#1445), statement-frequency validation (#1593), Yahoo significant digits (#1567).
+
+### Completed — Tier 1 (8 backported)
+
+| # | Upstream | Fix | Fork file | Status |
+|---|----------|-----|-----------|--------|
+| 1 | #1294 | Benchmark map: add .KQ (Korea KOSDAQ), .SI (Singapore STI) | `tradingagents/default_config.py` | ✅ committed |
+| 2 | #1458 `9dceea6e` | Yahoo news: fall back to defaults on null article fields | `tradingagents/dataflows/yfinance_news.py` | ✅ committed |
+| 3 | #1456 `810b4cc4` | Yahoo fundamentals: print each money figure with its currency | `tradingagents/dataflows/y_finance.py` | ✅ committed |
+| 4 | #1417 `9df071b2` | Gemini: 600s read timeout like other providers | `tradingagents/llm_clients/google_client.py` | ✅ committed |
+| 5 | #1376 `41877168` | StockTwits: decode HTML entities in message bodies | `tradingagents/dataflows/stocktwits.py` | ✅ committed |
+
+**Already in-fork** (no change needed): benchmark map .SH/.SS + #1294 entries (#1260, #1294), Claude dated-snapshot regex (#1585), portfolio finite guard (different structure), #1595 date-window (fork lacks `as_of_window`).
+
+**Not ported** (upstream `vendors/yahoo/` structure absent from fork): #1467/#1469 news-from-search, #1567 significant digits. **Not applicable** (fork lacks `tradingagents/portfolio.py`): #1509 finite guard, #1556 broker-alias match.
+
+### Verification (all passing)
+- `tests/test_signal_processing.py tests/test_structured_agents.py`: **68 passed**
+- `tradingagents --help` (CLI entry): works
+- `scripts/flint/run_shadow_analysis.py --help` (shadow entry): works
+- `import tradingagents` + all Tier 0/1 modules: OK
+
+---
+
 ## 0. Methodology
 
 1. Enumerate the upstream cohort from `git log upstream/main --not main` (all commits upstream has that this fork lacks), filtered to merged-at `>= 2026-09-16`.

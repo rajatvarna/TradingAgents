@@ -11,7 +11,7 @@
 
 ## Progress (2026-11-01 → 2026-11-02)
 
-**Branch:** `feat/upstream-oct-integration` (5 commits ahead of `main`)
+**Branch:** `feat/upstream-oct-integration` (7 commits ahead of `main`)
 
 ### Completed — Tier 0 (3 backported + 2 already in-fork)
 
@@ -26,7 +26,7 @@
 **Not ported** (require upstream's restructured `vendors/`/`memory/` modules absent from fork):
 SEC EDGAR one row per period (#1517/#1542), settle on final closes (#1548/#1539), settlement lock `wait=False` (#11dab3b0), `settle_all_pending` API (#1445), statement-frequency validation (#1593), Yahoo significant digits (#1567).
 
-### Completed — Tier 1 (8 backported)
+### Completed — Tier 1 (9 backported)
 
 | # | Upstream | Fix | Fork file | Status |
 |---|----------|-----|-----------|--------|
@@ -35,16 +35,18 @@ SEC EDGAR one row per period (#1517/#1542), settle on final closes (#1548/#1539)
 | 3 | #1456 `810b4cc4` | Yahoo fundamentals: print each money figure with its currency | `tradingagents/dataflows/y_finance.py` | ✅ committed |
 | 4 | #1417 `9df071b2` | Gemini: 600s read timeout like other providers | `tradingagents/llm_clients/google_client.py` | ✅ committed |
 | 5 | #1376 `41877168` | StockTwits: decode HTML entities in message bodies | `tradingagents/dataflows/stocktwits.py` | ✅ committed |
+| 6 | #1465 `b3ca569c` | FRED: euro-area macro series aliases (ECB, Eurostat, OECD, EUR/USD) | `tradingagents/dataflows/fred.py` | ✅ committed |
 
-**Already in-fork** (no change needed): benchmark map .SH/.SS + #1294 entries (#1260, #1294), Claude dated-snapshot regex (#1585), portfolio finite guard (different structure), #1595 date-window (fork lacks `as_of_window`).
+**Already in-fork** (no change needed): benchmark map .SH/.SS + #1294 entries (#1260, #1294), Claude dated-snapshot regex (#1585), crypto Reddit communities (#1461 via `_subreddits_for_ticker`), backtest/grid evaluation (#1234/#1166 via `tradingagents/evaluation/backtest.py` + `back_test/`), outcome-measurement window (#85d91374 via configurable `holding_days`), portfolio finite guard (different structure), #1595 date-window (fork lacks `as_of_window`).
 
-**Not ported** (upstream `vendors/yahoo/` structure absent from fork): #1467/#1469 news-from-search, #1567 significant digits. **Not applicable** (fork lacks `tradingagents/portfolio.py`): #1509 finite guard, #1556 broker-alias match.
+**Not ported** (upstream `vendors/yahoo/` structure absent from fork): #1467/#1469 news-from-search, #1567 significant digits. **Not applicable** (fork lacks `tradingagents/portfolio.py`): #1509 finite guard, #1556 broker-alias match. **Not ported** (upstream `vendors/` structure absent): #1593 statement-frequency validation.
 
 ### Verification (all passing)
 - `tests/test_signal_processing.py tests/test_structured_agents.py`: **68 passed**
 - `tradingagents --help` (CLI entry): works
 - `scripts/flint/run_shadow_analysis.py --help` (shadow entry): works
 - `import tradingagents` + all Tier 0/1 modules: OK
+- FRED euro aliases resolve correctly: `ecb_deposit_rate→ECBDFR`, `euro_hicp→CP0000EZ19M086NEST`, `eur_usd→DEXUSEU`, etc.
 
 ---
 

@@ -90,6 +90,17 @@ MACRO_SERIES = {
     "building_permits": "PERMIT",
     "housing_permits": "PERMIT",
     "retail_sales": "RSAFS",
+    # Euro-area mirrors (#1465): ECB policy rates, Eurostat HICP/GDP,
+    # OECD long-term yields, and the EUR/USD rate. FRED mirrors these for
+    # non-US tickers (e.g. Euronext .PA).
+    "ecb_deposit_rate": "ECBDFR",
+    "ecb_main_refi_rate": "ECBMRRFR",
+    "euro_hicp": "CP0000EZ19M086NEST",
+    "euro_core_hicp": "00XEFDEZ19M086NEST",
+    "euro_real_gdp": "CLVMNACSCAB1GQEA19",
+    "germany_10y": "IRLTLT01DEM156N",
+    "france_10y": "IRLTLT01FRM156N",
+    "eur_usd": "DEXUSEU",
 }
 
 
@@ -201,8 +212,10 @@ def get_macro_data(
     """Fetch a FRED macroeconomic series as a formatted markdown report.
 
     Args:
-        indicator: A friendly alias (e.g. "cpi", "unemployment", "10y_treasury")
-            or a raw FRED series ID (e.g. "CPIAUCSL", "DGS10").
+        indicator: A friendly alias (e.g. "cpi", "unemployment", "10y_treasury",
+            euro-area aliases such as "ecb_deposit_rate", "euro_hicp",
+            "euro_core_hicp", "euro_real_gdp", "germany_10y", "france_10y",
+            "eur_usd", or a raw FRED series ID (e.g. "CPIAUCSL", "DGS10").
         curr_date: The as-of date (yyyy-mm-dd). It bounds the observation window
             AND pins the data vintage: FRED is queried with the realtime bounds
             set to ``curr_date`` (clamped to FRED's own today) so a historical

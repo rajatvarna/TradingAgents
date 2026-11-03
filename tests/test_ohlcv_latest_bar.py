@@ -13,6 +13,8 @@ anywhere counts as no data and the staleness check judges the rest.
 """
 from __future__ import annotations
 
+import os
+
 import pandas as pd
 import pytest
 
@@ -183,9 +185,10 @@ def test_the_snapshot_does_not_present_a_filled_price_as_reported(monkeypatch, t
     today = pd.Timestamp("2026-05-08 12:00")
     monkeypatch.setattr(su, "get_config", lambda: {"data_cache_dir": str(tmp_path)})
     monkeypatch.setattr(su.pd.Timestamp, "today", staticmethod(lambda: today))
-    cache = tmp_path / "AAPL-YFin-data.csv"
+    cache = tmp_path / f"AAPL-YFin-data-{su.OHLCV_CACHE_FILE_SUFFIX}.csv"
     cache.write_text(frame.to_csv(index=False))
     os.utime(cache, (today.timestamp(), today.timestamp()))
+    monkeypatch.setattr(su.time, "time", lambda: today.timestamp())
     monkeypatch.setattr(su.yf, "download", lambda *a, **k: (_ for _ in ()).throw(
         AssertionError("should read the seeded cache")))
 

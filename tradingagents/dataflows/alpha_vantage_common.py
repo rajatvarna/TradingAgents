@@ -7,7 +7,7 @@ from io import StringIO
 import pandas as pd
 import requests
 
-from .errors import VendorNotConfiguredError, VendorRateLimitError
+from .errors import VendorCapabilityError, VendorNotConfiguredError, VendorRateLimitError
 
 API_BASE_URL = "https://www.alphavantage.co/query"
 AV_MAX_RETRIES = 3
@@ -41,8 +41,12 @@ class AlphaVantageAuthError(ValueError):
     pass
 
 
-class AlphaVantageUnsupportedIndicatorError(ValueError):
-    """Raised when an indicator function is called that is not supported by Alpha Vantage."""
+class AlphaVantageUnsupportedIndicatorError(VendorCapabilityError, ValueError):
+    """Raised when an indicator is not served by Alpha Vantage.
+
+    A vendor error, not a caller error: another vendor may compute it, so the
+    router moves on instead of treating this vendor's prose as an answer.
+    """
 
     pass
 
@@ -57,8 +61,13 @@ def get_api_key() -> str:
     return api_key
 
 
-def format_datetime_for_api(date_input) -> str:
-    """Convert various date formats to YYYYMMDDTHHMM required by Alpha Vantage."""
+def format_datetime_for_api(date_input, end_of_day: bool = False) -> str:
+    """Convert various date formats to YYYYMMDDTHHMM required by Alpha Vantage.
+
+    A plain date means midnight, the start of that day. For the end of a window
+    pass ``end_of_day`` so the day itself is inside it, rather than dropping
+    everything published on the analysis date.
+    """
     if isinstance(date_input, str):
         # If already in correct format, return as-is
         if len(date_input) == 13 and "T" in date_input:
@@ -66,7 +75,7 @@ def format_datetime_for_api(date_input) -> str:
         # Try to parse common date formats
         try:
             dt = datetime.strptime(date_input, "%Y-%m-%d")
-            return dt.strftime("%Y%m%dT0000")
+            return dt.strftime("%Y%m%dT2359" if end_of_day else "%Y%m%dT0000")
         except ValueError:
             try:
                 dt = datetime.strptime(date_input, "%Y-%m-%d %H:%M")
@@ -198,26 +207,20 @@ def _filter_csv_by_range(csv_data: str, start_date: str, end_date: str, *, end_o
     if not csv_data or csv_data.strip() == "":
         return csv_data
 
-    try:
-        # Parse CSV data
-        df = pd.read_csv(StringIO(csv_data))
+    # Deliberately unguarded: the API returns the full series up to today, so
+    # this trim is the only thing keeping bars after end_date out of a historical
+    # run. Returning the untrimmed body on failure would leak future prices, so a
+    # parse failure propagates and the routing layer falls through or fails.
+    df = pd.read_csv(StringIO(csv_data))
 
-        # Assume the first column is the date column (timestamp)
-        date_col = df.columns[0]
-        df[date_col] = pd.to_datetime(df[date_col])
+    # Assume the first column is the date column (timestamp)
+    date_col = df.columns[0]
+    df[date_col] = pd.to_datetime(df[date_col])
 
-        # Filter by date range
-        start_dt = pd.to_datetime(start_date)
-        end_dt = pd.to_datetime(end_date)
-        if end_of_day:
-            end_dt += pd.Timedelta(hours=23, minutes=59, seconds=59)
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date)
+    if end_of_day:
+        end_dt += pd.Timedelta(hours=23, minutes=59, seconds=59)
 
-        filtered_df = df[(df[date_col] >= start_dt) & (df[date_col] <= end_dt)]
-
-        # Convert back to CSV string
-        return filtered_df.to_csv(index=False)
-
-    except Exception as e:
-        # If filtering fails, return original data with a warning
-        print(f"Warning: Failed to filter CSV data by range: {e}")
-        return csv_data
+    filtered_df = df[(df[date_col] >= start_dt) & (df[date_col] <= end_dt)]
+    return filtered_df.to_csv(index=False)

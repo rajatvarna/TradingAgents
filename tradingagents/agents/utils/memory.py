@@ -163,8 +163,15 @@ class TradingMemoryLog:
         meta_json = json.dumps(merged_meta, ensure_ascii=False)
         decision = self._sanitize_block(final_trade_decision)
         with self._get_conn() as conn:
-            # INSERT OR IGNORE respects the UNIQUE(ticker, trade_date, pending) constraint,
-            # replacing the previous SELECT + conditional INSERT (two round-trips → one).
+            # Any entry for this ticker and date blocks another, pending or settled:
+            # a re-run after the outcome landed would otherwise count the same
+            # decision twice in past context and in every aggregate over the log.
+            if conn.execute(
+                "SELECT 1 FROM memory_log WHERE ticker = ? AND trade_date = ? LIMIT 1",
+                (ticker, trade_date),
+            ).fetchone():
+                return
+            # INSERT OR IGNORE respects the UNIQUE(ticker, trade_date, pending) constraint.
             conn.execute(
                 """
                 INSERT OR IGNORE INTO memory_log (ticker, trade_date, rating, decision, reflection, pending, meta, outcome, expected_return)
@@ -175,11 +182,11 @@ class TradingMemoryLog:
         # --- Markdown sidecar for test compatibility (tests read mem.md) ---
         if self._log_path is not None:
             try:
-                # Idempotency guard: check existing pending entry
+                # Idempotency guard: any existing entry blocks a duplicate
                 if self._log_path.exists():
                     raw = self._log_path.read_text(encoding="utf-8")
                     for line in raw.splitlines():
-                        if line.startswith(f"[{trade_date} | {ticker} |") and line.endswith("| pending]"):
+                        if line.startswith(f"[{trade_date} | {ticker} |") and line.endswith("]"):
                             return
                 tag = f"[{trade_date} | {ticker} | {rating} | pending]"
                 entry = f"{tag}\n\nDECISION:\n{decision}{self._SEPARATOR}"

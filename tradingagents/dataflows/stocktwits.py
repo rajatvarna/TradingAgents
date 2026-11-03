@@ -15,19 +15,30 @@ network call succeeded.
 from __future__ import annotations
 
 import contextlib
+import html
 import http.client
 import json
 import logging
 from datetime import datetime
 from urllib.request import Request, urlopen
 
-from .date_window import in_window
+from .date_window import coverage_gap, in_window
 from .symbol_utils import crypto_base
 
 logger = logging.getLogger(__name__)
 
 _API = "https://api.stocktwits.com/api/2/streams/symbol/{ticker}.json"
 _UA = "tradingagents/0.2 (+https://github.com/TauricResearch/TradingAgents)"
+
+
+def _created_at(message) -> datetime | None:
+    """Parse a message's ISO 8601 ``created_at``; None when missing or malformed."""
+    raw = message.get("created_at")
+    if not raw:
+        return None
+    with contextlib.suppress(ValueError, TypeError):
+        return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    return None
 
 
 def _within_window(messages, start_date, end_date):
@@ -41,16 +52,7 @@ def _within_window(messages, start_date, end_date):
         return messages
     start_dt = datetime.strptime(start_date, "%Y-%m-%d")
     end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-    kept = []
-    for m in messages:
-        created = None
-        raw = m.get("created_at")
-        if raw:
-            with contextlib.suppress(ValueError, TypeError):
-                created = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-        if in_window(created, start_dt, end_dt):
-            kept.append(m)
-    return kept
+    return [m for m in messages if in_window(_created_at(m), start_dt, end_dt)]
 
 
 def _stocktwits_symbol(ticker: str) -> str:
@@ -70,6 +72,13 @@ def _stocktwits_symbol(ticker: str) -> str:
     if sym.endswith(".BO"):
         return sym[: -len(".BO")] + ".BSE"
     return sym
+
+
+def _body(message) -> str:
+    """The message text; the StockTwits API serves it HTML-escaped
+    (``&amp;``, ``&#39;``), so decode entities before screening (#1376).
+    """
+    return html.unescape(message.get("body") or "")
 
 
 # A symbol stream is a page of messages; cap the read so a compromised or
@@ -125,12 +134,17 @@ def fetch_stocktwits_messages(
 
     raw_messages = data.get("messages", []) if isinstance(data, dict) else []
     messages = [m for m in raw_messages if isinstance(m, dict)] if isinstance(raw_messages, list) else []
-    messages = _within_window(messages, start_date, end_date)
+    fetched = messages
+    messages = _within_window(fetched, start_date, end_date)
     if not messages:
         if start_date and end_date:
-            return (
+            gap = coverage_gap(
+                (_created_at(m) for m in fetched), start_date, end_date,
+                "StockTwits", f"messages about ${ticker.upper()}",
+            )
+            return gap or (
                 f"<no StockTwits messages for ${ticker.upper()} within "
-                f"{start_date}..{end_date} (public stream serves only recent messages)>"
+                f"{start_date}..{end_date}>"
             )
         return f"<no StockTwits messages found for ${ticker.upper()}>"
 
@@ -146,7 +160,7 @@ def fetch_stocktwits_messages(
         entities = entities if isinstance(entities, dict) else {}
         sentiment_obj = entities.get("sentiment") or {}
         sentiment = sentiment_obj.get("basic") if isinstance(sentiment_obj, dict) else None
-        body = (m.get("body") or "").replace("\n", " ").strip()
+        body = _body(m).replace("\n", " ").strip()
         if len(body) > 280:
             body = body[:280] + "…"
 

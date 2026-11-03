@@ -226,7 +226,7 @@ class TestFormatterHandlesRssPosts:
             "created_utc": reddit._iso_to_timestamp("2026-05-20T14:30:00Z"),
             "selftext": "great quarter", "source": "rss",
         }]
-        with patch.object(reddit, "_fetch_subreddit", return_value=rss_posts):
+        with patch.object(reddit, "_fetch_subreddit_rss", return_value=rss_posts):
             out = reddit.fetch_reddit_posts("NVDA", subreddits=("stocks",), inter_request_delay=0)
         assert "via RSS feed" in out
         assert "↑" not in out  # no fake score arrow
@@ -239,7 +239,7 @@ class TestFormatterHandlesRssPosts:
             "created_utc": reddit._iso_to_timestamp("2026-05-20T14:30:00Z"),
             "selftext": "",
         }]
-        with patch.object(reddit, "_fetch_subreddit", return_value=json_posts):
+        with patch.object(reddit, "_fetch_subreddit_rss", return_value=json_posts):
             out = reddit.fetch_reddit_posts("NVDA", subreddits=("stocks",), inter_request_delay=0)
         assert "1234↑" in out
         assert "56c" in out
@@ -253,11 +253,11 @@ class TestCryptoSearchTerm:
     def _captured_ticker(self, ticker):
         seen = {}
 
-        def fake_fetch(t, sub, limit, timeout):
+        def fake_fetch(t, sub, limit, timeout, **kwargs):
             seen["ticker"] = t
             return []
 
-        with patch.object(reddit, "_fetch_subreddit", side_effect=fake_fetch):
+        with patch.object(reddit, "_fetch_subreddit_rss", side_effect=fake_fetch):
             reddit.fetch_reddit_posts(ticker, subreddits=("stocks",), inter_request_delay=0)
         return seen["ticker"]
 
@@ -325,12 +325,15 @@ class TestUnavailableIsNotReportedAsAbsence:
         assert "No Reddit discussion posts were available" not in out
         assert "unavailable" in out
 
-    def test_mixed_empty_and_unavailable_distinguishes_both(self):
-        err = HTTPError("url", 429, "Too Many Requests", {}, None)
+    def test_mixed_empty_and_unavailable_distinguishes_both(self, monkeypatch):
+        # Per-subreddit requests only happen on the OAuth path (anonymous runs
+        # use one combined request, which succeeds or fails as a whole).
+        monkeypatch.setenv("REDDIT_CLIENT_ID", "id")
+        monkeypatch.setenv("REDDIT_CLIENT_SECRET", "secret")
         # r/stocks: clean empty feed. r/investing: 429 on all attempts.
         with patch.object(
-            reddit, "urlopen",
-            side_effect=[_empty_atom_resp(), err, err, err],
+            reddit, "_fetch_subreddit",
+            side_effect=[[], reddit.RedditUnavailable("investing", "HTTP 429")],
         ), patch.object(reddit.time, "sleep"):
             out = reddit.fetch_reddit_posts(
                 "NVDA", subreddits=("stocks", "investing"), inter_request_delay=0
@@ -347,3 +350,78 @@ class TestEmptyIsNotAnError:
     def test_empty_feed_returns_empty_list_not_error(self):
         with patch.object(reddit, "urlopen", return_value=_empty_atom_resp()):
             assert reddit._fetch_subreddit_rss("NVDA", "stocks", 5, 5.0) == []
+
+
+@pytest.mark.unit
+class TestRetryPaidOncePerRun:
+    """The 60s back-off is paid at most once per run (port of upstream 7cc478ad)."""
+
+    def test_retry_is_not_spent_again_after_a_failure(self, monkeypatch):
+        # The per-subreddit loop is the OAuth path; anonymous runs use one
+        # combined request and so pay the back-off at most once anyway.
+        monkeypatch.setenv("REDDIT_CLIENT_ID", "id")
+        monkeypatch.setenv("REDDIT_CLIENT_SECRET", "secret")
+        seen = []
+
+        def record(t, sub, limit, timeout, _retry=True):
+            seen.append(_retry)
+            raise reddit.RedditUnavailable(sub, "HTTP 429")
+
+        with patch.object(reddit, "_fetch_subreddit", side_effect=record):
+            reddit.fetch_reddit_posts("NVDA", subreddits=("a", "b", "c"), inter_request_delay=0)
+        assert seen == [True, False, False]
+
+
+@pytest.mark.unit
+class TestCombinedSubredditRequest:
+    """Anonymous runs search every subreddit in one request (port of upstream 241638da)."""
+
+    @staticmethod
+    def _post(title, sub):
+        return {
+            "title": title, "score": None, "num_comments": None,
+            "created_utc": reddit._iso_to_timestamp("2026-05-20T14:30:00Z"),
+            "selftext": "", "source": "rss", "subreddit": sub,
+        }
+
+    def test_one_request_posts_grouped_by_named_subreddit(self):
+        calls = []
+
+        def fake(query, sub, limit, timeout, **kwargs):
+            calls.append((sub, limit))
+            return [self._post("A", "investing"), self._post("B", "stocks"), self._post("C", "investing")]
+
+        with patch.object(reddit, "_fetch_subreddit_rss", side_effect=fake):
+            out = reddit.fetch_reddit_posts(
+                "NVDA", subreddits=("wallstreetbets", "stocks", "investing"), inter_request_delay=0
+            )
+        assert calls == [("wallstreetbets+stocks+investing", reddit._FEED_PAGE)]
+        assert out.index("r/stocks") < out.index("r/investing")
+        assert "r/investing — 2 posts" in out and "r/stocks — 1 posts" in out
+        assert "r/wallstreetbets: <no posts found" in out
+
+    def test_each_subreddit_keeps_its_own_limit(self):
+        posts = [self._post(f"P{i}", "stocks") for i in range(8)]
+        with patch.object(reddit, "_fetch_subreddit_rss", return_value=posts):
+            out = reddit.fetch_reddit_posts(
+                "NVDA", subreddits=("stocks", "investing"), limit_per_sub=3, inter_request_delay=0
+            )
+        assert "r/stocks — 3 posts" in out
+
+    def test_full_page_is_not_taken_as_absence(self):
+        posts = [self._post(f"P{i}", "stocks") for i in range(reddit._FEED_PAGE)]
+        with patch.object(reddit, "_fetch_subreddit_rss", return_value=posts):
+            out = reddit.fetch_reddit_posts(
+                "NVDA", subreddits=("stocks", "investing"), inter_request_delay=0
+            )
+        assert "r/investing: <not among the newest" in out
+
+    def test_failed_combined_request_is_unavailable(self):
+        with patch.object(
+            reddit, "_fetch_subreddit_rss",
+            side_effect=reddit.RedditUnavailable("stocks+investing", "HTTP 429"),
+        ):
+            out = reddit.fetch_reddit_posts(
+                "NVDA", subreddits=("stocks", "investing"), inter_request_delay=0
+            )
+        assert "Reddit unavailable" in out and "not an absence" in out
